@@ -1,5 +1,7 @@
 # 代码导航
 
+画布连线/任务行操作/群聊删除：`web/workflow-editor.mjs` 关闭会把拖动中临时线算入的 X6 allowMulti，重复连线由编辑器校验，连线后焦点回画布；`web/app.js`、`web/styles.css` 让任务行下一步与更多菜单常显左对齐；`web/communication.js` 用齿轮进入编辑群聊并在弹框底部删除群聊（注入共享 confirmDialog）。`server/communication-store.mjs` 的 deleteCommunication 做群聊逻辑删除，`server/index.mjs` 提供 DELETE 路由，`server/persistence.mjs` 目录查询排除已删除；契约见 docs/17，验收见 test-workflow-editor、test-directory-headers、test-communication-workbench 与 communication.test。CLI 不覆盖长期沟通，无 CLI 变化。
+
 Baton更名：App/CLI/更新仓库与环境变量统一；当前协议、私有配置位置及显式本机切换见 `docs/development/baton-identity-cutover.md`。发送者配色按共享senderId引用，表单/成员换行复用共享控件。待办详情与市场辅助计数渐进加载，不扩大API或派工语义。
 
 首屏与发送反馈（延迟/失败验收：`scripts/test-progressive-loading.mjs`）：`app.js` 拆开任务元信息/协作和目录/引用加载；`automations.mjs` 先显示当前页，再补计数与触发历史；`app.js`/`communication.js` 按Run/会话保留本地发送记录与真实确认。控制台保持点击后读取；任务消息由App/CLI共享可选`clientRequestId`，Store原子保存并去重，协作投影保留请求引用。工作流指定端口对齐与空心命中在编辑器/布局模块；共享CSS统一协作边距、Markdown与设置入口。

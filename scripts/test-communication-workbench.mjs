@@ -258,6 +258,37 @@ try {
   const firstGroup=await createGroup();
   const secondGroup=await createGroup();assert.notEqual(firstGroup,secondGroup,'same selected employees can create separate groups');
   const newChat=new URL(page.url()).pathname.split('/').at(-1);assert.notEqual(newChat,group.id);
+  // Group settings use a gear icon. Only an existing group offers deletion, after
+  // confirmation; the chat leaves the list while private chats stay undeletable.
+  const gearShape=await page.locator('[data-edit-chat-group]').evaluate(node=>{const box=node.getBoundingClientRect(),icon=node.querySelector('svg')?.getBoundingClientRect();return {label:node.getAttribute('aria-label'),text:node.textContent.trim(),icon:icon?[Math.round(icon.width),Math.round(icon.height)]:null,width:Math.round(box.width),height:Math.round(box.height)};});
+  console.log('GROUP settings icon',JSON.stringify(gearShape));
+  assert.deepEqual({label:gearShape.label,text:gearShape.text,icon:gearShape.icon},{label:'编辑群聊',text:'',icon:[16,16]},'the gear keeps its full 16px icon');assert.equal(gearShape.width,gearShape.height,'icon button is square');
+  await page.goto(origin+'/communication/'+firstGroup);await page.locator('.communication-heading').filter({hasText:employee.name+'，'+failedAgent.name}).waitFor();
+  await page.locator('[data-edit-chat-group]').click();
+  const editorFooter=page.locator('dialog.communication-picker[open] .form-actions');
+  assert.deepEqual(await editorFooter.locator('button').allTextContents(),['删除群聊','关闭','保存']);
+  const footerEdges=await editorFooter.evaluate(node=>{const box=node.getBoundingClientRect(),buttons=[...node.querySelectorAll('button')].map(button=>button.getBoundingClientRect());return {left:Math.round(buttons[0].left-box.left),gap:Math.round(buttons[1].left-buttons[0].right)};});
+  console.log('GROUP editor footer',JSON.stringify(footerEdges));assert.equal(footerEdges.left,0,'deletion starts at the footer leading edge');assert.ok(footerEdges.gap>24,'deletion stays apart from close/save');
+  const confirmation=page.locator('.modal.confirm-dialog');
+  await page.locator('[data-delete-group]').click();await confirmation.waitFor();
+  assert.equal(await confirmation.locator('h2').textContent(),'删除群聊');assert.match(await confirmation.locator('.confirm-dialog-message').textContent(),/保留为历史/);
+  await page.evaluate(()=>document.getAnimations().filter(animation=>Number.isFinite(animation.effect.getComputedTiming().endTime)).forEach(animation=>animation.finish()));
+  await page.screenshot({path:join(root,'group-delete-confirm.png')});
+  await confirmation.locator('[data-confirm-dialog-cancel]').click();await confirmation.waitFor({state:'hidden'});
+  assert.equal(await page.locator('dialog.communication-picker[open]').count(),1,'cancelling keeps the group editor open');
+  assert.equal((await api('/api/communications/'+firstGroup)).conversation.id,firstGroup,'cancelled deletion keeps the group');
+  await page.locator('[data-delete-group]').click();await confirmation.waitFor();await confirmation.locator('[data-confirm-dialog-accept]').click();
+  await page.waitForURL(url=>!url.pathname.endsWith(firstGroup));
+  await wait('deleted group hidden',async()=>await page.locator(`[data-chat-id="${firstGroup}"]`).count()===0);
+  assert.equal(await page.locator('dialog.communication-picker[open]').count(),0,'deletion closes the editor');
+  await assert.rejects(api('/api/communications/'+firstGroup),/群聊已删除/);
+  assert.ok(!(await api('/api/communications?page=1')).conversations.some(row=>row.id===firstGroup),'the list no longer returns the deleted group');
+  await assert.rejects(api('/api/communications/'+chat.id,{},'DELETE'),/私聊不能删除/);
+  await page.goto(origin+'/communication/'+chat.id);await page.locator('.communication-heading').filter({hasText:employee.name}).waitFor();
+  assert.equal(await page.locator('[data-edit-chat-group]').isVisible(),false,'private chats expose no group settings or deletion');
+  console.log('GROUP deletion confirmed, hidden from list, private chat rejected');
+  evidence.groupDeletion={gearIcon:gearShape,footer:footerEdges,cancelKeepsGroup:true,deletedHidden:true,privateRejected:true};
+  await page.goto(origin+'/communication/'+newChat);await page.locator('.communication-heading').filter({hasText:employee.name+'，'+failedAgent.name}).waitFor();
   await page.locator('[data-edit-chat-group]').click();await page.locator(`[data-remove-extension="${employee.id}"]`).click();
   assert.equal(await page.locator('.communication-picker .extension-chip-name').textContent(),failedAgent.name);
   await page.locator('.communication-picker [type=submit]').click();
@@ -284,6 +315,10 @@ try {
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
       const selected=page.locator(`[data-chat-member-console="${employee.id}"]`);assert.equal(await selected.getAttribute('aria-pressed'),'true');assert.equal(await selected.evaluate(el=>{const probe=document.createElement('span');probe.style.color='var(--text)';el.append(probe);const matches=getComputedStyle(el).color===getComputedStyle(probe).color;probe.remove();return matches;}),true);
       await page.screenshot({path:join(root,`group-console-${theme}-${width}.png`)});await page.locator('[data-close-chat-console]').click();
+      if(!await page.locator('[data-edit-chat-group]').isVisible())await page.locator('[data-toggle-chat-members]').click();
+      await page.locator('[data-edit-chat-group]').click();await page.locator('dialog.communication-picker[open] [data-delete-group]').waitFor();
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+      await page.screenshot({path:join(root,`group-settings-${theme}-${width}.png`)});await page.locator('dialog.communication-picker[open] [data-close-group]').click();
     }
   }
   const loginResponse = await fetch(origin+'/api/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({username:'communication-qa',password})});

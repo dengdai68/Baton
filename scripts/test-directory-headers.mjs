@@ -201,6 +201,21 @@ try {
           await p.locator('#tasks-table .task-row').first().waitFor();
           assert.equal(await p.locator('#tasks-table [data-task-group=backlog]').count(), 1);
           assert.equal(await p.locator('#tasks-table [data-task-group=attention]').count(), 0);
+          // Row actions stay visible without hover and start at the action column's left edge.
+          await p.mouse.move(1, 1);
+          const rowActions = await p.locator('#tasks-table .task-row-actions').evaluateAll(nodes => nodes.map(node => {
+            const box = node.getBoundingClientRect(), first = node.firstElementChild.getBoundingClientRect();
+            return { offset: Math.round(first.left - box.left), justify: getComputedStyle(node).justifyContent, labels: [...node.querySelectorAll(':scope > .small-button, .action-menu > summary')].map(item => [item.textContent.trim(), getComputedStyle(item).opacity]) };
+          }));
+          console.log(`${mode} task row actions`, JSON.stringify(rowActions.slice(0, 3)));
+          assert.ok(rowActions.length > 0);
+          for (const row of rowActions) {
+            assert.equal(row.offset, 0, 'row actions start at the column left edge');
+            assert.equal(row.justify, 'flex-start');
+            assert.deepEqual(row.labels.map(([label]) => label), ['启动', '⋯'], 'draft rows show the next action and the more menu');
+            assert.ok(row.labels.every(([, opacity]) => opacity === '1'), 'row actions are visible without hover');
+          }
+          evidence[mode + '-task-row-actions'] = { rows: rowActions.length, alignment: 'left', visibleWithoutHover: true };
           // Title opens the existing draft editor; the more menu retains deletion confirmation.
           await p.locator('#tasks-table .task-title-link').first().click();
           await p.locator('#task-form').waitFor(); await p.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();

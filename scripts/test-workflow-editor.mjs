@@ -175,6 +175,34 @@ try {
   }
   console.log('PASS manually selected port centers and rims, reverse routes, diamonds, node movement and saved port identities');
 
+  // A real drag often snaps to another port of the target node before reaching
+  // the intended one. The release point decides the port, focus returns to the
+  // canvas and Delete removes the new edge rather than the source node.
+  await api('/api/workflow-templates/'+pinned.id,pinnedInput,'PUT');await openPinned();
+  const edgeCount=async()=>Number((await page.locator('.workflow-editor-count').textContent()).match(/· (\d+)/)[1]);
+  const portCenter=async(id,side)=>{const box=await port(id,side).boundingBox();return {x:box.x+box.width/2,y:box.y+box.height/2};};
+  const detourFrom=await portCenter('a','right'),detourVia=await portCenter('b','top'),detourTo=await portCenter('b','left');
+  await cell('a').hover();await page.mouse.move(detourFrom.x,detourFrom.y);await page.mouse.down();
+  await page.mouse.move(detourVia.x,detourVia.y-8,{steps:12});
+  const snapped=await page.locator('.workflow-editor-canvas .x6-highlight-stroke').count();console.log(`DETOUR snapped highlights near b.top: ${snapped}`);assert.ok(snapped>0,'the drag first snaps to the passing port');
+  await page.mouse.move(detourTo.x,detourTo.y);await page.mouse.up();
+  await page.waitForFunction(()=>Number(document.querySelector('.workflow-editor-count').textContent.match(/· (\d+)/)[1])===1);
+  const detour=await page.evaluate(()=>{const node=document.querySelector('.workflow-editor-canvas [data-cell-id="a"]');return {active:document.activeElement?.classList.contains('workflow-editor-canvas')?'canvas':document.activeElement?.getAttribute('data-cell-id')||document.activeElement?.tagName,outline:getComputedStyle(node).outlineStyle,error:document.querySelector('.workflow-editor-error').textContent};});
+  console.log('DETOUR released on b.left',JSON.stringify(detour));
+  assert.equal(detour.active,'canvas','connecting returns focus to the canvas');assert.equal(detour.outline,'none','the source node keeps no pointer focus ring');assert.equal(detour.error,'');
+  await page.keyboard.press('Delete');assert.equal(await edgeCount(),0,'Delete removes the newly selected edge');assert.equal(await cell('a').count(),1,'Delete keeps the source node');
+  await page.mouse.move(detourFrom.x,detourFrom.y);await page.mouse.down();await page.mouse.move(detourVia.x,detourVia.y-8,{steps:12});await page.mouse.move(detourTo.x,detourTo.y);await page.mouse.up();
+  await page.waitForFunction(()=>Number(document.querySelector('.workflow-editor-count').textContent.match(/· (\d+)/)[1])===1);
+  // Duplicate links stay rejected by the editor's own rule after X6 allowMulti is relaxed.
+  await connect('b','a','top','top');const duplicateFrom=await portCenter('b','bottom'),duplicateTo=await portCenter('a','bottom');
+  await page.mouse.move(duplicateFrom.x,duplicateFrom.y);await page.mouse.down();await page.mouse.move(duplicateTo.x,duplicateTo.y,{steps:18});await page.mouse.up();await page.waitForTimeout(300);
+  console.log(`DUPLICATE b→a through other ports keeps ${await edgeCount()} edges`);assert.equal(await edgeCount(),2,'a second b→a link is rejected');
+  await page.getByRole('button',{name:'保存工作流',exact:true}).click();await page.locator('#workflow-form').waitFor({state:'detached'});
+  const detourSaved=(await cli(['workflows','get',pinned.id,...flags])).edges;console.log('DETOUR saved edges',JSON.stringify(detourSaved.map(({source,target,sourcePort,targetPort})=>({source,target,sourcePort,targetPort}))));
+  assert.deepEqual(detourSaved.map(({source,target,sourcePort,targetPort})=>({source,target,sourcePort,targetPort})),[{source:'a',target:'b',sourcePort:'right',targetPort:'left'},{source:'b',target:'a',sourcePort:'top',targetPort:'top'}]);
+  evidence.detourConnection={snapped,focus:detour.active,outline:detour.outline,saved:detourSaved.length};
+  console.log('PASS release port wins after snapping past another port; focus, Delete and duplicate rejection stay on the edited edges');
+
   if(real){
     const marker='WF_EDGE_'+randomBytes(12).toString('hex'),goalProof='GOAL_FILE_'+randomBytes(12).toString('hex'),nodeProof='NODE_FILE_'+randomBytes(12).toString('hex');
     const worker=(await api('/api/agents',{name:'画布真实验收员工',kind:'business',systemPrompt:'只完成当前节点要求，在任务工作目录创建实际文件；完成后 handoff 交给经理。',runtime:{profileId,extensionSelection:{pluginIds:[],mcpIds:[]}}})).agent;

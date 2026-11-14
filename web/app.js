@@ -250,7 +250,7 @@ async function refresh({ quiet = false } = {}) {
   }
 }
 const runOfTask = (taskId) => state.runs.find((run) => run.taskId === taskId || run.task?.id === taskId);
-const communicationUI = createCommunicationUI({ api, notify: toast,
+const communicationUI = createCommunicationUI({ api, notify: toast, confirmDialog,
   renderAvatar: (agent, className = '') => `<span class="agent-card-avatar ${esc(roleColor(agent))} ${esc(className)}" aria-hidden="true">${esc(initialsOf(agent))}</span>`,
   renderConsole: (stream, result, agent) => {
     if (result.refresh) for (const cache of [consoleContentCache, promptSnapshotCache]) for (const key of cache.keys()) if (key.startsWith(result.basePath + '/')) cache.delete(key);
@@ -900,7 +900,7 @@ function renderTasks() {
        const run = runOfTask(task.id), editable = task.status === 'backlog' && !run;
        const title = `<button class="task-title-link" ${editable ? `data-edit-task="${esc(task.id)}"` : `data-open-task="${esc(task.id)}"`} title="${esc(task.title)}">${esc(task.title)}</button>`;
        const menu = `${editable ? `<button class="small-button" data-edit-task="${esc(task.id)}">编辑</button>` : ''}${task.status === 'done' ? `<button class="small-button" data-archive-task="${esc(task.id)}">归档</button>` : ''}${task.deletionBlockedBy === null ? `<button class="small-button danger" data-delete-task="${esc(task.id)}">删除任务</button>` : ''}`;
-       const next = task.status === 'backlog' ? `<button class="small-button on-hover" data-run-task="${esc(task.id)}">启动</button>` : task.status === 'done' ? `<button class="small-button on-hover" data-archive-task="${esc(task.id)}">归档</button>` : run ? `<button class="small-button ${taskNeedsAttention(task.status) && task.status !== 'paused' ? '' : 'on-hover'}" data-open-task="${esc(task.id)}">${taskActionLabel(task.status)}</button>` : '';
+       const next = task.status === 'backlog' ? `<button class="small-button" data-run-task="${esc(task.id)}">启动</button>` : task.status === 'done' ? `<button class="small-button" data-archive-task="${esc(task.id)}">归档</button>` : run ? `<button class="small-button" data-open-task="${esc(task.id)}">${taskActionLabel(task.status)}</button>` : '';
        const members = (task.memberAgentIds || []).slice(0,5).map(id => task.memberSnapshots?.find(agent => agent.id === id) || (state.catalogReferences?.agents || state.agents || []).find(agent => agent.id === id)).filter(Boolean);
        return `<article class="task-row" data-task-id="${esc(task.id)}"><span class="task-state-icon" data-status-tone="${statusTone(task.status)}" title="${esc(statusText[task.status] || task.status)}" aria-hidden="true">${statusShape(task.status)}</span><div class="task-row-title">${title}<span class="task-workflow">${esc(task.workflowSnapshot?.name || task.workflowTemplateId || '—')}</span></div><div class="task-row-step" data-status-tone="${statusTone(task.status)}">${taskRowStatus(task,run)}</div><div class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</div><time class="task-row-time" title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time><div class="task-row-actions" data-status-tone="${statusTone(task.status)}">${next}${task.deletionBlockedBy === 'active_inquiries' ? '<span class="task-deletion-notice" title="请等待当前答疑完成后重试删除。">答疑进行中</span>' : ''}${actionMenu(menu,'任务更多操作')}</div></article>`;
      }).join('')}</section>`;

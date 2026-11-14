@@ -17,11 +17,14 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
     migratedReadState = true;
   }
   if (migratedReadState) save();
+  // Deleted group chats keep their facts as history but accept no operation.
   const conversation = (key) => {
     const item = journal.get("communicationConversations", key);
     if (!item) throw new Error("沟通会话不存在");
+    if (item.status === "deleted") throw new Error("群聊已删除");
     return item;
   };
+  const listed = thread => thread.status !== "deleted" && (thread.kind !== "agent" || journal.get("agents", thread.targetId)?.status !== "deleted");
   const delivery = (conversationId, key) => {
     conversation(conversationId);
     const item = journal.get("communicationDeliveries", key);
@@ -94,7 +97,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
     return {...copy(agent),roleSnapshots};
   };
   return {
-    communicationUnreadCount() { return state.communicationConversations.filter(thread=>thread.kind!=='agent'||journal.get('agents',thread.targetId)?.status!=='deleted').reduce((sum,thread)=>sum+unread(thread),0); },
+    communicationUnreadCount() { return state.communicationConversations.filter(listed).reduce((sum,thread)=>sum+unread(thread),0); },
     registerCommunicationAttachment(key, record) {
       conversation(key);
       if (!record || !/^attachment_[a-f0-9-]{36}$/.test(record.id) || typeof record.name !== 'string' || !record.name || /[/\\\0]/.test(record.name) || record.path !== `attachments/${record.id}/${record.name}` || !Number.isSafeInteger(record.bytes) || record.bytes < 0 || record.bytes > 20 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(record.sha256)) throw new Error('附件元数据无效');
@@ -132,6 +135,20 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
         save(); return summary(thread);
       });
     },
+    // Only group chats can be deleted. Messages, attachments, sessions and
+    // events stay as history; unstarted replies are cancelled with an audit.
+    deleteCommunication(key) {
+      const thread = conversation(key);
+      if (thread.kind === "agent") throw new Error("私聊不能删除，仅可删除群聊");
+      if (["claimed", "running"].some(status => journal.select("communicationDeliveries", "status", status).some(row => row.conversationId === key))) throw new Error("群聊成员正在回复，请等待回复结束后再删除");
+      return this.transaction(() => {
+        for (const item of journal.select("communicationDeliveries", "conversationId", key).filter(row => ["queued", "failed"].includes(row.status))) {
+          item.status = "cancelled"; item.nextAttemptAt = null; item.updatedAt = now(); event(item, "cancelled", "群聊已删除，待回复取消；历史保留");
+        }
+        thread.status = "deleted"; thread.deletedAt = now(); save();
+        return { id: thread.id, kind: "group", name: thread.name, status: thread.status, deletedAt: thread.deletedAt, historyRetained: true };
+      });
+    },
     detachCommunicationTeam(teamId) { detachTeam(teamId); },
     detachCommunicationMember(agentId) {
       for (const thread of state.communicationConversations.filter(row => row.kind !== "agent" && rosterIds(row).includes(agentId))) {
@@ -143,7 +160,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
     },
     listCommunications(query) {
       if(query){const page=persistence.queryEntities('communicationConversations',query);return {...page,items:page.items.map(id=>summary(conversation(id)))};}
-      return state.communicationConversations.filter(thread=>thread.kind!=='agent'||journal.get('agents',thread.targetId)?.status!=='deleted').map(thread=>summary(thread)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+      return state.communicationConversations.filter(listed).map(thread=>summary(thread)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
     },
     markCommunicationRead(key, messageId) {
       const thread = conversation(key),target=journal.get('communicationMessages',messageId),next=target?.conversationId===key?journal.entry('communicationMessages',messageId).position:-1;
@@ -187,6 +204,8 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
       return copy(message);
     },
     claimCommunication(key) {
+      // A pump that finishes after deletion stops quietly instead of failing.
+      if (journal.get("communicationConversations", key)?.status === "deleted") return null;
       const thread = conversation(key), queue = ['queued','claimed','running','failed'].flatMap(status=>journal.select('communicationDeliveries','status',status)).filter(row=>row.conversationId===key).sort((a,b)=>journal.entry('communicationDeliveries',a.id).position-journal.entry('communicationDeliveries',b.id).position);
       // FIFO per member; an unavailable member must not block other group members.
       for (const candidate of queue) if (["queued", "failed"].includes(candidate.status) && !members(thread).some(member => member.id === candidate.agentId && member.status === "active")) { candidate.status = "cancelled"; candidate.nextAttemptAt = null; event(candidate, "cancelled", "成员已离开或不可用，待回复取消"); save(); }

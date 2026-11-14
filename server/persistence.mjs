@@ -278,7 +278,7 @@ export function createSqlitePersistence(databasePath = ":memory:", { onSaveDiagn
       const clauses=['collection=?'], values=[collection];
       const field=name=>`json_extract(value_json,'$.${name}')`;
       if(collection==='agents')clauses.push(`${field('status')} != 'deleted'`);
-      if(collection==='communicationConversations')clauses.push(`(${field('kind')}!='agent' OR EXISTS(SELECT 1 FROM workspace_entities a WHERE a.collection='agents' AND a.id=json_extract(workspace_entities.value_json,'$.targetId') AND json_extract(a.value_json,'$.status')!='deleted'))`);
+      if(collection==='communicationConversations')clauses.push(`COALESCE(${field('status')},'')!='deleted'`,`(${field('kind')}!='agent' OR EXISTS(SELECT 1 FROM workspace_entities a WHERE a.collection='agents' AND a.id=json_extract(workspace_entities.value_json,'$.targetId') AND json_extract(a.value_json,'$.status')!='deleted'))`);
       if(collection==='tasks') {
         clauses.push(`COALESCE(${field('kind')},'ordinary') != 'automation'`,`${field('archivedAt')} IS ${archived ? 'NOT ' : ''}NULL`);
         if(workflow && workflow!=='all'){clauses.push(`${field('workflowTemplateId')}=?`);values.push(workflow);}

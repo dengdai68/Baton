@@ -1,5 +1,7 @@
 # 控制面
 
+群聊删除由 `communication-store.mjs` 的 `deleteCommunication` 拥有：仅群聊、成员回复 claimed/running 时拒绝，排队/失败回复取消并记审计，会话写入 `status=deleted`、`deletedAt` 后从列表、未读和全部会话操作中排除（「群聊已删除」），消息、附件、原生会话、事件与工作目录保留为历史；删除后的 pump 领取为空即结束。`index.mjs` 提供认证 `DELETE /api/communications/:id`，`persistence.mjs` 的会话目录查询同步排除已删除群聊。
+
 任务 `POST /api/runs/:id/messages` 可选 `clientRequestId` 的 Run 范围幂等性由 `Store.submitHumanMessage` 拥有：原命令摘要、消息与派工回执原子保存；重放在状态/归档门禁前返回原事实。HTTP 仅对首次命令唤醒执行，冲突返回 409。协作投影透出请求 ID；详细契约见 docs/03、CLI 对齐见 docs/21。
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。

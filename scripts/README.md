@@ -1,5 +1,7 @@
 # 工程脚本
 
+画布/任务/沟通本轮验收：test-workflow-editor 先让拖线吸附目标节点的另一个端口再在目标端口松手（修复前稳定失败），核对焦点回到画布、Delete 只删新连线、重复连线被拒及保存端口；test-directory-headers 在两主题宽窄窗口核对草稿行「启动」「⋯」未悬停即可见且左对齐；test-communication-workbench 核对齿轮按钮尺寸与可读名称、编辑群聊底部删除位置、确认框取消/确认、删除后列表隐藏、私聊 DELETE 被拒，以及两主题宽窄的群聊设置截图。
+
 本轮Baton验收：test-task-creation/test-automations覆盖等高成员选择、仅Cron计划与非法输入；test-collaboration-flow覆盖senderId同名区分和按头像配色；test-progressive-loading覆盖待办先显、市场实际分页及独立辅助请求。test-plugin-updates只验证手动更新全部与CLI等价命令、冻结历史和失败恢复，不再验证自动开关。真实任务/沟通分别使用test-task-collaboration-real与test-communication-direct-real，所有环境标识均为BATON_*。
 
 `test-redesign.mjs` 按逐页源码复核后的结构断言验证当前石墨设计：标题栏/侧栏/文档标题尺寸、主操作所在区域、搜索宽度和卡片内部几何，覆盖浅/深色 × 1440/760；实际操作四类目录抽屉的外部点击/Escape关闭、内部候选选择、角色草稿不自动保存和居中表单防误关，以及设置导航28px高度、无额外顶边线和图标/文字垂直居中，命令面板、侧栏快捷键、菜单焦点、任务看板、待办交付快照与人类确认（含失败重试）、回复上下文、抽屉、窄屏会话列表关闭和即时保存。截图仅作留证；必需夹具缺失、未捕获交互失败和页面错误都会使验收失败。可设 `BATON_REDESIGN_APP=/Applications/Baton.app` 可选择安装包；`BATON_REDESIGN_INTERACTION_ONLY=1` 只跑交互。使用隔离 HOME/Store 夹具与禁用 Provider 的测试命令，截图和日志只写 .data。相关既有 UI 脚本同步 light/dark 模式，废弃 warm/minimal 主题。

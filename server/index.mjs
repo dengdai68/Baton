@@ -377,6 +377,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     const pagination = { before: searchParams.get("before"), limit: Number(searchParams.get("limit") || 100), since:searchParams.get("since") };
     if (!action && request.method === "GET") { sendJson(response, 200, store.getCommunication(key, pagination)); return true; }
     if (!action && request.method === "PUT") { sendJson(response, 200, { conversation: store.updateCommunication(key, await readJson(request)) }); return true; }
+    if (!action && request.method === "DELETE") { sendJson(response, 200, { conversation: store.deleteCommunication(key) }); return true; }
     if (action === "messages" && request.method === "POST") {
       const message = store.sendCommunication(key, await readJson(request));
       sendJson(response, 202, { message }); wakeCommunication(key); return true;

@@ -850,6 +850,40 @@ test('deletion cancels queued chats, hides private/member lists, retains replies
 });
 
 
+test('group chat deletion is logical: blocked while replying, cancels unstarted replies, hides the chat and keeps history',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'af-chat-delete-')),databasePath=join(root,'state.sqlite');
+  let store=createStore({databasePath});
+  t.after(async()=>{store.close();await rm(root,{recursive:true,force:true});});
+  const group=store.openCommunication({kind:'group',name:'待删除群聊',memberAgentIds:['agent_analyst','agent_designer']});
+  const kept=store.openCommunication({kind:'group',name:'保留群聊',memberAgentIds:['agent_analyst']}),privateChat=store.openCommunication({kind:'agent',targetId:'agent_analyst'});
+  send(store,group.id,'分析师先回复',['agent_analyst']);const running=store.claimCommunication(group.id);
+  const beforeRejected=store.snapshot();
+  assert.throws(()=>store.deleteCommunication(group.id),/正在回复/);assert.deepEqual(store.snapshot(),beforeRejected,'a rejected deletion changes nothing');
+  console.log('[delete] running reply blocks deletion without changes');
+  store.completeCommunication(group.id,running.id,'回复完成');
+  send(store,group.id,'设计师回复',['agent_designer']);const failed=store.claimCommunication(group.id);store.failCommunication(group.id,failed.id,'模拟失败');
+  send(store,group.id,'排队等待',['agent_analyst']);
+  assert.equal(store.communicationUnreadCount(),1,'the unread reply belongs to the group');
+  const deleted=store.deleteCommunication(group.id);
+  assert.deepEqual({...deleted,deletedAt:typeof deleted.deletedAt},{id:group.id,kind:'group',name:'待删除群聊',status:'deleted',deletedAt:'string',historyRetained:true});
+  const snapshot=store.snapshot(),deliveries=snapshot.communicationDeliveries.filter(row=>row.conversationId===group.id);
+  console.log('[delete] delivery states after deletion',deliveries.map(row=>`${row.agentId}:${row.status}`).join(', '));
+  assert.deepEqual(deliveries.map(row=>row.status),['done','cancelled','cancelled'],'failed and queued replies are cancelled, finished history stays');
+  assert.equal(snapshot.communicationEvents.filter(row=>row.conversationId===group.id&&row.type==='cancelled'&&row.content.includes('群聊已删除')).length,2,'each cancellation is audited');
+  assert.equal(snapshot.communicationMessages.filter(row=>row.conversationId===group.id).length,4,'messages remain as history');
+  assert.ok(!store.listCommunications().some(row=>row.id===group.id));assert.deepEqual(store.listCommunications({page:1}).items.map(row=>row.id).sort(),[kept.id,privateChat.id].sort());
+  assert.equal(store.communicationUnreadCount(),0,'a deleted chat no longer counts unread replies');
+  assert.equal(store.claimCommunication(group.id),null);assert.ok(!store.pendingCommunications().includes(group.id));
+  for(const attempt of [()=>store.getCommunication(group.id),()=>send(store,group.id,'不能再发'),()=>store.updateCommunication(group.id,{name:'改名'}),()=>store.markCommunicationRead(group.id,deliveries[0].messageId),()=>store.retryCommunication(group.id,failed.id),()=>store.getCommunicationConsole(group.id),()=>store.deleteCommunication(group.id)])assert.throws(attempt,/群聊已删除/);
+  assert.throws(()=>store.deleteCommunication(privateChat.id),/私聊不能删除/);assert.throws(()=>store.deleteCommunication('chat_missing'),/不存在/);
+  const service=createCommunicationService(store,{root:join(root,'communications'),invoke:async()=>{throw new Error('deleted chats never invoke a member');}});
+  await service.kick(group.id);assert.equal(service.isActive(),false,'a pump for a deleted chat ends quietly');
+  store.close();store=createStore({databasePath});
+  assert.ok(!store.listCommunications({page:1}).items.some(row=>row.id===group.id),'deletion persists across restart');assert.throws(()=>store.getCommunication(group.id),/群聊已删除/);
+  assert.equal(store.getCommunication(kept.id).conversation.name,'保留群聊');
+  console.log('[delete] restart keeps the chat hidden; other chats unaffected');
+});
+
 test('group peers share files and cwd but retain distinct native sessions and private attempt records',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-shared-chat-')),store=createStore({databasePath:join(root,'state.sqlite')});t.after(async()=>{store.close();await rm(root,{recursive:true,force:true});});
  const audit=join(root,'records/communications'),work=join(root,'work/communications'),calls=[];

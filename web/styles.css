@@ -2228,6 +2228,9 @@ html:root .workflow-canvas-actions .workflow-canvas-delete[hidden] { display:non
 html:root .workflow-canvas-actions .workflow-canvas-delete:hover { color:var(--danger-ink); background:var(--danger-soft); border-color:var(--danger); }
 html:root .workflow-canvas-actions .workflow-canvas-delete svg { display:block; width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
 .workflow-editor-modal .workflow-editor-canvas [data-cell-id]:focus-visible { outline:none; }
+/* Chromium rings any focused SVG element in the system accent color; pointer
+   focus from pressing a node or port shows no ring, keyboard focus keeps the stroke. */
+.workflow-editor-canvas [data-cell-id]:focus:not(:focus-visible) { outline:none; }
 .workflow-editor-canvas [data-cell-id]:focus-visible :is(.workflow-node-body,.workflow-edge-stroke) { stroke:var(--accent); stroke-width:2.5px; }
 .workflow-editor-announcement { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 .workflow-editor-preview { margin:0; min-height:360px; height:min(54dvh,540px); padding:18px; overflow:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg-hover); color:var(--text); font:inherit; line-height:1.7; white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -2859,6 +2862,8 @@ button:disabled { cursor:not-allowed; opacity:.45; pointer-events:none; }
 .communication-picker::backdrop { background:var(--bg-overlay); }
 .communication-picker h2 { color:var(--text); font-size:15px; font-weight:600; }
 .communication-picker input { padding:5px 10px; border-color:var(--border); border-radius:var(--r-sm); background:var(--bg-input); color:var(--text); }
+/* Group deletion stays apart from close/save at the footer's leading edge. */
+.communication-picker .form-actions [data-delete-group] { margin-right:auto; }
 .communication-mentions { border:0; border-radius:var(--r-md); background:var(--bg-raised); box-shadow:var(--shadow-pop); }
 .communication-mentions button { border-radius:var(--r-xs); color:var(--text); }
 .communication-mentions button[aria-selected="true"] { background:var(--bg-active); }
@@ -3500,13 +3505,12 @@ html #tasks-view .task-filter-panel select { font-size:var(--fs-body); }
 .task-row-members { display:flex; align-items:center; min-width:0; }
 .task-row .stack-avatar { flex:none; width:20px; height:20px; margin-right:-5px; border:0; box-shadow:0 0 0 2px var(--bg-canvas); font-size:10px; font-weight:600; }
 .task-row-time { color:var(--text-tertiary); font-size:var(--fs-small); white-space:nowrap; font-variant-numeric:tabular-nums; }
-.task-row-actions { display:flex; align-items:center; justify-content:flex-end; gap:4px; min-width:0; }
+/* Row actions stay visible and start at one left edge so rows scan as a column. */
+.task-row-actions { display:flex; align-items:center; justify-content:flex-start; gap:4px; min-width:0; }
 .task-row-actions > .small-button { min-height:var(--control-h-sm); padding:0 8px; font-size:var(--fs-small); white-space:nowrap; }
 .task-row-actions[data-status-tone=attention] > .small-button:first-child { border-color:var(--st-attention-border); background:var(--st-attention-bg); color:var(--st-attention); }
 .task-row .action-menu > summary { min-height:var(--control-h-sm); }
 .task-row { cursor:pointer; }
-.task-row-actions .on-hover,.task-row-actions .action-menu > summary { opacity:0; }
-.task-row:hover .task-row-actions .on-hover,.task-row:focus-within .task-row-actions .on-hover,.task-row:hover .action-menu > summary,.task-row:focus-within .action-menu > summary,.task-row .action-menu[open] > summary { opacity:1; }
 /* Graphite keeps one toolbar row and single-line rows at every width; secondary
    columns step away instead of wrapping. */
 @media(max-width:1000px) {
@@ -3526,7 +3530,7 @@ html #tasks-view .task-filter-panel select { font-size:var(--fs-body); }
 #task-header-actions .task-layout-switch { padding:0; background:transparent; }
 #task-header-actions [data-task-layout] { width:var(--control-h-sm); height:var(--control-h-sm); min-height:var(--control-h-sm); padding:0; }
 .task-row-actions { flex-wrap:wrap; }
-.task-row-actions .task-deletion-notice { order:1; flex-basis:100%; text-align:right; font-size:var(--fs-caption); }
+.task-row-actions .task-deletion-notice { order:1; flex-basis:100%; text-align:left; font-size:var(--fs-caption); }
 
 /* Final paper alignment: shared directory chips, compact rows and extension cards. */
 .directory-chips { display:flex; align-items:center; gap:2px; min-width:0; overflow-x:auto; scrollbar-width:none; }
@@ -3723,6 +3727,9 @@ html:root,html:root[data-theme] {
   :is(.communication-header,.communication-roster > header,.communication-console-actions,.communication-sidebar-heading) > button.text-action:hover { background:var(--bg-hover); color:var(--text); }
   :is(.communication-header,.communication-roster > header,.communication-console-actions) > button.text-action[aria-expanded="true"] { background:var(--bg-active); color:var(--text); }
   .communication-console-actions > [data-close-chat-console],.communication-roster > header > [data-close-chat-members] { width:var(--control-h-sm); padding:0; font-size:16px; }
+  /* The group settings gear is a square icon button like the console toggles. */
+  .communication-roster > header > button.text-action[data-edit-chat-group] { width:var(--control-h-sm); padding:0; }
+  .communication-roster > header > [data-edit-chat-group] svg { flex:none; }
   .communication-console-actions { display:flex; align-items:center; gap:2px; }
   .communication-error:empty { display:none; }
   .communication-layout { display:grid; grid-template-columns:280px minmax(0,1fr); grid-template-rows:minmax(0,1fr); flex:1; height:auto; min-height:0; border-top:0; overflow:hidden; }

@@ -74,6 +74,8 @@ export function communicationDayLabel(value, today = new Date()) {
 }
 const shortTime = value => value ? new Date(value).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
 const consoleIcon = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m7 9 3 3-3 3m6 0h4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+// Gear-shaped settings icon for group chat editing.
+const settingsIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.7 2.1L13.3 2.1L13.6 4.6L16.1 5.6L18.1 4.1L19.9 5.9L18.4 7.9L19.4 10.4L21.9 10.7L21.9 13.3L19.4 13.6L18.4 16.1L19.9 18.1L18.1 19.9L16.1 18.4L13.6 19.4L13.3 21.9L10.7 21.9L10.4 19.4L7.9 18.4L5.9 19.9L4.1 18.1L5.6 16.1L4.6 13.6L2.1 13.3L2.1 10.7L4.6 10.4L5.6 7.9L4.1 5.9L5.9 4.1L7.9 5.6L10.4 4.6Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 export const imageAttachment = name => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(name || '');
 const attachmentSize = bytes => bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : bytes >= 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${bytes} B`;
@@ -164,7 +166,7 @@ export function outgoingAttachmentMarkup(entry) {
   return entry?.attachments?.length ? `<div class="communication-attachment-list outgoing-attachments">${entry.attachments.map(item=>`<span class="communication-attachment">${imageAttachment(item.file.name) ? pictureIcon : attachmentIcon}<span>${escapeHtml(item.file.name)}</span><small>${attachmentSize(item.file.size)}</small></span>`).join('')}</div>` : '';
 }
 
-export function createCommunicationUI({ api, navigate, notify, prepareContent = async () => {}, renderContent = escapeHtml, renderConsole = () => {}, renderAvatar = () => '', onRead = () => {} }) {
+export function createCommunicationUI({ api, navigate, notify, confirmDialog = async () => false, prepareContent = async () => {}, renderContent = escapeHtml, renderConsole = () => {}, renderAvatar = () => '', onRead = () => {} }) {
   let host, currentId = null, generation = 0, timer, contacts = [], conversations = [];
   let listLoaded = false, listError = "", listRequest = null, listPage = 1, listPagination = {page:1,totalPages:1,total:0};
   const views = new Map(), markdownCache=new ByteCache({maxBytes:4*1024*1024,maxEntries:300});
@@ -515,7 +517,7 @@ export function createCommunicationUI({ api, navigate, notify, prepareContent = 
         <div><button class="small-button communication-older" hidden>加载更早消息</button><button class="small-button communication-latest" hidden>回到最新</button></div><div class="communication-messages" aria-label="聊天记录"></div>
         <form class="communication-composer"><div class="communication-mentions" role="listbox" aria-label="@ 成员" hidden></div><div class="message-composer-card"><div class="message-composer-input"><div class="communication-draft-attachments" data-chat-attachments></div><textarea id="communication-input" aria-label="输入消息" placeholder="输入消息…" rows="2">${escapeHtml(state.draft)}</textarea></div><p class="field-hint" data-chat-upload-status role="status"></p><input type="file" multiple data-chat-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-chat-image-file hidden><div class="communication-composer-actions">${attachmentControls('chat', state.sending)}<button type="button" class="composer-icon-button" data-chat-mention aria-label="提及成员" title="提及成员" hidden>@</button><span class="composer-hint">Enter 发送 · Shift + Enter 换行</span><button class="primary-button" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>发送</button></div></div></form>
       </section>
-      <aside class="communication-roster" aria-label="聊天成员" hidden><header><strong data-chat-member-count>成员</strong><button type="button" class="text-action" data-edit-chat-group>编辑群聊</button><button type="button" class="text-action" data-close-chat-members aria-label="关闭成员列表">×</button></header><div data-chat-roster></div></aside>
+      <aside class="communication-roster" aria-label="聊天成员" hidden><header><strong data-chat-member-count>成员</strong><button type="button" class="text-action" data-edit-chat-group aria-label="编辑群聊" title="编辑群聊">${settingsIcon}</button><button type="button" class="text-action" data-close-chat-members aria-label="关闭成员列表">×</button></header><div data-chat-roster></div></aside>
       <dialog class="communication-picker communication-member-detail" aria-label="员工详细信息"></dialog>
       <aside id="communication-console-panel" class="communication-console" data-communication-console hidden>
         <div class="communication-console-toolbar"><span class="communication-console-avatar" data-chat-console-avatar></span><div class="communication-console-identity"><strong data-chat-console-name></strong><small data-chat-console-runtime></small></div><div class="communication-console-actions"><button type="button" class="text-action" data-communication-console-latest>↓ 最新</button><button type="button" class="text-action" data-communication-console-refresh>刷新</button><button type="button" class="text-action" data-close-chat-console aria-label="关闭控制台">×</button></div></div><button type="button" class="text-action communication-console-older" data-communication-console-older hidden>加载更早记录</button><p class="communication-console-error" data-communication-console-error role="alert"></p><div class="communication-trace-stream" data-communication-stream tabindex="0" role="log" aria-label="沟通控制台"></div>
@@ -674,6 +676,11 @@ export function createCommunicationUI({ api, navigate, notify, prepareContent = 
     if (focus && !panel.open) panel.showModal();
   }
 
+  // A deleted chat leaves no local draft, upload preview or reading state.
+  function forgetConversation(key) {
+    for (const item of views.get(key)?.attachments || []) if (item.previewURL) URL.revokeObjectURL(item.previewURL);
+    views.delete(key);
+  }
   async function startConversation(memberAgentIds) {
     if (!memberAgentIds.length) throw new Error('请至少选择一位数字员工');
     const input = memberAgentIds.length === 1 ? {kind:'agent',targetId:memberAgentIds[0]} : {kind:'group',memberAgentIds};
@@ -683,11 +690,23 @@ export function createCommunicationUI({ api, navigate, notify, prepareContent = 
   function showGroupEditor(existing = null) {
     const trigger = query('[data-new-chat]'), key = currentId;
     const dialog = document.createElement('dialog'); dialog.className = 'communication-picker'; dialog.setAttribute('aria-labelledby','communication-picker-title');
-    dialog.innerHTML = `<header><h2 id="communication-picker-title">${existing ? '编辑群聊' : '新建对话'}</h2></header><form>${existing ? `<div class="form-field"><label for="chat-group-name">群聊名称</label><input id="chat-group-name" name="name" maxlength="100" required value="${escapeHtml(existing.name)}"></div>` : ''}<div class="form-field" data-group-member-picker></div><p role="alert" data-group-error></p><div class="form-actions"><button type="button" class="small-button" data-close-group autofocus>关闭</button><button type="submit" class="primary-button">${existing ? '保存' : '开始沟通'}</button></div></form>`;
+    dialog.innerHTML = `<header><h2 id="communication-picker-title">${existing ? '编辑群聊' : '新建对话'}</h2></header><form>${existing ? `<div class="form-field"><label for="chat-group-name">群聊名称</label><input id="chat-group-name" name="name" maxlength="100" required value="${escapeHtml(existing.name)}"></div>` : ''}<div class="form-field" data-group-member-picker></div><p role="alert" data-group-error></p><div class="form-actions">${existing ? '<button type="button" class="small-button danger" data-delete-group>删除群聊</button>' : ''}<button type="button" class="small-button" data-close-group autofocus>关闭</button><button type="submit" class="primary-button">${existing ? '保存' : '开始沟通'}</button></div></form>`;
     host.append(dialog);
     const employees = contacts.filter(item => item.contactKind === 'agent'), teams = contacts.filter(item => item.contactKind === 'team');
     const selection = createEmployeeMultiSelect(dialog.querySelector('[data-group-member-picker]'), { id:'chat-group-members', label:'成员', placeholder:'添加团队或数字员工', esc:escapeHtml, items:[...teams,...employees], selectedIds:existing?.members.map(member=>member.id) || [], detail:item=>`<small>${escapeHtml(item.contactKind === 'team' ? '团队 · '+item.memberAgentIds.length+' 位员工' : item.description || '数字员工')}</small>`, expand:item=>item.contactKind === 'team' ? item.memberAgentIds.filter(id=>employees.some(member=>member.id===id)) : [item.id] });
     dialog.querySelector('[data-close-group]').onclick = () => dialog.close();
+    const remove = dialog.querySelector('[data-delete-group]');
+    if (remove) remove.onclick = async () => {
+      const error = dialog.querySelector('[data-group-error]');
+      if (!await confirmDialog({ title: '删除群聊', message: `删除「${existing.name}」后，群聊从会话列表移除且不能再发送消息；已有消息、附件和执行记录保留为历史。`, confirmLabel: '删除群聊', danger: true })) { if (dialog.open) remove.focus(); return; }
+      remove.disabled = true; error.textContent = '';
+      try {
+        await api(`/api/communications/${key}`, { method: 'DELETE' });
+        dialog.close(); conversations = conversations.filter(item => item.id !== key); renderList();
+        if (currentId === key) navigate(null);
+        forgetConversation(key); onRead();
+      } catch (problem) { error.textContent = problem.message; remove.disabled = false; }
+    };
     dialog.oncancel = event => event.preventDefault();
     dialog.onclose = () => { closeFloatingLists(dialog); dialog.remove(); trigger?.focus(); };
     dialog.querySelector('form').onsubmit = async event => {
