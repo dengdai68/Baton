@@ -60,7 +60,7 @@ const desktopNotifications=createDesktopNotifications({
   },
   onDiagnostic:(event,fields)=>diagnostic('desktop.notification_'+event,fields)
 });
-app.setName("AgentForge");
+app.setName("Baton");
 const controlRoot=resolveDesktopDataRoot({ packaged: app.isPackaged, env: process.env });
 let storage = desktopStoragePaths(controlRoot,{controlRoot,instance:app.isPackaged?'desktop':'desktop-dev'});
 const previousUserData = app.getPath('userData');
@@ -70,7 +70,7 @@ const endpointFile = join(controlRoot, "desktop-endpoint.json");
 const cliSessionFile = join(controlRoot, "desktop-cli-session.json");
 let cliSessionSync = Promise.resolve(), publishedCliParent = null;
 const preferencesFile = join(controlRoot, "desktop-preferences.json");
-installProcessDiagnostics("desktop", { instancePath: storage.AGENTFORGE_AUTH_DB_PATH });
+installProcessDiagnostics("desktop", { instancePath: storage.BATON_AUTH_DB_PATH });
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", showWindow);
@@ -78,7 +78,7 @@ else {
     diagnostic("desktop.start_failed", { error });
     // Documented last resort: if even the app-styled error window cannot be
     // created (process-level failure), exit with the diagnostic log only.
-    try { await appDialog({ kind: "error", title: "AgentForge 启动失败", message: "桌面客户端启动失败。", detail: `日志：${diagnostics().status().filePath}`, buttons: ["退出"], cancelIndex: 0 }); }
+    try { await appDialog({ kind: "error", title: "Baton 启动失败", message: "桌面客户端启动失败。", detail: `日志：${diagnostics().status().filePath}`, buttons: ["退出"], cancelIndex: 0 }); }
     catch (dialogError) { diagnostic("desktop.start_dialog_failed", { error: dialogError }); }
     app.quit();
   });
@@ -100,16 +100,16 @@ async function startControlPlane() {
   const owned = child;
   owned.on('message',message=>{
     if(owned!==child)return;
-    if(message?.type==='agentforge-notification') { void desktopNotifications.receive(message.notice,()=>owned===child&&!quitting);return; }
-    if(message?.type!=='agentforge-storage-restart'||typeof message.workspaceRoot!=='string')return;
-    void changeStorageRoot(message.workspaceRoot).catch(error=>diagnostic('desktop.storage_restart_failed',{error})).finally(()=>{if(child===owned&&owned.connected)owned.send({type:'agentforge-update-release',id:message.id},()=>{});});
+    if(message?.type==='baton-notification') { void desktopNotifications.receive(message.notice,()=>owned===child&&!quitting);return; }
+    if(message?.type!=='baton-storage-restart'||typeof message.workspaceRoot!=='string')return;
+    void changeStorageRoot(message.workspaceRoot).catch(error=>diagnostic('desktop.storage_restart_failed',{error})).finally(()=>{if(child===owned&&owned.connected)owned.send({type:'baton-update-release',id:message.id},()=>{});});
   });
   for (const stream of ["stdout", "stderr"]) createInterface({ input: owned[stream] }).on("line", text => diagnostic(`desktop.server_${stream}`, { text, childPid: owned.pid }));
   owned.once("exit", (code, signal) => { diagnostic("desktop.server_exit", { code, signal }); if (child === owned) { desktopNotifications.clear(); child = null; childBootstrapToken = null; controlOrigin = null; childInstanceId = null; } });
   owned.once("error", error => { diagnostic("desktop.server_error", { error }); if (child === owned) { desktopNotifications.clear(); child = null; childBootstrapToken = null; controlOrigin = null; childInstanceId = null; } });
   const ready = await new Promise((resolve, reject) => {
     const timer = setTimeout(() => finish(new Error("本地后台启动超时，请检查服务日志。")), 30000);
-    const onMessage = message => { if (message?.type === "agentforge-ready") finish(null, message); };
+    const onMessage = message => { if (message?.type === "baton-ready") finish(null, message); };
     const onExit = () => finish(new Error("本地后台启动失败，请检查服务日志。"));
     const finish = (error, message) => { clearTimeout(timer); owned.off("message", onMessage); owned.off("exit", onExit); error ? reject(error) : resolve(message); };
     owned.on("message", onMessage); owned.once("exit", onExit);
@@ -134,17 +134,17 @@ async function changeStorageRoot(workspaceRoot){
   connecting=true;const previous=storage;let moved;
   try{
     if(applicationUpdates?.snapshot().phase==='downloading')throw new Error('安装包正在下载，请下载完成后再更换数据目录');
-    window?.setTitle('AgentForge · 正在整理数据目录…');
+    window?.setTitle('Baton · 正在整理数据目录…');
     const owned=child;if(!owned)throw new Error('没有可停止的本机服务');
     await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error('本机服务未退出，未搬运数据')),15000);owned.once('exit',()=>{clearTimeout(timer);resolve();});owned.kill();});
-    moved=await relocateStorage({sourceRoot:previous.dataRoot,controlRoot,workspaceRoot,instance:app.isPackaged?'desktop':'desktop-dev',previousRuntimeRoots:JSON.parse(previous.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS),onProgress:entry=>diagnostic('desktop.storage_copy',{entry})});
+    moved=await relocateStorage({sourceRoot:previous.dataRoot,controlRoot,workspaceRoot,instance:app.isPackaged?'desktop':'desktop-dev',previousRuntimeRoots:JSON.parse(previous.BATON_RUNTIME_PREVIOUS_ROOTS),onProgress:entry=>diagnostic('desktop.storage_copy',{entry})});
     storage=desktopStoragePaths(controlRoot,{controlRoot,instance:app.isPackaged?'desktop':'desktop-dev',workspaceRoot:moved.location.workspaceRoot,previousRuntimeRoots:moved.location.previousRuntimeRoots});
     await startControlPlane();
     await moved.cleanup().catch(error=>diagnostic('desktop.storage_source_cleanup_failed',{error}));
   }catch(error){
     diagnostic('desktop.storage_move_failed',{error});
     if(moved&&child){const failed=child;await new Promise(resolve=>{const timer=setTimeout(resolve,5000);failed.once('exit',()=>{clearTimeout(timer);resolve();});failed.kill();});}
-    if(!child&&moved){await writeStorageLocation(controlRoot,{version:1,workspaceRoot:previous.AGENTFORGE_WORKSPACE_ROOT,previousRuntimeRoots:JSON.parse(previous.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS)});storage=previous;}
+    if(!child&&moved){await writeStorageLocation(controlRoot,{version:1,workspaceRoot:previous.BATON_WORKSPACE_ROOT,previousRuntimeRoots:JSON.parse(previous.BATON_RUNTIME_PREVIOUS_ROOTS)});storage=previous;}
     await appDialog({parent:window,kind:'error',title:'数据目录未切换',message:'未能完成数据目录整理，原始资料已保留。',detail:error.message,buttons:['好'],cancelIndex:0});
   }finally{connecting=false;}
   await connect('/settings/workspace');
@@ -155,16 +155,16 @@ function syncCliSession() {
   cliSessionSync = cliSessionSync.catch(() => {}).then(async () => {
     if (!controlOrigin || quitting) return;
     const origin = controlOrigin, instanceId = childInstanceId;
-    const cookies = await session.defaultSession.cookies.get({ url: origin, name: 'agentforge_session' });
+    const cookies = await session.defaultSession.cookies.get({ url: origin, name: 'baton_session' });
     const cookie = cookies.find(item => item.path === '/' && /^[a-f0-9]{64}$/.test(item.value));
     if (!cookie) { desktopNotifications.clear(); publishedCliParent = null; await unlink(cliSessionFile).catch(error => { if (error.code !== 'ENOENT') throw error; }); return; }
     const parentKey = `${instanceId}:${cookie.value}`;
     if (publishedCliParent === parentKey) return;
     desktopNotifications.clear();
-    const response = await fetch(`${origin}/api/auth/cli-session`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: `agentforge_session=${cookie.value}` }, body: '{}' });
+    const response = await fetch(`${origin}/api/auth/cli-session`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(5000), headers: { Origin: origin, 'Content-Type': 'application/json', Cookie: `baton_session=${cookie.value}` }, body: '{}' });
     if (!response.ok) { await unlink(cliSessionFile).catch(() => {}); return; }
     const grant = await response.json();
-    if (!/^agentforge_session=[a-f0-9]{64}$/.test(grant.cookie) || origin !== controlOrigin || instanceId !== childInstanceId || quitting) return;
+    if (!/^baton_session=[a-f0-9]{64}$/.test(grant.cookie) || origin !== controlOrigin || instanceId !== childInstanceId || quitting) return;
     const temporary = `${cliSessionFile}.${randomBytes(8).toString('hex')}.tmp`;
     try {
       await writeFile(temporary, JSON.stringify({ origin, instanceId, cookie: grant.cookie, expiresAt: grant.expiresAt }), { flag: 'wx', mode: 0o600 });
@@ -188,22 +188,22 @@ async function installDefaultCli() {
 async function connect(preferredRoute=null) {
   if (connecting || quitting) return;
   connecting = true;
-  window?.setTitle("AgentForge · 正在连接本机服务…");
+  window?.setTitle("Baton · 正在连接本机服务…");
   try {
     if (!child || !await health(controlOrigin, childInstanceId)) await startControlPlane();
     if (!quitting) {
       const route = await initialRoute(controlOrigin);
-      if (route === "/setup") await window.loadURL(`${controlOrigin}/setup`, { extraHeaders: `X-AgentForge-Bootstrap: ${childBootstrapToken}\n` });
+      if (route === "/setup") await window.loadURL(`${controlOrigin}/setup`, { extraHeaders: `X-Baton-Bootstrap: ${childBootstrapToken}\n` });
       else await window.loadURL(controlOrigin+(preferredRoute||''));
-      window.setTitle("AgentForge");
+      window.setTitle("Baton");
       publishedCliParent = null;
       await syncCliSession();
-      await finishStorageRelocation({businessRoot:storage.dataRoot,previousRuntimeRoots:JSON.parse(storage.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS)}).catch(error=>diagnostic('desktop.storage_source_cleanup_failed',{error}));
+      await finishStorageRelocation({businessRoot:storage.dataRoot,previousRuntimeRoots:JSON.parse(storage.BATON_RUNTIME_PREVIOUS_ROOTS)}).catch(error=>diagnostic('desktop.storage_source_cleanup_failed',{error}));
     }
   } catch (error) {
     diagnostic("desktop.connection_failed", { error });
     if (!quitting && window && !window.isDestroyed()) {
-      const response = await appDialog({ parent: window, kind: "error", title: "无法连接 AgentForge", message: "无法连接本机服务。", detail: `日志：${diagnostics().status().filePath}`, buttons: ["重试", "关闭"], defaultIndex: 0, cancelIndex: 1 });
+      const response = await appDialog({ parent: window, kind: "error", title: "无法连接 Baton", message: "无法连接本机服务。", detail: `日志：${diagnostics().status().filePath}`, buttons: ["重试", "关闭"], defaultIndex: 0, cancelIndex: 1 });
       connecting = false;
       if (response === 0) return connect();
       app.quit();
@@ -233,12 +233,12 @@ function ensureTray() {
   const image = nativeImage.createFromPath(join(sourceRoot, 'web/icons/trayTemplate.png'));
   image.setTemplateImage(true);
   tray = new Tray(image);
-  tray.setToolTip("AgentForge");
+  tray.setToolTip("Baton");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "打开 AgentForge", click: showWindowFromTray },
+    { label: "打开 Baton", click: showWindowFromTray },
     { label: "设置…", click: openSettings },
     { type: "separator" },
-    { label: "退出 AgentForge", click: () => app.quit() }
+    { label: "退出 Baton", click: () => app.quit() }
   ]));
 }
 
@@ -276,7 +276,7 @@ async function changeAppearance(value) {
 }
 function cliInstallation() {
   if (!app.isPackaged || process.platform !== 'darwin') return null;
-  const launcher = join(dirname(app.getAppPath()), 'cli/agentforge');
+  const launcher = join(dirname(app.getAppPath()), 'cli/baton');
   if (launcher.startsWith('/Volumes/') || launcher.includes('/AppTranslocation/')) return null;
   return createCliInstallation({ home: homedir(), launcher, shell: userInfo().shell || '/bin/zsh', zdotdir: process.env.ZDOTDIR });
 }
@@ -294,7 +294,7 @@ async function closeWindow() {
   closingPrompt = true;
   try {
     const response = await appDialog({ parent: window,
-      kind: "question", title: "关闭 AgentForge", message: "关闭主窗口时，你希望如何处理？",
+      kind: "question", title: "关闭 Baton", message: "关闭主窗口时，你希望如何处理？",
       detail: "选择会保存，可随时在「设置 → 常规」修改。保留在菜单栏会继续运行本机后台；Cmd+Q 始终退出。",
       buttons: ["退出程序", "保留在菜单栏", "取消"], defaultIndex: 2, cancelIndex: 2
     });
@@ -312,7 +312,7 @@ async function closeWindow() {
 function showAboutDialog() {
   const parent = window && !window.isDestroyed() ? window : null;
   void appDialog({ parent, kind: "question",
-    title: "关于 AgentForge", message: `AgentForge 桌面客户端\n版本 ${app.getVersion()}`,
+    title: "关于 Baton", message: `Baton 桌面客户端\n版本 ${app.getVersion()}`,
     detail: `Electron ${process.versions.electron} · Chromium ${process.versions.chrome} · Node ${process.versions.node}`,
     buttons: ["好"], cancelIndex: 0
   }).catch(error => diagnostic("desktop.about_failed", { error }));
@@ -326,17 +326,17 @@ async function prepareUpdateRestart() {
   await new Promise((resolve, reject) => {
     const finish = error => { clearTimeout(timer); owned.off('message', receive); error ? reject(error) : resolve(); };
     const receive = message => {
-      if (message?.type !== 'agentforge-update-readiness' || message.id !== id || owned !== child) return;
+      if (message?.type !== 'baton-update-readiness' || message.id !== id || owned !== child) return;
       if (message.ready === true) { restartReservation = { child: owned, id }; finish(); }
       else finish(new Error('仍有任务、沟通或保存操作正在执行，请结束后再重启安装'));
     };
-    const timer = setTimeout(() => { if (owned.connected) owned.send({type:'agentforge-update-release',id},()=>{}); finish(new Error('无法确认后台已空闲，未重启，请稍后重试')); }, 5000);
+    const timer = setTimeout(() => { if (owned.connected) owned.send({type:'baton-update-release',id},()=>{}); finish(new Error('无法确认后台已空闲，未重启，请稍后重试')); }, 5000);
     owned.on('message', receive);
-    owned.send({ type:'agentforge-update-prepare', id }, error => { if (error) finish(new Error('后台连接已断开，未重启')); });
+    owned.send({ type:'baton-update-prepare', id }, error => { if (error) finish(new Error('后台连接已断开，未重启')); });
   });
 }
 function releaseUpdateRestart() {
-  if (restartReservation?.child.connected) restartReservation.child.send({type:'agentforge-update-release',id:restartReservation.id},()=>{});
+  if (restartReservation?.child.connected) restartReservation.child.send({type:'baton-update-release',id:restartReservation.id},()=>{});
   restartReservation = null;
 }
 async function startApplicationUpdates() {
@@ -389,12 +389,12 @@ async function checkApplicationUpdates() {
 function installMenu() {
   const contents = window.webContents;
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === "darwin" ? [{ label: "AgentForge", submenu: [
-      { id: "about-agentforge", label: "关于 AgentForge", click: showAboutDialog }, { type: "separator" },
+    ...(process.platform === "darwin" ? [{ label: "Baton", submenu: [
+      { id: "about-baton", label: "关于 Baton", click: showAboutDialog }, { type: "separator" },
       { label: "设置…", accelerator: "Command+,", click: openSettings },
       { label: "检查更新…", click: () => { void checkApplicationUpdates().catch(error => diagnostic('desktop.update_check_failed',{error})); } },
       { type: "separator" }, { role: "hide" }, { role: "hideOthers" }, { role: "unhide" },
-      { type: "separator" }, { label: "退出 AgentForge", accelerator: "Command+Q", click: () => app.quit() }
+      { type: "separator" }, { label: "退出 Baton", accelerator: "Command+Q", click: () => app.quit() }
     ] }] : []),
     { role: "editMenu" },
     { label: "导航", submenu: [
@@ -410,7 +410,7 @@ function installMenu() {
 async function start() {
   const location=await readStorageLocation(controlRoot,defaultDesktopLocation({controlRoot,packaged:app.isPackaged,env:process.env}));
   storage=desktopStoragePaths(controlRoot,{controlRoot,instance:app.isPackaged?'desktop':'desktop-dev',workspaceRoot:location.workspaceRoot,previousRuntimeRoots:location.previousRuntimeRoots});
-  if(controlRoot!==storage.dataRoot&&await legacyDataRequiresMigration({legacyRoot:controlRoot,currentDatabasePath:storage.AGENTFORGE_DB_PATH}))throw new Error('旧位置仍有实例资料。请先退出 AgentForge，显式整理到配置的数据根目录；未创建空实例。参见 docs/30-storage-layout.md。');
+  if(controlRoot!==storage.dataRoot&&await legacyDataRequiresMigration({legacyRoot:controlRoot,currentDatabasePath:storage.BATON_DB_PATH}))throw new Error('旧位置仍有实例资料。请先退出 Baton，显式整理到配置的数据根目录；未创建空实例。参见 docs/30-storage-layout.md。');
   // A saved locator is authoritative. A disconnected data volume must never
   // look like a fresh instance on the system disk.
   const savedLocator=await lstat(join(controlRoot,'storage.json')).catch(error=>{if(error.code==='ENOENT')return null;throw error;});
@@ -420,7 +420,7 @@ async function start() {
   // Hard protection: a legacy default location with real instance data must
   // never be silently replaced by a fresh instance under the new data home.
   const legacyRoot = legacyDesktopDataRoot({ packaged: app.isPackaged, userData: previousUserData, env: process.env, sourceRoot });
-  if (legacyRoot && await legacyDataRequiresMigration({ legacyRoot, currentDatabasePath: storage.AGENTFORGE_DB_PATH })) {
+  if (legacyRoot && await legacyDataRequiresMigration({ legacyRoot, currentDatabasePath: storage.BATON_DB_PATH })) {
     const command = app.isPackaged
       ? `ELECTRON_RUN_AS_NODE=1 "${process.execPath}" "${join(process.resourcesPath, "scripts", "migrate-data-home.mjs")}" --yes`
       : "node scripts/migrate-data-home.mjs --yes";
@@ -435,13 +435,13 @@ async function start() {
   nativeTheme.themeSource = appearance;
   nativeTheme.on("updated", () => { if (window && !window.isDestroyed()) window.setBackgroundColor(appearanceBackground()); });
   session.defaultSession.cookies.on('changed', (_event, cookie) => {
-    if (cookie.name === 'agentforge_session' && cookie.domain === '127.0.0.1') void syncCliSession();
+    if (cookie.name === 'baton_session' && cookie.domain === '127.0.0.1') void syncCliSession();
   });
   void installDefaultCli();
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   app.dock?.setIcon(join(sourceRoot, 'web/icons/application-dock.png'));
-  window = new BrowserWindow({ ...(process.platform === "darwin" ? { titleBarStyle:"hiddenInset", trafficLightPosition:{x:16,y:15} } : {}), width: 1320, height: 860, minWidth: 760, minHeight: 560, title: "AgentForge", icon: join(sourceRoot, 'web/icons/application-dock.png'), backgroundColor: appearanceBackground(),
+  window = new BrowserWindow({ ...(process.platform === "darwin" ? { titleBarStyle:"hiddenInset", trafficLightPosition:{x:16,y:15} } : {}), width: 1320, height: 860, minWidth: 760, minHeight: 560, title: "Baton", icon: join(sourceRoot, 'web/icons/application-dock.png'), backgroundColor: appearanceBackground(),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false, preload: fileURLToPath(new URL("./preload.cjs", import.meta.url)) }
   });
   const contents = window.webContents;
@@ -517,7 +517,7 @@ async function start() {
   });
   // Presentation only: the authenticated server includes desktop CSS before
   // first paint, including login redirects. This marker grants no authority.
-  contents.setUserAgent(`${contents.getUserAgent()} AgentForgeDesktop/1`);
+  contents.setUserAgent(`${contents.getUserAgent()} BatonDesktop/1`);
   contents.on("will-navigate", (event, url) => { if (!isConsoleURL(url, controlOrigin)) { event.preventDefault(); void external(url); } });
   contents.on("will-redirect", (event, url) => { if (!isConsoleURL(url, controlOrigin)) event.preventDefault(); });
   contents.setWindowOpenHandler(({ url }) => {

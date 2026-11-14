@@ -18,11 +18,11 @@ test('MCP discovery launches through the desktop-provided Node executable',async
  const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
  await writeFile(wrapper,`#!/bin/sh\nprintf x >> ${quote(marker)}\nexec ${quote(process.execPath)} "$@"\n`,{mode:0o700});
  await writeFile(script,`import {Server} from ${JSON.stringify(pathToFileURL(resolve('node_modules/@modelcontextprotocol/sdk/dist/esm/server/index.js')).href)};import {StdioServerTransport} from ${JSON.stringify(pathToFileURL(resolve('node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js')).href)};import {ListToolsRequestSchema} from ${JSON.stringify(pathToFileURL(resolve('node_modules/@modelcontextprotocol/sdk/dist/esm/types.js')).href)};const server=new Server({name:'desktop-fixture',version:'1.0.0'},{capabilities:{tools:{}}});server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[${JSON.stringify(tool('desktop_tool'))}]}));await server.connect(new StdioServerTransport());`);
- const ref=await reference(root,{command:process.execPath,args:[script]}),previous=process.env.AGENTFORGE_ELECTRON_NODE;
+ const ref=await reference(root,{command:process.execPath,args:[script]}),previous=process.env.BATON_ELECTRON_NODE;
  try {
-  process.env.AGENTFORGE_ELECTRON_NODE=wrapper;
+  process.env.BATON_ELECTRON_NODE=wrapper;
   const found=await createMcpToolDiscovery()(ref,'test');assert.equal(found.total,1);assert.equal(found.tools[0].name,'desktop_tool');assert.equal(await readFile(marker,'utf8'),'x');
- }finally{if(previous===undefined)delete process.env.AGENTFORGE_ELECTRON_NODE;else process.env.AGENTFORGE_ELECTRON_NODE=previous;}
+ }finally{if(previous===undefined)delete process.env.BATON_ELECTRON_NODE;else process.env.BATON_ELECTRON_NODE=previous;}
 });
 
 test('MCP tools discovers all pages over real stdio, shares in-flight work, caches successes and refreshes',async t=>{

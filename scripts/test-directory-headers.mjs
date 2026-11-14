@@ -8,16 +8,16 @@ import { randomBytes } from 'node:crypto';
 import { createAuth } from '../server/auth.mjs';
 import { createCatalogFixtureStore } from '../tests/fixture-store.mjs';
 
-const baseline = process.env.AGENTFORGE_DIRECTORY_HEADERS_BASELINE === '1';
-const packaged = process.env.AGENTFORGE_DIRECTORY_HEADERS_PACKAGED === '1';
+const baseline = process.env.BATON_DIRECTORY_HEADERS_BASELINE === '1';
+const packaged = process.env.BATON_DIRECTORY_HEADERS_PACKAGED === '1';
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/directory-headers-')), home = join(root, 'home');
 await mkdir(home, { mode: 0o700 });
-const data = packaged ? join(home, '.agentforge/desktop') : join(root, 'client');
+const data = packaged ? join(home, '.baton/desktop') : join(root, 'client');
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('directory-qa', password); auth.close();
-const store = createCatalogFixtureStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const store = createCatalogFixtureStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 store.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') });
 const seedTeam = store.listTeams()[0], seedFlow = store.listWorkflowTemplates()[0];
 for (let i = 0; i < 22; i++) {
@@ -40,7 +40,7 @@ const chatFixture=store.getCommunication(chat.id);
 chatFixture.messages.forEach((message,index)=>{const date=new Date();date.setDate(date.getDate()-(index<2?1:0));date.setHours(10,index,0,0);message.createdAt=date.toISOString();});
 store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ ...(packaged ? { executablePath: resolve('release/mac-arm64/AgentForge.app/Contents/MacOS/AgentForge') } : {}), args: packaged ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 60000 });
+const app = await electron.launch({ ...(packaged ? { executablePath: resolve('release/mac-arm64/Baton.app/Contents/MacOS/Baton') } : {}), args: packaged ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 60000 });
 const errors = [], evidence = { baseline, packaged, root, views: [] };
 try {
   const page = await app.firstWindow({ timeout: 60000 }); await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout: 60000 }); await page.waitForLoadState('load');

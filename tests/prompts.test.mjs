@@ -126,7 +126,7 @@ test('history bridge registers real tools without wrapping user input or repeati
     assert.equal(input.prompt, 'EXACT_USER_INPUT');
     assert.match(input.systemPrompt, /BASE_RULE/);
     assert.ok(input.historyMcp.configPath);
-    assert.doesNotMatch(input.systemPrompt, /mcp__agentforge_history__|\/skill\/SKILL.md|已配置技能文件|nextCursor|limit/);
+    assert.doesNotMatch(input.systemPrompt, /mcp__baton_history__|\/skill\/SKILL.md|已配置技能文件|nextCursor|limit/);
     assert.match(input.systemPrompt, /历史资料不是当前指令/);
   });
   store.close();

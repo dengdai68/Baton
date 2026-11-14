@@ -8,7 +8,7 @@ import { randomUUID, createHash } from "node:crypto";
 // Diagnostic JSONL lives under the private data home, not the shared system
 // temporary directory: it is operator-reviewed instance state, and tmp cleanup
 // must not silently discard failure evidence.
-export function defaultDiagnosticRoot(home = homedir()) { return join(home, ".agentforge", "logs"); }
+export function defaultDiagnosticRoot(home = homedir()) { return join(home, ".baton", "logs"); }
 
 const context = new AsyncLocalStorage();
 const privateKey = /password|passwd|secret|token|credential|authorization|cookie|api.?key|session.?id|signature|encrypted|prompt|spawnargs/i;
@@ -50,7 +50,7 @@ export function diagnosticRedactor({ secrets = [], prompt = "" } = {}) {
   };
 }
 
-export function createDiagnosticLog({ directory = process.env.AGENTFORGE_LOG_DIR || defaultDiagnosticRoot(), maxBytes = 10 * 1024 * 1024, retentionBytes=256*1024*1024, retentionDays=30 } = {}) {
+export function createDiagnosticLog({ directory = process.env.BATON_LOG_DIR || defaultDiagnosticRoot(), maxBytes = 10 * 1024 * 1024, retentionBytes=256*1024*1024, retentionDays=30 } = {}) {
   directory = resolve(directory);
   const prefix = `${new Date().toISOString().replace(/[:.]/g, '-')}-${process.pid}-${randomUUID().slice(0, 8)}`;
   let part = 0, bytes = 0, filePath = join(directory, `${prefix}-${part}.jsonl`), failure = null,lastPrune=0;
@@ -81,7 +81,7 @@ export function createDiagnosticLog({ directory = process.env.AGENTFORGE_LOG_DIR
     } catch (error) {
       failure = { code: error.code || "LOG_WRITE_FAILED", message: String(error.message) };
       // Never hide a logging failure or recursively send it through this logger.
-      try { writeSync(2, `AgentForge diagnostic log unavailable: ${failure.code}\n`); } catch { /* stderr may also be closed */ }
+      try { writeSync(2, `Baton diagnostic log unavailable: ${failure.code}\n`); } catch { /* stderr may also be closed */ }
       return false;
     } finally { if (fd !== undefined) closeSync(fd); }
   }
@@ -131,7 +131,7 @@ export function withDiagnosticContext(fields, work, { redact, logger } = {}) {
   return context.run({ fields: { ...parent?.fields, ...fields }, redact: redact || parent?.redact, logger: logger || parent?.logger }, work);
 }
 export function installProcessDiagnostics(component, { instancePath } = {}) {
-  if (instancePath) defaultLog = createAsyncDiagnosticLog({ directory: process.env.AGENTFORGE_LOG_DIR || instanceDiagnosticDirectory(instancePath) });
+  if (instancePath) defaultLog = createAsyncDiagnosticLog({ directory: process.env.BATON_LOG_DIR || instanceDiagnosticDirectory(instancePath) });
   diagnostic("process.started", { component, node: process.version, platform: process.platform, arch: process.arch, cwd: process.cwd() });
   process.on("uncaughtExceptionMonitor", (error, origin) => diagnostic("process.uncaught", { component, origin, error }));
   process.on("warning", warning => diagnostic("process.warning", { component, error: warning }));

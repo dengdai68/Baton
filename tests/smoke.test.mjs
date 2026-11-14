@@ -25,7 +25,7 @@ test('workflow delivery locations are arbitrary workspace-relative paths, surviv
     let store=createStore({databasePath});
     const base={name:'媒体与根文件',nodes:[{id:'media',title:'制作',staffingGuidance:'媒体制作',artifactPaths:['artifacts/preparation/','reports/质检/','summary.md']},{id:'free',title:'自由组织',staffingGuidance:'根据交付要求组织文件'}]};
     const flow=store.createWorkflowTemplate(base);assert.deepEqual(flow.nodes[0].artifactPaths,base.nodes[0].artifactPaths);assert.deepEqual(flow.nodes[1].artifactPaths,[]);
-    for(const path of ['../escape','/absolute','a/../b','a//b','.','./a','.git/config','.agentforge/private','a\\b'])assert.throws(()=>store.createWorkflowTemplate({...base,name:'invalid-'+path,nodes:[{...base.nodes[0],artifactPaths:[path]}]}));
+    for(const path of ['../escape','/absolute','a/../b','a//b','.','./a','.git/config','.baton/private','a\\b'])assert.throws(()=>store.createWorkflowTemplate({...base,name:'invalid-'+path,nodes:[{...base.nodes[0],artifactPaths:[path]}]}));
     store.close();store=createStore({databasePath});assert.deepEqual(store.snapshot().workflowTemplates.find(item=>item.id===flow.id).nodes.map(node=>node.artifactPaths),[base.nodes[0].artifactPaths,[]]);store.close();
   }finally{await rm(root,{recursive:true,force:true});}
 });
@@ -272,7 +272,7 @@ test("Artifact read errors stay actionable without exposing Run file paths", asy
   const source = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
   const start = source.indexOf("function artifactReadError"), end = source.indexOf("\n\nfunction sendJson", start);
   const { artifactReadError, readArtifactSafely } = new Function(`${source.slice(start, end)}; return { artifactReadError, readArtifactSafely };`)();
-  const missing = artifactReadError(new Error("ENOENT: no such file or directory, lstat '/tmp/agentforge-runs/runs/run/traces/trace/missing.md'"));
+  const missing = artifactReadError(new Error("ENOENT: no such file or directory, lstat '/tmp/baton-runs/runs/run/traces/trace/missing.md'"));
   assert.equal(missing.message, "Artifact 文件不可读取或已不存在");
   assert.doesNotMatch(missing.message, /ENOENT|\/tmp|run\//);
   assert.equal(artifactReadError(new Error("产物大于 524288 字节，请在本地文件系统中查看")).message, "产物大于 524288 字节，请在本地文件系统中查看");
@@ -325,7 +325,7 @@ test("page summaries omit history and role console cursors preserve paginated au
 });
 
 test("system workspace root assigns isolated Task/Run paths and survives configuration changes", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-managed-"));
+  const root = await mkdtemp(join(tmpdir(), "baton-managed-"));
   try {
     const db = join(root, "meta.sqlite"), store = createStore({ databasePath: db, workspaceRoot: join(root, "work") });
     const seed = fixtureTaskInput(store), input = { ...seed }; delete input.workspacePath;
@@ -361,7 +361,7 @@ test("bootstrap Task lists use workspace labels instead of host paths", async ()
 });
 
 test("Task freezes explicit acceptance criteria, rejects malformed input, and preserves criteria across restarts", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-acceptance-"));
+  const root = await mkdtemp(join(tmpdir(), "baton-acceptance-"));
   let database;
   try {
     const db = join(root, "state.sqlite"), store = createStore({ databasePath: db }), base = fixtureTaskInput(store);
@@ -405,7 +405,7 @@ test("content delivery workflow freezes boundaries and never resurrects deleted 
   const flexibleTask = store.createTask({managerAgentId:'system_project_manager', title: "按能力安排审校", objective: "项目经理从现有成员中选择合适的人。", workspacePath: process.cwd(), memberAgentIds: incompleteTeam.memberAgentIds, workflowTemplateId: template.id });
   assert.deepEqual(flexibleTask.nodeAssignments, {});
 
-  const root = await mkdtemp(join(tmpdir(), "agentforge-content-workflow-")), path = join(root, "state.sqlite"), persistence = createSqlitePersistence(path);
+  const root = await mkdtemp(join(tmpdir(), "baton-content-workflow-")), path = join(root, "state.sqlite"), persistence = createSqlitePersistence(path);
   let persistenceClosed = false;
   try {
     persistence.save({ agents: [], teams: [], tasks: [], workflowTemplates: [{ id: "workflow_custom_content", system: false, name: "内容交付", description: "历史自定义内容流", nodes: [{ id: "draft", title: "已有草稿", ownerRole: "产品设计师", dependsOn: [], artifactPaths: ["docs/draft/"] }] }], runs: [], traces: [], artifacts: [], messages: [], decisions: [], events: [] });
@@ -495,7 +495,7 @@ test("employees have no developer/repository protocol and new tasks use the shar
 });
 
 test("real Git preparation clones employee sources, preserves changes and retries failed checkout", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-employee-git-"));
+  const root = await mkdtemp(join(tmpdir(), "baton-employee-git-"));
   const envKeys = ["GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"], previous = Object.fromEntries(envKeys.map(key => [key, process.env[key]]));
   try {
     const executable = join(root, "provider.mjs"); await writeFile(executable, `#!/usr/bin/env node
@@ -561,7 +561,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
     const recovered = await files.prepareRunWorkspace(recoveryTask);
     assert.equal(git("-C", recoveryRepo, "rev-parse", "HEAD"), baselineRevisions[0].commitSha);
     assert.deepEqual(recovered, baselineRevisions);
-    const markerPath = join(nextRun.workspacePath, ".agentforge/workspace-ready.json");
+    const markerPath = join(nextRun.workspacePath, ".baton/workspace-ready.json");
     const marker = JSON.parse(await readFile(markerPath, "utf8"));
     marker.repositoryRevisions[0].commitSha = "invalid";
     await writeFile(markerPath, JSON.stringify(marker));
@@ -620,7 +620,7 @@ test("console subscription invalidates stale visits and preserves history during
 });
 
 test("member sessions persist across retry and restart, isolate members and audit reconstruction", async () => {
-  const root = await directory("agentforge-sessions-");
+  const root = await directory("baton-sessions-");
   try {
     const databasePath = join(root, "state.sqlite"), store = createStore({ databasePath }), run = store.createRun(fixtureTaskInput(store).id);
     store.initializeDispatches(run.id);
@@ -649,7 +649,7 @@ test("member sessions persist across retry and restart, isolate members and audi
 });
 
 test("runtime uses explicit session IDs and only classifies missing sessions for reconstruction", async () => {
-  const root = await directory("agentforge-session-cli-");
+  const root = await directory("baton-session-cli-");
   try {
     const executable = join(root, "fixture.mjs");
     await writeFile(executable, `#!/usr/bin/env node\nconst a=process.argv.slice(2);if(a.at(-1)==='missing'){console.error('No conversation found with session ID');process.exit(1)}if(a.at(-1)==='retry'){console.error('503 temporary provider error');process.exit(1)}console.log(JSON.stringify({type:'result',result:JSON.stringify(a)}));`); await chmod(executable, 0o755);
@@ -707,7 +707,7 @@ test("Runtime cancellation fence rejects before spawn and paused Task cannot be 
 });
 
 test("Task deletion stages Run files until Store deletion commits and recovers an interrupted handoff", async () => {
-  const root = await directory("agentforge-task-delete-"), runFilesRoot = join(root, "run-files");
+  const root = await directory("baton-task-delete-"), runFilesRoot = join(root, "run-files");
   try {
     const files = createRunFiles({ root: runFilesRoot }), store = createStore(), run = store.createRun(fixtureTaskInput(store).id), sentinel = join(runFilesRoot, "runs", run.id, "traces", "snapshot.txt");
     await files.prepareRun(run.id);
@@ -915,7 +915,7 @@ test("Store records employee decisions without business validation", () => {
 });
 
 test("repository snapshots ignore runtime logs but retain tracked files, new source and document evidence", async () => {
-  const root = await directory("agentforge-git-snapshot-");
+  const root = await directory("baton-git-snapshot-");
   try {
     const repo = join(root, "repos", "app"), files = createRunFiles({ root: join(root, "run-files") });
     execFileSync("git", ["-C", repo, "init", "--quiet"]);
@@ -952,7 +952,7 @@ test("repository snapshots ignore runtime logs but retain tracked files, new sou
 });
 
 test("Artifact capture ignores sensitive and symbolic-link changes without copying them", async () => {
-  const root = await directory("agentforge-restricted-capture-"), outside = await mkdtemp(join(tmpdir(), "agentforge-restricted-outside-"));
+  const root = await directory("baton-restricted-capture-"), outside = await mkdtemp(join(tmpdir(), "baton-restricted-outside-"));
   try {
     const files = createRunFiles({ root: join(root, "run-files") });
     await mkdir(join(root, "docs", "requirements"), { recursive: true });
@@ -1136,7 +1136,7 @@ test("nested consultation routes any role to human, rejects self mentions, and r
 });
 
 test("SQLite restart recovers claimed dispatch with the same messages and a new attempt", async () => {
-  const root = await directory("agentforge-queue-");
+  const root = await directory("baton-queue-");
   try {
     const databasePath = join(root, "queue.sqlite"), first = createStore({ databasePath });
     const run = first.createRun(first.listTasks()[0].id);
@@ -1154,7 +1154,7 @@ test("SQLite restart recovers claimed dispatch with the same messages and a new 
 });
 
 test("working directory reads all task files without a manifest and rejects unsafe paths", async () => {
-  const workspacePath = await directory("agentforge-directory-");
+  const workspacePath = await directory("baton-directory-");
   try {
     const files = createRunFiles({ root: join(workspacePath, "snapshots") });
     const task = { workspacePath, workflowSnapshot: { nodes: [{ repositoryPath: "repos/app" }] } };
@@ -1169,9 +1169,9 @@ test("working directory reads all task files without a manifest and rejects unsa
     await assert.rejects(files.readWorkingFile(task, "repos/app/.env"));
     await symlink(join(workspacePath, "repos"), join(workspacePath, "docs/link"));
     await assert.rejects(files.readWorkingFile(task, "docs/link/app/index.js"), /符号链接/);
-    const protocolPath = join(workspacePath, ".agentforge-workspace.json");
+    const protocolPath = join(workspacePath, ".baton-workspace.json");
     await writeFile(protocolPath,'not a protocol any more');
-    assert.ok(!(await files.listWorkingDirectory(task)).entries.some(entry=>entry.path==='.agentforge-workspace.json'));
+    assert.ok(!(await files.listWorkingDirectory(task)).entries.some(entry=>entry.path==='.baton-workspace.json'));
     assert.equal(await readFile(protocolPath,'utf8'),'not a protocol any more');
   } finally { await rm(workspacePath, { recursive: true, force: true }); }
 });
@@ -1377,7 +1377,7 @@ test("task properties render safe recorded facts independently of the active tab
   assert.doesNotMatch(legacy, /data-workspace-disclosure="brief" open|undefined/);
 });
 test("a business Provider handoff without a captured Artifact is recorded", async () => {
-  const root = await directory("agentforge-artifact-required-");
+  const root = await directory("baton-artifact-required-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -1409,7 +1409,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("an employee result with custom report fields is recorded without rejection", async () => {
-  const root = await directory("agentforge-node-result-schema-");
+  const root = await directory("baton-node-result-schema-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -1444,9 +1444,9 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("legacy snapshots drop node state and reflection-agent fields while keeping facts", async () => {
-  const path = join(await directory("agentforge-legacy-"), "legacy.sqlite"); try { createSqlitePersistence(path).save({ agents: [], teams: [], tasks: [{ id: "task", workspacePath: process.cwd(), workflowTemplateId: "software_delivery", workflowSnapshot: { id: "software_delivery", name: "legacy", nodes: [{ id: "requirements", title: "需求", ownerRole: "需求分析师", dependsOn: [] }] }, managerRuntime: { provider: "codex" }, reflectionRuntime: { provider: "codex" }, status: "backlog" }], workflowTemplates: [{ id: "software_delivery", name: "legacy", nodes: [{ id: "requirements", title: "需求", ownerRole: "需求分析师", dependsOn: [] }] }], runs: [{ id: "run", taskId: "task", status: "completed", nodeStates: { requirements: "completed" }, reflectionAgent: { id: "system_reflection_agent" }, steps: [{ id: "step", nodeId: "requirements", ownerAgentId: "agent_analyst", status: "completed" }] }], artifacts: [{ id: "artifact", runId: "run", stepId: "step" }], messages: [], issues: [], decisions: [], events: [] }); const snapshot = createStore({ databasePath: path }).snapshot(); assert.equal("nodeStates" in snapshot.runs[0], false); assert.equal("reflectionAgent" in snapshot.runs[0], false); assert.equal(snapshot.traces[0].legacy, true); assert.equal(snapshot.agents.every((agent) => agent.runtime.provider === "claude-code"), true); } finally { await rm(join(path, ".."), { recursive: true, force: true }); } });
-test("Run files keep real Trace and workspace files", async () => { const root = await directory("agentforge-files-"); try { const files = createRunFiles({ root }); await writeFile(join(root, "source.js"), "export const version = 2;\n"); const before = new Map(); const changed = await files.captureWorkspaceChanges({ runId: "run", traceId: "trace", workspacePath: root, before }); assert.match(changed.artifacts[0].storagePath, /traces\/trace\/workspace/); } finally { await rm(root, { recursive: true, force: true }); } });
-test("Artifact previews verify the captured snapshot before returning content", async () => { const root = await directory("agentforge-artifact-read-"), outside = await mkdtemp(join(tmpdir(), "agentforge-artifact-outside-")); try { const files = createRunFiles({ root }); const storagePath = "runs/run/traces/trace/workspace/docs/report.md", artifact = join(root, "runs", "run", "traces", "trace", "workspace", "docs", "report.md"), original = "# Report\n", expected = { bytes: Buffer.byteLength(original), sha256: createHash("sha256").update(original).digest("hex") }; await mkdir(join(root, "runs", "run", "traces", "trace", "workspace", "docs"), { recursive: true }); await writeFile(artifact, original); assert.equal((await files.readArtifact(storagePath, { expected })).content, original); assert.deepEqual(await files.readArtifactBytes(storagePath, { expected }), Buffer.from(original)); await assert.rejects(files.readArtifactBytes(storagePath, 1), /产物大于 1 字节/); const tampered = "# Alter!\n"; assert.equal(Buffer.byteLength(tampered), expected.bytes); await writeFile(artifact, tampered); await assert.rejects(files.readArtifact(storagePath, { expected }), /完整性校验失败/); await assert.rejects(files.readArtifactBytes(storagePath, { expected }), /完整性校验失败/); await assert.rejects(files.readArtifact(storagePath, { expected: { bytes: expected.bytes, sha256: "not-a-sha" } }), /完整性无法验证/); await writeFile(join(outside, "secret.txt"), "OUTSIDE_ARTIFACT_SENTINEL"); await rm(artifact); await symlink(join(outside, "secret.txt"), artifact); await assert.rejects(files.readArtifact(storagePath, { expected }), /符号链接/); await assert.rejects(files.readArtifactBytes(storagePath, { expected }), /符号链接/); await rm(artifact); await rm(join(root, "runs", "run", "traces", "trace", "workspace"), { recursive: true, force: true }); await mkdir(join(outside, "docs"), { recursive: true }); await writeFile(join(outside, "docs", "report.md"), "OUTSIDE_ARTIFACT_SENTINEL"); await symlink(outside, join(root, "runs", "run", "traces", "trace", "workspace")); await assert.rejects(files.readArtifact(storagePath, { expected }), /符号链接/); } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); } });
+  const path = join(await directory("baton-legacy-"), "legacy.sqlite"); try { createSqlitePersistence(path).save({ agents: [], teams: [], tasks: [{ id: "task", workspacePath: process.cwd(), workflowTemplateId: "software_delivery", workflowSnapshot: { id: "software_delivery", name: "legacy", nodes: [{ id: "requirements", title: "需求", ownerRole: "需求分析师", dependsOn: [] }] }, managerRuntime: { provider: "codex" }, reflectionRuntime: { provider: "codex" }, status: "backlog" }], workflowTemplates: [{ id: "software_delivery", name: "legacy", nodes: [{ id: "requirements", title: "需求", ownerRole: "需求分析师", dependsOn: [] }] }], runs: [{ id: "run", taskId: "task", status: "completed", nodeStates: { requirements: "completed" }, reflectionAgent: { id: "system_reflection_agent" }, steps: [{ id: "step", nodeId: "requirements", ownerAgentId: "agent_analyst", status: "completed" }] }], artifacts: [{ id: "artifact", runId: "run", stepId: "step" }], messages: [], issues: [], decisions: [], events: [] }); const snapshot = createStore({ databasePath: path }).snapshot(); assert.equal("nodeStates" in snapshot.runs[0], false); assert.equal("reflectionAgent" in snapshot.runs[0], false); assert.equal(snapshot.traces[0].legacy, true); assert.equal(snapshot.agents.every((agent) => agent.runtime.provider === "claude-code"), true); } finally { await rm(join(path, ".."), { recursive: true, force: true }); } });
+test("Run files keep real Trace and workspace files", async () => { const root = await directory("baton-files-"); try { const files = createRunFiles({ root }); await writeFile(join(root, "source.js"), "export const version = 2;\n"); const before = new Map(); const changed = await files.captureWorkspaceChanges({ runId: "run", traceId: "trace", workspacePath: root, before }); assert.match(changed.artifacts[0].storagePath, /traces\/trace\/workspace/); } finally { await rm(root, { recursive: true, force: true }); } });
+test("Artifact previews verify the captured snapshot before returning content", async () => { const root = await directory("baton-artifact-read-"), outside = await mkdtemp(join(tmpdir(), "baton-artifact-outside-")); try { const files = createRunFiles({ root }); const storagePath = "runs/run/traces/trace/workspace/docs/report.md", artifact = join(root, "runs", "run", "traces", "trace", "workspace", "docs", "report.md"), original = "# Report\n", expected = { bytes: Buffer.byteLength(original), sha256: createHash("sha256").update(original).digest("hex") }; await mkdir(join(root, "runs", "run", "traces", "trace", "workspace", "docs"), { recursive: true }); await writeFile(artifact, original); assert.equal((await files.readArtifact(storagePath, { expected })).content, original); assert.deepEqual(await files.readArtifactBytes(storagePath, { expected }), Buffer.from(original)); await assert.rejects(files.readArtifactBytes(storagePath, 1), /产物大于 1 字节/); const tampered = "# Alter!\n"; assert.equal(Buffer.byteLength(tampered), expected.bytes); await writeFile(artifact, tampered); await assert.rejects(files.readArtifact(storagePath, { expected }), /完整性校验失败/); await assert.rejects(files.readArtifactBytes(storagePath, { expected }), /完整性校验失败/); await assert.rejects(files.readArtifact(storagePath, { expected: { bytes: expected.bytes, sha256: "not-a-sha" } }), /完整性无法验证/); await writeFile(join(outside, "secret.txt"), "OUTSIDE_ARTIFACT_SENTINEL"); await rm(artifact); await symlink(join(outside, "secret.txt"), artifact); await assert.rejects(files.readArtifact(storagePath, { expected }), /符号链接/); await assert.rejects(files.readArtifactBytes(storagePath, { expected }), /符号链接/); await rm(artifact); await rm(join(root, "runs", "run", "traces", "trace", "workspace"), { recursive: true, force: true }); await mkdir(join(outside, "docs"), { recursive: true }); await writeFile(join(outside, "docs", "report.md"), "OUTSIDE_ARTIFACT_SENTINEL"); await symlink(outside, join(root, "runs", "run", "traces", "trace", "workspace")); await assert.rejects(files.readArtifact(storagePath, { expected }), /符号链接/); } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); } });
 
 test("Artifact verification streams legal files above preview size and rejects changed snapshots", async () => {
   const root = await mkdtemp(join(tmpdir(), "af-artifact-verify-"));
@@ -1471,10 +1471,10 @@ test("Artifact verification streams legal files above preview size and rejects c
     await assert.rejects(files.verifyArtifact(storagePath, { expected: { bytes: 1, sha256: "a".repeat(64) } }), /符号链接/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
-test("product Artifact capture excludes workspace files outside docs and sensitive entries inside business roots", async () => { const root = await directory("agentforge-product-files-"); try { const files = createRunFiles({ root: join(root, "run-files") }); await mkdir(join(root, "docs", "testing"), { recursive: true }); await mkdir(join(root, "repos", "app"), { recursive: true }); for (const path of ["docs/.env", "docs/credentials.json", "repos/app/deploy.key", "repos/app/id_rsa"]) await writeFile(join(root, path), "QUALITY_SENTINEL_SECRET"); const before = await files.snapshotWorkspace(root, { includeRoots: ["docs", "repos"] }); await writeFile(join(root, "docs", "testing", "report.md"), "# report\n"); await writeFile(join(root, "scratch.txt"), "not a product artifact\n"); const changed = await files.captureWorkspaceChanges({ runId: "run", traceId: "trace", workspacePath: root, before, includeRoots: ["docs", "repos"], allowedRoots: ["docs/testing/", "repos/app"] }); assert.deepEqual(changed.artifacts.map((item) => item.name), ["docs/testing/report.md"]); assert.deepEqual([...changed.after.keys()], ["docs/testing/report.md"]); assert.doesNotMatch(JSON.stringify(changed), /QUALITY_SENTINEL_SECRET|\.env|credentials\.json|deploy\.key|id_rsa/); const beforeScope = await files.snapshotWorkspace(root, { includeRoots: ["docs", "repos"] }); await mkdir(join(root, "docs", "other"), { recursive: true }); await writeFile(join(root, "docs", "other", "outside.md"), "must not be accepted\n"); await assert.rejects(files.captureWorkspaceChanges({ runId: "run", traceId: "rejected", workspacePath: root, before: beforeScope, includeRoots: ["docs", "repos"], allowedRoots: ["docs/testing/"] }), /越界变更.*docs\/other\/outside\.md/); } finally { await rm(root, { recursive: true, force: true }); } });
-test("repository tree exposes regular source while rejecting sensitive entries and symlink paths", async () => { const root = await directory("agentforge-tree-"), outside = await mkdtemp(join(tmpdir(), "agentforge-tree-outside-")); try { const files = createRunFiles({ root }); await mkdir(join(root, "repos", "app", "src"), { recursive: true }); await writeFile(join(root, "repos", "app", "src", "login.js"), "export const login = true;\n"); for (const name of [".env", "credentials.json", "deploy.key", "id_rsa"]) await writeFile(join(root, "repos", "app", name), "test-only"); const serialized = JSON.stringify(await files.listRepositoryTree(root, "repos/app")); assert.match(serialized, /login\.js/); assert.doesNotMatch(serialized, /\.env|credentials\.json|deploy\.key|id_rsa/); await assert.rejects(files.listRepositoryTree(root, "repos/app/../other"), /代码仓库路径/); await writeFile(join(outside, "outside-only.txt"), "not a task repository"); await rm(join(root, "repos", "app"), { recursive: true, force: true }); await symlink(outside, join(root, "repos", "app")); await assert.rejects(files.listRepositoryTree(root, "repos/app"), /符号链接/); await rm(join(root, "repos", "app"), { recursive: true, force: true }); await rm(join(root, "repos"), { recursive: true, force: true }); await symlink(outside, join(root, "repos")); await assert.rejects(files.listRepositoryTree(root, "repos/app"), /符号链接/); } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); } });
+test("product Artifact capture excludes workspace files outside docs and sensitive entries inside business roots", async () => { const root = await directory("baton-product-files-"); try { const files = createRunFiles({ root: join(root, "run-files") }); await mkdir(join(root, "docs", "testing"), { recursive: true }); await mkdir(join(root, "repos", "app"), { recursive: true }); for (const path of ["docs/.env", "docs/credentials.json", "repos/app/deploy.key", "repos/app/id_rsa"]) await writeFile(join(root, path), "QUALITY_SENTINEL_SECRET"); const before = await files.snapshotWorkspace(root, { includeRoots: ["docs", "repos"] }); await writeFile(join(root, "docs", "testing", "report.md"), "# report\n"); await writeFile(join(root, "scratch.txt"), "not a product artifact\n"); const changed = await files.captureWorkspaceChanges({ runId: "run", traceId: "trace", workspacePath: root, before, includeRoots: ["docs", "repos"], allowedRoots: ["docs/testing/", "repos/app"] }); assert.deepEqual(changed.artifacts.map((item) => item.name), ["docs/testing/report.md"]); assert.deepEqual([...changed.after.keys()], ["docs/testing/report.md"]); assert.doesNotMatch(JSON.stringify(changed), /QUALITY_SENTINEL_SECRET|\.env|credentials\.json|deploy\.key|id_rsa/); const beforeScope = await files.snapshotWorkspace(root, { includeRoots: ["docs", "repos"] }); await mkdir(join(root, "docs", "other"), { recursive: true }); await writeFile(join(root, "docs", "other", "outside.md"), "must not be accepted\n"); await assert.rejects(files.captureWorkspaceChanges({ runId: "run", traceId: "rejected", workspacePath: root, before: beforeScope, includeRoots: ["docs", "repos"], allowedRoots: ["docs/testing/"] }), /越界变更.*docs\/other\/outside\.md/); } finally { await rm(root, { recursive: true, force: true }); } });
+test("repository tree exposes regular source while rejecting sensitive entries and symlink paths", async () => { const root = await directory("baton-tree-"), outside = await mkdtemp(join(tmpdir(), "baton-tree-outside-")); try { const files = createRunFiles({ root }); await mkdir(join(root, "repos", "app", "src"), { recursive: true }); await writeFile(join(root, "repos", "app", "src", "login.js"), "export const login = true;\n"); for (const name of [".env", "credentials.json", "deploy.key", "id_rsa"]) await writeFile(join(root, "repos", "app", name), "test-only"); const serialized = JSON.stringify(await files.listRepositoryTree(root, "repos/app")); assert.match(serialized, /login\.js/); assert.doesNotMatch(serialized, /\.env|credentials\.json|deploy\.key|id_rsa/); await assert.rejects(files.listRepositoryTree(root, "repos/app/../other"), /代码仓库路径/); await writeFile(join(outside, "outside-only.txt"), "not a task repository"); await rm(join(root, "repos", "app"), { recursive: true, force: true }); await symlink(outside, join(root, "repos", "app")); await assert.rejects(files.listRepositoryTree(root, "repos/app"), /符号链接/); await rm(join(root, "repos", "app"), { recursive: true, force: true }); await rm(join(root, "repos"), { recursive: true, force: true }); await symlink(outside, join(root, "repos")); await assert.rejects(files.listRepositoryTree(root, "repos/app"), /符号链接/); } finally { await rm(root, { recursive: true, force: true }); await rm(outside, { recursive: true, force: true }); } });
 test("project manager routes employee work and directly hands off to the human", async () => {
-  const root = await directory("agentforge-runtime-"); try { const executable = join(root, "provider.mjs"); await writeFile(executable, `#!/usr/bin/env node
+  const root = await directory("baton-runtime-"); try { const executable = join(root, "provider.mjs"); await writeFile(executable, `#!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 const userPrompt = process.argv.at(-1) || "";
 const instructionFlag = process.argv.indexOf("--append-system-prompt-file");
@@ -1538,7 +1538,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("agent consultation immediately invokes the recipient instead of waiting for patrol", async () => {
-  const root = await directory("agentforge-consultation-"); try {
+  const root = await directory("baton-consultation-"); try {
     const store = createStore();
     const analyst = store.createAgent({ name: "需求", role: "需求分析师", runtime: { provider: "claude-code", executable: join(root, "provider.mjs") } });
     const architect = store.createAgent({ name: "架构", role: "系统架构师", runtime: { provider: "claude-code", executable: join(root, "provider.mjs") } });
@@ -1571,7 +1571,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("human retry now resumes a backoff Run without discarding its failed Trace", async () => {
-  const root = await directory("agentforge-retry-now-");
+  const root = await directory("baton-retry-now-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -1625,9 +1625,9 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("failed business writes survive restart and become accepted Artifacts on retry", async () => {
-  const root = await directory("agentforge-failed-write-retry-");
+  const root = await directory("baton-failed-write-retry-");
   try {
-    const executable = join(root, "provider.mjs"), databasePath = join(root, ".agentforge/state.sqlite"), runFilesRoot = join(root, "run-files");
+    const executable = join(root, "provider.mjs"), databasePath = join(root, ".baton/state.sqlite"), runFilesRoot = join(root, "run-files");
     await writeFile(executable, `#!/usr/bin/env node
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 const userPrompt = process.argv.at(-1) || "";
@@ -1637,8 +1637,8 @@ const prompt = "[应用系统指令]" + String.fromCharCode(10) + systemPrompt +
 const out = { kind: "node_result", summary: "fixture", artifacts: [], decisions: [], needsHuman: false, consultation: null, inputAssessment: { sufficient: true, sourceNodeIds: [], rationale: "fixture", missingEvidence: [] }, deliveryReview: null, managerDecision: null };
 if (prompt.includes('"purpose":"delivery_review"')) out.deliveryReview = { verdict: "pass", restartFromNodeId: "", findings: ["源码和测试已接纳"] };
 else if (prompt.includes("任务级项目经理")) out.managerDecision = { nextNodeId: prompt.includes('"type":"node"') ? null : "develop", nextAgentId: null, rationale: "按交付事实路由" };
-else if (!existsSync(".agentforge/first-attempt-marker")) {
-  writeFileSync(".agentforge/first-attempt-marker", "failed");
+else if (!existsSync(".baton/first-attempt-marker")) {
+  writeFileSync(".baton/first-attempt-marker", "failed");
   mkdirSync("docs/development/src", { recursive: true }); mkdirSync("docs/development/test", { recursive: true });
   writeFileSync("docs/development/src/main.js", "export const answer = 42;\\n");
   writeFileSync("docs/development/test/main.test.js", "assert.equal(answer, 42);\\n");
@@ -1682,7 +1682,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test("missing snapshot baseline does not block coordination or a manager handoff", async () => {
-  const root = await directory("agentforge-missing-run-baseline-");
+  const root = await directory("baton-missing-run-baseline-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, '#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",result:JSON.stringify({summary:"交人类验收",managerDecision:{nextNodeId:null,rationale:"经理安排"}})}));\n'.replaceAll('\\n', '\n'));
@@ -1702,7 +1702,7 @@ test("missing snapshot baseline does not block coordination or a manager handoff
 });
 
 test("Run workspace baseline survives restart and rejects uncovered or oversized changes", async () => {
-  const root = await directory("agentforge-run-baseline-");
+  const root = await directory("baton-run-baseline-");
   try {
     const workspacePath = join(root, "workspace"), runFilesRoot = join(root, "audit"), runId = "run_baseline";
     await mkdir(join(workspacePath, "docs/development"), { recursive: true });
@@ -1723,9 +1723,9 @@ test("Run workspace baseline survives restart and rejects uncovered or oversized
     assert.deepEqual(oversized.artifacts.map((item) => item.name), ["docs/development/source.js"]);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
-test("runtime preserves tool events and release guard", async () => { const root = await directory("agentforge-stream-"); try { const executable = join(root, "provider.mjs"); await writeFile(executable, "#!/usr/bin/env node\nconsole.log(JSON.stringify({type:'assistant',message:{content:[{type:'tool_use',id:'x',name:'Read',input:{path:'a'}}]}})); console.log(JSON.stringify({type:'user',message:{content:[{type:'tool_result',tool_use_id:'x',content:'ok'}]}})); console.log(JSON.stringify({type:'result',result:'{}'}));"); await chmod(executable, 0o755); const events = []; await runClaudeCodeCli({ runtime: { provider: "claude-code", executable, skillPaths: [], pluginPaths: [], mcpConfigPaths: [] }, workspacePath: root, traceDirectory: root, finalPath: join(root, "final.json"), outputSchema: { type: "object" }, prompt: "test", runId: "run", onEvent: async (event) => events.push(event) }); assert.equal(events.length, 3); } finally { await rm(root, { recursive: true, force: true }); } });
+test("runtime preserves tool events and release guard", async () => { const root = await directory("baton-stream-"); try { const executable = join(root, "provider.mjs"); await writeFile(executable, "#!/usr/bin/env node\nconsole.log(JSON.stringify({type:'assistant',message:{content:[{type:'tool_use',id:'x',name:'Read',input:{path:'a'}}]}})); console.log(JSON.stringify({type:'user',message:{content:[{type:'tool_result',tool_use_id:'x',content:'ok'}]}})); console.log(JSON.stringify({type:'result',result:'{}'}));"); await chmod(executable, 0o755); const events = []; await runClaudeCodeCli({ runtime: { provider: "claude-code", executable, skillPaths: [], pluginPaths: [], mcpConfigPaths: [] }, workspacePath: root, traceDirectory: root, finalPath: join(root, "final.json"), outputSchema: { type: "object" }, prompt: "test", runId: "run", onEvent: async (event) => events.push(event) }); assert.equal(events.length, 3); } finally { await rm(root, { recursive: true, force: true }); } });
 test("termination records Run and Trace cancellation facts without a false failure", async () => {
-  const root = await directory("agentforge-cancel-");
+  const root = await directory("baton-cancel-");
   let store, run, execution, executionSettled = false, executionError;
   try {
     const executable = join(root, "slow.mjs"), readyPath = join(root, "provider-ready");
@@ -1875,7 +1875,7 @@ test("collaboration is chronological without pinned acceptance duplicates and un
     if (!elements.has(id)) elements.set(id, { innerHTML: "", addEventListener() {}, querySelector(){return null;}, querySelectorAll(){return [];} });
     return elements.get(id);
   };
-  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", "roleColor", "initialsOf", "communicationDayLabel", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback(), () => 'color-system', agent => agent.name?.slice(0,1) || '?', communicationDayLabel);
+  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", "roleColor", "initialsOf", "communicationDayLabel", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback(), agent => 'color-'+(agent.color || 'system'), agent => agent.name?.slice(0,1) || '?', communicationDayLabel);
   workspace.run.task.archivedAt = null;
   workspace.messages = [
     { id: 'manager-final', kind: 'manager_decision', sender: { type: 'agent', name: '经理' }, recipient: { type: 'team', name: '团队' }, content: '最终交接结论', createdAt: '2026-10-19T00:00:00Z' },
@@ -1901,6 +1901,20 @@ test("collaboration is chronological without pinned acceptance duplicates and un
   assert.match(select("#collaboration-panel").innerHTML, /新的提问/);
   assert.match(select("#collaboration-panel").innerHTML, /最终交接结论/);
   assert.doesNotMatch(select("#collaboration-panel").innerHTML, /data-collaboration-filter|collaboration-filters/);
+  workspace.run.participants=[{id:'sender-a',name:'同名员工',color:'blue'},{id:'sender-b',name:'同名员工',color:'green'}];
+  view.collaborationItems=collaborationRecords({messages:[
+    {id:'from-a',kind:'handoff',sender:{type:'agent',id:'sender-a',name:'同名员工'},content:'报告A',createdAt:'2026-11-14T00:00:00Z'},
+    {id:'from-b',kind:'handoff',sender:{type:'agent',id:'sender-b',name:'同名员工'},content:'报告B',createdAt:'2026-11-14T00:01:00Z'},
+    {id:'unknown-sender',kind:'handoff',sender:{type:'agent',id:'missing',name:'同名员工'},content:'未知引用',createdAt:'2026-11-14T00:02:00Z'},
+  ]});
+  view.outbox=new Map([['local-pending',{id:'local-pending',status:'sending',createdAt:'2026-11-14T00:03:00Z',content:'本地人类消息',attachments:[]}]]);
+  render(workspace,[{id:'sender-a',color:'amber'}]);
+  const identityMarkup=select('#collaboration-panel').innerHTML;
+  assert.match(identityMarkup,/data-collaboration-record="from-a"[^>]+data-sender-color="blue"[^>]*>[\s\S]*?collaboration-avatar color-blue/);
+  assert.match(identityMarkup,/data-collaboration-record="from-b"[^>]+data-sender-color="green"[^>]*>[\s\S]*?collaboration-avatar color-green/);
+  assert.match(identityMarkup,/data-collaboration-record="unknown-sender"[^>]+data-sender-color="system"/);
+  assert.match(identityMarkup,/data-collaboration-record="local-pending"[^>]+data-sender-color="system"/);
+  view.outbox.clear();
   workspace.run.task.archivedAt = '2026-10-20';
   render(workspace, []);
   assert.equal(select('#instruction-text').disabled, true);
@@ -2018,7 +2032,7 @@ test("a created Task remains actionable when its immediate Run launch is rejecte
   assert.equal(notices.at(-1).isError, true);
 });
 test("plain text employee handoff reaches human acceptance on the manager decision", async () => {
-  const root = await directory("agentforge-coordination-text-");
+  const root = await directory("baton-coordination-text-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -2048,7 +2062,7 @@ console.log(JSON.stringify({type:"result",result}));
 
 for (const malformed of [false, true]) {
   test(`manager ${malformed ? 'incomplete' : 'missing'} decision receives precise same-dispatch correction without a system message`, async () => {
-    const root = await directory('agentforge-manager-decision-');
+    const root = await directory('baton-manager-decision-');
     try {
       const executable = join(root, 'provider.mjs');
       await writeFile(executable, `#!${process.execPath}
@@ -2078,7 +2092,7 @@ console.log(JSON.stringify({type:'result',subtype:'success',result}));
 }
 
 test("prompt snapshot write failure does not block runtime or manager handoff", async () => {
-  const root = await directory("agentforge-prompt-failure-");
+  const root = await directory("baton-prompt-failure-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -2107,7 +2121,7 @@ console.log(JSON.stringify({type:"result",result:JSON.stringify({summary:"PROVID
 });
 
 test("a business Trace accepts files outside its declared Artifact paths", async () => {
-  const root = await directory("agentforge-artifact-scope-");
+  const root = await directory("baton-artifact-scope-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -2140,7 +2154,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
 });
 
 test("manager work can create an auditable Artifact without a role permission gate", async () => {
-  const root = await directory("agentforge-manager-write-");
+  const root = await directory("baton-manager-write-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node
@@ -2175,7 +2189,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(out) }));
 });
 
 test("a business Trace can change a sensitive file without exposing it as an Artifact", async () => {
-  const root = await directory("agentforge-sensitive-delivery-");
+  const root = await directory("baton-sensitive-delivery-");
   try {
     const executable = join(root, "provider.mjs");
     await writeFile(executable, `#!/usr/bin/env node

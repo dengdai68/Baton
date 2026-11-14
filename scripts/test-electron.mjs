@@ -20,17 +20,17 @@ import { Readable } from "node:stream";
 await mkdir(".data", { recursive: true });
 await mkdir("screenshots", { recursive: true });
 const directory = await mkdtemp(resolve(".data/electron-e2e-"));
-const storage = desktopStoragePaths(join(directory,'.agentforge','desktop'), { home: directory });
+const storage = desktopStoragePaths(join(directory,'.baton','desktop'), { home: directory });
 const password = randomBytes(24).toString("hex");
-const auth = createAuth({ databasePath: storage.AGENTFORGE_AUTH_DB_PATH });
+const auth = createAuth({ databasePath: storage.BATON_AUTH_DB_PATH });
 await auth.setAdministrator("desktop-test", password);
 auth.close();
-const fixtureStore = createStore({ databasePath: storage.AGENTFORGE_DB_PATH, configurationDirectory:storage.AGENTFORGE_DESKTOP_CONTROL_ROOT,workspaceRoot: storage.AGENTFORGE_WORKSPACE_ROOT });
+const fixtureStore = createStore({ databasePath: storage.BATON_DB_PATH, configurationDirectory:storage.BATON_DESKTOP_CONTROL_ROOT,workspaceRoot: storage.BATON_WORKSPACE_ROOT });
 assert.deepEqual(fixtureStore.listTasks(), []);
 const fixtureTask = fixtureStore.createTask({managerAgentId:'system_project_manager', title: "隔离任务空间验收", objective: "只用于界面回归", memberAgentIds: fixtureStore.listTeams()[0].memberAgentIds, workflowTemplateId: "software_delivery" });
-assert.ok(fixtureTask.workspacePath.startsWith(storage.AGENTFORGE_WORKSPACE_ROOT + "/"));
+assert.ok(fixtureTask.workspacePath.startsWith(storage.BATON_WORKSPACE_ROOT + "/"));
 const fixtureRun = fixtureStore.createRun(fixtureTask.id);
-assert.ok(fixtureRun.workspacePath.startsWith(storage.AGENTFORGE_WORKSPACE_ROOT + "/"));
+assert.ok(fixtureRun.workspacePath.startsWith(storage.BATON_WORKSPACE_ROOT + "/"));
 await mkdir(join(fixtureRun.workspacePath, "docs/notes"), { recursive: true });
 await initializeWorkspaceGit(fixtureRun.workspacePath, []);
 await writeFile(join(fixtureRun.workspacePath, "docs/notes/readme.md"), "# 隔离目录阅读测试\n只用于 UI 回归，不是模型交付。\n");
@@ -38,7 +38,7 @@ const failureTrace = fixtureStore.createTrace(fixtureRun.id, { agentId: fixtureR
 fixtureStore.completeTrace(failureTrace.id, { status: "failed", error: "CLI 不可启动：检查数字员工的可执行文件路径、服务 PATH 和任务目录是否存在。" });
 fixtureStore.addEvent({ type: "trace.failed", runId: fixtureRun.id, actor: { type: "agent", id: fixtureRun.manager.id, name: fixtureRun.manager.name }, message: "CLI 不可启动：检查数字员工的可执行文件路径、服务 PATH 和任务目录是否存在。", data: { traceId: failureTrace.id, auditVersion: 2 } });
 fixtureStore.pauseRun(fixtureRun.id, "Isolated presentation fixture; do not execute Provider");
-const fixtureFiles = createRunFiles({ root: storage.AGENTFORGE_RUN_FILES_ROOT });
+const fixtureFiles = createRunFiles({ root: storage.BATON_RUN_FILES_ROOT });
 let fixtureThinkingEventId;
 for (const [presentation, fields] of Object.entries({
   thinking: { thinking: { text: '公开思考直接阅读，不折叠', redacted: false, truncated: false } },
@@ -88,14 +88,14 @@ const silentTrace = fixtureStore.createTrace(fixtureRun.id, { agentId: fixtureRu
 fixtureStore.attachTracePrompt(silentTrace.id, await fixtureFiles.writePromptSnapshot(fixtureRun.id, silentTrace.id, promptSnapshot({ systemPrompt: "SYSTEM_PRIVATE_DO_NOT_DISPLAY", prompt: "静默调用快照原文。" })));
 const fixtureChatEmployee=fixtureStore.listAgents().find(agent=>agent.id==='agent_engineer');
 fixtureStore.close();
-await writeStorageLocation(storage.AGENTFORGE_DESKTOP_CONTROL_ROOT,{version:1,workspaceRoot:storage.AGENTFORGE_WORKSPACE_ROOT,previousRuntimeRoots:[]});
+await writeStorageLocation(storage.BATON_DESKTOP_CONTROL_ROOT,{version:1,workspaceRoot:storage.BATON_WORKSPACE_ROOT,previousRuntimeRoots:[]});
 const desktop = await electron.launch({ args: ["apps/electron/main.mjs", `--user-data-dir=${join(directory, "profile")}`], env: {
   ...process.env,
   // Isolate the whole data home: the child control plane drops inherited
-  // AGENTFORGE_* values, so only HOME keeps its diagnostics out of the
-  // operator's real ~/.agentforge.
+  // BATON_* values, so only HOME keeps its diagnostics out of the
+  // operator's real ~/.baton.
   HOME: directory,
-  AGENTFORGE_DESKTOP_DATA_ROOT: storage.AGENTFORGE_DESKTOP_CONTROL_ROOT
+  BATON_DESKTOP_DATA_ROOT: storage.BATON_DESKTOP_CONTROL_ROOT
 }, timeout: 60000 });
 const actualPaths=await desktop.evaluate(({app})=>Object.fromEntries(['userData','sessionData','logs','crashDumps'].map(key=>[key,app.getPath(key)])));
 for(const path of Object.values(actualPaths)) assert.ok(path.startsWith(directory+'/'),'all Electron paths use isolated instance root');
@@ -390,7 +390,7 @@ async function verifyTaskSearch(page, prefix) {
   await page.locator('.console-tool-call[open] [data-execution-kind="output"]').waitFor();
   assert.match(await page.locator('.console-tool-call[open]').textContent(), /node --test fixture.test.mjs/);
   assert.equal(await page.locator('.execution-content img').count(), 0, 'provider HTML is plain text');
-  const contentPath = join(storage.AGENTFORGE_RUN_FILES_ROOT, contentRef.storagePath);
+  const contentPath = join(storage.BATON_RUN_FILES_ROOT, contentRef.storagePath);
   const savedContent = await readFile(contentPath);
   try {
     await writeFile(contentPath, '{}');
@@ -594,7 +594,7 @@ try {
   let desktopOrigin = new URL(page.url()).origin;
   assert.notEqual(desktopOrigin, "http://127.0.0.1:4310", "desktop must not attach to independent Web");
   await page.locator("#username").waitFor({ timeout: 60000 });
-  assert.equal(await page.locator('head #agentforge-desktop-style').count(), 1, 'login receives desktop CSS in HTML');
+  assert.equal(await page.locator('head #baton-desktop-style').count(), 1, 'login receives desktop CSS in HTML');
   await page.addInitScript(() => {
     window.desktopPaints = [];
     const inspect = () => { if (document.body) window.desktopPaints.push(getComputedStyle(document.documentElement).getPropertyValue('--desktop-presentation').trim()); if (window.desktopPaints.length < 30) requestAnimationFrame(inspect); };
@@ -609,7 +609,7 @@ try {
   await page.locator("#account-name").waitFor();
   await page.waitForFunction(() => document.querySelector("#account-name")?.textContent === "desktop-test");
   assert.equal(await page.locator("#account-name").textContent(), "desktop-test");
-  assert.equal(await page.locator('head #agentforge-desktop-style').count(), 1);
+  assert.equal(await page.locator('head #baton-desktop-style').count(), 1);
   assert.ok(await page.evaluate(() => desktopPaints.length > 0 && desktopPaints.every(style => style === 'workbench')), 'all sampled post-login frames use desktop style');
   await page.waitForFunction(() => getComputedStyle(document.body).getPropertyValue("--desktop-density").trim() === "compact");
   await page.waitForFunction(() => getComputedStyle(document.body).getPropertyValue("--desktop-presentation").trim() === "workbench");
@@ -971,7 +971,7 @@ try {
         const rejected=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/settings/workspace'&&r.request().method()==='PUT');
         await saveWorkspace.click();assert.equal((await rejected).status(),400);
         await page.locator('#workspace-settings-form .field-error').filter({hasText:/./}).waitFor();
-        assert.equal(await page.evaluate(async()=>(await(await fetch('/api/settings/workspace')).json()).workspaceRoot),storage.AGENTFORGE_WORKSPACE_ROOT,'invalid destination preserves the current root');
+        assert.equal(await page.evaluate(async()=>(await(await fetch('/api/settings/workspace')).json()).workspaceRoot),storage.BATON_WORKSPACE_ROOT,'invalid destination preserves the current root');
         const nextRoot=join(directory,'new-workspaces','新目录'),previousOrigin=desktopOrigin;
         await input.fill(nextRoot);await saveWorkspace.click();
         await page.waitForURL(url=>url.origin!==previousOrigin&&url.pathname==='/settings/workspace',{timeout:60000});
@@ -1050,11 +1050,11 @@ try {
     const menuRoles = await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().items.flatMap((item) => (item.submenu?.items || []).map((sub) => sub.role || sub.id || sub.label)));
     assert.ok(!menuRoles.includes("about"), `no system About role remains in the menu: ${JSON.stringify(menuRoles)}`);
     const aboutDialogEvent = desktop.waitForEvent("window");
-    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById("about-agentforge").click());
+    await desktop.evaluate(({ Menu }) => Menu.getApplicationMenu().getMenuItemById("about-baton").click());
     const aboutDialog = await aboutDialogEvent;
     await aboutDialog.waitForLoadState("domcontentloaded");
     await aboutDialog.locator('[data-dialog-choice="0"]').waitFor();
-    assert.match(await aboutDialog.locator('[data-dialog-title]').textContent(), /关于 AgentForge/);
+    assert.match(await aboutDialog.locator('[data-dialog-title]').textContent(), /关于 Baton/);
     assert.match(await aboutDialog.locator('[data-dialog-message]').textContent(), /版本 /);
     assert.deepEqual(await aboutDialog.locator('[data-dialog-choice]').allTextContents(), ["好"]);
     assert.equal(await aboutDialog.evaluate(() => document.documentElement.scrollHeight <= document.documentElement.clientHeight && document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, "About dialog has no scrollbars");

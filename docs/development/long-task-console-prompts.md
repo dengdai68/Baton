@@ -71,8 +71,8 @@
 - `node scripts/test-collaboration-flow.mjs`：源码与打包候选均通过；SSE 追加、摘要更新保留原有 DOM/选中文本/滚动，工具完成保留展开，工具组增长保留手动折叠；真实 Electron 宽窄布局及协作 Markdown 展示通过。此为隔离呈现夹具，不冒充模型执行。
 - 真实 Claude Code 2.1.310 隔离后台验证：命令真实睡眠 75 秒，平台测试空闲阈值 60 秒；完整调用 95.641 秒，跨过空闲阈值后读取实际生成的 marker，成功退出，最终结果为 marker 内容。没有在首条“等待后台完成”时结算。
 - 真实视频任务使用已有完整产物继续：翻译 154 条、ChatTTS 154/154、全片 1161.862 秒、独立质检后提交人类验收。业务阶段跨旧安装版本执行；不声称四阶段全部在最终新包从零重跑。后续安装版续接用于核对新的提示词、协议与展示。
-- 已安装 `/Applications/AgentForge.app` beta.108，签名校验通过。正式接口与当前客户端均显示原任务“待你验收”；最终 Trace `trace_mvwlf8u3_4` completed，验收请求关联该 Trace，0 次工具调用、0 个新增产物、0 个未结束投递。本轮未重做视频、重置历史或替人类确认完成。
+- 已安装 `/Applications/Baton.app` beta.108，签名校验通过。正式接口与当前客户端均显示原任务“待你验收”；最终 Trace `trace_mvwlf8u3_4` completed，验收请求关联该 Trace，0 次工具调用、0 个新增产物、0 个未结束投递。本轮未重做视频、重置历史或替人类确认完成。
 - 业务听感、数字发音与源字幕缺词仍是原团队如实披露的未验证项，本轮没有把可解码当作人工试听通过。
 - 初次短超时夹具受本机启动时间影响，已调整启动预算后验证真正超过空闲阈值的等待；旧 VM 测试假定仅有 innerHTML，已将其收敛为时间线行生成单测，真实 DOM 保留由 Electron 测试负责。最终门禁结果以上为准。
 
-证据均留本机临时目录，不提交截图、日志、会话或提示词全文。私有审阅位置记录在 `/private/tmp/agentforge-video-audit-path`；单测及 UI 日志为 `/private/tmp/agentforge-beta108-*.log`。真实后台探针位置记录在 `/private/tmp/agentforge-real-background-probe-path`。
+证据均留本机临时目录，不提交截图、日志、会话或提示词全文。私有审阅位置记录在 `/private/tmp/baton-video-audit-path`；单测及 UI 日志为 `/private/tmp/baton-beta108-*.log`。真实后台探针位置记录在 `/private/tmp/baton-real-background-probe-path`。

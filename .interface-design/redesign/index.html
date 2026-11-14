@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentForge 客户端界面重设计 · 设计总览</title>
+<title>Baton 客户端界面重设计 · 设计总览</title>
 <link rel="stylesheet" href="assets/tokens.css">
 <link rel="stylesheet" href="assets/components.css">
 <link rel="stylesheet" href="assets/doc.css">
@@ -44,7 +44,7 @@
       <!-- ===================== 摘要 ===================== -->
       <section class="doc-section" id="summary">
         <span class="doc-eyebrow"><i data-icon="sparkle" class="icon--sm"></i>设计提案 · 第二轮 · 方向已定</span>
-        <h1 class="doc-h1">AgentForge 客户端界面重设计</h1>
+        <h1 class="doc-h1">Baton 客户端界面重设计</h1>
         <p class="doc-lead">基于隔离客户端实测的 98 张截图（两套主题、1440 与 760 两种宽度）和样式源码分析，给出问题清单、可复用的设计系统、三种风格方向，以及覆盖全部核心页面的可交互 HTML 设计稿。业务逻辑、HTTP / CLI 契约与执行规则均不变。</p>
         <div class="doc-stats">
           <div class="stat"><b>22</b><span>个问题 · 4 个 P0</span></div>
@@ -126,7 +126,7 @@
           <div>
             <div class="issue__title"><span class="id">01</span>「需要我处理」没有一等入口</div>
             <dl><dt>现象</dt><dd>侧栏「任务中心 4 待你处理」只是计数，点进去是全量列表；等待澄清、待验收、错误中断与草稿、已完成混排，只靠 11px 状态标签区分。总览页对新用户默认隐藏。</dd>
-            <dt>影响</dt><dd>人类决策是 AgentForge 的关键闭环（澄清→继续，验收→完成），现在要逐行扫读才能找到。</dd>
+            <dt>影响</dt><dd>人类决策是 Baton 的关键闭环（澄清→继续，验收→完成），现在要逐行扫读才能找到。</dd>
             <dt>建议</dt><dd>新增「待我处理」视图（现有数据的客户端聚合）；任务列表按「需要谁行动」分组。<a href="pages/inbox.html">待我处理 ↗</a> <a href="pages/tasks.html">任务 ↗</a></dd></dl>
           </div>
           <div class="issue__shots"><button class="thumb" data-full="02-tasks-warm-wide"><img loading="lazy" alt="任务中心现状" data-shot="02-tasks-warm-wide"><span>任务中心 · 1440</span></button></div>
@@ -496,7 +496,7 @@
         <ol class="changes">
           <li><strong>文档式输入</strong>：标题与描述去掉边框，内容优先（沿用既有方向）。</li>
           <li><strong>成员与工作流同排</strong>：沿用框内多选与 ★ 经理指派。</li>
-          <li><strong>路径缩写</strong>：工作目录显示为 <code>~/AgentForge/tasks</code>。</li>
+          <li><strong>路径缩写</strong>：工作目录显示为 <code>~/Baton/tasks</code>。</li>
           <li><strong>按钮分级</strong>：取消（幽灵）/ 保存草稿（次）/ 保存并开始（主，⌘↵）；Enter 仍为保存草稿。</li>
         </ol>
 

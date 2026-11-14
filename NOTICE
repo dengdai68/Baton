@@ -1,9 +1,9 @@
-AgentForge App
-Copyright 2026 dengdai68 and AgentForge contributors
+Baton App
+Copyright 2026 dengdai68 and Baton contributors
 
-Derived from AgentForge, source commit c1277e57a715d31ae6d64f15ecb4d7fbecd8ec31.
-Project source: https://github.com/dengdai68/AgentForge-App
-Original source: https://github.com/dengdai68/AgentForge
+Derived from Baton, source commit c1277e57a715d31ae6d64f15ecb4d7fbecd8ec31.
+Project source: https://github.com/dengdai68/Baton-App
+Original source: https://github.com/dengdai68/Baton
 
 Except for separately licensed third-party components, this project's source
 is licensed under the Apache License, Version 2.0. See LICENSE.
@@ -22,7 +22,7 @@ distribution without changing their contents.
 DeepSeek Harness command Hook bridges (0.2.1-rc.2) retain their MIT licenses
 in server/runtime/vendor/dsh-hooks/*.LICENSE. Unmodified upstream files and
 package integrity are identified in provenance.json; hook-guard.mjs is an
-AgentForge adapter, not upstream code.
+Baton adapter, not upstream code.
 
 Image thumbnails use sharp (Apache-2.0) and its distributed libvips binaries
 (the bundled @img distribution is LGPL-3.0-or-later). The macOS distribution

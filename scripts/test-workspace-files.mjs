@@ -9,20 +9,20 @@ import {randomBytes,createHash} from 'node:crypto';
 import {_electron as electron} from 'playwright-core';
 import {createAuth} from '../server/auth.mjs';
 
-if(process.env.AGENTFORGE_WORKSPACE_REAL!=='1')throw Error('Set AGENTFORGE_WORKSPACE_REAL=1 to authorize a real Claude code-development task.');
-const resumed=Boolean(process.env.AGENTFORGE_WORKSPACE_RESUME);
-const root=resumed?resolve(process.env.AGENTFORGE_WORKSPACE_RESUME):await mkdtemp(join(tmpdir(),'af-workspace-case-'));
+if(process.env.BATON_WORKSPACE_REAL!=='1')throw Error('Set BATON_WORKSPACE_REAL=1 to authorize a real Claude code-development task.');
+const resumed=Boolean(process.env.BATON_WORKSPACE_RESUME);
+const root=resumed?resolve(process.env.BATON_WORKSPACE_RESUME):await mkdtemp(join(tmpdir(),'af-workspace-case-'));
 assert.equal(dirname(root),resolve(tmpdir()),'resume only an isolated fixture in the system temporary directory');
 assert.match(basename(root),/^af-workspace-case-[A-Za-z0-9]+$/);
 if(resumed){const previous=JSON.parse(await readFile(join(root,'evidence.json'),'utf8'));assert.equal(previous.root,root);assert.equal(previous.real,true);assert.equal(previous.result,'FAIL','resume only a failed acceptance, without rerunning its model task');}
-const home=join(root,'home'),data=join(home,'.agentforge/desktop');await mkdir(home,{recursive:true});
+const home=join(root,'home'),data=join(home,'.baton/desktop');await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('workspace-qa',password);auth.close();
-const actual=process.env.AGENTFORGE_WORKSPACE_CLAUDE || execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
+const actual=process.env.BATON_WORKSPACE_CLAUDE || execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
 const wrapper=join(root,'real-claude');await writeFile(wrapper,'#!/bin/sh\nHOME='+JSON.stringify(homedir())+' exec '+JSON.stringify(actual)+' "$@"\n',{mode:0o700});
 const clip=join(root,'fixture.mp4');if(!resumed)execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-f','lavfi','-i','color=c=blue:s=160x90:r=10','-t','1','-c:v','libx264','-pix_fmt','yuv420p',clip]);
-const appPath=process.env.AGENTFORGE_WORKSPACE_APP;
+const appPath=process.env.BATON_WORKSPACE_APP;
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({...(appPath?{executablePath:resolve(appPath,'Contents/MacOS/AgentForge'),args:['--user-data-dir='+join(root,'profile')]}:{args:['apps/electron/main.mjs','--user-data-dir='+join(root,'profile')]}),env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR || join(homedir(),'.claude'),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:90000});
+const app=await electron.launch({...(appPath?{executablePath:resolve(appPath,'Contents/MacOS/Baton'),args:['--user-data-dir='+join(root,'profile')]}:{args:['apps/electron/main.mjs','--user-data-dir='+join(root,'profile')]}),env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR || join(homedir(),'.claude'),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:90000});
 const evidence={root,packaged:Boolean(appPath),real:true,resumed,result:'RUNNING'};
 const wait=async(label,check,timeout=900000)=>{const start=Date.now();let last=0;while(Date.now()-start<timeout){const value=await check();if(value)return value;if(Date.now()-last>30000){console.log('WAIT',label);last=Date.now()}await new Promise(done=>setTimeout(done,500))}throw Error('timeout: '+label)};
 try{
@@ -33,7 +33,7 @@ try{
   await writeFile(join(root,'endpoint.json'),JSON.stringify({origin:base,instanceId:(await api('/api/health')).instanceId}),{mode:0o600});
   const cli=(args,input='')=>new Promise((done,reject)=>{const child=spawn(process.execPath,['cli/main.mjs',...args,'--json','--endpoint-file',join(root,'endpoint.json'),'--session-file',join(root,'cli/session.json')]);let out='',err='';child.stdout.on('data',b=>out+=b);child.stderr.on('data',b=>err+=b);child.once('error',reject);child.once('close',code=>code?reject(Error(err||out)):done(JSON.parse(out).data));child.stdin.end(typeof input==='string'?input:JSON.stringify(input))});
   const create=(group,input)=>cli([group,'create','--file','-'],input);
-  await cli(['auth','login','--username','workspace-qa','--password-stdin'],password+'\n');await cli(['plugins','auto-update','--file','-'],{enabled:false});
+  await cli(['auth','login','--username','workspace-qa','--password-stdin'],password+'\n');
   let task,run,testerId;
   if(resumed){
     const listing=await cli(['tasks','list','--all']);task=listing.items.find(item=>item.title==='WORKSPACE-85｜自定义目录代码开发与独立测试');assert.ok(task,'existing real task must exist');
@@ -60,7 +60,7 @@ try{
   const huge=await open(join(workspace,'artifacts/preparation/assets/large-test.bin'),'w');await huge.truncate(298473832);await huge.close();
   const bytes=Buffer.alloc(600*1024,0xab);await writeFile(join(workspace,'artifacts/preparation/assets/download.bin'),bytes);
   await mkdir(join(workspace,'data/many'),{recursive:true});await Promise.all(Array.from({length:1005},(_,i)=>writeFile(join(workspace,'data/many',String(i).padStart(4,'0')+'.txt'),'paging fixture')));
-  await writeFile(join(workspace,'.env'),'private fixture sentinel');await writeFile(join(workspace,'.agentforge-workspace.json'),'{obsolete invalid fixture}');
+  await writeFile(join(workspace,'.env'),'private fixture sentinel');await writeFile(join(workspace,'.baton-workspace.json'),'{obsolete invalid fixture}');
   const changes=await api('/api/runs/'+run.id+'/working-directory/changes');assert.ok(changes.repositories.flatMap(repo=>repo.changes).some(item=>item.path==='artifacts/preparation/assets/source.mp4'));
   const tooLarge=await api('/api/runs/'+run.id+'/working-directory/diff?path=artifacts/preparation/assets/large-test.bin');assert.equal(tooLarge.tooLarge,true);
   const openFolder=async(p,path)=>{const folder=p.locator(`[data-directory-path="${path}"]`);await folder.waitFor();if(!await folder.evaluate(el=>el.open))await folder.locator(':scope > summary').click();};

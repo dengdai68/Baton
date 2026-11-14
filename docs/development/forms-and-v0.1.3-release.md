@@ -35,18 +35,18 @@
 
 本机验收候选输出：`/private/tmp/af-stable-v0.1.3-final-20261103`。首轮构建后又补全浮层的外部点击/焦点关闭及关闭回调，因此重新完整构建。Electron Builder 会从包内 package.json 移除 build/devDependencies，版本与生产依赖已另外核对一致。
 
-| 命令（APP 为最终目录中的 mac-arm64/AgentForge.app） | 结果与证据 |
+| 命令（APP 为最终目录中的 mac-arm64/Baton.app） | 结果与证据 |
 | --- | --- |
-| `AGENTFORGE_TASK_CREATION_APP=… node scripts/test-task-creation.mjs` | 通过；`.data/task-creation-x0kiVM`，含关闭仍展开候选的所属弹框后无残留浮层 |
-| `AGENTFORGE_COMMUNICATION_APP=… node scripts/test-communication-workbench.mjs` | 通过；`.data/communication-workbench-VNrQoN` |
-| `AGENTFORGE_SETTINGS_APP=… node scripts/test-runtime-settings.mjs` | 通过；`.data/runtime-settings-72Bi9X`，含包内 CLI 自动安装和新 shell 共享授权 |
-| `AGENTFORGE_PACKAGED_APP=… npm run package:mac:check` | 通过；`.data/packaged-electron-e2e-QrONVG`，资源哈希、签名完整性/篡改拒绝、插件 YAML 三 Runtime 投影、隔离登录/CLI/任务/重启及慢 shell 退出 |
+| `BATON_TASK_CREATION_APP=… node scripts/test-task-creation.mjs` | 通过；`.data/task-creation-x0kiVM`，含关闭仍展开候选的所属弹框后无残留浮层 |
+| `BATON_COMMUNICATION_APP=… node scripts/test-communication-workbench.mjs` | 通过；`.data/communication-workbench-VNrQoN` |
+| `BATON_SETTINGS_APP=… node scripts/test-runtime-settings.mjs` | 通过；`.data/runtime-settings-72Bi9X`，含包内 CLI 自动安装和新 shell 共享授权 |
+| `BATON_PACKAGED_APP=… npm run package:mac:check` | 通过；`.data/packaged-electron-e2e-QrONVG`，资源哈希、签名完整性/篡改拒绝、插件 YAML 三 Runtime 投影、隔离登录/CLI/任务/重启及慢 shell 退出 |
 
 已查看最终包的团队底部下拉截图：560px 高窗口向上展开、视口内可点；源码与包内所有本轮运行文件哈希一致。ASAR 根仅包含许可证、应用源码及依赖，不包含 `.data`、`.git`、`.codex`、测试或诊断资料。更新元数据中的两份安装包大小和 SHA-512 与最终附件一致；SHA256SUMS.txt 同时覆盖 DMG、ZIP、两份 blockmap 和 latest-mac.yml。
 
 `node --check` 已覆盖规定的 index/store/orchestrator/app 及本轮新增/修改的 renderer 模块，`git diff --check` 通过。首次完整测试 615/616 通过：旧样式断言将表单的视口高度限制也误作普通弹窗规则，已缩小到普通弹窗的基础样式；表单边界由实际 UI 验收负责。原失败日志为 `/private/tmp/af-v0.1.3-commit.log`。提交钩子强制复跑 `npm test`、`check:ai` 和 `check:impact -- --staged`，通过后才生成发行源码提交，最终日志为 `/private/tmp/af-v0.1.3-commit-final.log`。提交格式另经 `check:commit` 验证。
 
-正式发布地址：[v0.1.3](https://github.com/dengdai68/AgentForge-App/releases/tag/v0.1.3)。发布流程为主分支提交、同名标签、草稿上传完整六个附件并核对远程大小/摘要，再公开为非预发布 latest；发布后的应用更新检测及下载校验使用隔离缓存验证，不操作当前安装实例。
+正式发布地址：[v0.1.3](https://github.com/dengdai68/Baton-App/releases/tag/v0.1.3)。发布流程为主分支提交、同名标签、草稿上传完整六个附件并核对远程大小/摘要，再公开为非预发布 latest；发布后的应用更新检测及下载校验使用隔离缓存验证，不操作当前安装实例。
 
 ## 上传网络回退
 

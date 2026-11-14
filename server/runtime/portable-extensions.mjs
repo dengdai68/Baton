@@ -8,7 +8,7 @@ import {readExtensionFile,readPluginExecutionPlan} from './marketplace.mjs';
 import {PORTABLE_AGENT_TOOLS,parsePluginMarkdown} from './plugin-compatibility.mjs';
 
 const launcher=fileURLToPath(new URL('./mcp-launcher.mjs',import.meta.url));
-const nativeNode=()=>process.env.AGENTFORGE_ELECTRON_NODE || process.execPath;
+const nativeNode=()=>process.env.BATON_ELECTRON_NODE || process.execPath;
 export const portableSkillName=(namespace,name,id)=>`${namespace}-${name}`.toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-+|-+$/g,'').slice(0,50)+'-'+createHash('sha256').update(id+':'+name).digest('hex').slice(0,8);
 export async function referenceNativeFile(source,target){
   try{await lstat(source);}catch(error){if(error.code==='ENOENT')return;throw error;}
@@ -25,7 +25,7 @@ export async function preparePortableExtensions(input){
   const {runtime,traceDirectory,historyMcp}=input;
   const selected=await selectedExtensions(runtime),servers={};
   for(const [name,{ref}]of Object.entries(selected))servers[name]={command:nativeNode(),args:[launcher,ref.path,ref.sha256,name],...(process.versions.electron?{env:{ELECTRON_RUN_AS_NODE:'1'}}:{})};
-  if(historyMcp){if(servers.agentforge_history)throw new Error('MCP 使用平台保留名称');servers.agentforge_history={command:historyMcp.command,args:historyMcp.args,env:historyMcp.env};}
+  if(historyMcp){if(servers.baton_history)throw new Error('MCP 使用平台保留名称');servers.baton_history={command:historyMcp.command,args:historyMcp.args,env:historyMcp.env};}
   const root=join(traceDirectory,'native-extensions');await mkdir(root,{recursive:true,mode:0o700});const skills=[],plugins=[],agents=[];
   for(const ref of (runtime.extensionManifest || []).filter(item=>item.kind==='plugin')){
     await readExtensionFile(ref);const plan=await readPluginExecutionPlan(ref);

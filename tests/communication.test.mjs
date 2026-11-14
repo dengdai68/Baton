@@ -89,6 +89,17 @@ test('communication groups days once and resolves member avatars without adding 
   assert.match(human, /<time title=.*datetime=/);
 });
 
+test('communication Markdown accents use the same exact member identity as its avatar', async t => {
+  const avatars=[],f=communicationReaderFixture(t,{renderAvatar:(member,className)=>{if(className==='communication-message-avatar')avatars.push(member);return '';}});f.mount();
+  f.take('').resolve({conversations:[]});
+  const result=f.result(['01','02','03']);result.conversation.members=[{id:'one',name:'同名员工',color:'blue'},{id:'two',name:'同名员工',color:'green'}];
+  result.messages.forEach((message,index)=>{message.sender={type:'agent',id:['one','two','missing'][index],name:'同名员工'};});
+  f.take('/a').resolve(result);await f.flush();
+  const html=f.query('.communication-messages').innerHTML;
+  assert.deepEqual([...html.matchAll(/data-sender-color="([^"]+)"/g)].map(match=>match[1]),['blue','green','system']);
+  assert.deepEqual(avatars.map(member=>member.color),['blue','green',undefined]);
+});
+
 test('communication list marks only incoming unread replies, never pending outgoing work', async t => {
   const f = communicationReaderFixture(t);
   f.mount();

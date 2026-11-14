@@ -24,12 +24,12 @@ test('workflow CLI documents and validates arbitrary relative delivery locations
   const {validateInput}=await import('../cli/client.mjs');
   const value={name:'媒体交付',nodes:[{id:'media',title:'制作',staffingGuidance:'媒体制作',artifactPaths:['artifacts/preparation/','reports/质检/','summary.md']}]};
   validateInput(value,resources.workflows.schema);
-  for(const path of ['/absolute','../escape','a/../b','a//b','a\\b','.git/config','.agentforge/private'])assert.throws(()=>validateInput({...value,nodes:[{...value.nodes[0],artifactPaths:[path]}]},resources.workflows.schema));
+  for(const path of ['/absolute','../escape','a/../b','a//b','a\\b','.git/config','.baton/private'])assert.throws(()=>validateInput({...value,nodes:[{...value.nodes[0],artifactPaths:[path]}]},resources.workflows.schema));
   assert.match(resources.workflows.schema.properties.nodes.items.properties.artifactPaths.description,/不限定 docs/);
 });
 
 const input = value => Readable.from([typeof value === 'string' ? value : JSON.stringify(value)]);
-const cookie = 'agentforge_session=' + 'a'.repeat(64);
+const cookie = 'baton_session=' + 'a'.repeat(64);
 const origin = 'http://127.0.0.1:51983', instanceId = '11111111-2222-4333-8444-555555555555';
 const endpointRoot = await mkdtemp(join(tmpdir(), 'af-cli-endpoint-')), endpointFile = join(endpointRoot, 'endpoint.json');
 await writeFile(endpointFile, JSON.stringify({ origin, instanceId }), { mode: 0o600 });
@@ -42,7 +42,7 @@ function connected(command, args, options = {}) {
     if (url === origin + '/api/health') {
       assert.equal(init.headers, undefined, 'discovery never sends a session');
       assert.equal(init.redirect, 'error');
-      return new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId }));
+      return new Response(JSON.stringify({ service: 'baton-control-plane', instanceId }));
     }
     return options.fetcher(url, init);
   };
@@ -62,7 +62,7 @@ test('storage commands share authenticated HTTP and report an accepted restart w
  assert.equal((await invoke(['get'])).workspaceRoot,'/work');assert.equal((await invoke(['update','--file','-'],{workspaceRoot:'/new-work'})).restarting,true);
  busy=true;await assert.rejects(invoke(['update','--file','-'],{workspaceRoot:'/new-work'}),error=>error.status===409);
  const before=calls;await assert.rejects(invoke(['update','--file','-'],{workspaceRoot:'/new-work',businessRoot:'/override'}),error=>error.code==='USAGE');await assert.rejects(invoke(['update','--file','-'],{root:'/new-work'}),error=>error.code==='USAGE');await assert.rejects(invoke(['get','unexpected-id']),error=>error.code==='USAGE');assert.equal(calls,before);
- const text=formatOutput(['storage','update'],await execute(['storage','update','--help']),{help:true});assert.match(text,/agentforge storage update --file/);assert.doesNotMatch(text,/storage update ID/);
+ const text=formatOutput(['storage','update'],await execute(['storage','update','--help']),{help:true});assert.match(text,/baton storage update --file/);assert.doesNotMatch(text,/storage update ID/);
 });
 
 test('CLI rejects removed targets offline and never contacts a service when the client is unavailable', async () => {
@@ -72,7 +72,7 @@ test('CLI rejects removed targets offline and never contacts a service when the 
   let calls = 0;
   await assert.rejects(executeCommand(['auth', 'login', '--username', 'operator', '--password-stdin', '--endpoint-file', endpointFile], { stdin: input('synthetic-password'), fetcher: async (url, init) => {
     calls++; assert.equal(url, origin + '/api/health'); assert.equal(init.headers, undefined);
-    return new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId: 'stale' }));
+    return new Response(JSON.stringify({ service: 'baton-control-plane', instanceId: 'stale' }));
   } }), error => error.code === 'CLIENT_UNAVAILABLE');
   assert.equal(calls, 1, 'stale instance never receives credentials');
 });
@@ -125,7 +125,7 @@ test('all task commands progressively disclose their own data and compact relate
   assert.equal(defaultMessage.message.recipient.id, manager.id);
   assert.deepEqual(resources.tasks.operationInputs.message.schema.required, ['content']);
   const text = await captured(args('get'), { fetcher });
-  assert.doesNotMatch(text.stdout,/agentforge teams get/); assert.match(text.stdout, /agentforge workflows get flow_one/); assert.match(text.stdout, /agentforge agents get manager_one/);
+  assert.doesNotMatch(text.stdout,/baton teams get/); assert.match(text.stdout, /baton workflows get flow_one/); assert.match(text.stdout, /baton agents get manager_one/);
   assert.doesNotMatch(text.stdout, /systemPrompt|memberSnapshots|workflowSnapshot|runtime|INTERNAL_EMPLOYEE/);
   const json = await captured([...args('get'), '--json'], { fetcher });
   assert.deepEqual(JSON.parse(json.stdout).data, JSON.parse(JSON.stringify(detail)));
@@ -177,7 +177,7 @@ test('task collaboration CLI exposes complete dispatch flow in text and JSON wit
     messages: [
       { id: 'assignment', kind: 'manager_decision', createdAt: '2026-10-30T00:00:00Z', sender: { type: 'agent', name: '经理' }, recipient: { type: 'team', name: '全体团队' }, content: '分析验收标准', traceId: 'source-trace' },
       { id: 'handoff', kind: 'handoff', createdAt: '2026-10-30T00:00:01Z', sender: {type:'agent',name:'需求分析'}, content: JSON.stringify({status:'completed', rawResponse:'# HUMAN_REPORT\n\n已交付验收标准。'}) },
-      { id: 'notice', kind: 'coordination_notice', createdAt: '2026-10-30T00:00:02Z', sender: { type: 'system', name: 'AgentForge' }, content: '协调说明' },
+      { id: 'notice', kind: 'coordination_notice', createdAt: '2026-10-30T00:00:02Z', sender: { type: 'system', name: 'Baton' }, content: '协调说明' },
       { id: 'human', kind: 'instruction', createdAt: '2026-10-30T00:00:03Z', sender: { type: 'human', name: '你' }, recipient: { type: 'team' }, content: '补充说明' },
     ],
     dispatches: [{ id: 'work', sourceMessageId: 'assignment', createdAt: '2026-10-30T00:00:01Z', recipientAgentId: 'analyst', workflowNodeId: 'requirements', purpose: 'node', status: 'claimed', attempts: 1, traceIds: ['execution-trace'] }],
@@ -205,14 +205,14 @@ test('desktop CLI verifies its private live endpoint and never falls back to Web
   const endpointFile = join(directory, 'desktop-endpoint.json');
   const desktopOrigin = 'http://127.0.0.1:51983', instanceId = '11111111-2222-4333-8444-555555555555';
   await writeFile(endpointFile, JSON.stringify({ origin: desktopOrigin, instanceId }), { mode: 0o600 });
-  const fetcher = async url => { assert.equal(url, `${desktopOrigin}/api/health`); return new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId }), { status: 200 }); };
+  const fetcher = async url => { assert.equal(url, `${desktopOrigin}/api/health`); return new Response(JSON.stringify({ service: 'baton-control-plane', instanceId }), { status: 200 }); };
   assert.equal(await resolveEndpoint(endpointFile, fetcher), desktopOrigin);
-  await assert.rejects(resolveEndpoint(endpointFile, async () => new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId: 'other' }))), error => error.code === 'CLIENT_UNAVAILABLE');
+  await assert.rejects(resolveEndpoint(endpointFile, async () => new Response(JSON.stringify({ service: 'baton-control-plane', instanceId: 'other' }))), error => error.code === 'CLIENT_UNAVAILABLE');
   await chmod(endpointFile, 0o644);
   await assert.rejects(resolveEndpoint(endpointFile, fetcher), error => error.code === 'CLIENT_UNAVAILABLE');
   await chmod(endpointFile, 0o600);
   await assert.rejects(resolveEndpoint(join(directory, 'missing.json'), fetcher), error => error.code === 'CLIENT_UNAVAILABLE');
-  assert.equal(defaultEndpointFile('/fixture-home'), '/fixture-home/.agentforge/desktop/desktop-endpoint.json');
+  assert.equal(defaultEndpointFile('/fixture-home'), '/fixture-home/.baton/desktop/desktop-endpoint.json');
 });
 async function captured(args, options = {}) {
   let stdout = '', stderr = '';
@@ -223,7 +223,7 @@ test('default CLI help progressively discloses root, groups and operation detail
   for (const args of [[], ['help'], ['--help'], ['schema']]) {
     const result = await captured(args, { fetcher() { assert.fail('help must stay offline'); } });
     assert.equal(result.code, 0); assert.equal(result.stderr, ''); assert.ok(!result.stdout.startsWith('{'));
-    for (const phrase of ['AI 团队操作系统', '数字员工', 'MCP 市场', '插件市场', '工作流', '团队', 'Runtime', '会话状态', '查看具体操作参数：在命令后加 --help，例如 agentforge agents get --help。']) assert.ok(result.stdout.includes(phrase), phrase);
+    for (const phrase of ['AI 团队操作系统', '数字员工', 'MCP 市场', '插件市场', '工作流', '团队', 'Runtime', '会话状态', '查看具体操作参数：在命令后加 --help，例如 baton agents get --help。']) assert.ok(result.stdout.includes(phrase), phrase);
     assert.doesNotMatch(result.stdout, /逐层查看|GROUP|OPERATION/);
     assert.equal(result.stdout.split('\n').filter(line => line.includes('--help')).length, 1);
     assert.ok(result.stdout.indexOf('AI 团队操作系统') < result.stdout.indexOf('命令目录'));
@@ -234,7 +234,7 @@ test('default CLI help progressively discloses root, groups and operation detail
   for (const group of Object.keys(resources)) {
     const result = await captured(['help', group], { columns: 160 });
     assert.equal(result.code, 0);
-    assert.match(result.stdout, /子命令/); assert.match(result.stdout, new RegExp(`例如 agentforge ${group} ${group==='storage'?'get':'list'} --help`));
+    assert.match(result.stdout, /子命令/); assert.match(result.stdout, new RegExp(`例如 baton ${group} ${group==='storage'?'get':'list'} --help`));
     assert.doesNotMatch(result.stdout, /下一层帮助|GROUP|OPERATION/);
     assert.ok(!result.stdout.includes('完整字段说明') && !result.stdout.includes('JSON 输入模板'));
     for (const operation of resources[group].operations) assert.ok(result.stdout.includes(operation));
@@ -246,7 +246,7 @@ test('default CLI help progressively discloses root, groups and operation detail
   }
   const auth = (await captured(['auth'])).stdout;
   assert.match(auth, /管理员会话/); assert.match(auth, /login/); assert.match(auth, /status/); assert.match(auth, /logout/);
-  assert.match(auth, /例如 agentforge auth login --help/); assert.doesNotMatch(auth, /GROUP|OPERATION/);
+  assert.match(auth, /例如 baton auth login --help/); assert.doesNotMatch(auth, /GROUP|OPERATION/);
   assert.ok(!auth.includes('--password-stdin') && !auth.includes('AF_LOGIN_PASSWORD'));
   const login = (await captured(['auth', 'login', '--help'])).stdout;
   assert.match(login, /--username NAME \[--password-stdin\]/); assert.match(login, /交互登录/); assert.match(login, /隐藏输入/); assert.match(login, /AF_LOGIN_PASSWORD/); assert.match(login, /stdin/);
@@ -270,14 +270,14 @@ test('default CLI help progressively discloses root, groups and operation detail
 test('displayed help examples are executable offline; usage errors do not recommend placeholder commands', async () => {
   const offline = { fetcher() { assert.fail('help must not authenticate or make requests'); } };
   const root = (await captured([], offline)).stdout;
-  const example = root.match(/例如 (agentforge [a-z -]+)--help/)[1].trim().split(/\s+/).slice(1);
+  const example = root.match(/例如 (baton [a-z -]+)--help/)[1].trim().split(/\s+/).slice(1);
   const detail = await captured([...example, '--help'], offline);
   assert.equal(detail.code, 0); assert.match(detail.stdout, /ID：必填精确资源ID/);
   for (const args of [['agents', 'get'], ['GROUP'], ['GROUP', 'agents'], ['agents', 'help']]) {
     const result = await captured(args, offline);
     assert.equal(result.code, 2); assert.equal(result.stdout, '');
     assert.doesNotMatch(result.stderr, /GROUP|OPERATION|<group>|<operation>/);
-    assert.match(result.stderr, /agentforge agents get --help/);
+    assert.match(result.stderr, /baton agents get --help/);
   }
 });
 test('explicit --json works before/after commands, including malformed usage; piped default stays text', async () => {
@@ -290,11 +290,11 @@ test('explicit --json works before/after commands, including malformed usage; pi
     assert.equal(JSON.parse(result.stdout).error.code, 'USAGE');
   }
   const { stdout, stderr } = await promisify(execFile)(process.execPath, [fileURLToPath(new URL('../cli/main.mjs', import.meta.url)), 'help']);
-  assert.match(stdout, /^AgentForge/); assert.equal(stderr, '');
+  assert.match(stdout, /^Baton/); assert.equal(stderr, '');
 });
 test('CLI executable works through an npm-style symlink and keeps stdout machine-readable', async () => {
   const root = await mkdtemp(join(tmpdir(), 'af-cli-link-'));
-  const link = join(root, 'agentforge');
+  const link = join(root, 'baton');
   await symlink(fileURLToPath(new URL('../cli/main.mjs', import.meta.url)), link);
   const { stdout, stderr } = await promisify(execFile)(process.execPath, [link, 'schema', 'workflows', '--json']);
   assert.equal(JSON.parse(stdout).data.group, 'workflows'); assert.equal(stderr, '');
@@ -364,16 +364,14 @@ test('MCP update is progressive, accepts partial input and sends an authenticate
     const count=f.calls.length;await assert.rejects(f.invoke(['mcps','update','skill_one','--file','-'],{}),/至少提供/);assert.equal(f.calls.length,count);
   }finally{await rm(f.root,{recursive:true,force:true})}
 });
-test('plugin update controls expose progressive help and authenticated status, trigger and settings commands',async()=>{
+test('plugin update controls expose only manual status and update-all commands',async()=>{
   const f=await fixture();try{
-    for(const operation of ['updates','check-updates','auto-update']){
-      const help=await captured(['plugins',operation,'--help']);assert.match(help.stdout,/2分钟/);if(operation==='auto-update'){assert.match(help.stdout,/--file/);assert.match(help.stdout,/enabled/);}
+    for(const operation of ['updates','check-updates']){
+      const help=await captured(['plugins',operation,'--help']);assert.match(help.stdout,/手动|更新全部/);assert.doesNotMatch(help.stdout,/auto-update|默认2分钟|intervalMinutes/);
     }
     await f.invoke(['plugins','updates']);assert.deepEqual(f.calls.at(-1),{path:'/api/runtime/marketplace/updates',method:'GET',body:null});
     await f.invoke(['plugins','check-updates']);assert.deepEqual(f.calls.at(-1),{path:'/api/runtime/marketplace/updates',method:'POST',body:{}});
-    await f.invoke(['plugins','auto-update','--file','-'],{enabled:false});assert.deepEqual(f.calls.at(-1),{path:'/api/runtime/marketplace/updates/settings',method:'PUT',body:{enabled:false}});
-    await f.invoke(['plugins','auto-update','--file','-'],{intervalMinutes:15});assert.deepEqual(f.calls.at(-1).body,{intervalMinutes:15});
-    const count=f.calls.length;for(const input of [{},{enabled:'false'},{enabled:true,extra:1},{intervalMinutes:0},{intervalMinutes:1441},{intervalMinutes:1.5},{intervalMinutes:'2'}])await assert.rejects(f.invoke(['plugins','auto-update','--file','-'],input));assert.equal(f.calls.length,count);
+    const count=f.calls.length;await assert.rejects(f.invoke(['plugins','auto-update','--file','-'],{enabled:false}),error=>error.code==='USAGE');assert.equal(f.calls.length,count);
   }finally{await rm(f.root,{recursive:true,force:true})}
 });
 test('plugin and MCP deletion exposes progressive help and requires explicit confirmation before authenticated DELETE', async () => {
@@ -688,7 +686,7 @@ test('default CLI uses the formal desktop delegation, validates instance and res
     const calls = [];
     const fetcher = async (url,init) => {
       calls.push({url,init});
-      if (url.endsWith('/api/health')) return new Response(JSON.stringify({service:'agentforge-control-plane',instanceId}));
+      if (url.endsWith('/api/health')) return new Response(JSON.stringify({service:'baton-control-plane',instanceId}));
       assert.equal(init.headers.Cookie,cookie);
       if (url.endsWith('/api/auth/session')) return new Response(JSON.stringify({username:'operator',expiresAt:null}));
       return new Response(JSON.stringify({profiles:[{id:'codex',provider:'codex',model:'',effort:'',enabled:true}]}));

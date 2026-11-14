@@ -15,15 +15,15 @@ import { executionContent, promptSnapshot } from '../server/runtime/local-cli.mj
 
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/collaboration-flow-'));
-process.env.AGENTFORGE_LOG_DIR = join(root, 'logs');
-const appBundle = process.env.AGENTFORGE_COLLABORATION_APP;
+process.env.BATON_LOG_DIR = join(root, 'logs');
+const appBundle = process.env.BATON_COLLABORATION_APP;
 const home = join(root, 'home');
-const data = appBundle ? join(home, '.agentforge/desktop') : join(root, 'client');
+const data = appBundle ? join(home, '.baton/desktop') : join(root, 'client');
 await mkdir(home, { recursive: true });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('flow-qa', password); auth.close();
-const s = createFixtureStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const s = createFixtureStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 const run = s.createRun(s.listTasks()[0].id);
 s.updateRun(run.id, { status: 'running' }); s.setTaskStatus(run.taskId, 'running');
 const analyst = s.getRunAgent(run.id, 'agent_analyst'), tester = s.getRunAgent(run.id, 'agent_tester');
@@ -75,12 +75,12 @@ for(const content of [executionContent({thinking:'FLOW_THINKING：先核对输�
 
 const currentFailure = s.createTrace(run.id, {workflowNodeId:'design',agentId:'agent_designer',type:'node'});
 s.completeTrace(currentFailure.id,{status:'failed',error:'FLOW_CURRENT_ERROR'});
-s.addMessage({ runId: run.id, sender: { type: 'system', id: 'agentforge', name: 'AgentForge' }, recipientAgentId: run.manager.id, kind: 'coordination_notice', content: 'FLOW_NOTICE：上一次派工未能送达，需要重新安排。' });
+s.addMessage({ runId: run.id, sender: { type: 'system', id: 'baton', name: 'Baton' }, recipientAgentId: run.manager.id, kind: 'coordination_notice', content: 'FLOW_NOTICE：上一次派工未能送达，需要重新安排。' });
 s.addMessage({ runId: run.id, kind: 'instruction', content: 'FLOW_HUMAN：补充给整个团队的说明。' });
 for (let i = 0; i < 35; i++) s.addMessage({ runId: run.id, sender: actor(analyst), kind: 'progress', content: `FLOW_PROGRESS_${i}：展示夹具 <img src=x onerror="window.flowInjected=true">` });
 const final = s.addMessage({ runId: run.id, traceId: tManager.id, sender: actor(run.manager), kind: 'manager_decision', content: 'FLOW_FINAL：已交付 review.md。技术检查完成，听感仍未验证。' });
 s.requestHumanAcceptance(run.id, { traceId: tManager.id, summary: 'FLOW_ACCEPTANCE：请人类核对交付与未验证项。' });
-s.addMessage({ runId: run.id, sender: { type: 'system', id: 'agentforge', name: 'AgentForge' }, recipientAgentId: run.manager.id, kind: 'escalation', content: 'FLOW_PLATFORM_FAILURE：自动失败升级摘要。' });
+s.addMessage({ runId: run.id, sender: { type: 'system', id: 'baton', name: 'Baton' }, recipientAgentId: run.manager.id, kind: 'escalation', content: 'FLOW_PLATFORM_FAILURE：自动失败升级摘要。' });
 s.confirmRunCompletion(run.id);
 s.addEvent({ type: 'run.failed', runId: run.id, message: 'FLOW_FAILURE_NOTICE：执行失败', data: { error: 'FLOW_OLD_ERROR：一次临时故障' } });
 const scrollRuns = [];
@@ -100,7 +100,7 @@ for (const width of [1320, 760]) {
 s.close();
 
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ ...(appBundle ? { executablePath: resolve(appBundle, 'Contents/MacOS/AgentForge'), args: [] } : { args: ['apps/electron/main.mjs'] }), env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+const app = await electron.launch({ ...(appBundle ? { executablePath: resolve(appBundle, 'Contents/MacOS/Baton'), args: [] } : { args: ['apps/electron/main.mjs'] }), env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 try {
   const page = await app.firstWindow({ timeout: 180000 });
   await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout:180000 });
@@ -120,7 +120,7 @@ try {
   assert.equal((await page.request.get(origin + '/api/runs/' + run.id + '/defects')).status(), 404);
   await page.goto(origin + '/runs/' + run.id);
   await page.locator('.collaboration-row').first().waitFor();
-  if (!process.env.AGENTFORGE_COLLABORATION_SCROLL_ONLY) {
+  if (!process.env.BATON_COLLABORATION_SCROLL_ONLY) {
   if (!await page.locator('#task-description-content').isVisible()) await page.locator('[data-toggle-task-details]').click();
   await page.locator('#task-description-content p').waitFor();
   assert.equal(await page.locator('.quality-risk-panel').count(), 0);
@@ -372,7 +372,7 @@ try {
     assert.equal(after.run.status,'paused');assert.equal(after.run.traceCount,0);
     await page.screenshot({path:join(root,`reply-latest-${width}.png`)});
   }
-  console.log('PASS' + ' ' + (appBundle ? 'packaged' : 'source') + (process.env.AGENTFORGE_COLLABORATION_SCROLL_ONLY ? ' collaboration reply scroll' : ' collaboration flow') + '; evidence: ' + root);
+  console.log('PASS' + ' ' + (appBundle ? 'packaged' : 'source') + (process.env.BATON_COLLABORATION_SCROLL_ONLY ? ' collaboration reply scroll' : ' collaboration flow') + '; evidence: ' + root);
 } finally {
   // A failed desktop startup can leave the close handshake waiting on its error
   // window. Bound cleanup to this test-owned process and retain the original error.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// One-time, operator-run migration of application instance data to ~/.agentforge.
+// One-time, operator-run migration of application instance data to ~/.baton.
 //
 // This is NOT an in-app auto migration: the operator runs it explicitly after
-// stopping every AgentForge instance. Per instance it copies the application
+// stopping every Baton instance. Per instance it copies the application
 // whitelist (databases, run files, runtime configuration, desktop endpoint and
 // preferences), verifies every file by size + SHA-256, then renames the legacy
 // entries to *.migrated-backup-<timestamp> without deleting anything.
@@ -27,22 +27,22 @@ const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 // Application-owned entries only. workspaces/ is deliberately absent: frozen
 // historical Task/Run paths stay where they are and remain readable.
 export const whitelistFiles = [
-  "agentforge.sqlite", "agentforge.sqlite-wal", "agentforge.sqlite-shm",
-  "agentforge.sqlite.history.sqlite", "agentforge.sqlite.history.sqlite-wal", "agentforge.sqlite.history.sqlite-shm",
-  "agentforge.sqlite.reset.json", "agentforge.sqlite.reset.json.pending",
+  "baton.sqlite", "baton.sqlite-wal", "baton.sqlite-shm",
+  "baton.sqlite.history.sqlite", "baton.sqlite.history.sqlite-wal", "baton.sqlite.history.sqlite-shm",
+  "baton.sqlite.reset.json", "baton.sqlite.reset.json.pending",
   "auth.sqlite", "auth.sqlite-wal", "auth.sqlite-shm",
   "desktop-endpoint.json", "desktop-preferences.json"
 ];
-export const whitelistDirectories = ["agentforge-runs", "runtime-configs"];
+export const whitelistDirectories = ["baton-runs", "runtime-configs"];
 
 export function packagedUserDataRoot({ home = homedir(), platform = process.platform, env = process.env } = {}) {
-  if (platform === "darwin") return join(home, "Library", "Application Support", "AgentForge");
-  if (platform === "win32") return join(env.APPDATA || join(home, "AppData", "Roaming"), "AgentForge");
-  return join(env.XDG_CONFIG_HOME || join(home, ".config"), "AgentForge");
+  if (platform === "darwin") return join(home, "Library", "Application Support", "Baton");
+  if (platform === "win32") return join(env.APPDATA || join(home, "AppData", "Roaming"), "Baton");
+  return join(env.XDG_CONFIG_HOME || join(home, ".config"), "Baton");
 }
 
 export function migrationInstances({ home = homedir(), userData = null } = {}) {
-  const dataHome = join(home, ".agentforge");
+  const dataHome = join(home, ".baton");
   return [
     { id: "desktop", source: userData || packagedUserDataRoot({ home }), target: join(dataHome, "desktop") },
     { id: "desktop-dev", source: join(repoRoot, ".data", "desktop-dev"), target: join(dataHome, "desktop-dev") }
@@ -105,7 +105,7 @@ async function probeHealth(origin, instanceId = null) {
   try {
     const response = await fetch(`${origin}/api/health`, { redirect: "error", signal: AbortSignal.timeout(1500) });
     const health = await response.json();
-    return response.ok && health.service === "agentforge-control-plane" && (!instanceId || health.instanceId === instanceId);
+    return response.ok && health.service === "baton-control-plane" && (!instanceId || health.instanceId === instanceId);
   } catch { return false; }
 }
 
@@ -178,7 +178,7 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const instances = migrationInstances(options).filter(instance => !options.only || instance.id === options.only);
-  console.log(`数据目录搬迁${options.apply ? "" : "（演练，未做修改；加 --yes 执行）"}：目标根 ${join(options.home, ".agentforge")}`);
+  console.log(`数据目录搬迁${options.apply ? "" : "（演练，未做修改；加 --yes 执行）"}：目标根 ${join(options.home, ".baton")}`);
   let failed = 0, acted = 0;
   for (const instance of instances) {
     try {

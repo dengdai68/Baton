@@ -3,8 +3,8 @@ import { constants } from 'node:fs';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const begin = '# >>> AgentForge CLI PATH >>>', end = '# <<< AgentForge CLI PATH <<<';
-const launcherMark = '# AgentForge managed CLI launcher v1';
+const begin = '# >>> Baton CLI PATH >>>', end = '# <<< Baton CLI PATH <<<';
+const launcherMark = '# Baton managed CLI launcher v1';
 const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
 const failure = (code, message) => Object.assign(new Error(message), { code });
 const owned = info => !process.getuid || info.uid === process.getuid();
@@ -15,7 +15,7 @@ const same = (a, b) => a === null ? b === null : b !== null && a.equals(b);
 export function createCliInstallation({ home, launcher, shell = '/bin/zsh', zdotdir, fileSystem = fs }) {
   if (![home, launcher, shell].every(value => typeof value === 'string' && isAbsolute(value) && !/[\0\r\n]/.test(value)) || resolve(home) === '/') throw failure('CLI_LOCATION', 'CLI 安装位置无效');
   home = resolve(home);
-  const bin = join(home, '.local/bin'), commandPath = join(bin, 'agentforge');
+  const bin = join(home, '.local/bin'), commandPath = join(bin, 'baton');
   const wrapper = Buffer.from(`#!/bin/sh\n${launcherMark}\nexec ${quote(launcher)} "$@"\n`);
   const family = basename(shell);
   const supported = ['zsh', 'bash'].includes(family) && (!zdotdir || resolve(zdotdir) === home);
@@ -53,7 +53,7 @@ export function createCliInstallation({ home, launcher, shell = '/bin/zsh', zdot
     const block = `${begin}\ncase ":\${PATH-}:" in\n  *${quote(':' + bin + ':')}*) ;;\n  *) export PATH=${quote(bin)}"\${PATH:+:$PATH}" ;;\nesac\n${end}\n`;
     if (previous.includes(begin) || previous.includes(end)) {
       if (previous.split(begin).length !== 2 || previous.split(end).length !== 2) throw failure('CLI_MARKERS', 'PATH 标记块重复或不完整，请先手工修复；其他配置未覆盖');
-      const pattern = /^# >>> AgentForge CLI PATH >>>\r?\n[\s\S]*?^# <<< AgentForge CLI PATH <<<(?:\r?\n|$)/m;
+      const pattern = /^# >>> Baton CLI PATH >>>\r?\n[\s\S]*?^# <<< Baton CLI PATH <<<(?:\r?\n|$)/m;
       if (!pattern.test(previous)) throw failure('CLI_MARKERS', 'PATH 标记块不完整，请先手工修复');
       return Buffer.from(previous.replace(pattern, () => block));
     }
@@ -65,7 +65,7 @@ export function createCliInstallation({ home, launcher, shell = '/bin/zsh', zdot
     await fileSystem.access(launcher, constants.X_OK);
     const command = await read(commandPath), text = command.bytes?.toString('utf8');
     // Strictly recognize our own complete forwarding script, not a marker alone.
-    if (command.bytes !== null && !/^#!\/bin\/sh\n# AgentForge managed CLI launcher v1\nexec '(?:[^'\n]|'\\'')*\/Contents\/Resources\/cli\/agentforge' "\$@"\n$/.test(text)) throw failure('CLI_CONFLICT', '已有非 AgentForge 的 agentforge 命令；不会覆盖，请先自行确认和处理');
+    if (command.bytes !== null && !/^#!\/bin\/sh\n# Baton managed CLI launcher v1\nexec '(?:[^'\n]|'\\'')*\/Contents\/Resources\/cli\/baton' "\$@"\n$/.test(text)) throw failure('CLI_CONFLICT', '已有非 Baton 的 baton 命令；不会覆盖，请先自行确认和处理');
     if (command.bytes !== null && !(command.mode & 0o100)) throw failure('CLI_FILE', '已有受管命令缺少本用户执行权限；请先检查并恢复执行权限，再重试');
     let profiles;
     if (family === 'zsh') profiles = [await read(join(home, '.zprofile')), await read(join(home, '.zshrc'))];
@@ -94,7 +94,7 @@ export function createCliInstallation({ home, launcher, shell = '/bin/zsh', zdot
     const current = await read(snapshot.path);
     if (!same(current.bytes, snapshot.bytes) || current.mode !== snapshot.mode) throw failure('CLI_CHANGED', '安装文件在操作期间发生变化；已停止，请检查后重试');
     if (next === null) { await fileSystem.unlink(snapshot.path); return; }
-    const temporary = join(dirname(snapshot.path), `.agentforge-cli-${randomUUID()}.tmp`);
+    const temporary = join(dirname(snapshot.path), `.baton-cli-${randomUUID()}.tmp`);
     try {
       await fileSystem.writeFile(temporary, next, { mode: snapshot.mode, flag: 'wx' });
       await fileSystem.chmod(temporary, snapshot.mode);

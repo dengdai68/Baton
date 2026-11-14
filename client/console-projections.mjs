@@ -485,7 +485,7 @@ export function collaborationRecords(workspace = {}) {
   const eventTitles = { "dispatch.retry_scheduled": "安排重试", "dispatch.retry_requested": "人类重试", "dispatch.retry_stopped": "因失败停止", "dispatch.escalated": "升级协调", "dispatch.coordination_followups_settled": "协调投递结算", "session.reset": "会话重建", "run.completed": "人类确认完成", "run.awaiting_acceptance": "提交人类验收", "run.acceptance_reopened": "重新协作", "run.recovered": "中断恢复", "run.cancelled": "人类终止", "run.paused": "任务暂停", "run.resumed": "任务继续", "run.inquiries_cancelled": "停止答疑", "run.failed": "执行失败", "run.retry_requested": "人类恢复", "run.orchestration_retry_requested": "重新协调", "run.reassessment_requested": "重新评估" };
   const publicEvent = event => ({
     id: event.id, timestamp: event.timestamp, category: "event", eventType: event.type,
-    title: eventTitles[event.type], content: event.message || "", from: event.actor?.name || "AgentForge",
+    title: eventTitles[event.type], content: event.message || "", from: event.actor?.name || "Baton",
     senderType: event.actor?.type || "system", traceId: event.data?.traceId || event.data?.acceptanceRequest?.traceId || null,
     error: event.data?.error || null, reason: event.data?.reason || null, nextRetryAt: event.data?.nextRetryAt || null,
     relatedDispatchIds: event.data?.dispatchIds || event.data?.cancelledDispatchIds || event.data?.recoveredDispatchIds || [],
@@ -495,8 +495,8 @@ export function collaborationRecords(workspace = {}) {
     const answer = messages.find(entry => entry.replyToMessageId === item.id), question = byMessage.get(item.replyToMessageId);
     const statusCode = answer ? "answered" : waiting ? "waiting" : "recorded";
     return {
-      id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type,
-      from: item.sender?.name || "AgentForge", to: item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
+      id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type, senderId: item.sender?.id || null,
+      from: item.sender?.name || "Baton", to: item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
       title: kinds[item.kind] || (item.replyToMessageId ? "答复" : "协作消息"), content: collaborationContent(item), attachments: asArray(item.attachments),
       status: answer ? "当前：已回答" : waiting ? "当前：等待答复" : "", statusCode,
       tone: waiting || item.kind === "escalation" ? "warning" : item.sender?.type === "human" ? "info" : ["manager_decision", "agent_consultation"].includes(item.kind) ? "violet" : "teal",
@@ -510,7 +510,7 @@ export function collaborationRecords(workspace = {}) {
   const recordById = new Map(records.map(item => [item.id, item]));
   const start = run.startedAt && run.task?.objective ? {
     id: `${run.id}:start`, timestamp: run.startedAt, category: "event", eventType: "run.started", title: "开始协作",
-    from: "AgentForge", to: run.manager?.name || null, senderType: "system", content: run.task.objective,
+    from: "Baton", to: run.manager?.name || null, senderType: "system", content: run.task.objective,
     acceptanceCriteria: asArray(run.task.acceptanceCriteria), tone: "info", statusCode: "recorded", status: "", human: true, deliveries: [], relatedEvents: [],
   } : null;
   if (start) { records.push(start); recordById.set(start.id, start); }
@@ -560,7 +560,7 @@ export function collaborationRecords(workspace = {}) {
       const recovery = !source && events.find(event => ["run.retry_requested", "run.orchestration_retry_requested"].includes(event.type) && event.data?.dispatchId === delivery.id);
       let record = source ? recordById.get(source.id) : recovery ? eventRecords.get(recovery.id) : delivery.dedupeKey === "initial-manager" ? start : null;
       if (!record) {
-        record = { id: delivery.id, timestamp: delivery.createdAt, category: "dispatch", title: "建立投递", from: "AgentForge", to: memberName(delivery.recipientAgentId), senderType: "system", content: "", status: "", statusCode: "recorded", tone: "violet", human: false, sourceNotice: "来源未关联；仅展示已建立的实际投递。", deliveries: [], relatedEvents: [] };
+        record = { id: delivery.id, timestamp: delivery.createdAt, category: "dispatch", title: "建立投递", from: "Baton", to: memberName(delivery.recipientAgentId), senderType: "system", content: "", status: "", statusCode: "recorded", tone: "violet", human: false, sourceNotice: "来源未关联；仅展示已建立的实际投递。", deliveries: [], relatedEvents: [] };
         records.push(record); recordById.set(record.id, record);
       }
       const history = asArray(delivery.traceIds).map((id, index) => {

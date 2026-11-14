@@ -1,15 +1,15 @@
 ---
-name: agentforge-release
-description: 为 AgentForge App 打包并发布 GitHub Release，按仓库约定递增正式版或 Beta 版本，生成简洁中文发布说明并核验附件。用户要求打包发布、发布测试版或正式版时使用；只安装到本机不等于发布。
+name: baton-release
+description: 为 Baton App 打包并发布 GitHub Release，按仓库约定递增正式版或 Beta 版本，生成简洁中文发布说明并核验附件。用户要求打包发布、发布测试版或正式版时使用；只安装到本机不等于发布。
 ---
 
-# AgentForge GitHub 发布
+# Baton GitHub 发布
 
 在仓库根目录执行。贡献规则见 `AGENTS.md`，构建入口见 `package.json`、`CONTRIBUTING.md`，附件与签名契约见 `docs/24-desktop-updates.md`。本 skill 定义发布操作流程；新增或修改 skill 本身不表示要实际发布。
 
 ## 版本与渠道
 
-- “发布”指发布到 `dengdai68/AgentForge` 的 GitHub Releases，不以本机打包、安装或推送代码代替发布成功。
+- “发布”指发布到 `dengdai68/Baton` 的 GitHub Releases，不以本机打包、安装或推送代码代替发布成功。
 - 未明确要求正式版时，一律发布测试版：`v主.次.补丁-beta.N`，例如 `v0.1.3-beta.1`。同一目标版本每次新的打包发布只将 beta 序号加 1；首个为 1。
 - 正式版严格为三段：`v主.次.补丁`，例如 `v0.1.3`。无特殊版本要求时，相对最新正式版只将补丁号加 1；主、次版本不变。对应 Beta 晋升正式时移除后缀，不再额外递增一次。
 - 默认新周期从最新正式版的下一补丁版开始；已有该周期 Beta 时继续其序号。例如正式版 `v0.1.3` 后依次为 `v0.1.4-beta.1`、`v0.1.4-beta.2`，明确要求正式版时为 `v0.1.4`。用户指定版本时优先遵循指定值。
@@ -26,13 +26,13 @@ description: 为 AgentForge App 打包并发布 GitHub Release，按仓库约定
 
 ## Release 标题与说明
 
-标题严格等于版本号（带 `v`），如 `v0.1.4-beta.2` 或 `v0.1.4`。不加 AgentForge、平台名、日期或其他文字。
+标题严格等于版本号（带 `v`），如 `v0.1.4-beta.2` 或 `v0.1.4`。不加 Baton、平台名、日期或其他文字。
 
 说明只列本次版本增加、修改和修复的内容，每项一句中文。Beta 相对上次同周期 Beta；首个 Beta 相对上次正式版；正式版汇总相对上次正式版的改动。以实际提交与 CHANGELOG 为证据，不直接粘贴全部 Unreleased。不要增加标题、前言、构建信息、测试报告、提交列表、下载教程或自动生成的 GitHub notes。
 
 最后一段固定为：
 
-注：如果提示 Apple 无法验证，请使用 `sudo xattr -d com.apple.quarantine "/Applications/AgentForge.app"` 暂时忽略。
+注：如果提示 Apple 无法验证，请使用 `sudo xattr -d com.apple.quarantine "/Applications/Baton.app"` 暂时忽略。
 
 该命令仅作为用户要求的说明文字，不在发布过程中对本机应用执行。
 
@@ -42,7 +42,7 @@ description: 为 AgentForge App 打包并发布 GitHub Release，按仓库约定
 - 新增任务按工作流筛选。
 - 修复员工重试时没有继续原会话的问题。
 
-注：如果提示 Apple 无法验证，请使用 `sudo xattr -d com.apple.quarantine "/Applications/AgentForge.app"` 暂时忽略。
+注：如果提示 Apple 无法验证，请使用 `sudo xattr -d com.apple.quarantine "/Applications/Baton.app"` 暂时忽略。
 ```
 
 ## 上传与核验

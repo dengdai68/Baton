@@ -181,13 +181,13 @@ test('role CLI runs authenticated CRUD over HTTP with reference-style output', a
   t.after(() => rm(root, { recursive: true, force: true }));
   const sessionFile = join(root, 'session.json'), endpointFile = join(root, 'endpoint.json');
   const origin = 'http://127.0.0.1:51983', instanceId = '11111111-2222-4333-8444-555555555555';
-  const cookie = 'agentforge_session=' + 'a'.repeat(64);
+  const cookie = 'baton_session=' + 'a'.repeat(64);
   await writeFile(endpointFile, JSON.stringify({ origin, instanceId }), { mode: 0o600 });
   const state = { roles: [{ id: 'role_one', name: '核查员', prompt: 'ROLE_ONE' }] };
   const calls = [];
   const fetcher = async (url, options = {}) => {
     const path = url.slice(origin.length), body = options.body ? JSON.parse(options.body) : null;
-    if (path === '/api/health') { assert.equal(options.headers, undefined); return new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId })); }
+    if (path === '/api/health') { assert.equal(options.headers, undefined); return new Response(JSON.stringify({ service: 'baton-control-plane', instanceId })); }
     calls.push({ path, method: options.method || 'GET', body });
     if (path === '/api/auth/login') return new Response(JSON.stringify({ username: 'operator', expiresAt: null }), { headers: { 'set-cookie': cookie + '; Path=/; HttpOnly' } });
     assert.equal(options.headers.Cookie, cookie, 'every resource request is authenticated');

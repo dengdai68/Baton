@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>设置 · AgentForge 重设计稿</title>
+<title>设置 · Baton 重设计稿</title>
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/components.css">
 <script src="../assets/icons.js"></script>
@@ -123,11 +123,11 @@
               <div class="srow srow--expand">
                 <div class="srow__text"><div class="srow__label">位置</div><div class="srow__desc">更换会整理资料并重启本机服务；有任务或沟通正在执行时不能更换。已有任务的工作路径保持原位。</div></div>
                 <div class="srow__panel" style="margin-top:12px;padding-top:0;border-top:0">
-                  <div class="hstack"><input class="input mono" style="flex:1" value="~/AgentForge" aria-label="工作目录"><button class="btn" type="button">选择…</button><button class="btn btn--primary" type="button" disabled>保存并整理</button></div>
+                  <div class="hstack"><input class="input mono" style="flex:1" value="~/Baton" aria-label="工作目录"><button class="btn" type="button">选择…</button><button class="btn btn--primary" type="button" disabled>保存并整理</button></div>
                 </div>
               </div>
-              <div class="srow"><div class="srow__text"><div class="srow__label">业务资料</div><div class="path"><span>~/AgentForge/records</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
-              <div class="srow"><div class="srow__text"><div class="srow__label">配置目录</div><div class="srow__desc">设置、认证、运行时、插件、MCP、Git 凭据与日志保留在此，不随工作目录移动。</div><div class="path"><span>~/.agentforge</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">业务资料</div><div class="path"><span>~/Baton/records</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">配置目录</div><div class="srow__desc">设置、认证、运行时、插件、MCP、Git 凭据与日志保留在此，不随工作目录移动。</div><div class="path"><span>~/.baton</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
             </div>
           </div>
           <div class="sgroup">
@@ -166,17 +166,17 @@
 
         <!-- 命令行 CLI -->
         <div class="settings-inner" data-tab-panel="cli" data-group="settings" hidden>
-          <h1>命令行 CLI</h1><p class="lead">在终端中使用 agentforge 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
+          <h1>命令行 CLI</h1><p class="lead">在终端中使用 baton 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
           <div class="sgroup">
             <div class="sbox">
-              <div class="srow"><span class="rt-logo"><i data-icon="terminal" class="icon--sm"></i></span><div class="srow__text"><div class="srow__label">agentforge<span class="status status--pill st-done"><i data-icon="st-done"></i>已安装</span></div><div class="path"><span>~/.local/bin/agentforge · v0.1.9</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>刷新</button><button class="btn btn--sm" type="button">重新安装</button></div></div>
+              <div class="srow"><span class="rt-logo"><i data-icon="terminal" class="icon--sm"></i></span><div class="srow__text"><div class="srow__label">baton<span class="status status--pill st-done"><i data-icon="st-done"></i>已安装</span></div><div class="path"><span>~/.local/bin/baton · v0.1.9</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>刷新</button><button class="btn btn--sm" type="button">重新安装</button></div></div>
             </div>
           </div>
           <div class="sgroup">
             <div class="sgroup__title">快速开始</div>
-<pre class="code-block">agentforge help
-agentforge schema agents
-agentforge tasks list --json</pre>
+<pre class="code-block">baton help
+baton schema agents
+baton tasks list --json</pre>
             <p class="faint" style="font-size:12px;margin-top:8px">CLI 复用客户端登录授权，相当于本机管理员权限，只交给可信的 AI。配置保存不等于任务执行，也不能代替你确认交付。</p>
           </div>
           <details class="sgroup">
@@ -204,7 +204,7 @@ agentforge tasks list --json</pre>
           <div class="sgroup">
             <div class="sgroup__title">应用</div>
             <div class="sbox">
-              <div class="srow"><img src="../../../web/icons/application-ui.png" alt="" width="28" height="28" style="border-radius:7px"><div class="srow__text"><div class="srow__label">AgentForge 0.1.9</div><div class="srow__desc">当前版本 · <a href="#">GitHub 发布记录</a></div></div><div class="srow__control"><button class="btn btn--sm" type="button">检查更新</button></div></div>
+              <div class="srow"><img src="../../../web/icons/application-ui.png" alt="" width="28" height="28" style="border-radius:7px"><div class="srow__text"><div class="srow__label">Baton 0.1.9</div><div class="srow__desc">当前版本 · <a href="#">GitHub 发布记录</a></div></div><div class="srow__control"><button class="btn btn--sm" type="button">检查更新</button></div></div>
               <div class="srow srow--expand"><span class="rt-logo" style="background:var(--accent-soft);color:var(--accent-text)"><i data-icon="download" class="icon--sm"></i></span><div class="srow__text"><div class="srow__label">发现新版本 0.2.0</div><div class="srow__desc">正在下载安装包…</div></div><div class="srow__control"><span class="tnum muted" style="font-size:12px">62%</span><button class="btn btn--ghost btn--sm" type="button">取消</button></div>
                 <div class="srow__panel" style="margin-top:10px;padding-top:0;border-top:0"><div class="progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="安装包下载进度"><i style="width:62%"></i></div></div>
               </div>
@@ -213,7 +213,7 @@ agentforge tasks list --json</pre>
           <div class="sgroup">
             <div class="sgroup__title">插件</div>
             <div class="sbox">
-              <div class="srow"><div class="srow__text"><div class="srow__label">自动更新 Git 插件</div><div class="srow__desc">仅在 AgentForge 服务运行时生效；本地目录与固定 SHA 不追随远端。</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="自动更新 Git 插件"></span></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">自动更新 Git 插件</div><div class="srow__desc">仅在 Baton 服务运行时生效；本地目录与固定 SHA 不追随远端。</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="自动更新 Git 插件"></span></div>
               <div class="srow"><div class="srow__text"><div class="srow__label">检查周期</div><div class="srow__desc">1–1440 分钟，默认 2 分钟。</div></div><div class="srow__control"><input class="input tnum" style="width:72px;text-align:right" value="2" aria-label="检查周期（分钟）"><span class="muted">分钟</span></div></div>
               <div class="srow"><div class="srow__text"><div class="srow__label">上次检查</div><div class="srow__desc">尚未检查 · 下次 00:59</div></div><div class="srow__control"><button class="btn btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>立即检查</button></div></div>
             </div>
@@ -226,8 +226,8 @@ agentforge tasks list --json</pre>
           <h1>运行日志</h1><p class="lead">任务、私聊、群聊与本机服务的详细诊断写入本机文件，这里只显示路径。</p>
           <div class="sgroup">
             <div class="sbox">
-              <div class="srow"><div class="srow__text"><div class="srow__label">日志目录</div><div class="path"><span>~/.agentforge/logs/af-7c21</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--sm" type="button">在访达中显示</button></div></div>
-              <div class="srow"><div class="srow__text"><div class="srow__label">当前服务日志</div><div class="path"><span>~/.agentforge/logs/af-7c21/server-48211.jsonl</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">日志目录</div><div class="path"><span>~/.baton/logs/af-7c21</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--sm" type="button">在访达中显示</button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">当前服务日志</div><div class="path"><span>~/.baton/logs/af-7c21/server-48211.jsonl</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button></div></div>
             </div>
           </div>
           <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">排查「找不到 CLI」</div><div class="callout__text">在日志中搜索 <code>provider.launch_diagnostic</code>，其中包含实际 PATH、目录检查与逐项建议；原始错误在同次调用的 <code>provider.spawn_error</code> 中。分享日志前请检查敏感内容。</div></div></div>

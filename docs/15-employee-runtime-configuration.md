@@ -2,7 +2,7 @@
 
 重复手动导入按同一来源地址＋插件名称匹配插件，按安装名称（去首尾空格、区分大小写）匹配 MCP；不同来源的同名插件保留。成功以新不可变版本覆盖当前目录项，原子更新所有当前员工（含停用）的选择并合并重复引用；Task/Run、排队投递和历史文件不变。致命失败整批保留原目录及绑定，候选从当前目录退役。首次安装不自动绑定员工；已存在的重复项在下次同标识导入时一并替换，不做全库清理。响应增加 replacements（kind/id/previousId/name）、employees（仅 ID/名称）、historyRetained；原 plugins/mcps 或 MCP 摘要字段不变。
 
-设置 → 插件更新提供自动更新开关、检查周期（整数分钟，1–1440，默认2分钟）、立即检查和最近结果；插件市场仅管理安装项。只更新已安装 Git 来源插件；本地目录不自动轮询，固定 sha 不追随 HEAD。以来源及依赖 Git 提交判断变化，版本号不变仍可更新。仅安装仍在当前列表中的名称，已删除项不重装；来源移除某已装插件、读取失败、格式/完整性/Runtime兼容或并发绑定冲突时保留该来源当前版本并记录诊断。其他来源仍检查。MCP 不随自动插件更新拆装或改变选择；Task/Run/排队投递不改写。服务运行时有效，退出后不运行，重启后重新计时；开关与周期持久化，最近结果不伪装为跨重启历史。GET/POST /api/runtime/marketplace/updates 查询/请求检查（POST返回202，之后查询结果）；PUT .../updates/settings 接受非空部分对象 {enabled?:boolean,intervalMinutes?:integer}，拒绝未知字段。上轮结束后按已保存周期再计时；保存设置重新计时，关闭不取消已开始检查，关闭时仍可立即检查。设置草稿不被状态刷新覆盖。
+插件页右上仅提供“更新全部”，由人类显式触发已安装Git插件更新；设置页不提供插件更新开关、周期或检查入口。GET /api/runtime/marketplace/updates 只查询本次服务的手动运行状态与最近结果，不启动业务库或Git网络；POST接受空对象并返回202，重复在途请求合并，随后GET查询最终回执。废弃PUT .../updates/settings返回410，更新命令拒绝配置字段。服务没有插件更新定时器，不持久化自动开关/周期；目录仅在手动更新期间查询进度，离页停止轮询，回页单次恢复状态。来源/不可变快照、当前员工与角色原子重绑定、失败保留原版本及冻结Task/Run/排队调用不变；不自动拆装MCP。
 
 MCP 详情提供编辑名称、说明及 JSON；保存生成新版本并原子更新当前员工的 mcpIds，列表只保留新的当前版本，已启动任务和排队调用保持旧快照。PUT /api/runtime/mcp-marketplace/:id 接受非空部分对象 {name?,description?,content?}；content 是完整单服务 JSON 字符串，省略保留配置。GET 中未改动的脱敏值在相同 JSON 位置保留，删除字段清除，重命名服务或鉴权字段须填写真实新值。失败保留旧绑定；新候选退役且文件不作历史改写。返回新 id、previousId、employees（仅 ID/名称）、historyRetained。旧 ID 再编辑返回404；不兼容时整次拒绝。
 
@@ -41,7 +41,7 @@ HTTP/CLI 拒绝 `skillIds`、员工 `mcpJson`、连接字段、手工路径及�
 ## 安装与详情
 
 - 插件首页只列已安装项。HTTPS Git 仓库或本机绝对目录直接一次安装全部条目。识别 `.claude-plugin/marketplace.json`、`.agents/plugins/marketplace.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和根 `plugin.json`。市场支持相对目录、Codex `local/path`、`url` 的同仓库 `./` 来源，以及 HTTPS `github`、`url`、`git-subdir` 远程来源。远程来源按 URL+ref/sha 复用检出，sha 优先；记录真实仓库与提交 ID。不提供读取来源/单插件选择/信任勾选。npm/archive/command 来源尚不支持，明确整批拒绝，不跳过条目或执行清单命令。
-- 安装复制完整插件及支持文件到 Runtime 根下 `installed-plugins/<批次ID>/plugins/<版本ID>/plugin/`，拆分 MCP 在同批次 `mcps/<版本ID>/`，独立手动 MCP 在 `marketplace/<版本ID>/`。根位于 `~/.agentforge/<实例>/runtime-configs/`；Git 托管凭据独立放在认证实例的 `credentials/`。更换根保留安装字节与冻结摘要，通过受管旧地址解析读取新位置，不重新导入或改写历史（docs/30）。准备完整批次后一次 rename 发布，失败清理临时批次，不暴露部分已安装项。版本不可变，保存 manifest 及完整目录摘要；受管副本篡改会拒绝执行。
+- 安装复制完整插件及支持文件到 Runtime 根下 `installed-plugins/<批次ID>/plugins/<版本ID>/plugin/`，拆分 MCP 在同批次 `mcps/<版本ID>/`，独立手动 MCP 在 `marketplace/<版本ID>/`。根位于 `~/.baton/<实例>/runtime-configs/`；Git 托管凭据独立放在认证实例的 `credentials/`。更换根保留安装字节与冻结摘要，通过受管旧地址解析读取新位置，不重新导入或改写历史（docs/30）。准备完整批次后一次 rename 发布，失败清理临时批次，不暴露部分已安装项。版本不可变，保存 manifest 及完整目录摘要；受管副本篡改会拒绝执行。
 - 配置根的祖先目录允许 macOS `/tmp` → `/private/tmp`、卷挂载等正常别名，先解析实际位置再创建与记录路径；配置根本身及受管子目录仍拒绝符号链接，运行中实际位置改变则报错。目录错误在诊断中保留具体路径和错误码，不自动删除或重建真实数据。
 - 导入不运行安装脚本、Hook、依赖安装或 MCP；首次安装不自动绑定员工，重复导入按本页覆盖规则更新已有选择。拆分时解析默认或声明的 MCP JSON，把插件根变量替换成已安装目录；清空加载副本的默认 MCP 文件并移除 manifest 的 MCP 声明，避免 Provider 自动启用。选中员工实际执行 Hook，以本机用户权限运行；bypass 不是沙箱。
 - 插件卡片、详情及员工选择器分别标记九种 Runtime 支持情况；详情给出不兼容原因，组件标记适用 Runtime。列表只给组件数量与兼容性；详情按需读取 Skill、Subagent、Hook 元信息及 manifest。支持表示静态组件可加载，不代表本机 CLI、依赖、模型账号已实测。在线市场浏览本轮不提供。
@@ -118,7 +118,7 @@ Runtime 展示名称为Claude Code、Codex、DeepSeek Harness、Cursor、Gemini 
 
 列表接受 `page`（正整数，默认1）与 `search`（名称/说明包含匹配，最多200字符），固定每页20项；返回原资源键 plugins/entries，加 total/page/pageSize/totalPages/hasMore。先过滤软删除和搜索再分页，按 createdAt 降序、ID 稳定排序；超尾页收敛到最后一页。拒绝未知或重复参数。App 翻页和防抖搜索、CLI --page/--search/--all 使用同一查询，员工选择器按页收集摘要，不读取组件正文。
 
-导入候选文件准备完后，目录登记、重复来源替换、员工重绑定、旧版本软删除在同一事务提交；失败候选不进入当前目录。MCP 编辑和自动插件更新同步这一事务边界。自动更新只查询数据库中未删除的安装项；删除与在途更新竞争由原版本/员工快照检查拒绝，不会自动复活。兼容性展示取安装时结果，真正绑定/执行按当前解析规则检查。
+导入候选文件准备完后，目录登记、重复来源替换、员工重绑定、旧版本软删除在同一事务提交；失败候选不进入当前目录。MCP 编辑和手动插件更新同步这一事务边界。手动更新只查询数据库中未删除的安装项；删除与在途更新竞争由原版本/员工快照检查拒绝，不会自动复活。兼容性展示取安装时结果，真正绑定/执行按当前解析规则检查。
 
 当前安装目录的唯一主数据是配置 JSON，不自动扫描旧目录或转换旧 SQLite 清单。现有实例仅在用户明确要求时停机显式整理；未整理的旧清单拒绝启动，不自动清除业务数据。
 
@@ -144,6 +144,6 @@ mcps tools支持--search名称/说明筛选后分页，默认每页20条，--pag
 
 插件名称与完整描述分别取 Skill frontmatter 的 `name`、`description`，不按仓库名推断，不截断描述。要求有效且唯一的插件名称和非空文本描述；无效元信息、重复名称或路径越界整批拒绝。保留 Skill 原文、references/scripts/assets 及可执行标记；不运行其中的安装器或业务命令。安装副本在 `plugin/skills/<name>/` 保存完整 Skill 目录，并生成 `.claude-plugin/plugin.json` 外壳；原始目录另存 `source/` 并校验摘要，来源仓库不写入生成文件。链接边界和现有原子发布/完整性限制继续生效。
 
-来源仍记录原仓库 URL 和 Git 提交。自动更新和立即检查复用现有插件更新链路，以相同 origin URL＋Skill name 识别版本；Skill 正文、描述或支持文件变更均产生新不可变安装，原子切换当前员工与角色绑定，历史任务与排队调用保持旧快照。没有自增虚构版本号。Git Skill 改名或移除视为原插件缺失，本次自动更新失败并保留旧版本；需要用户明确重新导入。新增兄弟 Skill 不因自动更新隐式安装。本地目录更新仍通过再次导入。
+来源仍记录原仓库 URL 和 Git 提交。手动更新全部复用现有插件更新链路，以相同 origin URL＋Skill name 识别版本；Skill 正文、描述或支持文件变更均产生新不可变安装，原子切换当前员工与角色绑定，历史任务与排队调用保持旧快照。没有自增虚构版本号。Git Skill 改名或移除视为原插件缺失，本次手动更新失败并保留旧版本；需要用户明确重新导入。新增兄弟 Skill 不因手动更新隐式安装。本地目录更新仍通过再次导入。
 
-包装只改变分发结构，不扩展 Runtime 的语义支持。`allowed-tools` 与 `allowedTools` 是可选元信息，不参与平台兼容性判断，保留字段并由目标 Runtime 自身处理；其他兼容性规则仍生效。App 和 CLI 的 list/search/page/get/import/delete、自动检查设置与检查回执完全复用插件协议，没有单独 Skill 资源或额外选择参数。
+包装只改变分发结构，不扩展 Runtime 的语义支持。`allowed-tools` 与 `allowedTools` 是可选元信息，不参与平台兼容性判断，保留字段并由目标 Runtime 自身处理；其他兼容性规则仍生效。App 和 CLI 的 list/search/page/get/import/delete、显式手动更新与检查回执完全复用插件协议，没有单独 Skill 资源或额外选择参数。

@@ -57,7 +57,7 @@ jobs:
           tag = release['tag_name']
           assert re.fullmatch(r'v[0-9]+\.[0-9]+\.[0-9]+(?:-beta\.[0-9]+)?', tag)
           version = tag[1:]
-          allowed = {f'AgentForge-{version}-arm64.dmg', f'AgentForge-{version}-arm64.zip'}
+          allowed = {f'Baton-{version}-arm64.dmg', f'Baton-{version}-arm64.zip'}
           work = Path(tempfile.mkdtemp(prefix='release-recovery-'))
           def download(name):
               subprocess.run(['gh', 'release', 'download', tag, '--repo', repo, '--pattern', name, '--dir', str(work)], check=True)

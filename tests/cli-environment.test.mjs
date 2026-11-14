@@ -11,7 +11,7 @@ const exec = promisify(execFile);
 const thinPath = '/usr/bin:/bin:/usr/sbin:/sbin';
 
 test('Runtime installation uses executable PATH files without invoking them and observes removal', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agentforge-install-check-'));
+  const root = await mkdtemp(join(tmpdir(), 'baton-install-check-'));
   const options = { environment: { PATH: root }, platform: 'linux' };
   assert.equal(runtimeInstalled('dsh', options), false);
   await mkdir(join(root, 'dsh'));
@@ -32,11 +32,11 @@ test('Runtime installation uses executable PATH files without invoking them and 
 });
 
 test('Mac CLI fallback preserves explicit PATH priority and private environment boundaries', () => {
-  const environment = { PATH: '/custom/bin:/usr/bin', ELECTRON_RUN_AS_NODE: '1', AGENTFORGE_BOOTSTRAP_TOKEN: 'private', KEEP: 'yes' };
+  const environment = { PATH: '/custom/bin:/usr/bin', ELECTRON_RUN_AS_NODE: '1', BATON_BOOTSTRAP_TOKEN: 'private', KEEP: 'yes' };
   const result = cliEnvironment('/custom/nvm/bin/claude', { EXTRA: 'yes', ELECTRON_RUN_AS_NODE: '1' }, { environment, platform: 'darwin', homeDirectory: '/fixture/home' });
   assert.equal(result.PATH, '/custom/bin:/usr/bin:/custom/nvm/bin:/fixture/home/.local/bin:/fixture/home/.npm-global/bin:/fixture/home/.volta/bin:/opt/homebrew/bin:/usr/local/bin:/bin:/usr/sbin:/sbin');
   assert.equal(result.ELECTRON_RUN_AS_NODE, undefined);
-  assert.equal(result.AGENTFORGE_BOOTSTRAP_TOKEN, undefined);
+  assert.equal(result.BATON_BOOTSTRAP_TOKEN, undefined);
   assert.equal(result.PYTHONDONTWRITEBYTECODE, '1');
   assert.equal(result.KEEP, 'yes'); assert.equal(result.EXTRA, 'yes');
   assert.equal(environment.PATH, '/custom/bin:/usr/bin');
@@ -50,7 +50,7 @@ test('real processes find a user-installed CLI and its Node interpreter without 
   await mkdir(resolve('.data'), { recursive: true });
   const root = await mkdtemp(resolve('.data/cli-path-test-'));
   const bin = join(root, '.local/bin'); await mkdir(bin, { recursive: true });
-  const command = 'agentforge-path-fixture';
+  const command = 'baton-path-fixture';
   await writeFile(join(bin, command), '#!/usr/bin/env node\nconsole.log("CLI_NODE_OK");\n', { mode: 0o700 });
   await symlink(process.execPath, join(bin, 'node'));
   await assert.rejects(exec(command, [], { env: { ...process.env, PATH: thinPath } }), error => error.code === 'ENOENT');
@@ -70,10 +70,10 @@ test('Mac Claude/Codex invocations and Codex probes share the repaired GUI envir
   await mkdir(resolve('.data'), { recursive: true });
   const root = await mkdtemp(resolve('.data/cli-adapter-test-'));
   const bin = join(root, '.local/bin'); await mkdir(bin, { recursive: true });
-  const cli = join(bin, 'agentforge-adapter-fixture');
+  const cli = join(bin, 'baton-adapter-fixture');
   await symlink(process.execPath, join(bin, 'node'));
   await writeFile(cli, `#!/usr/bin/env node
-if (process.env.ELECTRON_RUN_AS_NODE || process.env.AGENTFORGE_BOOTSTRAP_TOKEN) throw new Error('bootstrap leaked');
+if (process.env.ELECTRON_RUN_AS_NODE || process.env.BATON_BOOTSTRAP_TOKEN) throw new Error('bootstrap leaked');
 if (process.argv.includes('features')) console.log('skip_host_skill_discovery stable true');
 else if (process.argv.includes('list')) console.log('[]');
 else {
@@ -87,12 +87,12 @@ else {
     import assert from 'node:assert/strict';
     import { runClaudeCodeCli, runCodexCli } from ${JSON.stringify(moduleUrl)};
     import { codexMarketArgs } from ${JSON.stringify(extensionsUrl)};
-    const runtime = {executable:'agentforge-adapter-fixture',skillPaths:[]};
+    const runtime = {executable:'baton-adapter-fixture',skillPaths:[]};
     for (const invoke of [runClaudeCodeCli,runCodexCli]) {
       const result = await invoke({runtime,workspacePath:${JSON.stringify(root)},traceDirectory:${JSON.stringify(root)},finalPath:${JSON.stringify(join(root, 'final'))},schemaPath:'unused-schema',outputSchema:{},prompt:'fixture',runId:'path-test',onEvent:async()=>{}});
       assert.deepEqual(JSON.parse(result.finalText), {status:'ok'});
       await assert.rejects(invoke({runtime:{...runtime,executable:${JSON.stringify(join(root, 'missing-cli'))}},workspacePath:${JSON.stringify(root)},traceDirectory:${JSON.stringify(root)},prompt:'fixture',runId:'missing-path-test',onEvent:async()=>{}}), /ENOENT/);
     }
     assert.ok((await codexMarketArgs(runtime,{},${JSON.stringify(root)})).includes('features.skip_host_skill_discovery=true'));
-  `], { env: { ...process.env, HOME: root, PATH: thinPath, ELECTRON_RUN_AS_NODE: '1', AGENTFORGE_BOOTSTRAP_TOKEN: 'fixture-secret', AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 30000 });
+  `], { env: { ...process.env, HOME: root, PATH: thinPath, ELECTRON_RUN_AS_NODE: '1', BATON_BOOTSTRAP_TOKEN: 'fixture-secret', BATON_LOG_DIR: join(root, 'logs') }, timeout: 30000 });
 });

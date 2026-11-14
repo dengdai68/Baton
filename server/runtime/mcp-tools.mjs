@@ -20,10 +20,10 @@ export function createMcpToolDiscovery({timeoutMs=15000,ttlMs=60000,clock=Date.n
       const timer=setTimeout(()=>controller.abort(new Error('MCP 工具读取超时，请检查服务与登录状态后重试')),timeoutMs);
       // A packaged backend runs inside Electron Helper. The host supplies the
       // main executable for Node children, as it does for the history bridge.
-      const nodeExecutable=process.env.AGENTFORGE_ELECTRON_NODE || process.execPath;
+      const nodeExecutable=process.env.BATON_ELECTRON_NODE || process.execPath;
       const transport=new StdioClientTransport({command:nodeExecutable,args:[fileURLToPath(new URL('./mcp-launcher.mjs',import.meta.url)),reference.path,reference.sha256,serviceName],env:{...cliEnvironment(nodeExecutable),ELECTRON_RUN_AS_NODE:'1'},stderr:'pipe',maxBufferSize:4*1024*1024});
       transport.stderr?.resume();
-      const client=new Client({name:'agentforge-tool-discovery',version:'1.0.0'},{capabilities:{}});
+      const client=new Client({name:'baton-tool-discovery',version:'1.0.0'},{capabilities:{}});
       try {
         await client.connect(transport,{signal:controller.signal,timeout:timeoutMs});
         const tools=[],names=new Set(),cursors=new Set();let cursor,bytes=2;

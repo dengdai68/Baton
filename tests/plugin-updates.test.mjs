@@ -7,23 +7,26 @@ import {join,resolve} from 'node:path';
 import {createStore} from '../server/store.mjs';
 import {createMarketplace} from '../server/runtime/marketplace.mjs';
 import {remotePluginRevision} from '../server/runtime/configuration.mjs';
-import {createPluginUpdates,pluginUpdateSources,pluginUpdateIntervalMs} from '../server/plugin-updates.mjs';
+import {createPluginUpdates,pluginUpdateSources} from '../server/plugin-updates.mjs';
 
 const pause=ms=>new Promise(done=>setTimeout(done,ms));
 
-test('update period is validated atomically, persisted, and reschedules without a network call',async t=>{
-  const root=await mkdtemp(join(tmpdir(),'af-period-')),store=createStore({databasePath:join(root,'state.sqlite')});t.after(()=>{store.close();return rm(root,{recursive:true,force:true})});
-  let calls=0;const updater=createPluginUpdates({getStore:()=>store,marketplace:{catalog:async()=>{calls++;return {plugins:[]}}}});t.after(()=>updater.stop());
-  assert.deepEqual(store.getPluginUpdateSettings(),{enabled:true,intervalMinutes:2});updater.start();
-  const value=updater.configure({intervalMinutes:7});assert.equal(value.intervalMs,420000);assert.ok(Math.abs(Date.parse(value.nextCheckAt)-Date.now()-420000)<1000);
-  for(const input of [{},[],null,{enabled:0},{intervalMinutes:0},{intervalMinutes:1441},{intervalMinutes:1.5},{intervalMinutes:'2'},{enabled:false,intervalMinutes:0},{extra:true}])assert.throws(()=>updater.configure(input));
-  assert.deepEqual(store.getPluginUpdateSettings(),{enabled:true,intervalMinutes:7});assert.equal(calls,0);
-  updater.configure({enabled:false});assert.equal(updater.status().nextCheckAt,null);await updater.check();assert.equal(calls,0,'checks use persisted metadata without rescanning catalog files');assert.equal(updater.status().nextCheckAt,null);
+test('plugin updates have no automatic lifecycle or persisted preferences',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'af-manual-updates-')),store=createStore({databasePath:join(root,'state.sqlite')});
+  t.after(()=>{store.close();return rm(root,{recursive:true,force:true});});
+  let probes=0;store.registerExtensions([{id:randomUUID(),kind:'plugin',name:'Manual',providers:[],createdAt:new Date().toISOString(),source:{url:'https://manual.invalid/repo.git',revision:'same'}}]);
+  const updater=createPluginUpdates({getStore:()=>store,marketplace:{},probe:async()=>{probes++;return 'same';},intervalMs:10});t.after(()=>updater.stop());
+  assert.equal(updater.start,undefined);assert.equal(updater.configure,undefined);
+  await pause(30);assert.equal(probes,0,'opening or reading status never starts Git work');assert.deepEqual(updater.status(),{running:false,lastCheckedAt:null,lastResult:null});
+  assert.equal((await updater.check()).updatedPlugins,0);assert.equal(probes,1);
+  await pause(30);assert.equal(probes,1,'completion does not schedule another check');
+  assert.equal(store.getPluginUpdateSettings,undefined);assert.equal(store.setPluginUpdateSettings,undefined);
+  assert.equal('pluginAutoUpdate' in store.snapshot().settings,false);assert.equal('pluginUpdateIntervalMinutes' in store.snapshot().settings,false);
 });
 
 import {gitOrigin} from './plugin-git-fixture.mjs';
 
-test('real Git commit polling updates selected plugins, retains frozen files and skips deleted plugins/MCPs',async t=>{
+test('manual Git update replaces selected plugins, retains frozen files and skips deleted plugins/MCPs',async t=>{
   const origin=await gitOrigin(t);
   await mkdir(join(origin.source,'.claude-plugin'));await mkdir(join(origin.source,'alpha/.claude-plugin'),{recursive:true});await mkdir(join(origin.source,'alpha/skills/check'),{recursive:true});await mkdir(join(origin.source,'beta/.claude-plugin'),{recursive:true});
   await writeFile(join(origin.source,'.claude-plugin/marketplace.json'),JSON.stringify({name:'fixture',plugins:[{name:'alpha',source:'./alpha'},{name:'beta',source:'./beta'}]}));
@@ -41,22 +44,17 @@ test('real Git commit polling updates selected plugins, retains frozen files and
   const role=store.createRole({name:'更新继承角色',prompt:'ROLE',...await market.resolveRole({pluginIds:[old.id],mcpIds:[]})});
   const inheritedEmployee=store.createAgent({name:'仅角色继承',roleIds:[role.id],runtime:{provider:'codex'}});
 
-  const updater=createPluginUpdates({getStore:()=>store,marketplace:market,intervalMs:process.env.AGENTFORGE_PLUGIN_UPDATE_SCHEDULE_REAL==='1'?pluginUpdateIntervalMs:500});t.after(()=>updater.stop());
-  assert.equal(updater.status().enabled,true);assert.equal(pluginUpdateIntervalMs,120000);
+  const updater=createPluginUpdates({getStore:()=>store,marketplace:market});t.after(()=>updater.stop());
   await writeFile(join(origin.source,'alpha/skills/check/SKILL.md'),'---\nname: check\ndescription: test\n---\nAFTER');
   const revision=await origin.commit();assert.equal(await remotePluginRevision({url:origin.url}),revision);
   assert.equal(await remotePluginRevision({url:origin.url,ref:'stable'}),initialRevision);assert.equal(await remotePluginRevision({url:origin.url,ref:'v1'}),initialRevision);assert.equal(await remotePluginRevision({url:origin.url,sha:initialRevision}),initialRevision);
-  const start=Date.now();updater.start();
-  for(let i=0;i<1500 && !updater.status().lastCheckedAt;i++)await pause(100);
-  const result=updater.status().lastResult;assert.equal(result.updatedPlugins,1);assert.deepEqual(result.errors,[]);
-  if(process.env.AGENTFORGE_PLUGIN_UPDATE_SCHEDULE_REAL==='1')assert.ok(Date.now()-start>=120000);
-  updater.configure({enabled:false});
+  const result=await updater.check();assert.equal(result.updatedPlugins,1);assert.deepEqual(result.errors,[]);
   const updated=store.listAgents().find(a=>a.id===employee.id).runtime;
   assert.deepEqual(store.getRole(role.id).extensionSelection.pluginIds,updated.extensionSelection.pluginIds);assert.deepEqual(store.listAgents().find(item=>item.id===inheritedEmployee.id).inheritedExtensionSelection.pluginIds,updated.extensionSelection.pluginIds);
   assert.notEqual(updated.extensionSelection.pluginIds[0],old.id);assert.deepEqual(updated.extensionSelection.mcpIds,frozen.extensionSelection.mcpIds);
   assert.match(await readFile(updated.skillPaths[0],'utf8'),/AFTER/);assert.match(await readFile(frozen.skillPaths[0],'utf8'),/BEFORE/);
   assert.equal((await market.mcpCatalog()).entries.length,installed.mcps.length);
-  assert.equal((await readdir(join(origin.root,'runtime/plugins'))).length,1,'automatic source checkouts are disposable; initial manual source remains');
+  assert.equal((await readdir(join(origin.root,'runtime/plugins'))).length,1,'manual update source checkouts are disposable; initial manual source remains');
   assert.deepEqual((await market.catalog()).plugins.filter(p=>!store.isExtensionRemoved('plugin',p.id)).map(p=>p.name),['alpha']);
   assert.equal((await updater.check()).updatedPlugins,0);
   // Same manifest version, incompatible new Hook: no partial employee update.
@@ -65,13 +63,13 @@ test('real Git commit polling updates selected plugins, retains frozen files and
   await writeFile(join(origin.source,'alpha/.claude-plugin/plugin.json'),' {"name":"alpha","version":"1.0.1"}');await origin.commit();assert.equal((await updater.check()).updatedPlugins,1);
 });
 
-test('checks never overlap, disable persists and stopping aborts in-flight network work',async t=>{
+test('manual checks never overlap and stopping aborts in-flight network work',async t=>{
   const root=await mkdtemp(join(tmpdir(),'af-update-state-')),databasePath=join(root,'state.sqlite');t.after(()=>rm(root,{recursive:true,force:true}));let store=createStore({databasePath});
   const marketplace={catalog:async()=>({plugins:[{id:'installed',name:'probe',source:{url:'https://example.invalid/repo.git',revision:'a'}}]})};
   store.registerExtensions((await marketplace.catalog()).plugins.map(item=>({...item,id:randomUUID(),kind:'plugin',providers:[],createdAt:new Date().toISOString()})));
   let calls=0;const updater=createPluginUpdates({getStore:()=>store,marketplace,probe:async(_,{signal})=>{calls++;await new Promise(done=>signal.addEventListener('abort',done,{once:true}));throw new Error('cancelled')}});
-  const first=updater.check();assert.equal(first,updater.check());await pause(10);assert.equal(calls,1);updater.configure({enabled:false,intervalMinutes:3});updater.stop();await first;assert.equal(updater.status().running,false);assert.equal(updater.status().nextCheckAt,null);
-  store.close();store=createStore({databasePath});assert.deepEqual(store.getPluginUpdateSettings(),{enabled:false,intervalMinutes:3});store.close();
+  const first=updater.check();assert.equal(first,updater.check());await pause(10);assert.equal(calls,1);updater.stop();await first;assert.equal(updater.status().running,false);assert.throws(()=>updater.check(),/关闭|重启/);
+  store.close();store=createStore({databasePath});assert.equal('pluginAutoUpdate' in store.snapshot().settings,false);store.close();
 });
 
 test('origin tracking groups shared markets and preserves pinned dependency refs',()=>{
@@ -110,4 +108,28 @@ test('bare Skill Git updates replace current employee and role bindings while pr
   const runtime=store.listAgents().find(a=>a.id===employee.id).runtime;assert.deepEqual(runtime.extensionSelection.pluginIds,[current[0].id]);assert.match(await readFile(runtime.skillPaths[0],'utf8'),/description: after/);assert.equal(await readFile(resolve(runtime.skillPaths[0],'../references/facts.txt'),'utf8'),'AFTER');assert.match(await readFile(frozen.skillPaths[0],'utf8'),/description: before/);assert.equal(await readFile(resolve(frozen.skillPaths[0],'../references/facts.txt'),'utf8'),'BEFORE');
   assert.equal((await updater.check()).updatedPlugins,0);
   await writeFile(join(skill,'SKILL.md'),'---\nname: renamed\ndescription: renamed\n---\nnew');await origin.commit();const rejected=await updater.check();assert.equal(rejected.updatedPlugins,0);assert.equal(rejected.errors.length,1);assert.deepEqual(store.listExtensions('plugin').map(p=>p.id),[current[0].id]);
+});
+
+// The real button controller is tested under delayed acknowledgements; a 202 is
+// an in-flight command rather than a completed update receipt.
+import {createPluginUpdateAction} from '../web/marketplace.mjs';
+const updateButton=()=>({disabled:false,textContent:'',setAttribute(key,value){this[key]=value;}});
+const until=async predicate=>{const deadline=Date.now()+2000;while(!predicate()){if(Date.now()>deadline)throw Error('manual update condition timed out');await pause(5);}};
+test('manual update button waits for completion, coalesces clicks and stops polling at the receipt',async t=>{
+  const button=updateButton(),calls=[],notices=[];let value={running:false,lastCheckedAt:null,lastResult:null},refreshes=0,release;
+  const gate=new Promise(resolve=>release=resolve);
+  const action=createPluginUpdateAction(button,{pollMs:10,notify:(...args)=>notices.push(args),onUpdated:()=>{refreshes++;},api:async(_path,options)=>{calls.push(options?.method || 'GET');if(options?.method==='POST'){await gate;value={...value,running:true};}return value;}});t.after(()=>action.dispose());
+  await action.refresh();assert.equal(button.textContent,'更新全部');assert.deepEqual(calls,['GET']);
+  const first=button.onclick();void button.onclick();assert.equal(button.disabled,true);assert.equal(button.textContent,'更新中…');release();await first;
+  assert.deepEqual(calls,['GET','POST']);assert.equal(button.disabled,true);assert.deepEqual(notices,[],'202 running must not announce zero updated plugins');
+  value={running:false,lastCheckedAt:new Date().toISOString(),lastResult:{updatedPlugins:2,errors:[]}};await until(()=>refreshes===1);
+  assert.equal(button.disabled,false);assert.equal(button.textContent,'更新全部');assert.deepEqual(notices,[['已更新 2 个插件。',false]]);
+  const count=calls.length;await pause(30);assert.equal(calls.length,count,'idle directory has no recurring update reads');
+});
+test('manual update read failures offer a read retry and disposal cancels pending polling',async()=>{
+  const button=updateButton(),calls=[],notices=[];let running=false;
+  const action=createPluginUpdateAction(button,{pollMs:10,notify:(...args)=>notices.push(args),api:async(_path,options)=>{calls.push(options?.method || 'GET');if(options?.method==='POST'){running=true;throw Error('lost response');}return {running,lastCheckedAt:null,lastResult:null};}});
+  await action.refresh();await button.onclick();assert.equal(button.textContent,'重试读取');assert.equal(button.disabled,false);assert.match(notices[0][0],/无法确认/);
+  await button.onclick();assert.deepEqual(calls,['GET','POST','GET'],'uncertain send retry reads status instead of sending another command');assert.equal(button.disabled,true);
+  action.dispose();const count=calls.length;await pause(30);assert.equal(calls.length,count);
 });

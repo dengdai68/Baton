@@ -21,7 +21,7 @@ test('read-only configuration lists without business storage and never reconcile
  assert.equal(readFileSync(join(options.directory,'configuration.pending.json'),'utf8'),pending);
 });
 test('uncommitted candidates are discarded and committed candidates recover without another write',t=>{
- const options=setup(t),first=createConfigurationStore(options);const revision=first.stage({settings:{pluginAutoUpdate:false}});
+ const options=setup(t),first=createConfigurationStore(options);const revision=first.stage({settings:{workspaceRoot:options.root}});
  assert.equal(existsSync(join(options.directory,'configuration.json')),false);
  assert.deepEqual(createConfigurationStore(options).values(),{});
  const next=createConfigurationStore(options),committed=next.stage({extensionCatalog:[{id:'kept'}]});

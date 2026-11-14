@@ -2,11 +2,11 @@
 
 这篇教程面向已经使用 Claude Code、Codex 或 DeepSeek Harness 的开发者。先用一份自带素材的小任务熟悉员工、协作和文件交付，流程不依赖外部仓库、插件或 MCP。
 
-安装包支持 macOS 13+ / Apple Silicon。应用按 Apache-2.0 开源，模型订阅、API 和工具费用另计。本文以 [v0.1.6-beta.1](https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1) 为下载基线；截图来自同版本的隔离实例。
+安装包支持 macOS 13+ / Apple Silicon。应用按 Apache-2.0 开源，模型订阅、API 和工具费用另计。本文以 [v0.1.6-beta.1](https://github.com/dengdai68/Baton/releases/tag/v0.1.6-beta.1) 为下载基线；截图来自同版本的隔离实例。
 
 ## 1. 安装与准备
 
-1. 从上述 Release 下载 `AgentForge-0.1.6-beta.1-arm64.dmg`，打开后将应用拖入 Applications。若要使用正式版，去[正式版下载页](https://github.com/dengdai68/AgentForge/releases/latest)，按该版本说明操作。
+1. 从上述 Release 下载 `Baton-0.1.6-beta.1-arm64.dmg`，打开后将应用拖入 Applications。若要使用正式版，去[正式版下载页](https://github.com/dengdai68/Baton/releases/latest)，按该版本说明操作。
 2. 当前安装包采用 ad-hoc 签名，未经 Apple 公证。若被 macOS 拦截，确认下载来源后按系统「隐私与安全性」提示允许打开；不要关闭系统安全保护。
 3. 首次启动创建本机管理员。进入「设置」，检查至少一种本机 Runtime。对应 CLI 需要提前安装并完成自身登录或 API 配置；应用不提供模型账号或额度。
 4. 确认任务工作根目录有写入权限。建议首次任务使用独立目录，不放入重要项目。
@@ -81,4 +81,4 @@
 
 首次体验成功后，再把成员存为团队，增加自定义工作流或定时自动化。定时自动化的确认规则与普通任务不同，配置前阅读[自动化说明](27-automations.md)。
 
-反馈可提交到 [GitHub Issues](https://github.com/dengdai68/AgentForge/issues)：附应用版本、macOS/芯片、Runtime 名称、复现步骤及脱敏错误摘要。不要附 API Key、完整提示词、私有项目内容或未经检查的日志。
+反馈可提交到 [GitHub Issues](https://github.com/dengdai68/Baton/issues)：附应用版本、macOS/芯片、Runtime 名称、复现步骤及脱敏错误摘要。不要附 API Key、完整提示词、私有项目内容或未经检查的日志。

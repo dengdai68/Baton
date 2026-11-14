@@ -16,7 +16,7 @@
 | Codex 0.164.0 | PASS | PASS | PASS |
 | DeepSeek Harness 0.2.1-rc.2 | PASS | PASS | PASS |
 
-六组真实模型调用全部通过，18 个来源/Runtime/传输组合全部覆盖。成功证据：/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/agentforge-beta102-verification-03cen7_y/.data/plugin-runtimes-real-uMRZ19/evidence.json；每组有独立目录、proof.json、reviewer-proof.json、hook-proof.jsonl、mcp-proof.log、events.json 及 Trace。运行命令：AGENTFORGE_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs。
+六组真实模型调用全部通过，18 个来源/Runtime/传输组合全部覆盖。成功证据：/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/baton-beta102-verification-03cen7_y/.data/plugin-runtimes-real-uMRZ19/evidence.json；每组有独立目录、proof.json、reviewer-proof.json、hook-proof.jsonl、mcp-proof.log、events.json 及 Trace。运行命令：BATON_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs。
 
 界面 scripts/test-brand-presentation.mjs 的源码与打包版验收均通过，覆盖 1320/760px、minimal/warm 两主题、卡片无 Runtime 标签、版本/ID、详情、空态与对比度；目录分别为 .data/brand-presentation-DoCGtn 和 .data/brand-presentation-YuuYF6。
 
@@ -32,6 +32,6 @@ npm test：585 pass / 0 fail；check:ai、check:impact、规定 node --check、g
 
 ## 安装和实机复核
 
-已安装 /Applications/AgentForge.app（版本保持 0.1.1）；codesign --verify --deep --strict 通过。ASAR SHA-256：b376650ce47a2d7d5ff586ee7a8dd3cf1740581679ec2b6dfc1d7e91bdca2ea2。
+已安装 /Applications/Baton.app（版本保持 0.1.1）；codesign --verify --deep --strict 通过。ASAR SHA-256：b376650ce47a2d7d5ff586ee7a8dd3cf1740581679ec2b6dfc1d7e91bdca2ea2。
 
 通过真实客户端查看插件与 MCP 市场，卡片已无 Runtime 支持标签；详情仍可查。安装前后 17 个任务/Run 的状态和消息 SHA-256 一致，无业务记录变化。安装前快照 /private/tmp/af-market-cards-before.json。

@@ -42,7 +42,7 @@ test("desktop first-run routing never treats unknown state as configured", async
 test("login only offers application setup and never source commands or downloads", async () => {
   const source = await readFile(new URL("../web/login.js", import.meta.url), "utf8");
   const html = await readFile(new URL("../web/login.html", import.meta.url), "utf8");
-  assert.doesNotMatch(source + html, /auth:setup|source-setup-guidance|owned-setup-guidance|client-download|AgentForgeDesktop/);
+  assert.doesNotMatch(source + html, /auth:setup|source-setup-guidance|owned-setup-guidance|client-download|BatonDesktop/);
   for (const status of [{configured:true},{configured:false,available:true},{configured:false,available:false}]) {
     const nodes=new Map();const get=key=>{if(!nodes.has(key))nodes.set(key,{hidden:true,focus(){},addEventListener(){},querySelector:get,username:{focus(){}}});return nodes.get(key);};
     vm.runInNewContext(source,{document:{querySelector:get},AbortSignal,fetch:async()=>({ok:true,json:async()=>status})});
@@ -150,7 +150,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
   assert.match(css, /:focus-visible \{ outline:2px solid var\(--focus\)/);
   assert.match(css, /\.nav-item\[data-desktop-restored-focus\]:focus-visible \{ outline:none; \}/);
   const main = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
-  assert.match(main, /label: "打开 AgentForge", click: showWindowFromTray/);
+  assert.match(main, /label: "打开 Baton", click: showWindowFromTray/);
   const calls = [], host = { window: { isDestroyed: () => false, webContents: { send: (...args) => calls.push(args) } }, showWindow: () => calls.push("show") };
   const restoreHost = vm.runInNewContext(`${main.slice(main.indexOf("function showWindowFromTray()"), main.indexOf("function ensureTray()"))}\nshowWindowFromTray`, host);
   restoreHost(); assert.deepEqual(calls, [["desktop:tray-restore"], "show"], "notify before showing the window");
@@ -202,8 +202,8 @@ test("Electron accepts only its owned credential-free Console origin", () => {
 });
 test("Electron health rejects wrong services and network errors", async () => {
   const owned = "http://127.0.0.1:51983", id = "owned-instance";
-  assert.equal(await health(owned, id, async () => ({ ok: true, json: async () => ({ service: "agentforge-control-plane", instanceId: id }) })), true);
-  assert.equal(await health(owned, id, async () => ({ ok: true, json: async () => ({ service: "agentforge-control-plane", instanceId: "another" }) })), false);
+  assert.equal(await health(owned, id, async () => ({ ok: true, json: async () => ({ service: "baton-control-plane", instanceId: id }) })), true);
+  assert.equal(await health(owned, id, async () => ({ ok: true, json: async () => ({ service: "baton-control-plane", instanceId: "another" }) })), false);
   assert.equal(await health(owned, id, async () => ({ ok: true, json: async () => ({ service: "other", instanceId: id }) })), false);
   assert.equal(await health(owned, id, async () => { throw new Error("offline"); }), false);
 });
@@ -239,10 +239,10 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   assert.match(source, /buttons: \["退出程序", "保留在菜单栏", "取消"\], defaultIndex: 2, cancelIndex: 2/);
   assert.match(source, /child\?\.kill\(\)/);
   assert.match(source, /requestSingleInstanceLock/);
-  assert.match(source, /setUserAgent\(.*AgentForgeDesktop\/1/);
+  assert.match(source, /setUserAgent\(.*BatonDesktop\/1/);
   assert.doesNotMatch(source, /insertCSS/, 'shared styles are served with HTML, never injected after load');
   const server = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
-  assert.match(server, /agentforge-desktop-style/);
+  assert.match(server, /baton-desktop-style/);
   assert.match(server, /if \(extension !== "\.html"\) return content/);
   assert.doesNotMatch(server, /user-agent|PUBLIC_ORIGIN/);
   assert.ok(server.indexOf("auth.guard") < server.indexOf("await serveStatic"));
@@ -253,7 +253,7 @@ test('CLI host bridge requires isolated host consent, rejects arguments/navigati
   const source = await readFile(new URL('../apps/electron/main.mjs', import.meta.url), 'utf8');
   const code = source.slice(source.indexOf("  ipcMain.handle('desktop:cli:status'"), source.indexOf('  // Presentation only:'));
   const handlers = new Map(); let writes = 0, allowed = true, accepted = false, answer;
-  const status = { canInstall: true, installed: false, commandPath: '/fixture/bin/agentforge', profilePaths: ['/fixture/.zshrc'] };
+  const status = { canInstall: true, installed: false, commandPath: '/fixture/bin/baton', profilePaths: ['/fixture/.zshrc'] };
   const context = { ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, isCliSender: () => allowed,
     contents: {}, controlOrigin: "http://127.0.0.1:51983", quitting: false, installingCli: false, window: {}, BrowserWindow() {}, shellEnvironmentAbort: new AbortController(), diagnostic() {}, cliUnavailable() {}, appearanceBackground: () => "#ffffff",
     cliInstallation: () => ({ status: async () => status, install: async paths => { assert.equal(JSON.stringify(paths), JSON.stringify(status.profilePaths)); writes++; return { ...status, installed: true }; } }),
@@ -289,7 +289,7 @@ test('CLI confirmation accepts only exact local main-frame choices and cancels o
       show() { this.visible = true; }
       focus() { this.focused = true; }
     }
-    const status = { commandPath: '/fixture/名字 <x>/agentforge', profilePaths: ['/fixture/.zshrc'] };
+    const status = { commandPath: '/fixture/名字 <x>/baton', profilePaths: ['/fixture/.zshrc'] };
     const pending = confirmCliInstallation({ BrowserWindow, parent, status, signal: signal.signal });
     const choose = (hash, main = true, base = child.url) => {
       const url = new URL(base); url.hash = hash;
@@ -342,7 +342,7 @@ test('app dialog accepts only exact local main-frame choices, sizes to content a
       show() { this.visible = true; }
       focus() { this.focused = true; }
     }
-    const pending = showAppDialog({ BrowserWindow, parent, kind: 'error', title: '无法连接 AgentForge', message: '无法连接本机服务。', detail: '日志：/fixture/log.jsonl', buttons: ['重试', '关闭'], defaultIndex: 0, cancelIndex: 1, signal: signal.signal, workAreaHeight: workArea ? () => workArea : undefined });
+    const pending = showAppDialog({ BrowserWindow, parent, kind: 'error', title: '无法连接 Baton', message: '无法连接本机服务。', detail: '日志：/fixture/log.jsonl', buttons: ['重试', '关闭'], defaultIndex: 0, cancelIndex: 1, signal: signal.signal, workAreaHeight: workArea ? () => workArea : undefined });
     const choose = (hash, main = true, base = child.url) => {
       const url = new URL(base); url.hash = hash;
       child.webContents.mainFrame.url = url.href;
@@ -409,7 +409,7 @@ test('app dialog accepts only exact local main-frame choices, sizes to content a
   assert.equal((main.match(/appDialog\(\{/g) || []).length, 9, 'system dialog scenes, notification draft protection, About, legacy refusal and storage relocation errors use the shared app dialog');
   assert.match(main, /需要先搬迁实例数据/);
   assert.doesNotMatch(main, /role:\s*["']about["']/, 'the macOS menu no longer triggers the system About panel');
-  assert.match(main, /关于 AgentForge/);
+  assert.match(main, /关于 Baton/);
   assert.match(main, /showAboutDialog/);
 });
 
@@ -479,9 +479,9 @@ test('application branding preserves the master and separates UI, inset Dock and
   const png = await readFile(new URL('web/icons/application.png', root));
   const icns = await readFile(new URL('apps/electron/application.icns', root));
   assert.equal(png.subarray(1, 4).toString(), 'PNG');
-  assert.equal(png.readUInt32BE(16), 1536);
-  assert.equal(png.readUInt32BE(20), 1536);
-  assert.equal(createHash('sha256').update(png).digest('hex'), '530b81a4b34e489a9886d289c27151d1359fa2d8ebc3118c8d3c89adf46f38c9', 'do not redraw or overwrite the operator-supplied mark');
+  assert.equal(png.readUInt32BE(16), 1254);
+  assert.equal(png.readUInt32BE(20), 1254);
+  assert.equal(createHash('sha256').update(png).digest('hex'), '1f6d6b6d0f13a1ac43b725b6179c2ec1b16bcf96153b922f9d8f0e22dfeaf9a8', 'do not redraw or overwrite the operator-supplied mark');
   assert.equal(icns.subarray(0, 4).toString(), 'icns');
   assert.equal(icns.readUInt32BE(4), icns.length);
   const html = await readFile(new URL('web/index.html', root), 'utf8');
@@ -568,36 +568,36 @@ test("Electron applies one component language to forms, reference and short wind
   assert.match(shared, /\.modal-backdrop \{[^}]*overflow:auto/, "the backdrop carries extreme overflow at page level");
 });
 test("packaged Electron keeps mutable control-plane data outside its resources", async () => {
-  const storage = desktopStoragePaths("/private/var/folders/agentforge-profile", { home: "/fixture-home" });
-  assert.equal(storage.AGENTFORGE_AUTH_DB_PATH, "/private/var/folders/agentforge-profile/auth.sqlite");
-  assert.equal(storage.AGENTFORGE_RUNTIME_CONFIG_ROOT, "/private/var/folders/agentforge-profile/runtime-configs");
-  assert.equal(storage.AGENTFORGE_WORKSPACE_ROOT, "/fixture-home/.agentforge/workspace");
-  assert.equal(storage.AGENTFORGE_DB_PATH, "/fixture-home/.agentforge/workspace/records/agentforge.sqlite");
-  const environment = desktopControlPlaneEnvironment({ environment: { PATH: "/usr/bin", AGENTFORGE_DB_PATH: "/existing/state.sqlite", AGENTFORGE_RUNTIME_CONFIG_ROOT: "/existing/config", AGENTFORGE_PUBLIC_ORIGIN: "https://unexpected.example", HOST: "0.0.0.0" }, storage, electronExecutable: "/Applications/AgentForge.app/Contents/MacOS/AgentForge", bootstrapToken: "a".repeat(64) });
+  const storage = desktopStoragePaths("/private/var/folders/baton-profile", { home: "/fixture-home" });
+  assert.equal(storage.BATON_AUTH_DB_PATH, "/private/var/folders/baton-profile/auth.sqlite");
+  assert.equal(storage.BATON_RUNTIME_CONFIG_ROOT, "/private/var/folders/baton-profile/runtime-configs");
+  assert.equal(storage.BATON_WORKSPACE_ROOT, "/fixture-home/.baton/workspace");
+  assert.equal(storage.BATON_DB_PATH, "/fixture-home/.baton/workspace/records/baton.sqlite");
+  const environment = desktopControlPlaneEnvironment({ environment: { PATH: "/usr/bin", BATON_DB_PATH: "/existing/state.sqlite", BATON_RUNTIME_CONFIG_ROOT: "/existing/config", BATON_PUBLIC_ORIGIN: "https://unexpected.example", HOST: "0.0.0.0" }, storage, electronExecutable: "/Applications/Baton.app/Contents/MacOS/Baton", bootstrapToken: "a".repeat(64) });
   assert.equal(environment.PATH, "/usr/bin");
-  assert.equal(environment.AGENTFORGE_DB_PATH, storage.AGENTFORGE_DB_PATH);
-  assert.equal(environment.AGENTFORGE_AUTH_DB_PATH, storage.AGENTFORGE_AUTH_DB_PATH);
-  assert.equal(environment.AGENTFORGE_RUNTIME_CONFIG_ROOT, storage.AGENTFORGE_RUNTIME_CONFIG_ROOT);
-  assert.equal(environment.AGENTFORGE_PUBLIC_ORIGIN, undefined);
+  assert.equal(environment.BATON_DB_PATH, storage.BATON_DB_PATH);
+  assert.equal(environment.BATON_AUTH_DB_PATH, storage.BATON_AUTH_DB_PATH);
+  assert.equal(environment.BATON_RUNTIME_CONFIG_ROOT, storage.BATON_RUNTIME_CONFIG_ROOT);
+  assert.equal(environment.BATON_PUBLIC_ORIGIN, undefined);
   assert.equal(environment.HOST, "127.0.0.1");
-  assert.equal(environment.AGENTFORGE_DESKTOP_PORT, "0");
-  assert.equal(environment.AGENTFORGE_ELECTRON_NODE, "/Applications/AgentForge.app/Contents/MacOS/AgentForge");
-  assert.equal(environment.AGENTFORGE_BOOTSTRAP_TOKEN, "a".repeat(64));
+  assert.equal(environment.BATON_DESKTOP_PORT, "0");
+  assert.equal(environment.BATON_ELECTRON_NODE, "/Applications/Baton.app/Contents/MacOS/Baton");
+  assert.equal(environment.BATON_BOOTSTRAP_TOKEN, "a".repeat(64));
   assert.throws(() => desktopStoragePaths("relative/profile"), /绝对路径/);
 });
-test("desktop data roots default under ~/.agentforge with per-instance isolation", () => {
+test("desktop data roots default under ~/.baton with per-instance isolation", () => {
   const home = "/private/var/fixture-home";
-  assert.equal(resolveDesktopDataRoot({ packaged: true, env: {}, home }), "/private/var/fixture-home/.agentforge/desktop");
-  assert.equal(resolveDesktopDataRoot({ packaged: false, env: {}, home }), "/private/var/fixture-home/.agentforge/desktop-dev");
-  assert.equal(resolveDesktopDataRoot({ packaged: false, env: { AGENTFORGE_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/isolated/e2e");
+  assert.equal(resolveDesktopDataRoot({ packaged: true, env: {}, home }), "/private/var/fixture-home/.baton/desktop");
+  assert.equal(resolveDesktopDataRoot({ packaged: false, env: {}, home }), "/private/var/fixture-home/.baton/desktop-dev");
+  assert.equal(resolveDesktopDataRoot({ packaged: false, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/isolated/e2e");
   // The packaged instance never follows an inherited development override.
-  assert.equal(resolveDesktopDataRoot({ packaged: true, env: { AGENTFORGE_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/private/var/fixture-home/.agentforge/desktop");
+  assert.equal(resolveDesktopDataRoot({ packaged: true, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/private/var/fixture-home/.baton/desktop");
   assert.equal(legacyDesktopDataRoot({ packaged: true, userData: "/legacy/userData", env: {}, sourceRoot: "/repo" }), "/legacy/userData");
   assert.equal(legacyDesktopDataRoot({ packaged: false, env: {}, sourceRoot: "/repo" }), "/repo/.data/desktop-dev");
-  assert.equal(legacyDesktopDataRoot({ packaged: false, env: { AGENTFORGE_DESKTOP_DATA_ROOT: "/isolated/e2e" }, sourceRoot: "/repo" }), null);
+  assert.equal(legacyDesktopDataRoot({ packaged: false, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, sourceRoot: "/repo" }), null);
   const storage = desktopStoragePaths(resolveDesktopDataRoot({ packaged: true, env: {}, home }), { home });
-  assert.equal(storage.AGENTFORGE_DB_PATH, "/private/var/fixture-home/.agentforge/workspace/records/agentforge.sqlite");
-  assert.equal(storage.AGENTFORGE_WORKSPACE_ROOT, "/private/var/fixture-home/.agentforge/workspace");
+  assert.equal(storage.BATON_DB_PATH, "/private/var/fixture-home/.baton/workspace/records/baton.sqlite");
+  assert.equal(storage.BATON_WORKSPACE_ROOT, "/private/var/fixture-home/.baton/workspace");
 });
 test("macOS package configuration is local-only and contains the control plane", async () => {
   const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
@@ -607,7 +607,7 @@ test("macOS package configuration is local-only and contains the control plane",
   assert.equal(manifest.scripts["prepackage:mac"], "npm run desktop:install");
   assert.equal(manifest.scripts["predesktop:test"], "npm run desktop:install");
   assert.equal(manifest.scripts.postinstall, undefined, "server-only installation must not download the desktop runtime");
-  assert.equal(manifest.build.appId, "com.agentforge.desktop");
+  assert.equal(manifest.build.appId, "com.baton.desktop");
   assert.equal(manifest.build.electronDist, "node_modules/electron/dist");
   assert.equal(manifest.build.asar, true);
   assert.equal(manifest.build.mac.identity, "-", "the full Beta bundle must be explicitly ad-hoc signed");
@@ -619,8 +619,8 @@ test("macOS package configuration is local-only and contains the control plane",
   assert.match(source, /ELECTRON_RUN_AS_NODE: "1"/);
   assert.doesNotMatch(source, /utilityProcess/);
   const server = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
-  assert.match(server, /const candidateBootstrapToken = process\.env\.AGENTFORGE_BOOTSTRAP_TOKEN;\s*delete process\.env\.AGENTFORGE_BOOTSTRAP_TOKEN;/);
-  assert.match(source, /X-AgentForge-Bootstrap/);
+  assert.match(server, /const candidateBootstrapToken = process\.env\.BATON_BOOTSTRAP_TOKEN;\s*delete process\.env\.BATON_BOOTSTRAP_TOKEN;/);
+  assert.match(source, /X-Baton-Bootstrap/);
   assert.doesNotMatch(source, /setup\?token=/);
   const packagedCheck = await readFile(new URL("../scripts/test-packaged-electron.mjs", import.meta.url), "utf8");
   assert.match(packagedCheck, /\["--verify", "--deep", "--strict", appBundle\]/);
@@ -703,9 +703,9 @@ test("release artifact cleanup accepts only its exact numeric build output", asy
   const script = workflow.slice(workflow.indexOf('      - name: Remove transferred artifact')).split('        run: |\n')[1].replace(/^ {10}/gm, '');
   const run = promisify(execFile);
   const command = 'gh() { printf "<%s>\\n" "$@"; };\n' + script;
-  const env = { ...process.env, GH_REPO: 'fixture/agentforge', ARTIFACT_ID: '123456' };
+  const env = { ...process.env, GH_REPO: 'fixture/baton', ARTIFACT_ID: '123456' };
   const result = await run('bash', ['-e', '-c', command], { env });
-  assert.equal(result.stdout, '<api>\n<--method>\n<DELETE>\n<repos/fixture/agentforge/actions/artifacts/123456>\n');
+  assert.equal(result.stdout, '<api>\n<--method>\n<DELETE>\n<repos/fixture/baton/actions/artifacts/123456>\n');
   for (const id of ['', 'all', '../releases', '123/456', '123; echo unexpected']) {
     await assert.rejects(run('bash', ['-e', '-c', command], { env: { ...env, ARTIFACT_ID: id } }), error => {
       assert.equal(error.code, 1);
@@ -775,8 +775,8 @@ test("workspace opening resolves only the authenticated current Run directory", 
 });
 
 test("all Chromium persistent and diagnostic paths stay in the instance data root",async()=>{
-  const paths=desktopBrowserPaths('/fixture/.agentforge/desktop');
-  assert.deepEqual(paths,{userData:'/fixture/.agentforge/desktop/browser',sessionData:'/fixture/.agentforge/desktop/browser',logs:'/fixture/.agentforge/desktop/electron-logs',crashDumps:'/fixture/.agentforge/desktop/crash-dumps'});
+  const paths=desktopBrowserPaths('/fixture/.baton/desktop');
+  assert.deepEqual(paths,{userData:'/fixture/.baton/desktop/browser',sessionData:'/fixture/.baton/desktop/browser',logs:'/fixture/.baton/desktop/electron-logs',crashDumps:'/fixture/.baton/desktop/crash-dumps'});
   assert.throws(()=>desktopBrowserPaths('relative'),/绝对路径/);
   const source=await readFile(new URL('../apps/electron/main.mjs',import.meta.url),'utf8');
   assert.ok(source.indexOf('app.setPath(name,path)')<source.indexOf('app.whenReady'));

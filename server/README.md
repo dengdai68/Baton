@@ -18,7 +18,7 @@ Runtime 原生恢复后按最后成功完成及零退出码结算，历史错误
 
 工作目录直接读取真实根，不再生成/读取展示清单，不预建 docs。目录查询按层/200项分页，普通根文件、业务自定义目录与大媒体可见；认证读取/下载仅保留工作根、敏感文件与链接检查。Git比较工作根初始化提交并保留绑定repos原始gitlink。Orchestrator记录各业务路径有限快照，Store工作流位置仅作建议、缺省空，不改写历史路径。
 
-plugin-updates.mjs 属于编排层，只准备已装 Git 插件新快照并调用 Store 事务；Store 保存开关、分钟周期和绑定/审计，Runtime 负责来源校验、Git 提交查询与不可变文件。HTTP 暴露认证状态、异步检查及部分设置，不从 UI 驱动定时器；重置避开活动更新，服务重启清空观察状态。
+plugin-updates.mjs 属于编排层，仅响应手动更新全部命令，准备已装Git插件不可变候选并调用Store原子更新员工/角色绑定与审计；Runtime负责来源校验、Git提交查询与不可变文件。没有自动计时、开关或周期持久化。HTTP提供受认证GET状态与POST手动命令，重复在途请求合并；GET状态不初始化业务库。废弃settings端点410，配置字段拒绝。重置避开活动更新，服务重启清空观察状态。
 
 MCP PUT 编辑由 Runtime 校验与准备新不可变文件，Store 事务核对并更新当前员工、退役旧目录版本及记录审计。HTTP 不循环保存部分员工；失败隐藏未使用候选，原配置/冻结文件保留。编辑不返回私有鉴权值。
 
@@ -34,9 +34,9 @@ Store 拥有 roles 集合：名称＋纯文本提示词，员工经 有序 `role
 
 Runtime 原始错误脱敏后保留，外部错误立即标记任务失败并等待原员工人工重试；10 秒巡检只推进非等待、非失败的任务。
 
-沟通附件由 Run Files 保存在会话 attachments 子目录，Store 只冻结引用和摘要；认证二进制上传最多 20 MiB，下载验证归属/字节/摘要/链接。调用正文和提示词在私有 .agentforge 目录，通用事件只持引用，原生会话绑定在投递尝试元数据；分页 API 供共享控制台，不制造 Task/Run。
+沟通附件由 Run Files 保存在会话 attachments 子目录，Store 只冻结引用和摘要；认证二进制上传最多 20 MiB，下载验证归属/字节/摘要/链接。调用正文和提示词在私有 .baton 目录，通用事件只持引用，原生会话绑定在投递尝试元数据；分页 API 供共享控制台，不制造 Task/Run。
 
-data-home.mjs 为客户端子服务提供统一的默认数据根 ~/.agentforge/workspace；数据库和 Run Files 按实例隔离于该根的 .agentforge，Runtime 配置保留私有配置目录，认证与启动资料留在 ~/.agentforge。宿主当前工作根优先，历史 Task/Run 路径不搬迁。Store 新 Task ID 使用随机 UUID，避免跨实例共享根目录时同毫秒/序号碰撞；HTTP/Store 命令不扩权，CLI 仅连接客户端。
+data-home.mjs 为客户端子服务提供统一的默认数据根 ~/.baton/workspace；数据库和 Run Files 按实例隔离于该根的 .baton，Runtime 配置保留私有配置目录，认证与启动资料留在 ~/.baton。宿主当前工作根优先，历史 Task/Run 路径不搬迁。Store 新 Task ID 使用随机 UUID，避免跨实例共享根目录时同毫秒/序号碰撞；HTTP/Store 命令不扩权，CLI 仅连接客户端。
 
 插件安装在来源复制阶段展开同仓库/目录内的符号链接，断链、循环、越界和特殊文件精确报错且整批回滚；执行用不可变普通文件副本，运行期完整性校验不放宽。HTTP/CLI 使用同一路径，契约见 docs/15。
 
@@ -151,11 +151,11 @@ Runtime 固定目录与本机安装门禁覆盖九项；任务/沟通/探测复�
 
 工作目录由宿主启动参数提供，生产 Store 以当前启动工作根分配新任务，不再让旧库内工作目录设置覆盖它。数据库、Run Files、Runtime 配置同盘；认证及 Git 凭据独立。HTTP storage 查询/修改先冻结调度与写入，再通知唯一 IPC 父进程停机整理；Runtime 与目录读取只解析受管资源地址，不变更冻结事实。数据清理包含独立 Git 凭据，日志实例以稳定认证位置标识；完整协议见 docs/30。
 
-当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.agentforge/desktop/agentforge-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 

@@ -14,18 +14,18 @@
 
 补充动画检查后，源码再次通过（`.data/task-creation-27jVRo/evidence.json`）；beta.101 打包版同样通过六组布局、创建与失败路径（`.data/task-creation-NMpVoh/evidence.json`），目检大窗口及短窗口截图。截图前结束有限动画，避免把祖先淡入过程误当最终界面。
 
-交付：`npm run package:mac` 成功生成 beta.101 ARM64 ZIP/DMG；应用通过 codesign 深度严格验证，打包内 app.js/styles.css/compact.css 与源码一致。已正常退出旧客户端、更新 `/Applications/AgentForge.app` 并启动新版本，通过客户端实际核对新表单；保留并恢复更新前未提交的验收草稿。更新前后正式 CLI 只读查询均为 15 个任务（6 待验收、3 取消、1 阻塞、5 完成），ID 集合摘要一致，登录延续，无真实任务变更。安装包为本机 ad-hoc 签名，未作公证或远程发布。
+交付：`npm run package:mac` 成功生成 beta.101 ARM64 ZIP/DMG；应用通过 codesign 深度严格验证，打包内 app.js/styles.css/compact.css 与源码一致。已正常退出旧客户端、更新 `/Applications/Baton.app` 并启动新版本，通过客户端实际核对新表单；保留并恢复更新前未提交的验收草稿。更新前后正式 CLI 只读查询均为 15 个任务（6 待验收、3 取消、1 阻塞、5 完成），ID 集合摘要一致，登录延续，无真实任务变更。安装包为本机 ad-hoc 签名，未作公证或远程发布。
 
 CLI 核对：本轮只调整创建表单的展示和可选验收折叠，不改变 HTTP 输入、任务/Run 语义或 CLI 已有字段；CLI 无需协议改动。启动失败保留任务的路径已在隔离界面验收，未重复调用真实 Provider。
 
 后续调整（beta.102）：按用户新要求替代大窗口60%规则，描述高度在六至十二行之间响应窗口，最高十二行，更多文本在框内滚动；弹框随内容收紧。协作正文折叠阈值由五行改为十行，保留完整 Markdown DOM、原位展开及阅读状态。只变呈现，不改消息、任务、CLI 或执行协议。同步现有两项 UI 验收的行数断言。
 
-本轮初次源码 UI 进程在 electron.launch 阶段分别遇到90秒/180秒超时，尚未进入布局验收（原始日志 `/private/tmp/agentforge-beta102-task-creation-source.log`、`/private/tmp/agentforge-beta102-collaboration-source.log`），同时构建启动与 MCP 测试子进程明显变慢；构建采样显示主线程在模块文件 open/read/stat 中。保留失败日志，减少并行 UI 并重试，不把超时当通过。
+本轮初次源码 UI 进程在 electron.launch 阶段分别遇到90秒/180秒超时，尚未进入布局验收（原始日志 `/private/tmp/baton-beta102-task-creation-source.log`、`/private/tmp/baton-beta102-collaboration-source.log`），同时构建启动与 MCP 测试子进程明显变慢；构建采样显示主线程在模块文件 open/read/stat 中。保留失败日志，减少并行 UI 并重试，不把超时当通过。
 
-beta.102 最终验证：源码目录完整测试为543通过、2超时（owned service 启动30秒、MCP request60秒）；同一份文件复制至本机临时目录后执行 `npm test`，545通过、0失败，耗时47.9秒（`/private/tmp/agentforge-beta102-tests-local.log`）。源码 UI 重试进入宿主后，后台30秒启动超时，未形成布局结论；未修改产品超时/重试来掩盖环境问题。
+beta.102 最终验证：源码目录完整测试为543通过、2超时（owned service 启动30秒、MCP request60秒）；同一份文件复制至本机临时目录后执行 `npm test`，545通过、0失败，耗时47.9秒（`/private/tmp/baton-beta102-tests-local.log`）。源码 UI 重试进入宿主后，后台30秒启动超时，未形成布局结论；未修改产品超时/重试来掩盖环境问题。
 
 本机签名应用副本的创建验收通过：`.data/task-creation-VsZAgT/evidence.json`（两主题、三种窗口、六至十二行和真实 HTTP 创建/启动拒绝）；协作验收通过：`.data/collaboration-flow-uQW8Vo`（十行裁剪、完整 Markdown、同 DOM 展开和状态保留、宽窄布局、控制台及 CLI）。README 同步后逐一核对包内103个项目文件与源码一致。check:ai/check:impact、规定语法与 diff 检查通过。
 
-安装方式如实记录：本轮标准 `npm run package:mac` 因开发盘读盘极慢而停止（退出143，日志 `/private/tmp/agentforge-beta102-package.log`），未生成可交付的beta.102 ZIP/DMG。为完成本机 UI 更新，在本机临时目录复用已安装beta.101的Electron/依赖，重打包当前renderer/版本及关联README，沿用原entitlements并重新ad-hoc签名；103个项目文件一致、深度严格签名验证通过后安装为 `/Applications/AgentForge.app` beta.102。未发布Release。启动后客户端保持登录、真实任务列表可见；用户正在持续操作设置，自动化多次拒绝切页，因此本轮新布局的直接操作证据来自同源签名副本，不声称在真实任务上完成新版本的展开测试。
+安装方式如实记录：本轮标准 `npm run package:mac` 因开发盘读盘极慢而停止（退出143，日志 `/private/tmp/baton-beta102-package.log`），未生成可交付的beta.102 ZIP/DMG。为完成本机 UI 更新，在本机临时目录复用已安装beta.101的Electron/依赖，重打包当前renderer/版本及关联README，沿用原entitlements并重新ad-hoc签名；103个项目文件一致、深度严格签名验证通过后安装为 `/Applications/Baton.app` beta.102。未发布Release。启动后客户端保持登录、真实任务列表可见；用户正在持续操作设置，自动化多次拒绝切页，因此本轮新布局的直接操作证据来自同源签名副本，不声称在真实任务上完成新版本的展开测试。
 
 更新后正式CLI只读查询与更新前相同：15任务、状态计数和ID集合摘要完全一致。安装前最后一次界面出现Codex思考等级High的未保存草稿；退出检查只识别文本输入而漏掉下拉草稿，重启后该选项恢复为已保存的默认值。此草稿未能保留，未擅自修改真实Runtime配置；因用户继续操作设置，不覆盖其后续输入，交付时如实提示重新选择。

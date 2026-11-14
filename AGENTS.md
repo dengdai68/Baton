@@ -1,4 +1,4 @@
-# AgentForge App 仓库协作规则
+# Baton App 仓库协作规则
 
 本文件只定义贡献者的规则与约束，不是产品手册。`AGENTS.md` 是唯一规则入口，`CLAUDE.md` 只引用本文件；不要复制维护第二份规则。
 
@@ -7,8 +7,8 @@
 - 本机开发直接在 `main` 上修改和提交，不新建或切换功能分支；用户明确要求其他分支时除外。
 - 先检查 Git 状态和最近变更；保留用户及其他会话的修改，不覆盖、不回退、不混入提交。任务工作目录是默认上下文，不是员工权限边界。
 - 读取 `ai/module-registry.json`、`docs/00-ai-map.md`，再读目标模块的局部 README、源码、测试与相关契约；优先用 `rg` 定位。
-- 本仓库新功能与界面开发可使用 [agentforge-development](.codex/skills/agentforge-development/SKILL.md)；它提供共享样式与产品落地方法，贡献规则仍以本文件为准。
-- GitHub 打包发布使用 [agentforge-release](.codex/skills/agentforge-release/SKILL.md)，版本、渠道、标签及 Release 文案按该流程执行；仅本机安装不等于发布。
+- 本仓库新功能与界面开发可使用 [baton-development](.codex/skills/baton-development/SKILL.md)；它提供共享样式与产品落地方法，贡献规则仍以本文件为准。
+- GitHub 打包发布使用 [baton-release](.codex/skills/baton-release/SKILL.md)，版本、渠道、标签及 Release 文案按该流程执行；仅本机安装不等于发布。
 - 按需查阅：产品 `docs/01`，架构 `docs/02`，领域 `docs/03`，设计 `docs/06`；完整文件名见 [文档索引](docs/README.md)。
 - 产品能力看 [README](README.md)，运行与安装看 [CONTRIBUTING](CONTRIBUTING.md)，工程流程与提交格式看 [CONTRIBUTING](CONTRIBUTING.md)；不要把功能说明、版本历史或验收台账堆入本文件。
 
@@ -50,7 +50,7 @@ git diff --check
 - 覆盖成功及最可能的失败路径；API 改动查 health 与真实端点，UI 改动实际操作宽窄布局，CLI 改动实际运行对应命令。执行流程改动须跑真实完整任务到人类验收，不能用 Provider 夹具冒充真实模型。
 - 新增或调整 Runtime 接入时，必须自行从官方来源安装或升级涉及的每一个 Runtime CLI 到当时最新版，再逐一验证真实调用、会话续接及完整任务；缺少登录或账号权限须明确记录阻塞，协议夹具不能替代真实验证。
 - 未验证、失败或被阻塞必须如实说明；交付报告包含改动、证据、已知限制与后续事项。只有实现、同步和验证齐全才算完成。
-- **默认本机安装**：每次完成功能、修复或界面改动并通过验证后，都要构建并安装到 `/Applications/AgentForge.app`，启动并核验实际安装内容，无需再次询问是否安装；用户明确要求不安装时除外。安装前检查正在执行的任务和沟通，未经中断授权等待空闲后重启；已授权的安排不重复确认。本机安装不自动包含提交、push 或 GitHub Release。
+- **默认本机安装**：每次完成功能、修复或界面改动并通过验证后，都要构建并安装到 `/Applications/Baton.app`，启动并核验实际安装内容，无需再次询问是否安装；用户明确要求不安装时除外。安装前检查正在执行的任务和沟通，未经中断授权等待空闲后重启；已授权的安排不重复确认。本机安装不自动包含提交、push 或 GitHub Release。
 - 本仓库是独立客户端，`npm start` 启动 Electron 及其随机端口子服务。验证使用隔离 HOME/数据目录，不占用或重启原仓库的 Web `4310`，不覆盖操作者安装。宿主关闭只管理自己的后台。
 - 需要提交时使用格式 `<type>(<scope>): <imperative summary>`，正文含 Intent / Changes / Verification / Risks / History，并运行 `npm run check:commit -- <消息文件>`。提交前检查范围、凭据与无关文件。
 - 平台不设置任务级操作权限或角色文件范围；数字员工以本机用户权限依据任务目标执行本地和远程操作。操作结果仍须如实记录，普通任务最终完成仍由人类确认；自动化遵循 docs/27 的明确例外。

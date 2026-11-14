@@ -1,4 +1,4 @@
-name: Publish AgentForge App macOS Stable
+name: Publish Baton App macOS Stable
 
 on:
   workflow_dispatch:
@@ -57,18 +57,18 @@ jobs:
       - run: npm run package:mac:check
       - name: Verify native signing, notarization and update manifest
         run: |
-          codesign --verify --deep --strict release/mac-arm64/AgentForge.app
-          codesign -dv --verbose=4 release/mac-arm64/AgentForge.app 2>&1 | grep '^Authority=Developer ID Application:'
-          xcrun stapler validate release/mac-arm64/AgentForge.app
+          codesign --verify --deep --strict release/mac-arm64/Baton.app
+          codesign -dv --verbose=4 release/mac-arm64/Baton.app 2>&1 | grep '^Authority=Developer ID Application:'
+          xcrun stapler validate release/mac-arm64/Baton.app
           test -s release/latest-mac.yml
-          (cd release && shasum -a 256 AgentForge-*-arm64.dmg AgentForge-*-arm64.zip > SHA256SUMS.txt)
+          (cd release && shasum -a 256 Baton-*-arm64.dmg Baton-*-arm64.zip > SHA256SUMS.txt)
       - uses: actions/upload-artifact@v4
         id: transfer
         with:
-          name: agentforge-stable-macos-arm64
+          name: baton-stable-macos-arm64
           path: |
-            release/AgentForge-*-arm64.dmg
-            release/AgentForge-*-arm64.zip
+            release/Baton-*-arm64.dmg
+            release/Baton-*-arm64.zip
             release/latest-mac.yml
             release/*.blockmap
             release/SHA256SUMS.txt
@@ -83,7 +83,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: agentforge-stable-macos-arm64
+          name: baton-stable-macos-arm64
           path: release
       - run: (cd release && sha256sum --check SHA256SUMS.txt)
       - name: Publish stable release and update metadata together
@@ -92,7 +92,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          gh release create "$RELEASE_TAG" release/* --verify-tag --latest --title "AgentForge $RELEASE_TAG" --generate-notes
+          gh release create "$RELEASE_TAG" release/* --verify-tag --latest --title "Baton $RELEASE_TAG" --generate-notes
       - name: Remove only the successful transfer artifact
         env:
           GH_TOKEN: ${{ github.token }}

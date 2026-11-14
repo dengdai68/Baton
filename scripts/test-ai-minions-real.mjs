@@ -13,11 +13,11 @@ import {nativePluginRuntime,codexAgentKey} from '../server/runtime/extensions.mj
 import {runClaudeCodeCli,runCodexCli,runDshCli} from '../server/runtime/local-cli.mjs';
 import {loadLoginShellEnvironment} from '../apps/electron/login-shell-env.mjs';
 import {cliEnvironment} from '../server/runtime/cli-environment.mjs';
-if(process.env.AGENTFORGE_AI_MINIONS_REAL!=='1'||!process.env.AGENTFORGE_AI_MINIONS_SOURCE)throw Error('Set AGENTFORGE_AI_MINIONS_REAL=1 and AGENTFORGE_AI_MINIONS_SOURCE to a local checkout; uses real model calls');
+if(process.env.BATON_AI_MINIONS_REAL!=='1'||!process.env.BATON_AI_MINIONS_SOURCE)throw Error('Set BATON_AI_MINIONS_REAL=1 and BATON_AI_MINIONS_SOURCE to a local checkout; uses real model calls');
 await mkdir('.data',{recursive:true});const root=await realpath(await mkdtemp(resolve('.data/ai-minions-real-')));
-Object.assign(process.env,await loadLoginShellEnvironment());process.env.AGENTFORGE_LOG_DIR=join(root,'logs');
-process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT=join(root,'runtime');
-const source=await realpath(process.env.AGENTFORGE_AI_MINIONS_SOURCE),exec=promisify(execFile),providers=['claude-code','codex','dsh'];
+Object.assign(process.env,await loadLoginShellEnvironment());process.env.BATON_LOG_DIR=join(root,'logs');
+process.env.BATON_RUNTIME_CONFIG_ROOT=join(root,'runtime');
+const source=await realpath(process.env.BATON_AI_MINIONS_SOURCE),exec=promisify(execFile),providers=['claude-code','codex','dsh'];
 const revision=(await exec('git',['-C',source,'rev-parse','HEAD'])).stdout.trim();
 const sourceStatus=(await exec('git',['-C',source,'status','--porcelain'])).stdout;
 const market=createMarketplace(join(root,'market')),imported=await market.import({path:source}),catalog=await market.catalog();

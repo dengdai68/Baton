@@ -66,7 +66,7 @@ export async function selectedExtensions(runtime) {
       for(const ref of refs) {
         const content=await readExtensionFile(ref);
         if(kind==='mcp') for(const [name,service] of Object.entries(parseMcpJson(content).mcpServers)) {
-          if(['agentforge_history','__proto__','prototype','constructor'].includes(name) || Object.hasOwn(servers,name)) throw new Error('MCP 服务名称重复或使用保留名称');
+          if(['baton_history','__proto__','prototype','constructor'].includes(name) || Object.hasOwn(servers,name)) throw new Error('MCP 服务名称重复或使用保留名称');
           servers[name]={service,ref};
         }
       }
@@ -92,7 +92,7 @@ export async function selectedExtensions(runtime) {
       }
       if (kind !== 'mcp') continue;
       for (const [name, service] of Object.entries(parseMcpJson(content).mcpServers)) {
-        if (['agentforge_history','__proto__','prototype','constructor'].includes(name) || Object.hasOwn(servers, name)) throw new Error('MCP 服务名称重复或使用了平台保留名称');
+        if (['baton_history','__proto__','prototype','constructor'].includes(name) || Object.hasOwn(servers, name)) throw new Error('MCP 服务名称重复或使用了平台保留名称');
         servers[name] = { service, ref };
       }
     }
@@ -124,7 +124,7 @@ export async function codexMarketArgs(runtime, servers, workspacePath, traceDire
   const disabled = configured.flatMap(item=>['-c',`mcp_servers.${item.name}.enabled=false`]);
   const mcp = {};
   for (const [name, {service, ref}] of Object.entries(servers)) {
-    const key=ref.mcpAdapterVersion===2 ? name : `agentforge_market_${ref.id.replaceAll('-','')}`;
+    const key=ref.mcpAdapterVersion===2 ? name : `baton_market_${ref.id.replaceAll('-','')}`;
     mcp[key] = { command: process.execPath, args: [fileURLToPath(new URL('./mcp-launcher.mjs', import.meta.url)), ref.path, ref.sha256, name], enabled: true, required: true,
       ...(process.versions.electron ? {env: {ELECTRON_RUN_AS_NODE: '1'}} : {}) };
   }
@@ -140,7 +140,7 @@ export async function codexMarketArgs(runtime, servers, workspacePath, traceDire
     // Frozen Skill-only invocations predate native projections; their recorded
     // paths remain executable without rewriting history or installation files.
     if(![1,2,3].includes(ref.adapterVersion)) continue;
-    const root=dirname(dirname(ref.path)), plan=[2,3].includes(ref.adapterVersion) ? await readPluginExecutionPlan(ref) : JSON.parse(await readFile(join(root,'.agentforge/codex.json'),'utf8'));
+    const root=dirname(dirname(ref.path)), plan=[2,3].includes(ref.adapterVersion) ? await readPluginExecutionPlan(ref) : JSON.parse(await readFile(join(root,'.baton/codex.json'),'utf8'));
     const namespace=[2,3].includes(ref.adapterVersion) ? JSON.parse(await readFile(ref.path,'utf8')).name : '';
     if(!traceDirectory && (plan.agents.length || plan.hooks.length)) throw new Error('插件原生组件需要执行记录目录');
     for(const [agentIndex,agent] of plan.agents.entries()) {

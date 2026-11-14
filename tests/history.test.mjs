@@ -247,15 +247,15 @@ test("CLI history configuration preserves positional prompt and is available to 
   try{
     const executable=join(root,"provider.mjs");
     await writeFile(executable,'#!/usr/bin/env node\nconst a=process.argv.slice(2);console.log(JSON.stringify({type:"result",structured_output:{argv:a}}));\n');await chmod(executable,0o755);
-    const base={runtime:{executable},workspacePath:root,traceDirectory:root,outputSchema:{},prompt:"exact test prompt",runId:"history-cli",onEvent:async()=>{},historyMcp:{configPath:join(root,"config.json"),command:process.execPath,args:["adapter.mjs"],env:{AGENTFORGE_HISTORY_SOCKET:"private-socket",ELECTRON_RUN_AS_NODE:"1"}}};
+    const base={runtime:{executable},workspacePath:root,traceDirectory:root,outputSchema:{},prompt:"exact test prompt",runId:"history-cli",onEvent:async()=>{},historyMcp:{configPath:join(root,"config.json"),command:process.execPath,args:["adapter.mjs"],env:{BATON_HISTORY_SOCKET:"private-socket",ELECTRON_RUN_AS_NODE:"1"}}};
     const response=await runClaudeCodeCli(base),args=JSON.parse(response.finalText).argv;
     assert.deepEqual(args.slice(-4),["--mcp-config",base.historyMcp.configPath,"--",base.prompt]);
     await writeFile(executable,'#!/usr/bin/env node\nif(process.argv.includes(\"features\")){console.log(\"skip_host_skill_discovery stable false\");process.exit(0);}if(process.argv.includes(\"mcp\")&&process.argv.includes(\"list\")){console.log(\"[]\");process.exit(0);}\nconst a=process.argv.slice(2);console.log(JSON.stringify({type:"item.completed",item:{type:"agent_message",text:JSON.stringify({argv:a})}}));\n');
     const codex=JSON.parse((await runCodexCli({...base,schemaPath:"schema.json",finalPath:join(root,"final.json")})).finalText).argv;
-    assert.ok(codex.includes('mcp_servers.agentforge_history.command='+JSON.stringify(process.execPath)));
-    assert.ok(codex.includes('mcp_servers.agentforge_history.env.AGENTFORGE_HISTORY_SOCKET="private-socket"'));
-    assert.ok(codex.includes('mcp_servers.agentforge_history.env.ELECTRON_RUN_AS_NODE="1"'), 'packaged history MCP must run Electron as Node, without leaking this flag to the Codex process');
-    assert.ok(codex.includes('mcp_servers.agentforge_history.required=true'), 'a missing platform history service must not silently become an unavailable capability');
+    assert.ok(codex.includes('mcp_servers.baton_history.command='+JSON.stringify(process.execPath)));
+    assert.ok(codex.includes('mcp_servers.baton_history.env.BATON_HISTORY_SOCKET="private-socket"'));
+    assert.ok(codex.includes('mcp_servers.baton_history.env.ELECTRON_RUN_AS_NODE="1"'), 'packaged history MCP must run Electron as Node, without leaking this flag to the Codex process');
+    assert.ok(codex.includes('mcp_servers.baton_history.required=true'), 'a missing platform history service must not silently become an unavailable capability');
     assert.equal(codex.at(-1),base.prompt);
   }finally{await rm(root,{recursive:true,force:true});}
 });
@@ -264,9 +264,9 @@ test("unready platform MCP fails the invocation rather than allowing an invisibl
   const root=await mkdtemp(new URL("../.data/history-unready-test-", import.meta.url));
   try{
     const executable=join(root,"provider.mjs");
-    await writeFile(executable,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"system",subtype:"init",mcp_servers:[{name:"agentforge_history",status:"failed"}],tools:[]}));setTimeout(()=>{},10000);');await chmod(executable,0o755);
+    await writeFile(executable,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"system",subtype:"init",mcp_servers:[{name:"baton_history",status:"failed"}],tools:[]}));setTimeout(()=>{},10000);');await chmod(executable,0o755);
     await assert.rejects(runClaudeCodeCli({runtime:{executable},workspacePath:root,traceDirectory:root,outputSchema:{},prompt:"test",runId:"unready-test",onEvent:async()=>{},historyMcp:{configPath:"test"}}),/未就绪/);
-    await writeFile(executable,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"system",subtype:"init",mcp_servers:[{name:"agentforge_history",status:"connected"}],tools:["Bash"]}));setTimeout(()=>{},10000);');
+    await writeFile(executable,'#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"system",subtype:"init",mcp_servers:[{name:"baton_history",status:"connected"}],tools:["Bash"]}));setTimeout(()=>{},10000);');
     await assert.rejects(runClaudeCodeCli({runtime:{executable},workspacePath:root,traceDirectory:root,outputSchema:{},prompt:"test",runId:"unready-test",onEvent:async()=>{},historyMcp:{configPath:"test"}}),/未装载/);
   }finally{await rm(root,{recursive:true,force:true});}
 });
@@ -302,9 +302,9 @@ test("real MCP SDK handshake/tool calls bind identity, paginate and clean up aft
     path=input.historyMcp.configPath;
     assert.equal((await stat(path)).mode & 0o777,0o600);
     const config=JSON.parse(await readFile(path,"utf8"));
-    assert.equal(config.mcpServers.agentforge_history.alwaysLoad,true);
-    assert.deepEqual(Object.keys(config.mcpServers.agentforge_history.env),["AGENTFORGE_HISTORY_SOCKET"]);
-    const socket=config.mcpServers.agentforge_history.env.AGENTFORGE_HISTORY_SOCKET;
+    assert.equal(config.mcpServers.baton_history.alwaysLoad,true);
+    assert.deepEqual(Object.keys(config.mcpServers.baton_history.env),["BATON_HISTORY_SOCKET"]);
+    const socket=config.mcpServers.baton_history.env.BATON_HISTORY_SOCKET;
     assert.ok(socket.startsWith(tmpdir()) || socket.startsWith("/tmp/"));
     assert.ok(Buffer.byteLength(socket)<100,"the invocation socket must remain below the macOS pathname limit");
     const transport=new StdioClientTransport({command:input.historyMcp.command,args:input.historyMcp.args,env:input.historyMcp.env,stderr:"pipe"});
@@ -337,7 +337,7 @@ test("reserved server name cannot be overridden and concurrent MCP invocations d
   const root=await mkdtemp(new URL("../.data/history-reserved-test-", import.meta.url));
   const s=createStore(),a=s.listAgents().find(a=>a.id===employee),b=s.listAgents().find(a=>a.id===peer);
   try{
-    const reserved=join(root,"reserved.json");await writeFile(reserved,JSON.stringify({mcpServers:{agentforge_history:{command:"bad"}}}));
+    const reserved=join(root,"reserved.json");await writeFile(reserved,JSON.stringify({mcpServers:{baton_history:{command:"bad"}}}));
     await assert.rejects(withHistoryTools(s,a,{runtime:{mcpConfigPaths:[reserved]},prompt:"test"},async()=>assert.fail("must not invoke")),/保留/);
     send(s,privateChat(s).id,"员工甲独有");send(s,s.openCommunication({kind:"agent",targetId:peer}).id,"员工乙独有");
     await Promise.all([a,b].map(agent=>withHistoryTools(s,agent,{runtime:{},prompt:"test"},async input=>{
@@ -371,11 +371,11 @@ test('durable history watermark updates only new records and resumes after resta
 test('relocated MCP resolves before history preflight and still rejects reserved names without mutating frozen input',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-history-relocated-')),oldRoot=join(root,'old/runtime-configs'),currentRoot=join(root,'current/runtime-configs'),path=join(oldRoot,'marketplace/proof/mcp.json'),current=join(currentRoot,'marketplace/proof/mcp.json');
  t.after(()=>rm(root,{recursive:true,force:true}));await mkdir(join(currentRoot,'marketplace/proof'),{recursive:true});
- const previous={root:process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT,aliases:process.env.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS};
- t.after(()=>{for(const[key,value]of [['AGENTFORGE_RUNTIME_CONFIG_ROOT',previous.root],['AGENTFORGE_RUNTIME_PREVIOUS_ROOTS',previous.aliases]])if(value===undefined)delete process.env[key];else process.env[key]=value;});
- process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT=currentRoot;process.env.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS=JSON.stringify([oldRoot]);
+ const previous={root:process.env.BATON_RUNTIME_CONFIG_ROOT,aliases:process.env.BATON_RUNTIME_PREVIOUS_ROOTS};
+ t.after(()=>{for(const[key,value]of [['BATON_RUNTIME_CONFIG_ROOT',previous.root],['BATON_RUNTIME_PREVIOUS_ROOTS',previous.aliases]])if(value===undefined)delete process.env[key];else process.env[key]=value;});
+ process.env.BATON_RUNTIME_CONFIG_ROOT=currentRoot;process.env.BATON_RUNTIME_PREVIOUS_ROOTS=JSON.stringify([oldRoot]);
  const s=createStore(),agent=s.listAgents().find(a=>a.id===employee),input={runtime:{mcpConfigPaths:[path],extensionManifest:[{kind:'mcp',path,sha256:'frozen'}]},prompt:'test'};
  const original=structuredClone(input);await writeFile(current,JSON.stringify({mcpServers:{proof:{command:'unused'}}}));
  await withHistoryTools(s,agent,input,async prepared=>{assert.equal(prepared.runtime.mcpConfigPaths[0],current);assert.equal(prepared.runtime.extensionManifest[0].path,current);assert.equal(prepared.runtime.extensionManifest[0].sha256,'frozen');});assert.deepEqual(input,original);
- await writeFile(current,JSON.stringify({mcpServers:{agentforge_history:{command:'unused'}}}));await assert.rejects(withHistoryTools(s,agent,input,async()=>assert.fail('reserved server must not invoke provider')),/保留/);
+ await writeFile(current,JSON.stringify({mcpServers:{baton_history:{command:'unused'}}}));await assert.rejects(withHistoryTools(s,agent,input,async()=>assert.fail('reserved server must not invoke provider')),/保留/);
 });

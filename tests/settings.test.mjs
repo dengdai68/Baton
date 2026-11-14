@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { ByteCache } from "../client/byte-cache.mjs";
 import { applyPreferences, NAVIGATION, normalizePreferences, PREFERENCES_KEY, readPreferences, savePreferences } from "../web/preferences.mjs";
-import { SETTINGS_PAGES, createClosePreferenceUI, createCliInstallationUI, createPluginUpdateSettingsUI } from "../web/settings.mjs";
+import { SETTINGS_PAGES, createClosePreferenceUI, createCliInstallationUI } from "../web/settings.mjs";
 import { createCatalogFixtureStore as createStore } from "./fixture-store.mjs";
 import { mkdtemp, mkdir, rm, writeFile, realpath, stat, access } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -21,18 +21,10 @@ function closePanel() {
   const panel = { hidden: false, querySelector: selector => ({ '[data-close-form]': form, '[data-close-status]': status, '[data-close-retry]': retry })[selector] };
   return { panel, options, save, status, retry, form, selected: () => options.find(option => option.checked)?.value || "", choose(value) { options.forEach(option => { option.checked = option.value === value; }); return form.onchange(); } };
 }
-test('plugin update settings preserve draft during refresh, validate, save, run when disabled and dispose polling',async t=>{
-  const enabled={checked:false},interval={value:'',setAttribute(key,value){this[key]=value;}},save={},check={},status={},note={};
-  const form={querySelector:key=>({'[name=enabled]':enabled,'[name=intervalMinutes]':interval,'[type=submit]':save})[key]};
-  const panel={hidden:false,querySelector:key=>({'[data-plugin-update-form]':form,'[data-check-plugin-updates]':check,'[data-plugin-update-status]':status,'[data-plugin-update-note]':note})[key]};
-  let saved={enabled:true,intervalMinutes:2},fail=false,calls=[];
-  const ui=createPluginUpdateSettingsUI(panel,async(path,options)=>{calls.push({path,options});if(fail)throw Error('controlled failure');if(options?.method==='PUT')saved=JSON.parse(options.body);return {...saved,running:false,lastResult:{updatedPlugins:0}};});t.after(()=>ui.dispose());
-  await ui.refresh();assert.equal(interval.value,'2');assert.equal(save.disabled,true);
-  interval.value='7';form.oninput();await ui.refresh();assert.equal(interval.value,'7');assert.equal(save.disabled,false);
-  interval.value='1.5';form.oninput();assert.equal(save.disabled,true);assert.match(note.textContent,/整数/);
-  interval.value='7';enabled.checked=false;form.oninput();fail=true;await form.onsubmit({preventDefault(){}});assert.equal(interval.value,'7');assert.equal(save.disabled,false);assert.match(note.textContent,/失败/);
-  fail=false;await form.onsubmit({preventDefault(){}});assert.deepEqual(saved,{enabled:false,intervalMinutes:7});assert.equal(save.disabled,true);assert.equal(check.disabled,false);
-  await check.onclick();assert.equal(calls.at(-1).options.method,'POST');ui.dispose();const count=calls.length;await ui.refresh();assert.equal(calls.length,count);
+test('update settings expose application updates without plugin controls or requests',async()=>{
+  const source=await readFile(new URL('../web/settings.mjs',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/createPluginUpdateSettingsUI|data-plugin-update|marketplace\/updates|pluginUpdateUI/);
+  assert.match(source,/data-app-update-check/);assert.match(source,/createAppUpdateUI/);
 });
 test('task console defaults to the latest executed known member, not the last finished long call',async()=>{
   const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
@@ -85,7 +77,7 @@ test('General CLI installation needs a desktop bridge and explicit click; cancel
   const web = cliPanel(); await createCliInstallationUI(web.panel).refresh();
   assert.equal(web.install.hidden, true); assert.match(web.status.textContent, /客户端宿主接口不可用/);
   let writes = 0, fail = false, cancelled = true;
-  const mac = cliPanel(), value = { supported: true, canInstall: true, installed: false, commandPath: '/fixture/agentforge', profilePaths: ['/fixture/.zshrc'] };
+  const mac = cliPanel(), value = { supported: true, canInstall: true, installed: false, commandPath: '/fixture/baton', profilePaths: ['/fixture/.zshrc'] };
   const ui = createCliInstallationUI(mac.panel, { getCliInstallation: async () => value, installCli: async () => {
     writes++; if (fail) throw new Error('failure'); return { ...value, cancelled, installed: !cancelled };
   } });
@@ -713,7 +705,7 @@ test("hiding every optional entry leaves Settings reachable and empty groups hid
 
 test("appearance choice is mirrored to the desktop host and colors native chrome", () => {
   const calls = [], meta = { content: "", setAttribute(name, value) { this[name] = value; } };
-  const view = { matchMedia: query => ({ matches: query === "(prefers-color-scheme: dark)" }), agentforgeDesktop: { setAppearance: async theme => { calls.push(theme); } } };
+  const view = { matchMedia: query => ({ matches: query === "(prefers-color-scheme: dark)" }), batonDesktop: { setAppearance: async theme => { calls.push(theme); } } };
   const document = { defaultView: view, documentElement: { dataset: {} }, querySelector: selector => selector === 'meta[name="theme-color"]' ? meta : null, querySelectorAll: () => [] };
   for (const [theme, color] of [["light", "#ffffff"], ["dark", "#111215"], ["system", "#111215"]]) {
     applyPreferences(document, { version: 2, theme });
@@ -723,9 +715,9 @@ test("appearance choice is mirrored to the desktop host and colors native chrome
   }
   assert.deepEqual(calls, ["light", "dark", "system"]);
   // A browser without the desktop bridge (or a rejecting host) still applies the theme.
-  view.agentforgeDesktop = { setAppearance: async () => { throw new Error("host closed"); } };
+  view.batonDesktop = { setAppearance: async () => { throw new Error("host closed"); } };
   applyPreferences(document, { version: 2, theme: "dark" });
-  delete view.agentforgeDesktop;
+  delete view.batonDesktop;
   applyPreferences(document, { version: 2, theme: "light" });
   assert.equal(document.documentElement.dataset.theme, "light");
 });
@@ -743,7 +735,7 @@ test("settings categories are refreshable routes and configuration leaves the em
   for (const page of Object.keys(SETTINGS_PAGES)) {
     const route = runWithCache(`${routeSource}\nrouteFromLocation()`, { location: { pathname: `/settings/${page}`, hash: "" } });
     assert.equal(route.view, "settings"); assert.equal(route.settingsPage, page);
-    const hosted = runWithCache(`${routeSource}\nrouteFromLocation()`, { location: { pathname: `/settings/${page}`, hash: "" }, window: { agentforgeDesktop: {} } });
+    const hosted = runWithCache(`${routeSource}\nrouteFromLocation()`, { location: { pathname: `/settings/${page}`, hash: "" }, window: { batonDesktop: {} } });
     assert.equal(hosted.settingsPage, page);
   }
   assert.equal(runWithCache(`${routeSource}\nrouteFromLocation()`, { location: { pathname: "/settings", hash: "" } }).settingsPage, "general");
@@ -1052,7 +1044,8 @@ async function inboxHarness(extra = {}) {
   const block = source.slice(source.indexOf('const inboxGroups ='),source.indexOf('/* ---------- 总览 ---------- */'));
   const state = {currentView:'inbox',inboxSelection:'a',inboxErrors:{},inboxResults:{awaiting_human:{tasks:[{id:'a',title:'登录',status:'awaiting_human',runs:[{id:'run/a'}]},{id:'b',title:'导出',status:'awaiting_human',runs:[{id:'run/b'}]}]}},inboxDetails:{}};
   const preview = {dataset:{},isConnected:true,innerHTML:'',querySelector(){return null;}};
-  const context = {state,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:()=>preview,esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
+  const list={innerHTML:''},host={innerHTML:'',querySelector:selector=>selector==='.inbox-list'?list:selector==='.inbox-layout'?{}:null};
+  const context = {state,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:selector=>selector==='#inbox-content'?host:preview,setTitleCount(){},requestAnimationFrame:callback=>callback(),esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
   const controller = runWithCache(block+';({refreshInbox,renderInbox,renderInboxPreview,sendInboxAnswer,inboxFacts,inboxDrafts,inboxAnswered,inboxTasks})',context);
   return {controller,state:context.state,preview,...context};
 }
@@ -1154,15 +1147,15 @@ test('inbox recent view merges same-day local answers with the latest 20 done ta
   assert.equal(h.state.inboxResults.done.tasks.length,2);assert.equal(h.state.inboxResults.done.tasks[0].id,'answered');assert.equal(h.state.inboxResults.done.totalPages,1);
 });
 
-test('market chips filter the complete catalog before paging and retain truthful source, components and use counts',async t=>{
+test('market chips use server filtering and paging while retaining truthful source, components and use counts',async t=>{
   const nodes=new Map(),query=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:false,dataset:{},classList:{toggle(){}},querySelector:query,setAttribute(key,value){this[key]=value;}});return nodes.get(selector);};
   const root={isConnected:true,querySelector:query},headerActions={querySelector:query},calls=[];
   const catalog=Array.from({length:25},(_,i)=>({id:'p'+i,name:'Plugin '+i,description:'Description',version:'1.2.0',components:{skills:2,agents:1,hooks:0},source:{url:'file:///tmp/plugin-source'},createdAt:'2026-11-01'}));
   const ui=createMarketplaceUI({esc:String,headerActions,api:async path=>{
-    calls.push(path);const url=new URL(path,'http://fixture');const page=Number(url.searchParams.get('page'));
+    calls.push(path);const url=new URL(path,'http://fixture');const page=Number(url.searchParams.get('page')),pageSize=Number(url.searchParams.get('pageSize') || 20);
     if(url.pathname==='/api/agents')return {agents:[{status:'inactive',runtime:{extensionSelection:{pluginIds:['p24']}}}],page:1,totalPages:1};
     const items=url.searchParams.get('usage')==='unused'?catalog.filter(item=>item.id!=='p24'):catalog;
-    return {plugins:items.slice((page-1)*20,page*20),page,totalPages:2,hasMore:page===1};
+    return {plugins:items.slice((page-1)*pageSize,page*pageSize),page,pageSize,total:items.length,totalPages:Math.ceil(items.length/pageSize),hasMore:page<Math.ceil(items.length/pageSize)};
   }});t.after(()=>ui.unmount());ui.mount(root);
   await new Promise(done=>setImmediate(done));
   assert.match(query('[data-market-chips]').innerHTML,/全部 <span>25/);assert.match(query('[data-market-chips]').innerHTML,/未被使用 <span>24/);
@@ -1170,14 +1163,51 @@ test('market chips filter the complete catalog before paging and retain truthful
   assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
   assert.match(query('[data-market-list]').innerHTML,/2 Skill · 1 Subagent/);assert.doesNotMatch(query('[data-market-list]').innerHTML,/0 Hook/);assert.match(query('[data-market-list]').innerHTML,/本地目录 · \/tmp\/plugin-source/);
   query('[data-market-pager]').onclick({target:{closest:()=>({dataset:{page:'2'}})}});
+  await new Promise(done=>setImmediate(done));
   assert.match(query('[data-market-list]').innerHTML,/Plugin 24/);assert.match(query('[data-market-list]').innerHTML,/1 位员工/);
   query('[data-market-chips]').onclick({target:{closest:()=>({dataset:{marketFilter:'unused'}})}});await new Promise(done=>setImmediate(done));
   assert.match(query('[data-market-chips]').innerHTML,/data-market-filter="unused" aria-pressed="true"/);
   query('[data-market-pager]').onclick({target:{closest:()=>({dataset:{page:'2'}})}});
+  await new Promise(done=>setImmediate(done));
   assert.doesNotMatch(query('[data-market-list]').innerHTML,/Plugin 24/);assert.match(query('[data-market-list]').innerHTML,/未被使用/);
   query('[data-market-chips]').onclick({target:{closest:()=>({dataset:{marketFilter:'all'}})}});await new Promise(done=>setImmediate(done));
   assert.equal(query('[data-market-list]').hidden,false);assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
   assert.ok(calls.some(path=>path.includes('usage=unused')&&path.includes('page=2')));
+});
+
+test('market current page paints before auxiliary reads, never scans later catalog pages and keeps rows on auxiliary failure',async t=>{
+  const nodes=new Map(),query=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:false,dataset:{},classList:{toggle(){}},querySelector:query,setAttribute(key,value){this[key]=value;}});return nodes.get(selector);};
+  const root={isConnected:true,querySelector:query},calls=[];let rejectCount,rejectEmployees;
+  const catalog=Array.from({length:20},(_,i)=>({id:'p'+i,name:'Plugin '+i,components:{skills:1}}));
+  const ui=createMarketplaceUI({esc:String,api:path=>{
+    calls.push(path);const url=new URL(path,'http://fixture');
+    if(url.pathname==='/api/agents')return new Promise((_,reject)=>rejectEmployees=reject);
+    assert.ok([...url.searchParams.keys()].every(key=>['page','search','usage'].includes(key)),'market queries use only the existing HTTP fields');
+    if(url.searchParams.get('usage')==='unused')return new Promise((_,reject)=>rejectCount=reject);
+    return Promise.resolve({plugins:catalog,page:1,pageSize:20,total:120,totalPages:6});
+  }});t.after(()=>ui.unmount());ui.mount(root);await new Promise(done=>setImmediate(done));
+  assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
+  assert.equal(query('[data-market-list]').hidden,false);assert.match(query('[data-market-chips]').innerHTML,/全部 <span>120/);
+  assert.ok(!calls.some(path=>new URL(path,'http://fixture').searchParams.get('page')==='2'));
+  rejectCount(Error('count offline'));rejectEmployees(Error('employee offline'));await new Promise(done=>setImmediate(done));
+  assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
+  assert.match(query('[data-market-chips]').innerHTML,/计数读取失败/);assert.match(query('[data-market-list]').innerHTML,/使用情况读取失败/);
+});
+
+test('inbox paints confirmed rows before compact details and ignores a late detail after leaving the view',async()=>{
+  let resolveDetail;const calls=[];
+  const h=await inboxHarness({api:path=>{
+    calls.push(path);
+    if(path.includes('/workspace?'))return new Promise(resolve=>resolveDetail=resolve);
+    const tasks=new URL(path,'http://fixture').searchParams.get('status')==='awaiting_acceptance'?[{id:'fast',title:'目录先显示',status:'awaiting_acceptance',runs:[{id:'slow-run'}]}]:[];
+    return Promise.resolve({tasks,total:tasks.length,page:1,totalPages:1});
+  }});
+  const pending=h.controller.refreshInbox();await new Promise(done=>setImmediate(done));
+  assert.equal(h.state.inboxLoading,false);assert.equal(h.state.inboxDetails.fast.loading,true);
+  assert.match(h.$('#inbox-content').querySelector('.inbox-list').innerHTML,/目录先显示/);
+  assert.match(h.preview.innerHTML,/正在读取事项详情/);assert.equal(calls.filter(path=>path.includes('/workspace?')).length,1);
+  h.state.currentView='agents';resolveDetail({run:{id:'slow-run',task:{}}});await pending;
+  assert.equal(h.state.inboxDetails.fast.loading,true,'old detail cannot update a departed view');
 });
 
 test('role rows expose the editor from the row and menu while capping bound avatars',async()=>{

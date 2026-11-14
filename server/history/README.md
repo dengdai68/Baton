@@ -22,4 +22,4 @@ Artifact 按冻结信息验证。派发提示词快照及私有凭据不进入�
 
 桥先解析冻结 MCP 的受管物理地址，再读取配置检查保留名称；所有检查和 Provider 调用共用同一份解析后的调用副本，不修改存储的冻结输入，也不放宽保留名称校验。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.agentforge/desktop/agentforge-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。

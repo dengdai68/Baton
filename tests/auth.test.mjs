@@ -15,14 +15,14 @@ for (const corrupt of [false,true]) test(`login and configuration do not depend 
   configuration.stage({extensionCatalog:[{id:'p',kind:'plugin',name:'Installed plugin',createdAt:'2026-01-01'},{id:'m',kind:'mcp',name:'Installed tools',createdAt:'2026-01-01'}]});configuration.commit();
   if(corrupt)await writeFile(databasePath,'intentionally invalid isolated SQLite fixture');
   const token=randomBytes(32).toString('hex');
-  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,HOME:root,AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:token,AGENTFORGE_DESKTOP_CONTROL_ROOT:controlRoot,AGENTFORGE_DB_PATH:databasePath,AGENTFORGE_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'records'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work')}});
+  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,HOME:root,BATON_DESKTOP_PORT:'0',BATON_BOOTSTRAP_TOKEN:token,BATON_DESKTOP_CONTROL_ROOT:controlRoot,BATON_DB_PATH:databasePath,BATON_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),BATON_RUN_FILES_ROOT:join(root,'records'),BATON_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),BATON_WORKSPACE_ROOT:join(root,'work')}});
   let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk});
   t.after(async()=>{if(child.exitCode===null){const exited=new Promise(resolve=>child.once('exit',resolve));child.kill();await exited;}await rm(root,{recursive:true,force:true});});
-  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.BATON_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
   const origin='http://127.0.0.1:'+ready.port;
   assert.equal((await fetch(origin+'/api/health')).status,200);
   assert.equal((await fetch(origin+'/api/tasks?page=1')).status,401);
-  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-AgentForge-Bootstrap':token}});
+  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-Baton-Bootstrap':token}});
   const bootstrapCookie=setup.headers.get('set-cookie').split(';')[0];
   const login=await fetch(origin+'/api/auth/bootstrap',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:bootstrapCookie},body:JSON.stringify({username:'fixture-admin',password:'Disposable-startup-test-519'})});
   assert.equal(login.status,201,await login.text());
@@ -45,20 +45,20 @@ for (const corrupt of [false,true]) test(`login and configuration do not depend 
 test("local service requires an owning client before opening storage", async () => {
   const {execFile}=await import("node:child_process");
   const {promisify}=await import("node:util");
-  await assert.rejects(promisify(execFile)(process.execPath,["server/index.mjs"],{env:{...process.env,AGENTFORGE_BOOTSTRAP_TOKEN:"",HOST:"0.0.0.0",PORT:"4310"}}),error=>error.code===1 && /只能由 AgentForge 客户端启动/.test(error.stderr));
+  await assert.rejects(promisify(execFile)(process.execPath,["server/index.mjs"],{env:{...process.env,BATON_BOOTSTRAP_TOKEN:"",HOST:"0.0.0.0",PORT:"4310"}}),error=>error.code===1 && /只能由 Baton 客户端启动/.test(error.stderr));
 });
 
 test("owned service binds only its random loopback origin and exits with the owner", async t => {
   const {fork}=await import('node:child_process');
   const {randomBytes}=await import('node:crypto');
   const root=await mkdtemp(join(tmpdir(),'af-owned-service-'));
-  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,HOME:root,HOST:'0.0.0.0',PORT:'4310',AGENTFORGE_PUBLIC_ORIGIN:'https://unused.invalid',AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:randomBytes(32).toString('hex'),AGENTFORGE_DB_PATH:join(root,'state.sqlite'),AGENTFORGE_AUTH_DB_PATH:join(root,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'runs'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(root,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work') }});
+  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,HOME:root,HOST:'0.0.0.0',PORT:'4310',BATON_PUBLIC_ORIGIN:'https://unused.invalid',BATON_DESKTOP_PORT:'0',BATON_BOOTSTRAP_TOKEN:randomBytes(32).toString('hex'),BATON_DB_PATH:join(root,'state.sqlite'),BATON_AUTH_DB_PATH:join(root,'auth.sqlite'),BATON_RUN_FILES_ROOT:join(root,'runs'),BATON_RUNTIME_CONFIG_ROOT:join(root,'runtime'),BATON_WORKSPACE_ROOT:join(root,'work') }});
   t.after(()=>{child.kill();return rm(root,{recursive:true,force:true});});
-  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('owned startup timeout')),Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('unexpected exit '+code))});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('owned startup timeout')),Number(process.env.BATON_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('unexpected exit '+code))});});
   const origin='http://127.0.0.1:'+ready.port;
-  assert.equal(ready.type,'agentforge-ready');assert.ok(ready.port>0);
+  assert.equal(ready.type,'baton-ready');assert.ok(ready.port>0);
   assert.equal((await fetch(origin+'/api/health')).status,200);
-  assert.match(await (await fetch(origin+'/login')).text(),/agentforge-desktop-style/);
+  assert.match(await (await fetch(origin+'/login')).text(),/baton-desktop-style/);
   const rejected=await fetch(origin+'/api/auth/login',{method:'POST',headers:{Origin:'https://unused.invalid','Content-Type':'application/json'},body:'{}'});assert.equal(rejected.status,403);
   const exited=new Promise(resolve=>child.once('exit',resolve));child.disconnect();
   assert.equal(await exited,143);
@@ -76,7 +76,7 @@ test("omitted origins allow offline setup but deny every HTTP host", async t => 
 });
 
 test("authentication gates real HTTP, persists revocable sessions and never stores passwords/tokens", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-auth-test-")), databasePath = join(root, "auth.sqlite");
+  const root = await mkdtemp(join(tmpdir(), "baton-auth-test-")), databasePath = join(root, "auth.sqlite");
   let clock = Date.now(), auth;
   const server = createServer(async (req, res) => {
     try { if (await auth.guard(req, res, new URL(req.url, "http://localhost"))) return; res.writeHead(200); res.end("protected-resource"); }
@@ -112,7 +112,7 @@ test("authentication gates real HTTP, persists revocable sessions and never stor
     const cookie = login.headers.get("set-cookie").split(";")[0];
     assert.match(login.headers.get("set-cookie"), /HttpOnly; SameSite=Strict; Max-Age=34560000/);
     assert.equal((await get("/api/bootstrap",cookie)).status, 200);
-    assert.equal((await get("/api/bootstrap", "agentforge_session=invalid")).status, 401);
+    assert.equal((await get("/api/bootstrap", "baton_session=invalid")).status, 401);
     const invalidHostStatus = await new Promise((resolve, reject) => {
       const request = httpRequest(origin + "/api/bootstrap", {headers:{Host:"evil.example",Cookie:cookie}}, response => { response.resume(); resolve(response.statusCode); });
       request.on("error",reject); request.end();
@@ -183,7 +183,7 @@ test("reset setup requires password reauthentication and grants only the request
     assert.equal(auth.configured(), true);
     const cleared = await post("/api/test-reset", { password }, cookie);
     assert.equal(cleared.status, 200);
-    const setupCookie = cleared.headers.getSetCookie().find(value => value.startsWith("agentforge_bootstrap=")).split(";")[0];
+    const setupCookie = cleared.headers.getSetCookie().find(value => value.startsWith("baton_bootstrap=")).split(";")[0];
     assert.equal((await get("/api/bootstrap", cookie)).status, 401);
     assert.equal((await get("/setup.html")).status, 404);
     assert.equal((await get("/setup.html", setupCookie)).status, 200);
@@ -194,7 +194,7 @@ test("reset setup requires password reauthentication and grants only the request
 });
 
 test("desktop bootstrap can create exactly one initial local administrator", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-auth-bootstrap-")), databasePath = join(root, "auth.sqlite"), secret = "a".repeat(64);
+  const root = await mkdtemp(join(tmpdir(), "baton-auth-bootstrap-")), databasePath = join(root, "auth.sqlite"), secret = "a".repeat(64);
   let auth;
   const server = createServer(async (req, res) => {
     try { if (await auth.guard(req, res, new URL(req.url, "http://localhost"))) return; res.writeHead(200); res.end("bootstrap-page"); }
@@ -209,11 +209,11 @@ test("desktop bootstrap can create exactly one initial local administrator", asy
     const status = await get("/api/auth/bootstrap-status");
     assert.deepEqual(await status.json(), { available: true, configured: false });
     assert.equal(await (await get("/setup")).status, 404);
-    assert.equal(await (await get("/setup", { "X-AgentForge-Bootstrap": "b".repeat(64) })).status, 404);
-    const handoff = await get("/setup", { "X-AgentForge-Bootstrap": secret });
+    assert.equal(await (await get("/setup", { "X-Baton-Bootstrap": "b".repeat(64) })).status, 404);
+    const handoff = await get("/setup", { "X-Baton-Bootstrap": secret });
     assert.equal(handoff.status, 303);
     assert.equal(handoff.headers.get("location"), "/setup.html");
-    const bootstrapCookie = handoff.headers.get("set-cookie").match(/agentforge_bootstrap=[a-f0-9]{64}/)[0];
+    const bootstrapCookie = handoff.headers.get("set-cookie").match(/baton_bootstrap=[a-f0-9]{64}/)[0];
     assert.notEqual(bootstrapCookie.split("=")[1], secret, "the Electron handoff secret must never be persisted as a browser cookie");
     assert.doesNotMatch(handoff.headers.get("set-cookie"), new RegExp(secret));
     assert.equal(await (await get("/setup.html", { Cookie: bootstrapCookie })).status, 200);
@@ -221,11 +221,11 @@ test("desktop bootstrap can create exactly one initial local administrator", asy
     assert.equal(await (await post("/api/auth/bootstrap", { username: "first-admin", password: "short" }, { Cookie: bootstrapCookie })).status, 400);
     const created = await post("/api/auth/bootstrap", { username: "first-admin", password: "Bootstrap-password-1937" }, { Cookie: bootstrapCookie });
     assert.equal(created.status, 201);
-    const sessionCookie = created.headers.get("set-cookie").match(/agentforge_session=[a-f0-9]{64}/)[0];
-    assert.ok(created.headers.get("set-cookie").includes("agentforge_bootstrap=;"));
+    const sessionCookie = created.headers.get("set-cookie").match(/baton_session=[a-f0-9]{64}/)[0];
+    assert.ok(created.headers.get("set-cookie").includes("baton_bootstrap=;"));
     assert.equal((await get("/api/bootstrap", { Cookie: sessionCookie })).status, 200);
     assert.deepEqual(await (await get("/api/auth/bootstrap-status")).json(), { available: false, configured: true });
-    assert.equal(await (await get("/setup", { "X-AgentForge-Bootstrap": secret })).status, 404);
+    assert.equal(await (await get("/setup", { "X-Baton-Bootstrap": secret })).status, 404);
     assert.equal(await (await post("/api/auth/bootstrap", { username: "attacker", password: "Bootstrap-password-1937" }, { Cookie: bootstrapCookie })).status, 404);
     const login = await post("/api/auth/login", { username: "first-admin", password: "Bootstrap-password-1937" });
     assert.equal(login.status, 200);
@@ -251,7 +251,7 @@ test("HTTP authentication precedes business routes and active content is sandbox
 });
 
 test("remote configuration requires exact HTTPS origins and sets Secure cookies", async () => {
-  const root = await mkdtemp(join(tmpdir(), "agentforge-auth-secure-")), databasePath = join(root,"auth.sqlite");
+  const root = await mkdtemp(join(tmpdir(), "baton-auth-secure-")), databasePath = join(root,"auth.sqlite");
   let auth;
   try {
     for (const origin of ["http://example.com", "https://example.com/path", "https://user:password@example.com"]) assert.throws(() => createAuth({databasePath,origins:[origin]}));
@@ -322,14 +322,14 @@ test('task message request IDs survive real authenticated HTTP and CLI retries w
   const claims=Array.from({length:3},()=>store.claimDispatch(run.id));
   const questions=claims.map((delivery,index)=>store.askQuestion(delivery.id,{audience:'human',question:`隔离问题 ${index}`}));
   store.close();
-  const token=randomBytes(32).toString('hex'),env={...process.env,HOME:root,AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:token,AGENTFORGE_DESKTOP_CONTROL_ROOT:controlRoot,AGENTFORGE_DB_PATH:databasePath,AGENTFORGE_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'records'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work')};
+  const token=randomBytes(32).toString('hex'),env={...process.env,HOME:root,BATON_DESKTOP_PORT:'0',BATON_BOOTSTRAP_TOKEN:token,BATON_DESKTOP_CONTROL_ROOT:controlRoot,BATON_DB_PATH:databasePath,BATON_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),BATON_RUN_FILES_ROOT:join(root,'records'),BATON_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),BATON_WORKSPACE_ROOT:join(root,'work')};
   const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
   t.after(async()=>{if(child.exitCode===null){const exited=new Promise(resolve=>child.once('exit',resolve));child.kill();await exited;}await rm(root,{recursive:true,force:true});});
-  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.BATON_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
   const origin='http://127.0.0.1:'+ready.port;
   assert.equal((await fetch(origin+'/api/health')).status,200);
   const endpoint=join(root,'endpoint.json'),session=join(root,'cli-session.json');await writeFile(endpoint,JSON.stringify({origin,instanceId:ready.instanceId}),{mode:0o600});
-  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-AgentForge-Bootstrap':token}});
+  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-Baton-Bootstrap':token}});
   const bootstrap=await fetch(origin+'/api/auth/bootstrap',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:setup.headers.get('set-cookie').split(';')[0]},body:JSON.stringify({username:'fixture-admin',password:'Disposable-message-test-519'})});assert.equal(bootstrap.status,201);
   const cookie=bootstrap.headers.get('set-cookie').split(';')[0];
   const request=(path,body)=>fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{Origin:origin,Cookie:cookie,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
@@ -350,4 +350,32 @@ test('task message request IDs survive real authenticated HTTP and CLI retries w
   const retried=await cli(args,input);assert.equal(retried.code,0,JSON.stringify(retried.value));assert.equal(retried.value.data.replayed,true);assert.equal(retried.value.data.message.id,sent.value.data.message.id);
   const conflict=await cli(args,JSON.stringify({content:'已修改',replyToMessageId:questions[1].id}));assert.equal(conflict.code,4);assert.equal(conflict.value.ok,false);
   const final=await (await request(`/api/runs/${run.id}/workspace?view=compact`)).json();assert.equal(final.pendingQuestions.length,1);assert.equal(final.traces.length,0);
+});
+
+test('manual plugin updates share authenticated App/CLI commands and reject retired settings',async t=>{
+  const {fork,spawn}=await import('node:child_process'),{randomBytes}=await import('node:crypto');
+  const root=await mkdtemp(join(tmpdir(),'af-manual-plugins-http-')),controlRoot=join(root,'control'),databasePath=join(root,'business.sqlite'),token=randomBytes(32).toString('hex');
+  const env={...process.env,HOME:root,BATON_DESKTOP_PORT:'0',BATON_BOOTSTRAP_TOKEN:token,BATON_DESKTOP_CONTROL_ROOT:controlRoot,BATON_DB_PATH:databasePath,BATON_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),BATON_RUN_FILES_ROOT:join(root,'records'),BATON_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),BATON_WORKSPACE_ROOT:join(root,'work')};
+  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
+  t.after(async()=>{if(child.exitCode===null){const exited=new Promise(resolve=>child.once('exit',resolve));child.kill();await exited;}await rm(root,{recursive:true,force:true});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.BATON_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
+  const origin='http://127.0.0.1:'+ready.port,path='/api/runtime/marketplace/updates';
+  assert.equal((await fetch(origin+'/api/health')).status,200);assert.equal((await fetch(origin+path)).status,401);
+  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-Baton-Bootstrap':token}});
+  const bootstrap=await fetch(origin+'/api/auth/bootstrap',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:setup.headers.get('set-cookie').split(';')[0]},body:JSON.stringify({username:'fixture-admin',password:'Disposable-plugin-test-519'})});assert.equal(bootstrap.status,201);
+  const cookie=bootstrap.headers.get('set-cookie').split(';')[0];
+  const request=(url,method='GET',body)=>fetch(origin+url,{method,headers:{Origin:origin,Cookie:cookie,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  assert.deepEqual(await (await request(path)).json(),{running:false,lastCheckedAt:null,lastResult:null});
+  await assert.rejects(access(databasePath),{code:'ENOENT'});assert.equal((await (await request('/api/bootstrap?view=connection')).json()).businessReady,false,'status is connection metadata, not a business-database read');
+  assert.equal((await request(path,'POST',{enabled:true})).status,400);
+  const retired=await request(path+'/settings','PUT',{enabled:true,intervalMinutes:2});assert.equal(retired.status,410);assert.match((await retired.json()).error,/已移除/);
+  assert.equal((await request(path,'POST',{})).status,202);
+  let status;for(let i=0;i<50;i++){status=await (await request(path)).json();if(!status.running)break;await new Promise(resolve=>setTimeout(resolve,10));}
+  assert.equal(status.running,false);assert.equal(status.lastResult.updatedPlugins,0);assert.ok(status.lastCheckedAt);assert.equal('enabled' in status,false);assert.equal('nextCheckAt' in status,false);
+  const endpoint=join(root,'endpoint.json'),session=join(root,'cli-session.json');await writeFile(endpoint,JSON.stringify({origin,instanceId:ready.instanceId}),{mode:0o600});
+  const cli=async(args,input)=>{const process=spawn(globalThis.process.execPath,[new URL('../cli/main.mjs',import.meta.url).pathname,...args,'--endpoint-file',endpoint,'--session-file',session,'--json'],{env,stdio:['pipe','pipe','pipe']});let stdout='',errors='';process.stdout.on('data',chunk=>stdout+=chunk);process.stderr.on('data',chunk=>errors+=chunk);process.stdin.end(input);const code=await new Promise(resolve=>process.once('exit',resolve));return {code,value:JSON.parse(stdout),errors};};
+  assert.equal((await cli(['auth','login','--username','fixture-admin','--password-stdin'],'Disposable-plugin-test-519\n')).code,0);
+  const trigger=await cli(['plugins','check-updates']);assert.equal(trigger.code,0,trigger.errors);assert.equal('enabled' in trigger.value.data,false);
+  const receipt=await cli(['plugins','updates']);assert.equal(receipt.code,0,receipt.errors);assert.equal(receipt.value.data.running,false);assert.equal(receipt.value.data.lastResult.updatedPlugins,0);
+  const obsolete=await cli(['plugins','auto-update','--file','-'],'{"enabled":true}');assert.equal(obsolete.code,2);assert.equal(obsolete.value.ok,false);
 });

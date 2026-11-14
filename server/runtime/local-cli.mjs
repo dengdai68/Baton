@@ -424,7 +424,7 @@ async function invokeClaudeCodeCli(input) {
   const nativeRuntime=await nativePluginRuntime(runtime,traceDirectory);
   const args = ["--print", "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions", "--permission-mode", "bypassPermissions", "--add-dir", traceDirectory];
   if (input.systemPrompt) {
-    const instructionsPath = join(traceDirectory, "agentforge-instructions.md");
+    const instructionsPath = join(traceDirectory, "baton-instructions.md");
     await writeFile(instructionsPath, input.systemPrompt, { mode: 0o600 });
     // Environment and invocation mode can change while the native session ID
     // stays the same. Do not retain a stale first-turn system prompt snapshot.
@@ -444,7 +444,7 @@ async function invokeClaudeCodeCli(input) {
   for (const pluginPath of nativeRuntime.pluginPaths || []) args.push("--plugin-dir", pluginPath);
   if(Object.keys(extensions).length) {
     const mcpServers=Object.fromEntries(Object.entries(extensions).map(([name,{ref}])=>[name,{command:process.execPath,args:[fileURLToPath(new URL('./mcp-launcher.mjs',import.meta.url)),ref.path,ref.sha256,name],...(process.versions.electron?{env:{ELECTRON_RUN_AS_NODE:'1'}}:{})}]));
-    const selectedMcp=join(traceDirectory,'agentforge-market-mcp.json');
+    const selectedMcp=join(traceDirectory,'baton-market-mcp.json');
     await writeFile(selectedMcp,JSON.stringify({mcpServers}),{mode:0o600});args.push('--mcp-config',selectedMcp);
   }
   if (input.historyMcp) args.push("--mcp-config",input.historyMcp.configPath);
@@ -454,7 +454,7 @@ async function invokeClaudeCodeCli(input) {
   let turnComplete = false;
   const backgroundTasks = new Set();
   return executeJsonl({
-    runId, command: runtime.executable || "claude", args, cwd: workspacePath, env: cliEnvironment(runtime.executable || "claude", { ...connectionEnv, ...(input.historyMcp ? { MCP_TIMEOUT: process.env.MCP_TIMEOUT || "120000", MCP_CONNECT_TIMEOUT_MS: process.env.MCP_CONNECT_TIMEOUT_MS || "120000", MCP_CONNECTION_NONBLOCKING: "0", ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH || "false" } : {}), AGENTFORGE_TRACE_OUTPUT_DIR: `${traceDirectory}/output` }), provider: "Claude Code", apiRetryTimeoutMs, idleTimeoutMs,
+    runId, command: runtime.executable || "claude", args, cwd: workspacePath, env: cliEnvironment(runtime.executable || "claude", { ...connectionEnv, ...(input.historyMcp ? { MCP_TIMEOUT: process.env.MCP_TIMEOUT || "120000", MCP_CONNECT_TIMEOUT_MS: process.env.MCP_CONNECT_TIMEOUT_MS || "120000", MCP_CONNECTION_NONBLOCKING: "0", ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH || "false" } : {}), BATON_TRACE_OUTPUT_DIR: `${traceDirectory}/output` }), provider: "Claude Code", apiRetryTimeoutMs, idleTimeoutMs,
     onEvent, diagnosticPrompt: [input.systemPrompt, prompt].filter(Boolean), executionKey: input.executionKey, canStart: input.canStart, session: input.session,
     isBackgroundWaiting: () => turnComplete || backgroundTasks.size > 0,
     normalizeEvent: (event) => {
@@ -479,15 +479,15 @@ async function invokeClaudeCodeCli(input) {
       if (failure) { terminalFailure = failure; recovered = false; }
       else if (event.type === "result" && event.subtype === "success" && !event.is_error) recovered = true;
       if (event.type === 'system' && event.subtype === 'init') {
-        const allowed = new Set([...Object.keys(extensions), ...(input.historyMcp ? ['agentforge_history'] : [])]);
+        const allowed = new Set([...Object.keys(extensions), ...(input.historyMcp ? ['baton_history'] : [])]);
         if ((event.mcp_servers || []).some(server => !allowed.has(server.name))) throw new Error('运行时加载了未选择的 MCP，已停止执行');
         if (Object.keys(extensions).some(name => !event.mcp_servers?.some(server => server.name === name && server.status === 'connected'))) throw new Error('所选 MCP 未就绪，请检查市场配置和本机服务');
         normalized.data.extensionIds = (runtime.extensionManifest || []).map(ref => ref.id);
         normalized.data.selectedMcpCount = Object.keys(extensions).length;
       }
       if (event.type === "system" && event.subtype === "init" && input.historyMcp) {
-        const historyServerStatus = event.mcp_servers?.find(server => server.name === "agentforge_history")?.status || "unreported";
-        const historyToolsAvailable = (event.tools || []).some(name => name.startsWith("mcp__agentforge_history__"));
+        const historyServerStatus = event.mcp_servers?.find(server => server.name === "baton_history")?.status || "unreported";
+        const historyToolsAvailable = (event.tools || []).some(name => name.startsWith("mcp__baton_history__"));
         normalized.data.historyServerStatus = historyServerStatus === "connected" ? "connected" : historyServerStatus === "unreported" ? "unreported" : "unavailable";
         normalized.data.historyToolsAvailable = historyToolsAvailable;
         if (historyServerStatus !== "unreported" && historyServerStatus !== "connected") throw new Error("平台历史 MCP 未就绪，保留当前投递重试");
@@ -528,7 +528,7 @@ async function invokeCodexCli(input) {
     // The bridge owns this small environment. In packaged builds its command
     // is Electron: only the MCP child receives Node mode, never Codex itself.
     const configuration = { command, args: commandArgs, enabled: true, required: true, ...Object.fromEntries(Object.entries(env).map(([key, value]) => [`env.${key}`, value])) };
-    for (const [key,value] of Object.entries(configuration)) args.push("-c",`mcp_servers.agentforge_history.${key}=${JSON.stringify(value)}`);
+    for (const [key,value] of Object.entries(configuration)) args.push("-c",`mcp_servers.baton_history.${key}=${JSON.stringify(value)}`);
   }
   // Hook trust is a root CLI flag, not an app-server subcommand option.
   const nativeArgs = args.filter(arg => arg !== '--dangerously-bypass-hook-trust');
@@ -547,7 +547,7 @@ async function invokeCodexCli(input) {
   let finalText = "", terminalFailure = null, recovered = false;
   const toolInputs = new Map();
   const transport = {
-    runId, command: runtime.executable || "codex", args, cwd: workspacePath, env: cliEnvironment(runtime.executable || "codex", { AGENTFORGE_TRACE_OUTPUT_DIR: `${traceDirectory}/output` }), provider: "Codex",
+    runId, command: runtime.executable || "codex", args, cwd: workspacePath, env: cliEnvironment(runtime.executable || "codex", { BATON_TRACE_OUTPUT_DIR: `${traceDirectory}/output` }), provider: "Codex",
     onEvent, diagnosticPrompt: [input.systemPrompt, prompt].filter(Boolean), executionKey: input.executionKey, canStart: input.canStart, session: input.session, apiRetryTimeoutMs: input.apiRetryTimeoutMs, idleTimeoutMs: input.idleTimeoutMs,
     normalizeEvent(event) {
       if (event.type === "stderr") return {providerEventType:"stderr",message:"Provider 诊断详情",data:{auditVersion:2,presentation:"error"},content:executionContent({text:providerDiagnostic(event,"Codex")},[input.systemPrompt,prompt].filter(Boolean))};

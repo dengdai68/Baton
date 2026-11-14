@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { userInfo } from 'node:os';
 import { basename, isAbsolute } from 'node:path';
 
-const protectedKey = key => key === 'HOST' || key.startsWith('AGENTFORGE_') || key.startsWith('ELECTRON_') || ['NODE_OPTIONS', 'NODE_PATH'].includes(key);
+const protectedKey = key => key === 'HOST' || key.startsWith('BATON_') || key.startsWith('ELECTRON_') || ['NODE_OPTIONS', 'NODE_PATH'].includes(key);
 const quote = value => `'${value.replaceAll("'", "'\\''")}'`;
 
 function capture(shell, args, environment, { timeoutMs, signal, maxBytes }) {

@@ -1,25 +1,25 @@
 # Contributing
 
-本仓库是 AgentForge 客户端的独立源码，默认 `npm start` 启动 Electron。`web/` 和 `server/` 均是应用的本机组成部分；不要求检出 AgentForge 原仓库。抽取边界见 [docs/23](docs/23-desktop-extraction.md)。测试与包构建使用隔离数据，不覆盖现有安装。
+本仓库是 Baton 客户端的独立源码，默认 `npm start` 启动 Electron。`web/` 和 `server/` 均是应用的本机组成部分；不要求检出 Baton 原仓库。抽取边界见 [docs/23](docs/23-desktop-extraction.md)。测试与包构建使用隔离数据，不覆盖现有安装。
 
 先阅读 [AGENTS.md](AGENTS.md)、[代码导航](docs/00-ai-map.md) 和目标模块的 README。
 
 ## 安装与本机运行
 
-从 [GitHub Releases](https://github.com/dengdai68/AgentForge/releases) 下载 DMG，将 AgentForge 拖入 Applications。当前安装包面向 macOS 13+ / Apple Silicon，采用 ad-hoc 签名，尚未经过 Apple 公证。应用内首次创建管理员，并在设置中配置 Runtime 和工作目录。Claude Code、Codex 或 DeepSeek Harness 需在本机安装并完成各自授权；应用自带本机服务，无需部署服务器。
+从 [GitHub Releases](https://github.com/dengdai68/Baton/releases) 下载 DMG，将 Baton 拖入 Applications。当前安装包面向 macOS 13+ / Apple Silicon，采用 ad-hoc 签名，尚未经过 Apple 公证。应用内首次创建管理员，并在设置中配置 Runtime 和工作目录。Claude Code、Codex 或 DeepSeek Harness 需在本机安装并完成各自授权；应用自带本机服务，无需部署服务器。
 
 源码开发需要 Node.js 22.12+（推荐 Node 24）、npm 和 Git：
 
 ```bash
-git clone https://github.com/dengdai68/AgentForge.git
-cd AgentForge
+git clone https://github.com/dengdai68/Baton.git
+cd Baton
 npm ci
 npm start
 ```
 
-`npm start` / `npm run dev` 启动 Electron 及其自有随机端口子服务，不复用 4310，也不提供独立 Web 部署。数据根默认 `~/.agentforge/workspace`，业务资料在 `<数据根>/.agentforge/desktop/`（开发为 desktop-dev），任务文件为该根下独立 Task/Run；认证、启动定位和日志仍位于 `~/.agentforge`。目录整理与现有实例显式搬运见 docs/30-storage-layout.md。仓库改名不改变应用身份。数字员工以当前本机用户权限执行，Runtime bypass 不是沙箱；当前为本机单管理员应用。
+`npm start` / `npm run dev` 启动 Electron 及其自有随机端口子服务，不复用 4310，也不提供独立 Web 部署。数据根默认 `~/.baton/workspace`，业务资料在 `<数据根>/.baton/desktop/`（开发为 desktop-dev），任务文件为该根下独立 Task/Run；认证、启动定位和日志仍位于 `~/.baton`。目录整理与现有实例显式搬运见 docs/30-storage-layout.md。仓库改名不改变应用身份。数字员工以当前本机用户权限执行，Runtime bypass 不是沙箱；当前为本机单管理员应用。
 
-安装版启动时提供用户级 `agentforge` 命令，可在「设置 → 命令行 CLI」查看及修复；源码入口为 `npm run cli -- help`。CLI 连接运行中的客户端并复用当前登录授权，完整指南见 [docs/21](docs/21-configuration-cli.md)。
+安装版启动时提供用户级 `baton` 命令，可在「设置 → 命令行 CLI」查看及修复；源码入口为 `npm run cli -- help`。CLI 连接运行中的客户端并复用当前登录授权，完整指南见 [docs/21](docs/21-configuration-cli.md)。
 
 ## 开发流程
 
@@ -49,13 +49,13 @@ History:
 
 ## 发布
 
-发布操作使用 [agentforge-release](.codex/skills/agentforge-release/SKILL.md)。默认 Beta，正式版仅在明确要求时发布；版本递增、标签操作和 Release 标题/说明遵循该 skill。下述旧 CI 入口不能直接用于新的 Beta 发布，格式差异与替代路径见 skill；签名与附件校验要求继续保留。签名状态在交付报告中说明，Release 正文保持 skill 要求的变更列表与底部注。
+发布操作使用 [baton-release](.codex/skills/baton-release/SKILL.md)。默认 Beta，正式版仅在明确要求时发布；版本递增、标签操作和 Release 标题/说明遵循该 skill。下述旧 CI 入口不能直接用于新的 Beta 发布，格式差异与替代路径见 skill；签名与附件校验要求继续保留。签名状态在交付报告中说明，Release 正文保持 skill 要求的变更列表与底部注。
 
 版本与锁文件保持一致。macOS 构建使用 `npm run package:mac`，产物位于 `release/`。发布标签与源码提交绑定，上传 DMG、ZIP 和 SHA-256 清单；不得把本机数据或凭据打入安装包。
 
 Release 工作流只在发布成功后删除本次构建输出 ID 对应的 Actions 中转产物；失败时保留最多一天以便重试。正式 Release 附件与 Actions 存储独立，不批量删除其他构建、日志、Git 标签或源码历史。
 
-仓库内 Codex skill 位于 `.codex/skills/agentforge-development/SKILL.md`，用于选择共享界面与验收路径；AGENTS.md 仍为唯一贡献规则入口，设计事实仍由 docs/06 维护。无需安装额外依赖。
+仓库内 Codex skill 位于 `.codex/skills/baton-development/SKILL.md`，用于选择共享界面与验收路径；AGENTS.md 仍为唯一贡献规则入口，设计事实仍由 docs/06 维护。无需安装额外依赖。
 
 正式版发布使用 .github/workflows/release-macos-stable.yml（已批准的 v主.次.补丁 标签，与 package.json 一致）。配置仓库 secrets：MAC_CSC_LINK（Developer ID Application 的p12证书或其base64）、MAC_CSC_KEY_PASSWORD、MAC_CSC_NAME（完整Developer ID Application证书名称）、APPLE_ID、APPLE_APP_SPECIFIC_PASSWORD、APPLE_TEAM_ID；同一应用后续签名保持Apple Team一致。工作流验证签名/公证后上传DMG、ZIP、latest-mac.yml、blockmap与SHA256SUMS.txt，正式Release设为latest。手动发布也必须上传同次构建的这些文件。默认本机/Beta构建保持ad-hoc；ad-hoc客户端首次升级到Developer ID版本需手动安装，后续才可原生自动更新。不得将证书/私钥/密码或CI临时文件提交入库。
 
@@ -63,6 +63,6 @@ Release 工作流只在发布成功后删除本次构建输出 ID 对应的 Acti
 
 本机网络无法上传大文件时，可调用现有 Beta 构建工作流的 `draft_assets_only=true`：按指定已存在标签构建并验收，将同次构建的六个附件上传到已存在草稿，拒绝替换公开 Release；不自动公开。仍需上述 ad-hoc 授权及工作流确认词。操作者核对摘要、安装方式和说明后再将草稿发布为所需正式版或预发布；正式签名工作流保持独立。
 
-当前存储归属以 [配置目录与工作目录](docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。

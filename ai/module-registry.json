@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "project": "agentforge",
-  "distribution": "AgentForge-App is the self-contained desktop extraction from AgentForge c1277e5. Client-only: npm start/dev launch Electron; the loopback child requires IPC ownership, no standalone Web/server launch. server/web/client/cli are bundled dependencies. No sibling repository imports. See docs/23-desktop-extraction.md.",
+  "project": "baton",
+  "distribution": "Baton-App is the self-contained desktop extraction from Baton c1277e5. Client-only: npm start/dev launch Electron; the loopback child requires IPC ownership, no standalone Web/server launch. server/web/client/cli are bundled dependencies. No sibling repository imports. See docs/23-desktop-extraction.md.",
   "coreAppCliParity": "AGENTS requires equivalent core management and task-creation capabilities. Store expands teamIds into independent members; CLI create --start preserves taskId on launch failure. App preserves capability tags and independent handoffFrom, exposes team status; task priority is retired. Covered by configuration-catalog/configuration-cli and isolated test-task-creation round trips.",
   "taskWorkflowListing": "Task lists display frozen workflow names and filter by stable workflow IDs before pagination. CLI tasks list --workflow ID_OR_NAME resolves unique current/frozen names, exposes workflow ID/name references, and rejects missing or ambiguous names. Covered by configuration-cli tests and isolated directory-headers UI acceptance.",
-  "purpose": "Module ownership, current contracts and change-impact requirements for the local AgentForge control plane and clients.",
+  "purpose": "Module ownership, current contracts and change-impact requirements for the local Baton control plane and clients.",
   "instructions": [
     "AGENTS.md",
     "CLAUDE.md"
@@ -12,12 +12,12 @@
   "instructionContract": "AGENTS.md is the concise canonical repository rulebook; CLAUDE.md retains only its local AGENTS link. verify-ai-contract validates the reference and required rules, not duplicated bodies. Development does not maintain old-version data compatibility, migrations or automatic backups; breaking changes state reinitialization requirements without silently resetting operator data. Changes to CLI-covered features must synchronize affected commands, validation, text/JSON output, progressive help/schema, docs and tests in the same change without expanding authority; details in CONTRIBUTING.md and docs/21.",
   "humanMap": "docs/00-ai-map.md",
   "releaseSkill": {
-    "path": ".codex/skills/agentforge-release/SKILL.md",
+    "path": ".codex/skills/baton-release/SKILL.md",
     "purpose": "GitHub Release workflow: Beta by default, patch-only stable increments, explicit stable tags, exact version titles and concise Chinese notes.",
-    "repository": "dengdai68/AgentForge"
+    "repository": "dengdai68/Baton"
   },
   "developmentSkill": {
-    "path": ".codex/skills/agentforge-development/SKILL.md",
+    "path": ".codex/skills/baton-development/SKILL.md",
     "purpose": "Repository-local development patterns and verification routing; AGENTS.md stays the sole contributor rulebook and docs/06 owns design facts. Not a Runtime skill or packaged employee plugin."
   },
   "moduleRoots": [
@@ -110,7 +110,7 @@
       "path": "server/plugin-updates.mjs",
       "kind": "orchestration",
       "owner": "server",
-      "purpose": "Non-overlapping configurable Git plugin checks (default two minutes), immutable candidate installation and Store-owned current employee rebinding; selected sources only, no MCP rebinding or frozen work rewrite.",
+      "purpose": "Explicit manual plugin-source update service. Coalesces concurrent checks, atomically replaces current bindings and preserves frozen history; no timer, automatic setting or interval persistence.",
       "sourceOfTruth": [
         "docs/02-system-architecture.md",
         "docs/15-employee-runtime-configuration.md"
@@ -240,7 +240,7 @@
       "collaborationFlow": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "repeatImports": "Manual repeat imports replace plugins by exact origin URL plus plugin name and MCPs by trimmed case-sensitive display name; different plugin origins remain distinct. Serialized HTTP imports prepare immutable candidates; Store plans identity matches and deduplicates references, HTTP resolves compatibility, then Store commits current employee references in one transaction. Failed candidates are retired; frozen work/files remain unchanged. Receipts add reference-only replacements/employees/historyRetained, with CLI help/schema/text and shared UI matching.",
       "workspaceFiles": "Workflow artifactPaths schema/help validates arbitrary canonical relative delivery positions, with no docs default; Artifacts retain progressive reference output. No directory browser/download CLI authority is added.",
-      "pluginUpdates": "plugins updates/check-updates/auto-update expose the shared service scheduler, progressive typed settings and reference-only update receipts; no direct Git or Provider access.",
+      "pluginUpdates": "plugins updates/check-updates expose manual singleflight status and update receipts through authenticated HTTP; retired auto-update and interval inputs reject. No CLI Git/Provider access.",
       "mcpEditing": "mcps update ID sends authenticated partial PUT, preserves unchanged redacted fields, returns new/previous IDs and employee references; frozen work remains unchanged.",
       "promptContract": "Employee systemPrompt help/schema explains native application system/developer instructions; configuration and Task commands/fields/auth remain unchanged.",
       "roleContract": "The roles group offers list/get/create/update/delete with progressive help/schema and --yes deletion; list --search matches name and prompt like the UI; agents schema/example/notes document ordered roleIds (multiple roles, [] unbinds). Output references roles by ID/name without dumping bound prompt text into other resources.",
@@ -370,14 +370,14 @@
           "recovery"
         ]
       },
-      "workspaceDefault": "defaultTaskWorkspaceRoot(home) resolves ~/.agentforge/workspace; explicit configured roots win. New Task/Run paths are under tasks/, communication business cwd under communications/, private content remains in Run Files."
+      "workspaceDefault": "defaultTaskWorkspaceRoot(home) resolves ~/.baton/workspace; explicit configured roots win. New Task/Run paths are under tasks/, communication business cwd under communications/, private content remains in Run Files."
     },
     {
       "id": "server.diagnostics",
       "path": "server/diagnostics.mjs",
       "kind": "runtime",
       "owner": "observability",
-      "purpose": "Private local diagnostic files preserve original errors, stacks and redacted provider streams before audit classification; path-only authenticated settings, no domain state; the npm test entry (scripts/run-tests.mjs) pins AGENTFORGE_LOG_DIR to a disposable fixture so bare diagnostics in tests never reach the real data home",
+      "purpose": "Private local diagnostic files preserve original errors, stacks and redacted provider streams before audit classification; path-only authenticated settings, no domain state; the npm test entry (scripts/run-tests.mjs) pins BATON_LOG_DIR to a disposable fixture so bare diagnostics in tests never reach the real data home",
       "sourceOfTruth": [
         "docs/02-system-architecture.md",
         "docs/08-real-local-agent-runtime.md"
@@ -536,8 +536,8 @@
           "lifecycle"
         ]
       },
-      "dataLayout": "Chromium userData/sessionData/browser cache, host logs and crash dumps are set before ready under the per-instance ~/.agentforge root; task workspace setting never changes application/auth paths.",
-      "workspaceDefault": "Task root uses server/data-home.mjs pure path helper for ~/agentforge, independently of isolated application state. CLI installation remains host-only.",
+      "dataLayout": "Chromium userData/sessionData/browser cache, host logs and crash dumps are set before ready under the per-instance ~/.baton root; task workspace setting never changes application/auth paths.",
+      "workspaceDefault": "Task root uses server/data-home.mjs pure path helper for ~/baton, independently of isolated application state. CLI installation remains host-only.",
       "workspaceOpening": "Zero-argument main-frame current-Run IPC resolves the authenticated workspace summary through its own Session, validates Run identity, unchanged URL and an absolute directory, then opens with shell.openPath. No arbitrary renderer path or general filesystem bridge.",
       "applicationUpdates": "Stable-only GitHub latest discovery, explicit download, SHA-256 DMG fallback for ad-hoc installs and native MacUpdater for Developer ID builds. Auto-download and install-on-quit disabled. Native restart acquires an atomic idle lease from the owned child, blocking writes/schedulers until quit or release.",
       "draftAssetsUpload": "The manual ad-hoc workflow may build an immutable existing tag and replace all six verified assets only on an existing draft. This mode never publishes; signed stable certificate gates remain separate.",
@@ -726,7 +726,7 @@
       "collaborationFlow": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "repeatImports": "Manual repeat imports replace plugins by exact origin URL plus plugin name and MCPs by trimmed case-sensitive display name; different plugin origins remain distinct. Serialized HTTP imports prepare immutable candidates; Store plans identity matches and deduplicates references, HTTP resolves compatibility, then Store commits current employee references in one transaction. Failed candidates are retired; frozen work/files remain unchanged. Receipts add reference-only replacements/employees/historyRetained, with CLI help/schema/text and shared UI matching.",
       "workspaceFiles": "Workflow artifactPaths are canonical workspace-relative file/directory hints, empty by default; preserve custom paths on reload and frozen tasks without docs rewrites. File metadata may refer to any business root.",
-      "pluginUpdates": "Store persists default-enabled checks and a validated 1-1440 minute period (default two), and atomically compares/replaces current employee bindings by installation source with a system audit; frozen work and MCP references remain immutable.",
+      "pluginUpdates": "Manual updates atomically compare and replace current employee and role bindings by installation source with system audit; frozen work and MCP references remain immutable. Store owns no automatic plugin toggle or interval.",
       "mcpEditing": "replaceMcpExtension atomically compares current employee runtime bindings, rebinds current selectors and retires the previous version with an audit; frozen tasks/deliveries remain unchanged.",
       "promptContract": "Member input cursors confirm only accepted calls. Trace.providerSessionId remains null for unconfirmed Codex placeholders and binds only the real thread ID. Responsibilities derive from actual Dispatches, not static Task nodeAssignments.",
       "roleContract": "Roles are name plus plain-text prompt records; employees bind an ordered unique roleIds array (omitted keeps, [] clears; retired roleId writes reject). Task creation freezes ordered roleSnapshots (id/name/prompt text) into member and manager snapshots; deletion rejects any current employee reference including inactive ones, listing their names, and frozen history stays verifiable. The retired legacy `role` field is never reused.",
@@ -832,7 +832,7 @@
     },
     {
       "id": "server.run-files",
-      "communicationFiles": "Original duplicate-safe attachment files live under communications/chat/attachments/id/name; no-follow component checks, SHA-256/bytes and 20 MiB bound. Redacted call content lives separately under chat/.agentforge/delivery/attempt and uses existing private integrity-bound reader.",
+      "communicationFiles": "Original duplicate-safe attachment files live under communications/chat/attachments/id/name; no-follow component checks, SHA-256/bytes and 20 MiB bound. Redacted call content lives separately under chat/.baton/delivery/attempt and uses existing private integrity-bound reader.",
       "path": "server/run-files.mjs",
       "workingFileDownload": "Complete current-file streams share whole-workspace, sensitive-path and symlink checks with previews; no-follow regular file descriptor ownership passes to an auto-closing stream without the preview byte limit.",
       "kind": "runtime",
@@ -1004,7 +1004,7 @@
         "server/runtime/vendor/dsh-hooks/"
       ],
       "backgroundLifecycle": "Claude native background tasks and successful completed-turn waits suspend the platform idle watchdog; later active turns rearm it. Native process exit and failure/cancel/API retry gates remain authoritative.",
-      "dshTransport": "dsh.mjs adapts installed DeepSeek Harness 0.2.1-rc.2 SDK over JSON-RPC; dsh-plugin.mjs is materialized as a private native Cordis plugin for literal system-role instructions and the real model catalog. Per-session AgentForge-owned DeepSeek Harness homes retain native history while the native credentials service references the operator DeepSeek Harness credential file. No global plugin/config writes; selected Skills/MCP only; session/wait owns descendant completion. Native rendered system messages contribute only a boolean instruction-delivery audit; no system body is persisted.",
+      "dshTransport": "dsh.mjs adapts installed DeepSeek Harness 0.2.1-rc.2 SDK over JSON-RPC; dsh-plugin.mjs is materialized as a private native Cordis plugin for literal system-role instructions and the real model catalog. Per-session Baton-owned DeepSeek Harness homes retain native history while the native credentials service references the operator DeepSeek Harness credential file. No global plugin/config writes; selected Skills/MCP only; session/wait owns descendant completion. Native rendered system messages contribute only a boolean instruction-delivery audit; no system body is persisted.",
       "installationState": "cli-environment.runtimeInstalled checks executable presence through the invocation PATH without starting a CLI or reading credentials. HTTP injects the fact into Store; installed=false forces effective enabled=false, locks UI switches and rejects enabled writes/new invocations. No stored preference/frozen snapshot rewrite; DeepSeek Harness is the display name, dsh remains the protocol ID.",
       "componentImportIsolation": "Import skips only typed component-definition errors (Markdown schema/YAML, Hook JSON/events/groups/handlers); returns private-source-free warnings. Raw source retained, executable tree excludes invalid Markdown and materializes valid per-dialect manifests/hooks. Runtime plans/integrity stay strict; path/link/manifest/MCP failures abort batch.",
       "nativeRecovery": "An explicit native successful completion plus zero process exit supersedes earlier errors for the current outcome only; preserve immutable diagnostics, latest failure and nonzero/incomplete failure. Codex presentation labels only the error event, never later content.",
@@ -1115,7 +1115,8 @@
         ]
       },
       "sharedCollaboration": "Unread public Run messages are caught up on each legitimate member invocation, separate from current work IDs. Only untouched manager tail report notifications coalesce, preserving all source references and idempotency; App/CLI share those references. Native prose before one trailing coordination envelope remains the full public body; no enforced discussion count or review.",
-      "humanMessageIdempotency": "Collaboration records retain the saved clientRequestId reference for exact App/CLI acknowledgement reconciliation; presentation adds no send or dispatch rules."
+      "humanMessageIdempotency": "Collaboration records retain the saved clientRequestId reference for exact App/CLI acknowledgement reconciliation; presentation adds no send or dispatch rules.",
+      "senderIdentity": "collaborationRecords preserves senderId as a stable identity reference for both App and CLI; it adds no routing or execution rules."
     },
     {
       "id": "web.console",
@@ -1214,7 +1215,10 @@
       "finalDirectories": "Automation status chips and native PUT-enabled row switches; full-width role edit rows with independent delete menus; extension chips, source/type metadata and component/tool/employee footer, using existing HTTP only. Pending plugin updates are unavailable (updater immediately applies), MCP tool results/errors are session-local explicit discoveries; login/setup share a centered borderless form. Covered by settings/automations tests and isolated directory/roles/market-catalog scripts.",
       "graphitePageStructure": "The graphite prototype (pages/*.html?style=graphite) is reviewed page by page against renderer DOM, CSS cascade and handlers. The shared 48px titlebar owns the page icon/title/count and actions; directory headings stay for assistive technology only; 44px filters remain fixed with independent content scrolling. Sidebar 232/60px; no document hero; search 220/150px; page gutter 24/16px. Inbox scope lives in the titlebar, cards/drawers preserve existing commands, settings has grouped navigation/row cards, and workflow editing fills the viewport. Code and structural interaction evidence are required; screenshot counts are not parity proof.",
       "progressiveLoading": "Task metadata paints before independently paged collaboration; summaries retain authoritative counts and console history/content stays click-lazy. Current directory and catalog references load concurrently without overwriting full directory objects; stale route/search responses cannot repaint the active page. Creation/edit waits for required references. Task and automation loading, errors and empty states remain distinct.",
-      "messageFeedback": "Task and conversation composers render per-context pending messages immediately, reconcile by saved message ID/clientRequestId, and retain unconfirmed content with draft recovery without overwriting new edits. No automatic resend or text/time deduplication. Collaboration omits all/human filters, uses safe Markdown and aligns record/separator/composer outer edges with the workspace error banner."
+      "messageFeedback": "Task and conversation composers render per-context pending messages immediately, reconcile by saved message ID/clientRequestId, and retain unconfirmed content with draft recovery without overwriting new edits. No automatic resend or text/time deduplication. Collaboration omits all/human filters, uses safe Markdown and aligns record/separator/composer outer edges with the workspace error banner.",
+      "senderIdentityColors": "Collaboration records retain senderId. Renderer resolves frozen Run identity before the current directory and never matches names; sender headings and Markdown emphasis use the same avatar hue with readable theme contrast, while prose stays neutral.",
+      "compactTaskForms": "Task and automation member pickers share the 28px empty control height with workflow select and grow naturally for wrapped chips. Automation schedule presents one Cron field without preset/preview requests; live task and communication member chips wrap and remain visible.",
+      "progressiveDirectories": "Inbox task rows paint before four concurrent compact summaries, with truthful preview loading and stale-visit guards. Marketplace requests the current HTTP page rather than collecting every page; auxiliary usage/employee metadata hydrates separately. Existing counts and CLI query semantics remain authoritative."
     },
     {
       "id": "web.manual-graphs",
@@ -1338,7 +1342,7 @@
       "collaborationReadability": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "collaborationFlow": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "workspaceFiles": "test-workspace-files.mjs validates complete workspace browsing, paged lazy directories, custom workflow paths, media CHANGE/download and opt-in real Claude code delivery with independent testing and human confirmation in an isolated source or packaged Electron client.",
-      "pluginUpdates": "test-plugin-updates.mjs exercises actual HTTPS Git installation and production two-minute scheduling through source or packaged Electron UI; opt-in real Claude task verifies native updated Skill output and human confirmation. Test-only Git TLS fixture is never packaged.",
+      "pluginUpdates": "test-plugin-updates.mjs exercises actual HTTPS Git installation and explicit manual source-wide updates through source or packaged UI and CLI; opt-in real Claude task verifies updated Skill output and human confirmation. No timer or automatic setting; isolated TLS fixtures are not packaged.",
       "mcpEditing": "test-marketplace-edit.mjs uses isolated HTTP/CLI and actual source or packaged Electron UI to check role empty/no-match wide/narrow layouts, repeated plugin/MCP imports, concurrent create, distinct origins, bundled MCP and inactive employee rebinding, whole-source rollback, empty teams, edit/cancel/errors and redacted values. No operator data is modified.",
       "releaseStorage": "The release workflow deletes only its exact uploaded artifact ID after successful Release publication; failed publishing retains its transfer artifact for one day. Directory-header UI regression checks no duplicate visual task title and current/archive topbar names in wide/narrow Electron windows.",
       "viewportEvidence": "Real Provider acceptance waits for renderer viewport geometry after resizing before saving narrow-window evidence; OS window resize acknowledgement alone is not visual readiness.",

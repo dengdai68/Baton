@@ -22,7 +22,7 @@ Runtime 外部故障立即保留脱敏原始错误并标记任务失败，禁止
 
 工作流 artifactPaths 是规范工作目录相对文件/目录建议，可省略为空；任意业务根均可使用，不再强制docs。create/update/schema/帮助/文本标签同步；任务artifacts仍按实际不可变快照查询，大文件当前目录浏览/下载属于客户端，不新增CLI越权入口。
 
-plugins 新增 updates（状态）、check-updates（立即请求异步检查）、auto-update --file settings.json（enabled布尔值和intervalMinutes整数分钟1–1440，至少一项，默认2）。帮助/schema/参数与认证HTTP、设置 → 更新 → 插件更新同步；更新回执只含插件ID/原ID/名称，不倾倒其他资源，检查不会创建任务或确认完成。CLI只访问客户端，Git网络由服务处理。沟通和任务控制台的默认选中仅为 UI 行为，不更改任务/协作命令。
+plugins updates查询手动状态，check-updates等价于插件页“更新全部”：异步发起所有已安装Git来源更新，随后updates读取最终回执；重复在途请求合并。帮助/schema/输出与受认证HTTP同步，移除auto-update与自动周期配置。回执只含插件ID/原ID/名称，不倾倒其他资源；命令不创建任务或确认完成。Git网络由客户端服务处理。
 
 MCP 新增 update ID --file patch.json，渐进帮助/schema 描述 name/description/content 部分更新、隐藏值保留与新版本回执。命令通过认证 PUT，不访问市场私有文件；省略 JSON 保留配置，成功后使用返回的新 ID。
 
@@ -32,13 +32,13 @@ pluginIds 仍选择完整插件：所选 Skill 原生注册、按需触发，不
 
 员工 systemPrompt 作为 Runtime 的应用系统指令传递；完整工作流仅项目经理持有，执行环境及可咨询成员目录也属于应用系统指令。CLI 字段不新增，帮助/schema 已同步含义；任务消息和精确澄清仍走同一认证 HTTP。
 
-CLI 仅连接运行中的客户端；源码/安装版统一通过私有 endpoint 发现、验证实例后才读取会话或发送凭据。不连接 Web、无 --target 或目标环境分支、不回退 4310；离线帮助/输入校验不访问服务。开发测试可指定 --endpoint-file。默认使用宿主发布的客户端授权；独立登录保存到 ~/.agentforge/cli-session.json，显式 --session-file 可隔离使用。
+CLI 仅连接运行中的客户端；源码/安装版统一通过私有 endpoint 发现、验证实例后才读取会话或发送凭据。不连接 Web、无 --target 或目标环境分支、不回退 4310；离线帮助/输入校验不访问服务。开发测试可指定 --endpoint-file。默认使用宿主发布的客户端授权；独立登录保存到 ~/.baton/cli-session.json，显式 --session-file 可隔离使用。
 
 `plugins import` 同样支持来源目录/所属 Git 仓库内的文件与目录链接，安装为普通文件，中文/空格文件名不变；断链、循环、越界、特殊文件明确定位并整批回滚，操作帮助/schema 说明该语义。无新参数，不扩大员工选择或 Runtime 权限。
 
 插件和 MCP 增加 `delete ID --yes`；帮助说明当前员工引用会阻止删除、冻结历史文件保留，插件与独立 MCP 不连带删除。搜索继续使用 `list --search 文本`，UI 布局不引入额外 CLI 协议。
 
-`main.mjs` 处理命令；`commands.mjs` 定义帮助与 schema；`client.mjs` 负责认证 HTTP；`output.mjs` 渲染文本/JSON；`password.mjs` 隐藏终端密码输入。`agentforge` 是安装包内的 Electron Node 启动器。
+`main.mjs` 处理命令；`commands.mjs` 定义帮助与 schema；`client.mjs` 负责认证 HTTP；`output.mjs` 渲染文本/JSON；`password.mjs` 隐藏终端密码输入。`baton` 是安装包内的 Electron Node 启动器。
 
 `roles` 组管理员工可共用的纯文本提示词角色（list/get/create/update/delete，update 部分更新，delete 需 `--yes` 且被绑定时拒绝）；员工经 `agents create/update` 的 有序 `roleIds` 数组绑定多个角色，[] 全部解绑；旧 roleId 输入拒绝。角色文本并入应用系统/developer 指令，冻结任务保持原文本；语义详见 docs/03、22。
 
@@ -106,7 +106,7 @@ workflows create/update 支持最简节点title/description（id省略生成node
 
 工作流画布的“连线标题”对应condition（分支标签），“提示词”对应description；本轮仅精简App呈现，CLI/schema/HTTP字段不变。UI不再编辑补充资料与关系标识，保存时保留其值，CLI仍可通过同一配置协议完整读写这些资料。
 
-执行画布工作流：`agentforge tasks create --workflow "工作流名称或ID" --file task.json --start`。文件提供title、objective、memberAgentIds/teamIds、可选acceptanceCriteria；省略--start只存草稿。工作流名称必须唯一；和workflowTemplateId同时指定时需为相同ID，冲突不创建任务。节点、分支和连线提示词冻结为workflow.md，由经理读取；执行/协作与App一致，完成在客户端确认。
+执行画布工作流：`baton tasks create --workflow "工作流名称或ID" --file task.json --start`。文件提供title、objective、memberAgentIds/teamIds、可选acceptanceCriteria；省略--start只存草稿。工作流名称必须唯一；和workflowTemplateId同时指定时需为相同ID，冲突不创建任务。节点、分支和连线提示词冻结为workflow.md，由经理读取；执行/协作与App一致，完成在客户端确认。
 
 任务经理现由tasks create/automations create文件中的必填managerAgentId从所选员工中指定，所有员工都可担任；员工kind保留但不影响身份。自动化部分更新可单独切换经理，不能移除经理而不重选。原Task/Run和成员会话保持冻结。
 mcps tools ID [--refresh]查询真实工具名称、说明、inputSchema/outputSchema及total/checkedAt，支持stdio/SSE/HTTP，仅列工具不调用；15秒超时、60秒成功缓存，失败不缓存。get仍只查询脱敏安装详情。
@@ -125,11 +125,11 @@ Runtime list/get/update/test/models 覆盖九项，可用固定 ID、Provider ID
 
 `storage get` / `storage update --file location.json` 与设置中的数据根目录共用受认证 HTTP；无资源 ID。更新仅接受 workspaceRoot，忙碌拒绝，restarting 回执只表示接受，重启后再次 get 核验。端点与认证发现位置不变；CLI 不直接访问文件/数据库。协议见 docs/21、目录事务见 docs/30。
 
-当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.agentforge/desktop/agentforge-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 
@@ -139,6 +139,6 @@ Runtime list/get/update/test/models 覆盖九项，可用固定 ID、Provider ID
 
 tasks update ID --file patch.json [--workflow ID_OR_NAME] [--start] 与 App 编辑草稿等价，仅普通 backlog 且没有 Run 可写。部分字段省略保持；memberAgentIds/teamIds 任一提交则替换完整成员，经理须属于最终集合，验收 [] 清空、工作流 null/空串恢复默认。保存冻结当前选择，保留 Task ID/创建时间/目录，不创建执行。启动未确认用 TASK_UPDATED_START_FAILED 回报 taskId，修改保留，先查询状态勿重复提交。
 
-`plugins import --file source.json` 同样支持裸 Skill 仓库或目录（根 SKILL.md 或 skills/<名称>/SKILL.md），每个 Skill 自动包装为同名同描述插件。后续 list/get/delete、updates/check-updates/auto-update 与普通插件相同；本地目录重新 import 更新，不新增 Skill 命令。
+`plugins import --file source.json` 同样支持裸 Skill 仓库或目录（根 SKILL.md 或 skills/<名称>/SKILL.md），每个 Skill 自动包装为同名同描述插件。后续 list/get/delete、updates/check-updates 与普通插件相同；本地目录重新 import 更新，不新增 Skill 命令。
 
 Skill allowed-tools/allowedTools 不参与平台兼容性判断；已有插件用 `plugins check-compatibility ID` 刷新目录摘要即可，无需重新导入。get、员工/角色绑定与 App 使用同一当前计算，字段保留，其他不兼容原因仍拒绝。

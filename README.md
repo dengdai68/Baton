@@ -1,13 +1,13 @@
 <div align="center">
-  <img src="web/icons/application-ui.png" alt="AgentForge" width="88" />
-  <h1>AgentForge · AI Team OS</h1>
+  <img src="web/icons/application-ui.png" alt="Baton" width="88" />
+  <h1>Baton · AI Team OS</h1>
   <p><strong>面向超级个体的 AI 团队操作系统：像定制虚拟员工一样配置 Agent，组织多 Agent 小组或团队，协作完成任务并交付真实文件。</strong></p>
   <p>你负责目标与决策，让 AI 员工各司其职。</p>
   <p>Claude Code · Codex · DeepSeek Harness · Cursor · Gemini · Qwen · Kimi · Pi · OpenCode</p>
-  <p><a href="https://github.com/dengdai68/AgentForge/releases/latest">下载 macOS 版</a> · <a href="#快速上手">快速上手</a> · <a href="#cli让-ai-团队接入你的工具链">CLI</a> · <a href="https://github.com/dengdai68/AgentForge/issues">反馈</a></p>
+  <p><a href="https://github.com/dengdai68/Baton/releases/latest">下载 macOS 版</a> · <a href="#快速上手">快速上手</a> · <a href="#cli让-ai-团队接入你的工具链">CLI</a> · <a href="https://github.com/dengdai68/Baton/issues">反馈</a></p>
 </div>
 
-从代码开发、调研分析到知识整理和内容生产，你可以为 Agent 定义职责、提示词、模型与工具，与单个虚拟员工交流，也可以组建团队共同执行任务。AgentForge 将成员、协作、执行记录和交付文件组织在同一个本机工作空间中。
+从代码开发、调研分析到知识整理和内容生产，你可以为 Agent 定义职责、提示词、模型与工具，与单个虚拟员工交流，也可以组建团队共同执行任务。Baton 将成员、协作、执行记录和交付文件组织在同一个本机工作空间中。
 
 | 任务工作空间 | 团队沟通 |
 | :---: | :---: |
@@ -40,11 +40,11 @@
 
 ## CLI：让 AI 团队接入你的工具链
 
-通过 `agentforge` 管理配置、创建任务和查询执行。支持逐级 `--help` 和 `--json`，可在终端使用，也可接入脚本或供其他 Agent 调用。
+通过 `baton` 管理配置、创建任务和查询执行。支持逐级 `--help` 和 `--json`，可在终端使用，也可接入脚本或供其他 Agent 调用。
 
 ```console
-$ agentforge --help
-AgentForge 是一个 AI 团队操作系统：让负责人组织具备不同能力的数字员工，协作完成代码开发、企业知识整理、调研和内容生产，并拿到可核验的交付物，而不只是聊天回复。
+$ baton --help
+Baton 是一个 AI 团队操作系统：让负责人组织具备不同能力的数字员工，协作完成代码开发、企业知识整理、调研和内容生产，并拿到可核验的交付物，而不只是聊天回复。
 
 命令目录
   tasks      任务 / 进度 / 协作 / 澄清
@@ -58,20 +58,20 @@ AgentForge 是一个 AI 团队操作系统：让负责人组织具备不同能�
   runtimes   Runtime 配置与连接查询
   auth       登录 / 会话状态 / 退出登录
 
-查看具体操作参数：在命令后加 --help，例如 agentforge agents get --help。
+查看具体操作参数：在命令后加 --help，例如 baton agents get --help。
 ```
 
-先启动并登录客户端；找不到命令时，在「设置 → 命令行 CLI」修复安装。用 `agentforge tasks create --help` 查看操作参数，`agentforge schema tasks` 查看字段与 JSON 模板。最终验收、私聊群聊、失败后的人工恢复及当前文件浏览仍在客户端完成；详见 [CLI 指南](docs/21-configuration-cli.md)。
+先启动并登录客户端；找不到命令时，在「设置 → 命令行 CLI」修复安装。用 `baton tasks create --help` 查看操作参数，`baton schema tasks` 查看字段与 JSON 模板。最终验收、私聊群聊、失败后的人工恢复及当前文件浏览仍在客户端完成；详见 [CLI 指南](docs/21-configuration-cli.md)。
 
 ## 安装
 
 当前安装包支持 **macOS 13+ / Apple Silicon（M 系列）**。
 
-1. 从 [GitHub Releases](https://github.com/dengdai68/AgentForge/releases/latest) 下载 DMG，将 **AgentForge** 拖入 **Applications**。
+1. 从 [GitHub Releases](https://github.com/dengdai68/Baton/releases/latest) 下载 DMG，将 **Baton** 拖入 **Applications**。
 2. 当前版本采用 ad-hoc 签名，尚无 Developer ID 签名和 Apple 公证。如果 macOS 提示无法验证或应用已损坏，确认下载来源可信后，在终端执行：
 
    ```bash
-   sudo xattr -dr com.apple.quarantine "/Applications/AgentForge.app"
+   sudo xattr -dr com.apple.quarantine "/Applications/Baton.app"
    ```
 
    此命令只移除该应用的隔离属性，随后重新打开应用。
@@ -84,8 +84,8 @@ AgentForge 是一个 AI 团队操作系统：让负责人组织具备不同能�
 需要 **Node.js 22.12+（推荐 Node 24）**、npm 和 Git：
 
 ```bash
-git clone https://github.com/dengdai68/AgentForge.git
-cd AgentForge
+git clone https://github.com/dengdai68/Baton.git
+cd Baton
 npm ci
 npm start
 ```

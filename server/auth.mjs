@@ -6,8 +6,8 @@ import { promisify } from "node:util";
 
 const derive = promisify(scrypt);
 const digest = value => createHash("sha256").update(value).digest("hex");
-const sessionCookieName = "agentforge_session";
-const bootstrapCookieName = "agentforge_bootstrap";
+const sessionCookieName = "baton_session";
+const bootstrapCookieName = "baton_bootstrap";
 // Browser cookie storage is finite; renew it on authenticated requests.
 // Server-side sessions have no time deadline (expires_at = 0).
 const cookieLifetimeSeconds = 400 * 24 * 60 * 60;
@@ -51,7 +51,7 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
   const revoke = request => { const hash = digest(tokenFrom(request)); if (!cliGrants.delete(hash)) db.prepare("DELETE FROM sessions WHERE token_hash=?").run(hash); };
   const bootstrapEnabled = () => Boolean(bootstrapSecret || (bootstrapSessionToken && bootstrapSessionExpiresAt > now())) && !account();
   const bootstrapAuthorized = request => bootstrapEnabled() && bootstrapSessionExpiresAt > now() && sameToken(tokenFrom(request, bootstrapCookieName), bootstrapSessionToken);
-  const bootstrapHeaderAuthorized = request => sameToken(typeof request.headers["x-agentforge-bootstrap"] === "string" ? request.headers["x-agentforge-bootstrap"] : "", bootstrapSecret);
+  const bootstrapHeaderAuthorized = request => sameToken(typeof request.headers["x-baton-bootstrap"] === "string" ? request.headers["x-baton-bootstrap"] : "", bootstrapSecret);
   const issueBootstrapSession = () => {
     bootstrapSessionToken = randomBytes(32).toString("hex");
     bootstrapSessionExpiresAt = now() + 10 * 60 * 1000;

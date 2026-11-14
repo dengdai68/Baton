@@ -2,7 +2,6 @@ import {fileURLToPath} from 'node:url';
 import {remotePluginRevision} from './runtime/configuration.mjs';
 import {diagnostic} from './diagnostics.mjs';
 
-export const pluginUpdateIntervalMs=120000;
 
 // An origin can contain relative plugins and independently moving Git sources.
 // Group by installation origin, while checking each distinct tracked ref once.
@@ -21,17 +20,10 @@ export function pluginUpdateSources(plugins) {
   return [...groups.values()];
 }
 
-export function createPluginUpdates({getStore,marketplace,probe=remotePluginRevision,intervalMs,canRun=()=>true}) {
-  let timer=null,nextCheckAt=null,current=null,controller=null,stopped=false;
+export function createPluginUpdates({getStore,marketplace,probe=remotePluginRevision,canRun=()=>true}) {
+  let current=null,controller=null,stopped=false;
   let lastCheckedAt=null,lastResult=null;
-  const duration=()=>intervalMs ?? getStore().getPluginUpdateSettings().intervalMinutes*60000;
-  const status=()=>({...getStore().getPluginUpdateSettings(),intervalMs:duration(),running:Boolean(current),lastCheckedAt,nextCheckAt,lastResult});
-  const schedule=()=>{
-    clearTimeout(timer);nextCheckAt=null;
-    if(stopped || current || !getStore().getPluginUpdateSettings().enabled)return;
-    nextCheckAt=new Date(Date.now()+duration()).toISOString();
-    timer=setTimeout(()=>{nextCheckAt=null;if(canRun())void check();else schedule();},duration());timer.unref?.();
-  };
+  const status=()=>({running:Boolean(current),lastCheckedAt,lastResult});
   async function perform(store,signal){
     const result={checkedSources:0,updatedPlugins:0,updates:[],warnings:[],errors:[]};
     const plugins=store.listExtensions('plugin');
@@ -76,12 +68,12 @@ export function createPluginUpdates({getStore,marketplace,probe=remotePluginRevi
   }
   function check(){
     if(current)return current;
-    if(stopped || !canRun())return Promise.resolve(status());
-    clearTimeout(timer);nextCheckAt=null;controller=new AbortController();
+    if(stopped || !canRun())throw new Error('当前服务正在关闭或准备重启，暂不能更新插件');
+    controller=new AbortController();
     current=perform(getStore(),controller.signal).then(result=>{lastResult=result;return result;}).catch(error=>{
       diagnostic('plugins.check_failed',{error});lastResult={checkedSources:0,updatedPlugins:0,updates:[],errors:[{message:'检查失败，详情见本机日志'}]};return lastResult;
-    }).finally(()=>{lastCheckedAt=new Date().toISOString();current=null;controller=null;schedule();});
+    }).finally(()=>{lastCheckedAt=new Date().toISOString();current=null;controller=null;});
     return current;
   }
-  return {status,check,start:schedule,reset(){lastCheckedAt=null;lastResult=null;schedule();},configure(input){getStore().setPluginUpdateSettings(input);schedule();return status();},stop(){stopped=true;clearTimeout(timer);nextCheckAt=null;controller?.abort();return current || Promise.resolve();}};
+  return {status,check,reset(){lastCheckedAt=null;lastResult=null;},stop(){stopped=true;controller?.abort();return current || Promise.resolve();}};
 }

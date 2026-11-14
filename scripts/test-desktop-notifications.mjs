@@ -10,10 +10,10 @@ import {createStore} from '../server/store.mjs';
 import {createAuth} from '../server/auth.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
-const root=await mkdtemp(join(tmpdir(),'af-desktop-notifications-')),home=join(root,'home'),data=join(home,'.agentforge/desktop'),workspace=join(root,'work');
+const root=await mkdtemp(join(tmpdir(),'af-desktop-notifications-')),home=join(root,'home'),data=join(home,'.baton/desktop'),workspace=join(root,'work');
 await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('notice-qa',password);auth.close();
-const real=process.env.AGENTFORGE_NOTIFICATIONS_REAL==='1',native=process.env.AGENTFORGE_NOTIFICATIONS_NATIVE==='1';
+const real=process.env.BATON_NOTIFICATIONS_REAL==='1',native=process.env.BATON_NOTIFICATIONS_NATIVE==='1';
 const bin=join(home,'.local/bin');await mkdir(bin,{recursive:true});const executable=join(bin,'claude');
 if(!real)await writeFile(join(home,'.zshrc'),"export PATH='"+bin+"':$PATH\n");
 if(!real)await writeFile(executable,`#!${process.execPath}
@@ -23,14 +23,14 @@ const result=chat?{reply:'PRIVATE_REPLY_NOT_FOR_NOTIFICATION',...(text.includes(
 console.log(JSON.stringify({type:'system',subtype:'init',session_id:process.argv[process.argv.indexOf(process.argv.includes('--session-id')?'--session-id':'--resume')+1]}));
 console.log(JSON.stringify({type:'result',subtype:'success',result:JSON.stringify(result)}));
 `,{mode:0o755});
-const store=createStore({databasePath:join(workspace,'records/agentforge.sqlite'),workspaceRoot:workspace,configurationDirectory:data});store.setPluginUpdateSettings({enabled:false});
+const store=createStore({databasePath:join(workspace,'records/baton.sqlite'),workspaceRoot:workspace,configurationDirectory:data});
 const agent=store.createAgent({name:'通知验收员工',systemPrompt:'通知测试。任务由你自行完成，完成后按协议提交人类验收；沟通简短答复即可，不联系其他人。',runtime:real?{provider:'claude-code'}:{provider:'claude-code',executable}});
 const privateChat=store.openCommunication({kind:'agent',targetId:agent.id}),group=store.openCommunication({kind:'group',name:'通知验收群',memberAgentIds:[agent.id]});
 // Pre-existing completed history must never replay as new notifications.
 const oldTask=store.createTask({title:'历史通知不重放',objective:'isolated',memberAgentIds:[agent.id],managerAgentId:agent.id}),oldRun=store.createRun(oldTask.id);store.requestHumanAcceptance(oldRun.id);store.confirmRunCompletion(oldRun.id);store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:workspace,previousRuntimeRoots:[]});
-const bundle=process.env.AGENTFORGE_NOTIFICATIONS_APP;
-const app=await electron.launch({...(bundle?{executablePath:join(resolve(bundle),'Contents/MacOS/AgentForge')} : {}),args:bundle?[]:['apps/electron/main.mjs'],env:{...testEnvironment({...process.env,HOME:home,PATH:real?process.env.PATH:bin+':'+process.env.PATH,AGENTFORGE_LOG_DIR:join(root,'logs')}),AGENTFORGE_DESKTOP_DATA_ROOT:data,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')}:{})},timeout:60000});
+const bundle=process.env.BATON_NOTIFICATIONS_APP;
+const app=await electron.launch({...(bundle?{executablePath:join(resolve(bundle),'Contents/MacOS/Baton')} : {}),args:bundle?[]:['apps/electron/main.mjs'],env:{...testEnvironment({...process.env,HOME:home,PATH:real?process.env.PATH:bin+':'+process.env.PATH,BATON_LOG_DIR:join(root,'logs')}),BATON_DESKTOP_DATA_ROOT:data,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')}:{})},timeout:60000});
 const evidence={root,packaged:Boolean(bundle),realModel:real,native,cases:[],pageErrors:[]};console.log('EVIDENCE '+root);
 const wait=async(fn,timeout=60000)=>{const end=Date.now()+timeout;while(Date.now()<end){const result=await fn();if(result)return result;await new Promise(resolve=>setTimeout(resolve,150));}throw Error('Acceptance wait timed out');};
 try{

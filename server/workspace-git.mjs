@@ -18,7 +18,7 @@ async function repository(root) {
 const directoryEntries=new Map(),comparisonBases=new Map();
 // Discover ordinary nested repositories without following filesystem links.
 export async function discoverWorkspaceRepositories(root) {
-  const found = [], excluded = new Set(['.git','.agentforge','node_modules','.data','.cache','.venv','__pycache__','coverage']);
+  const found = [], excluded = new Set(['.git','.baton','node_modules','.data','.cache','.venv','__pycache__','coverage']);
   let visited = 0;
   async function walk(directory, prefix = '') {
     if (++visited > 10000) throw new Error('仓库发现目录过多，无法完整读取');
@@ -51,7 +51,7 @@ export async function initializeWorkspaceGit(root, sources = []) {
   if (await exists(join(root,'.git'))) return false;
   await git(root, ['init','--initial-branch=main']);
   const ignore = join(root,'.gitignore');
-  if (!await exists(ignore)) await writeFile(ignore, '.agentforge/\n.DS_Store\nnode_modules/\n.env\n.env.*\n', { flag: 'wx' });
+  if (!await exists(ignore)) await writeFile(ignore, '.baton/\n.DS_Store\nnode_modules/\n.env\n.env.*\n', { flag: 'wx' });
   await git(root, ['add','--','.gitignore']);
   for (const source of sources) {
     if (!/^repos\/[A-Za-z0-9._-]+$/.test(source.path) || ['repos/.','repos/..'].includes(source.path)) throw new Error('子模块路径无效');
@@ -68,7 +68,7 @@ export async function initializeWorkspaceGit(root, sources = []) {
     await git(root,['update-index','--add','--cacheinfo',`160000,${head.stdout.trim()},${source.path}`]);
   }
   if (await exists(join(root,'.gitmodules'))) await git(root,['add','--','.gitmodules']);
-  await git(root,['-c','user.name=AgentForge','-c','user.email=agentforge@localhost','-c','commit.gpgsign=false','commit','-m','Initialize workspace source control']);
+  await git(root,['-c','user.name=Baton','-c','user.email=baton@localhost','-c','commit.gpgsign=false','commit','-m','Initialize workspace source control']);
   return true;
 }
 // Read the original gitlink, not the child HEAD (which advances when employees commit).

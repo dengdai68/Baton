@@ -9,21 +9,21 @@ import { createFixtureStore } from '../tests/fixture-store.mjs';
 import { createAuth } from '../server/auth.mjs';
 import { writeStorageLocation } from '../server/storage-layout.mjs';
 
-const root = await mkdtemp(join(tmpdir(), 'agentforge-composer-caret-'));
-const home = join(root, 'home'), data = join(home, '.agentforge/desktop'), workspace = join(root, 'work');
+const root = await mkdtemp(join(tmpdir(), 'baton-composer-caret-'));
+const home = join(root, 'home'), data = join(home, '.baton/desktop'), workspace = join(root, 'work');
 await mkdir(home, { recursive: true });
 const password = randomBytes(20).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('caret-qa', password); auth.close();
-const store = createFixtureStore({ databasePath: join(workspace, 'records/agentforge.sqlite'), configurationDirectory: data, workspaceRoot: workspace });
-store.setPluginUpdateSettings({ enabled: false });
+const store = createFixtureStore({ databasePath: join(workspace, 'records/baton.sqlite'), configurationDirectory: data, workspaceRoot: workspace });
+
 const agents = store.listAgents().filter(row => row.status === 'active');
 const privateChat = store.openCommunication({ kind: 'agent', targetId: agents[0].id });
 const group = store.openCommunication({ kind: 'group', name: '光标回归夹具', memberAgentIds: agents.slice(0, 2).map(row => row.id) });
 const run = store.createRun(store.listTasks()[0].id); store.pauseRun(run.id); store.close();
 await writeStorageLocation(data, { version: 1, workspaceRoot: workspace, previousRuntimeRoots: [] });
-const bundle = process.env.AGENTFORGE_COMPOSER_APP;
-const app = await electron.launch({ ...(bundle ? { executablePath: join(resolve(bundle), 'Contents/MacOS/AgentForge') } : {}), args: bundle ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 60000 });
+const bundle = process.env.BATON_COMPOSER_APP;
+const app = await electron.launch({ ...(bundle ? { executablePath: join(resolve(bundle), 'Contents/MacOS/Baton') } : {}), args: bundle ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 60000 });
 const evidence = { root, packaged: Boolean(bundle), cases: [], pageErrors: [] };
 try {
   const page = await app.firstWindow(); page.on('pageerror', error => evidence.pageErrors.push(error.message));

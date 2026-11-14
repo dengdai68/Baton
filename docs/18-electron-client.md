@@ -4,7 +4,7 @@
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
 
-仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
+仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，表单仍仅显式关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。
 
@@ -34,7 +34,7 @@
 
 沟通右侧半屏控制台使用共享 renderer，提供成员切换、真实 thinking/text/tools、提示词、失败与分页。附件用浏览器文件选择和认证 HTTP 保存到会话目录，下载保留原名；不新增通用宿主桥。compact.css 仅调整间距字号，市场头像沿用员工颜色。模型真实专项在源码隔离客户端执行，安装包另以隔离 HOME/受控 CLI 验证。
 
-数据根默认为 ~/.agentforge/workspace；任务文件与 records/ 下的业务数据库、Trace 共用此数据盘；插件/MCP 与 Runtime 设置保留配置目录。认证、CLI 发现与宿主 profile 留在 ~/.agentforge/<实例>/，日志留在 ~/.agentforge/logs。已有 Task/Run 业务路径保持创建时的位置。CLI 只发现当前客户端，不直读数据库。
+数据根默认为 ~/.baton/workspace；任务文件与 records/ 下的业务数据库、Trace 共用此数据盘；插件/MCP 与 Runtime 设置保留配置目录。认证、CLI 发现与宿主 profile 留在 ~/.baton/<实例>/，日志留在 ~/.baton/logs。已有 Task/Run 业务路径保持创建时的位置。CLI 只发现当前客户端，不直读数据库。
 
 员工、插件/MCP 市场复用共享搜索/卡片/删除命令；桌面通过 compact.css 保持紧凑尺寸，隐藏重复页标题不产生工具栏前空白。删除确认使用现有应用弹框，不增加宿主进程桥或系统弹框。
 
@@ -48,17 +48,17 @@ Electron 使用本仓库 renderer 界面，宿主代码位于 `apps/electron/`�
 
 | 归属 | 默认位置 |
 | --- | --- |
-| 安装版业务资料 | `~/.agentforge/workspace/records/` |
-| 开发版业务资料 | `~/.agentforge/workspace-dev/records/` |
+| 安装版业务资料 | `~/.baton/workspace/records/` |
+| 开发版业务资料 | `~/.baton/workspace-dev/records/` |
 | 任务文件 | `<配置根>/task_<uuid>/run_<id>/` |
-| 认证/启动定位/宿主 profile | `~/.agentforge/desktop/` 或 `desktop-dev/` |
-| 日志 | `~/.agentforge/logs/<实例标识>/` |
+| 认证/启动定位/宿主 profile | `~/.baton/desktop/` 或 `desktop-dev/` |
+| 日志 | `~/.baton/logs/<实例标识>/` |
 
 启动由私有 `storage.json` 定位业务根，不依赖先读取业务数据库。数据盘不可访问时拒绝启动，不回退到系统盘创建空实例。Chromium userData/sessionData 保持在认证实例的 `browser/`，日志与崩溃目录仍属宿主日志；原生 CLI 自身全局认证与会话不由此功能搬动。
 
-“设置 → 工作目录”及 `agentforge storage` 共用认证 HTTP；空闲锁覆盖执行、沟通、调度与并发写。宿主停止自己的子服务后整理明确的应用资料，逐文件校验，原子切换定位，再从新位置启动服务。旧业务资料在新服务健康后清理；清理记录放在新业务根，断电后仍能核对，源有变化则保留。身份认证不随数据移动，Git 托管凭据留在认证实例的 `credentials/`。现有冻结路径只在读取/调用边界解析实际位置，不改历史内容。完整决策、显式现有实例整理命令和失败边界见 [统一存储](30-storage-layout.md)。
+“设置 → 工作目录”及 `baton storage` 共用认证 HTTP；空闲锁覆盖执行、沟通、调度与并发写。宿主停止自己的子服务后整理明确的应用资料，逐文件校验，原子切换定位，再从新位置启动服务。旧业务资料在新服务健康后清理；清理记录放在新业务根，断电后仍能核对，源有变化则保留。身份认证不随数据移动，Git 托管凭据留在认证实例的 `credentials/`。现有冻结路径只在读取/调用边界解析实际位置，不改历史内容。完整决策、显式现有实例整理命令和失败边界见 [统一存储](30-storage-layout.md)。
 
-开发可显式设置 `AGENTFORGE_DESKTOP_DATA_ROOT` 隔离启动资料，并用当前协议 locator 选择专用业务根；测试绝不改写真实安装。旧目录有实例而新目录空时拒绝静默新建，不自动执行旧数据转换或重置。
+开发可显式设置 `BATON_DESKTOP_DATA_ROOT` 隔离启动资料，并用当前协议 locator 选择专用业务根；测试绝不改写真实安装。旧目录有实例而新目录空时拒绝静默新建，不自动执行旧数据转换或重置。
 
 ## 外观
 
@@ -86,7 +86,7 @@ web/ 是客户端 renderer 源码。服务始终为 HTML 加入 compact.css，�
 
 ## CLI 与打包
 
-安装版启动时默认安装，设置 → 命令行 CLI 可修复用户级 `~/.local/bin/agentforge` 和受管 PATH 块；不需要全局 Node。安装版 CLI 读取私有 endpoint 并验证当前实例 ID，失效不回退 Web。
+安装版启动时默认安装，设置 → 命令行 CLI 可修复用户级 `~/.local/bin/baton` 和受管 PATH 块；不需要全局 Node。安装版 CLI 读取私有 endpoint 并验证当前实例 ID，失效不回退 Web。
 
 `npm run package:mac` 输出 Apple Silicon DMG/ZIP。当前要求 macOS 13+，采用 ad-hoc 签名，未经过 Developer ID 签名或 Apple 公证；发布上传 SHA-256 清单。构建和验证不得包含操作者的账户、凭据或业务数据。
 
@@ -94,7 +94,7 @@ web/ 是客户端 renderer 源码。服务始终为 HTML 加入 compact.css，�
 
 ## 默认命令行集成
 
-Mac 安装版从持久位置启动时默认执行用户级 CLI 安装，复用现有受管安装器：`~/.local/bin/agentforge` 与 zsh/bash 的 PATH 标记块。不使用 sudo，不覆盖其他命令、链接或并发修改；不支持的 Shell/位置及安装失败保留设置页的状态与重试。源码模式及临时卷不自动安装。默认安装无需额外确认弹窗；用户在设置中仍可修复安装。
+Mac 安装版从持久位置启动时默认执行用户级 CLI 安装，复用现有受管安装器：`~/.local/bin/baton` 与 zsh/bash 的 PATH 标记块。不使用 sudo，不覆盖其他命令、链接或并发修改；不支持的 Shell/位置及安装失败保留设置页的状态与重试。源码模式及临时卷不自动安装。默认安装无需额外确认弹窗；用户在设置中仍可修复安装。
 
 宿主通过正式认证端点生成父会话关联的 CLI 授权并发布在私有实例目录，登录/退出/服务重新连接时同步；CLI 不读浏览器文件。授权契约见 docs/14。
 
@@ -151,7 +151,7 @@ DeepSeek Harness 为第三个固定 Runtime，设置与员工选择复用现有�
 
 应用更新安装包缓存与业务数据一起使用配置数据盘。更换目录时禁止并发下载；已验证的安装包在 SHA256 搬运后按当前缓存目录打开，不继续使用旧盘路径。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 ## 共享协作输入与报告通知
 
@@ -163,10 +163,13 @@ DeepSeek Harness 为第三个固定 Runtime，设置与员工选择复用现有�
 
 ## 系统通知与页面反馈
 
-`apps/electron/notifications.mjs` 只接收自有子服务通过 IPC 发出的 `agentforge-notification` 元数据。Store 在成功提交后发布临时通知：`run.awaiting_acceptance` 提交验收、`run.completed` 最终完成、`communication.message` 员工的新沟通回复（私聊和群聊）。通知不新增业务事件类型、不读取历史事件、不轮询数据库；历史读取、重启恢复历史、失败回滚和重复完成沟通不发送通知。业务状态、冻结会话与人类验收规则不变。
+`apps/electron/notifications.mjs` 只接收自有子服务通过 IPC 发出的 `baton-notification` 元数据。Store 在成功提交后发布临时通知：`run.awaiting_acceptance` 提交验收、`run.completed` 最终完成、`communication.message` 员工的新沟通回复（私聊和群聊）。通知不新增业务事件类型、不读取历史事件、不轮询数据库；历史读取、重启恢复历史、失败回滚和重复完成沟通不发送通知。业务状态、冻结会话与人类验收规则不变。
 
 宿主逐项验证通知类型与业务 ID，在当前 Session 经同源 `/api/auth/session` 认证后才调用 Electron Notification；不增加 renderer 发送通知的方法，不开放浏览器 Notification 权限。IPC 仅携带事件/消息 ID、任务/Run 或会话 ID、任务/会话名称及发送员工姓名；系统通知不含消息正文、附件、提示词、Trace 或路径，文本经过凭据形态脱敏、控制字符清理和长度限制。每个存活宿主内按事件/消息 ID 去重，缓存有上限，退出登录、后台更换和退出时清理原通知。通知失败只记录诊断，不影响业务提交，也不自动重试。
 
-任务通知点击打开 `/runs/<RunID>`，消息通知点击打开 `/communication/<会话ID>` 并显示窗口；点击时重新认证并核对原子服务身份。目标页面已经打开时只唤回窗口、不重新加载；其他页面存在未关闭的编辑表单时先询问是否前往，取消保留编辑。前台和后台均可通知，实际横幅、通知中心及声音由操作系统的 AgentForge 通知授权和专注模式决定，应用不绕过系统偏好。签名安装包验证真实通知显示事件；源码夹具只验证 IPC、元数据和路由，不冒充系统显示或真实模型。
+任务通知点击打开 `/runs/<RunID>`，消息通知点击打开 `/communication/<会话ID>` 并显示窗口；点击时重新认证并核对原子服务身份。目标页面已经打开时只唤回窗口、不重新加载；其他页面存在未关闭的编辑表单时先询问是否前往，取消保留编辑。前台和后台均可通知，实际横幅、通知中心及声音由操作系统的 Baton 通知授权和专注模式决定，应用不绕过系统偏好。签名安装包验证真实通知显示事件；源码夹具只验证 IPC、元数据和路由，不冒充系统显示或真实模型。
 
-页面 toast 使用 `web/toast.mjs` 的手动 Popover 顶层，后来打开的 dialog/popover 会重新置顶通知；不靠提高 z-index 绕过浏览器顶层规则，不抢焦点或拦截点击。隔离验收：`node scripts/test-desktop-notifications.mjs`；安装包设 `AGENTFORGE_NOTIFICATIONS_APP=/path/AgentForge.app`，真实系统显示另设 `AGENTFORGE_NOTIFICATIONS_NATIVE=1`，真实模型另设 `AGENTFORGE_NOTIFICATIONS_REAL=1`。所有模式使用隔离 HOME、工作目录、认证和浏览器资料。
+页面 toast 使用 `web/toast.mjs` 的手动 Popover 顶层，后来打开的 dialog/popover 会重新置顶通知；不靠提高 z-index 绕过浏览器顶层规则，不抢焦点或拦截点击。隔离验收：`node scripts/test-desktop-notifications.mjs`；安装包设 `BATON_NOTIFICATIONS_APP=/path/Baton.app`，真实系统显示另设 `BATON_NOTIFICATIONS_NATIVE=1`，真实模型另设 `BATON_NOTIFICATIONS_REAL=1`。所有模式使用隔离 HOME、工作目录、认证和浏览器资料。
+
+
+Baton使用com.baton.desktop、Baton.app及baton命令；首次切换需要用现有管理员重新登录，认证数据库和任务历史保留。默认配置根为~/.baton/desktop，数据根仍由显式locator确定；用户既有目录与冻结路径不按品牌词改写。见development/baton-identity-cutover.md。

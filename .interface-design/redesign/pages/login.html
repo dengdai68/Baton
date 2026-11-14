@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>登录 / 首次设置 · AgentForge 重设计稿</title>
+<title>登录 / 首次设置 · Baton 重设计稿</title>
 <link rel="stylesheet" href="../assets/tokens.css">
 <link rel="stylesheet" href="../assets/components.css">
 <script src="../assets/icons.js"></script>
@@ -40,8 +40,8 @@
   <div class="auth__body">
     <!-- 登录 -->
     <form class="auth__col" data-view-panel="login" onsubmit="return false">
-      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
-      <h1>登录 AgentForge</h1>
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="Baton">
+      <h1>登录 Baton</h1>
       <p class="sub">本机工作区 · 单管理员</p>
       <div class="field"><label class="field__label" for="u1">用户名</label><input class="input input--lg" id="u1" autocomplete="username" value="design-audit"></div>
       <div class="field"><label class="field__label" for="p1">密码</label><div class="pw"><input class="input input--lg" id="p1" type="password" autocomplete="current-password" value="••••••••••••"><button class="btn btn--ghost btn--sm" type="button" aria-pressed="false">显示</button></div></div>
@@ -51,7 +51,7 @@
 
     <!-- 首次设置 -->
     <form class="auth__col" data-view-panel="setup" hidden onsubmit="return false">
-      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="Baton">
       <h1>设置本机工作区</h1>
       <p class="sub">创建这台电脑上的管理员。该入口只由桌面客户端打开，不会创建公开注册。</p>
       <div class="field"><label class="field__label" for="u2">管理员用户名</label><input class="input input--lg" id="u2" autocomplete="username" placeholder="例如：zhou"><span class="field__hint">1–64 位字母、数字、点、下划线或连字符</span></div>
@@ -63,8 +63,8 @@
 
     <!-- 登录失败：错误就地显示，保留已输入的用户名 -->
     <form class="auth__col" data-view-panel="error" hidden onsubmit="return false">
-      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
-      <h1>登录 AgentForge</h1>
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="Baton">
+      <h1>登录 Baton</h1>
       <p class="sub">本机工作区 · 单管理员</p>
       <div class="field"><label class="field__label" for="u4">用户名</label><input class="input input--lg" id="u4" value="design-audit"></div>
       <div class="field"><label class="field__label" for="p4">密码</label><div class="pw"><input class="input input--lg is-invalid" id="p4" type="password" value="••••••" aria-invalid="true" aria-describedby="p4-err"><button class="btn btn--ghost btn--sm" type="button">显示</button></div><span class="field__error" id="p4-err" role="alert"><i data-icon="alert" class="icon--sm"></i>用户名或密码不正确，请重试。</span></div>
@@ -73,7 +73,7 @@
 
     <!-- 尚未设置管理员 -->
     <div class="auth__col" data-view-panel="guide" hidden>
-      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="Baton">
       <h1>还没有管理员</h1>
       <p class="sub">此服务尚未完成首次设置。</p>
       <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__text">在菜单栏选择「导航 → 首页 / 重新连接」（<kbd class="kbd">⌘</kbd><kbd class="kbd">0</kbd>），在应用内创建管理员。无需终端命令；仍无法打开时，请退出并重新启动客户端。</div></div></div>

@@ -11,10 +11,10 @@ const execute = promisify(execFile);
 async function fixture(shell = '/bin/zsh', options = {}) {
   await fs.mkdir('.data', { recursive: true });
   const root = await fs.mkdtemp(resolve('.data/cli-install-'));
-  const home = join(root, "user's home $safe"), launcher = join(root, "Agent's Forge.app/Contents/Resources/cli/agentforge");
+  const home = join(root, "user's home $safe"), launcher = join(root, "Agent's Forge.app/Contents/Resources/cli/baton");
   await fs.mkdir(home, { mode: 0o700 }); await fs.mkdir(resolve(launcher, '..'), { recursive: true });
   await fs.writeFile(launcher, '#!/bin/sh\nprintf \'{"ok":true}\\n\'\n', { mode: 0o755 });
-  return { root, home, launcher, command: join(home, '.local/bin/agentforge'), installer: createCliInstallation({ home, launcher, shell, ...options }) };
+  return { root, home, launcher, command: join(home, '.local/bin/baton'), installer: createCliInstallation({ home, launcher, shell, ...options }) };
 }
 test('CLI installs idempotently with quoted paths; fresh zsh/bash login and interactive shells find the command', async () => {
   for (const shell of ['/bin/zsh', '/bin/bash'].filter(existsSync)) {
@@ -27,7 +27,7 @@ test('CLI installs idempotently with quoted paths; fresh zsh/bash login and inte
     assert.equal((await fs.stat(rc)).mode & 0o777, 0o600);
     assert.equal((await fs.stat(f.command)).mode & 0o777, 0o755);
     await f.installer.install(); assert.equal(await fs.readFile(rc, 'utf8'), first);
-    for (const args of [['-ilc', 'agentforge help'], ['-ic', 'agentforge help']]) {
+    for (const args of [['-ilc', 'baton help'], ['-ic', 'baton help']]) {
       // Functional discovery, not a performance benchmark; same 30s budget as host shell capture.
       const result = await execute(shell, args, { env: { HOME: f.home, ZDOTDIR: f.home, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
       assert.deepEqual(JSON.parse(result.stdout), { ok: true });
@@ -50,7 +50,7 @@ test('CLI refuses foreign/empty commands, link targets, malformed profiles and u
     if (kind === 'directory-link') { await fs.rmdir(join(f.home, '.local/bin')); await fs.symlink(f.root, join(f.home, '.local/bin')); }
     if (kind === 'profile-link') await fs.symlink(outside, rc);
     if (kind === 'readonly' || kind === 'writable') { await fs.writeFile(rc, '# existing'); await fs.chmod(rc, kind === 'readonly' ? 0o400 : 0o666); }
-    if (kind === 'markers') await fs.writeFile(rc, '# >>> AgentForge CLI PATH >>>\n# incomplete');
+    if (kind === 'markers') await fs.writeFile(rc, '# >>> Baton CLI PATH >>>\n# incomplete');
     if (kind === 'oversize') await fs.writeFile(rc, 'x'.repeat(262145));
     if (kind === 'binary') await fs.writeFile(rc, Buffer.from([0xff, 0xfe]));
     assert.equal((await f.installer.status()).canInstall, false, kind);

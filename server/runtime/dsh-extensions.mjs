@@ -28,8 +28,8 @@ export async function mountExtensions(ctx, instructions, directory) {
       const definition = children.get(agent.session.id);
       if (!definition) return;
       await agent.ctx.inject(['systemPrompt','tools'], scoped => {
-        scoped.systemPrompt.section({name:'agentforge:application',order:20000,text:definition.body,interpolate:false});
-        scoped.systemPrompt.section({name:'agentforge:response',order:20010,text:'',interpolate:false});
+        scoped.systemPrompt.section({name:'baton:application',order:20000,text:definition.body,interpolate:false});
+        scoped.systemPrompt.section({name:'baton:response',order:20010,text:'',interpolate:false});
         const available=scoped.tools.schemas().map(tool=>tool.name);
         const expand=names=>[...new Set(names.flatMap(name=>{
           const native=nativeTools[name] || name;
@@ -56,9 +56,9 @@ export async function mountExtensions(ctx, instructions, directory) {
         let activation;
         try {
           activation = await ctx.subagents.startActivation({provider:'spawn',label:args.description || definition.qualifiedName,childId,request:{parent:exec.agent,prompt:[{type:'text',text:args.prompt}],maxDepth:1},signal:exec.signal,delivery:'caller'});
-          notify('agentforge.subagent',{phase:'started',id:childId,name:definition.qualifiedName});
+          notify('baton.subagent',{phase:'started',id:childId,name:definition.qualifiedName});
           const result = await activation.result;
-          notify('agentforge.subagent',{phase:'ended',id:childId,name:definition.qualifiedName,status:result.stopReason});
+          notify('baton.subagent',{phase:'ended',id:childId,name:definition.qualifiedName,status:result.stopReason});
           if (result.stopReason !== 'completed') throw new Error(`子代理未完成：${result.stopReason}`);
           return {agentId:childId,output:result.output.filter(block=>block.type==='text').map(block=>block.text).join('\n')};
         } finally {try {await activation?.dispose();} finally {children.delete(childId);}}

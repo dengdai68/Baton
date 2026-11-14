@@ -11,7 +11,7 @@ import { createAuth } from '../server/auth.mjs';
 await mkdir('.data',{recursive:true});
 const root=await mkdtemp(resolve('.data/communication-media-')),home=join(root,'home'),data=join(root,'client');await mkdir(home,{recursive:true});
 const auth=createAuth({databasePath:join(data,'auth.sqlite')}),password=randomBytes(24).toString('hex');await auth.setAdministrator('media-qa',password);auth.close();
-const store=createCatalogFixtureStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
+const store=createCatalogFixtureStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
 const files=createRunFiles({root:join(root,'work','records'),communicationsRoot:join(root,'work/communications')}),chat=store.openCommunication({kind:'agent',targetId:'agent_analyst'});
 const imageBytes=await readFile('web/icons/application.png'),fileBytes=Buffer.from('附件下载内容\n中文文件名与原字节保留。');
 const attachments=[];
@@ -21,7 +21,7 @@ store.completeCommunication(chat.id,store.claimCommunication(chat.id).id,'已收
 const auto=store.saveAutomation({managerAgentId:'system_project_manager',title:'素材整理',objective:'读取参考图片与说明文件。\n生成本轮整理结果，并说明需要继续处理的内容。',memberAgentIds:['system_project_manager','agent_analyst'],cron:'0 9 * * *',enabled:false});
 const trigger=store.triggerAutomation(auto.id);store.requestHumanAcceptance(trigger.runId);store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});
+const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});
 const evidence={root,cases:[]};console.log('EVIDENCE '+root);
 try{
  const page=await app.firstWindow({timeout:180000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:90000});const origin=new URL(page.url()).origin;page.on('pageerror',error=>console.log('UI_ERROR',error.message));
@@ -29,7 +29,7 @@ try{
  const size=async(width,height=800)=>{await app.evaluate(({BrowserWindow},{origin,width,height})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,height),{origin,width,height});await page.waitForFunction(({width,height})=>innerWidth===width&&innerHeight===height,{width,height});};
  await size(1200);
  await page.goto(origin+'/communication/'+chat.id);await page.locator('.communication-message-attachments').waitFor();await page.screenshot({path:join(root,'chat-before.png')});
- if(process.env.AGENTFORGE_MEDIA_BASELINE==='1'){
+ if(process.env.BATON_MEDIA_BASELINE==='1'){
   await page.goto(origin+'/automations/'+auto.id);await page.locator('.automation-trigger-table').waitFor();evidence.baseline=await page.locator('.automation-table-scroll').evaluate(el=>({width:el.clientWidth,scrollWidth:el.scrollWidth}));await page.screenshot({path:join(root,'automation-before.png')});console.log(JSON.stringify(evidence));
  }else{
   assert.equal((await page.request.get(origin+'/api/health')).status(),200);

@@ -24,7 +24,7 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
   document.addEventListener("focusout", event => {
     if (event.target === restoredNavigation) clearRestoredFocus();
   }, true);
-  contextBridge.exposeInMainWorld("agentforgeDesktop", Object.freeze({
+  contextBridge.exposeInMainWorld("batonDesktop", Object.freeze({
     copyWorkspacePath: (text) => ipcRenderer.invoke("desktop:workspace:copy-path", text),
     openWorkspaceDirectory: () => ipcRenderer.invoke("desktop:workspace:open-directory"),
     getPreferences: () => ipcRenderer.invoke("desktop:preferences:get"),

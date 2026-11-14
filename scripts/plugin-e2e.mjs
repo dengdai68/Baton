@@ -7,7 +7,7 @@ import {runClaudeCodeCli} from '../server/runtime/local-cli.mjs';
 import {createMarketplace} from '../server/runtime/marketplace.mjs';
 
 export async function preparePluginFixture(root) {
-  if(process.env.AGENTFORGE_DEVELOPMENT_E2E_RESUME) return {env:{},close(){}};
+  if(process.env.BATON_DEVELOPMENT_E2E_RESUME) return {env:{},close(){}};
   const repo=join(root,'plugin-source'),proof=`plugin-${randomUUID()}`,markers=[`skill-${randomUUID()}`,`skill-${randomUUID()}`],log=join(root,'plugin-mcp.log'),hookLog=join(root,'plugin-hook.log');
   for(const path of ['.claude-plugin','agents','hooks','scripts']) await mkdir(join(repo,path),{recursive:true});
   await writeFile(join(repo,'.claude-plugin/plugin.json'),JSON.stringify({name:'verification-kit',description:'手写双 Skill、Subagent、Hook 与可拆分 MCP 插件',mcpServers:{selected_proof:{command:process.execPath,args:[resolve('scripts/marketplace-probe-mcp.mjs'),log,proof]}}}));
@@ -26,7 +26,7 @@ export async function preparePluginFixture(root) {
 const fileExists=path=>stat(path).then(()=>true,()=>false);
 export async function setupPluginMarketplace({page,api,root,developer,tester,manager}) {
   const fixture=JSON.parse(await readFile(join(root,'plugin-fixture.json'),'utf8'));
-  if(process.env.AGENTFORGE_DEVELOPMENT_E2E_RESUME) {
+  if(process.env.BATON_DEVELOPMENT_E2E_RESUME) {
     const saved=JSON.parse(await readFile(join(root,'plugin-install-evidence.json'),'utf8'));
     return deliveryCheck({api,root,developer,tester,fixture,plugin:saved.plugin});
   }

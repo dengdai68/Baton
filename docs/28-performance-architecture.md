@@ -35,7 +35,7 @@ SQLite 继续是唯一持久状态源。集合按实体保存；Store 使用实�
 
 ## 执行和 I/O
 
-`execution-budget.mjs` 是编排层共享资源池，任务与沟通使用同一个实例预算；默认总数 8、单 Provider 4，可用 `AGENTFORGE_MAX_EXECUTIONS` / `AGENTFORGE_MAX_PROVIDER_EXECUTIONS` 指定 1–64。按任务/会话轮转，内部 FIFO；排队写出“等待实例执行资源”日志，取消和退出释放等待，结束释放名额。它不替代经理派工，不改变同成员串行规则，也不是任务权限或业务优先级。
+`execution-budget.mjs` 是编排层共享资源池，任务与沟通使用同一个实例预算；默认总数 8、单 Provider 4，可用 `BATON_MAX_EXECUTIONS` / `BATON_MAX_PROVIDER_EXECUTIONS` 指定 1–64。按任务/会话轮转，内部 FIFO；排队写出“等待实例执行资源”日志，取消和退出释放等待，结束释放名额。它不替代经理派工，不改变同成员串行规则，也不是任务权限或业务优先级。
 
 10 秒巡检只选活动状态；巡检每批最多 16 个、自动化每批最多 8 个，以 `setImmediate` 让出事件循环，检测本身不等待模型。触发沿用幂等键和 Store 事务。停用自动化删除一次构造 Task/Run 集合，各关联集合各过滤一次；文件清理仍采用暂存、持久状态与启动恢复，202/pending 如实保留。
 

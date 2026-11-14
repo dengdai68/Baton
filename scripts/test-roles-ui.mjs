@@ -14,20 +14,20 @@ import { createStore } from '../server/store.mjs';
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/roles-ui-'));
 assert.equal(dirname(root), resolve('.data')); assert.match(basename(root), /^roles-ui-[a-zA-Z0-9]+$/);
-const bundle=process.env.AGENTFORGE_ROLES_APP;
-const home = join(root, 'home'), data = bundle?join(home,'.agentforge','desktop'):join(root, 'client');
+const bundle=process.env.BATON_ROLES_APP;
+const home = join(root, 'home'), data = bundle?join(home,'.baton','desktop'):join(root, 'client');
 await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('roles-ui', password);
 auth.close();
-const seeded = createStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const seeded = createStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 const employee = seeded.listAgents().find(item => item.kind === 'business');
 assert.ok(employee, 'default catalog provides a business employee');
 seeded.close();
 
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ ...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')}:{args:['apps/electron/main.mjs']}), env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+const app = await electron.launch({ ...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')}:{args:['apps/electron/main.mjs']}), env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 try {
   const page = await app.firstWindow({ timeout: 180000 });
   await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout: 60000 });

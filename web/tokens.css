@@ -1,4 +1,4 @@
-/* AgentForge design tokens · Graphite (Linear-like: calm neutral grey, dense, thin rules).
+/* Baton design tokens · Graphite (Linear-like: calm neutral grey, dense, thin rules).
    Shared by every renderer page and native dialog; the language is .interface-design/system.md.
    Components use semantic tokens (--bg-* --text-* --border-* --accent-* --st-*);
    light-dark() lets one declaration serve light, dark and system appearance. */

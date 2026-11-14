@@ -340,7 +340,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
       const call=prompt?/^(.+)_([1-9]\d*)$/.exec(eventId):null;
       const row=prompt?(call?persistence.communicationCallEvents(key,call[1],Number(call[2])).find(item=>item.type==='prompt.snapshot'):null):journal.get('communicationEvents',eventId);
       const reference = row?.data?.contentRef;
-      if (!reference || row.conversationId!==key || (!prompt&&row.data?.auditVersion!==2) || !reference.storagePath.startsWith(`communications/${key}/.agentforge/`)) throw new Error('沟通执行内容不存在或不属于当前会话');
+      if (!reference || row.conversationId!==key || (!prompt&&row.data?.auditVersion!==2) || !reference.storagePath.startsWith(`communications/${key}/.baton/`)) throw new Error('沟通执行内容不存在或不属于当前会话');
       return copy(reference);
     },
     getCommunicationEvents(key, deliveryId, { before = null, limit = 100 } = {}) {

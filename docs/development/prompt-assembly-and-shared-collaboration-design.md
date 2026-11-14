@@ -88,9 +88,9 @@ managerDecision 用于派工、等待或提交验收，handoff 用于转交，co
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
-当前工作目录：/mock/agentforge/tasks/task_demo/run_demo
+当前工作目录：/mock/baton/tasks/task_demo/run_demo
 
 [本轮待处理事项]
 用途：组织本任务的首次分工。
@@ -123,7 +123,7 @@ managerDecision 用于派工、等待或提交验收，handoff 用于转交，co
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -243,9 +243,9 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
-当前工作目录：/mock/agentforge/tasks/task_demo/run_demo
+当前工作目录：/mock/baton/tasks/task_demo/run_demo
 
 [本轮待处理事项]
 用途：执行交接。
@@ -294,7 +294,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -337,7 +337,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -382,7 +382,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -404,7 +404,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -423,7 +423,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -442,7 +442,7 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_demo/context.md
 资料版本：1
 
 [本轮待处理事项]
@@ -562,9 +562,9 @@ list_employees、read_employee 查看员工资料，不替代本任务的有效�
 
 ```text
 [本轮上下文]
-任务资料入口：/mock/agentforge/records/runs/run_auto_demo/context.md
+任务资料入口：/mock/baton/records/runs/run_auto_demo/context.md
 资料版本：1
-当前工作目录：/mock/agentforge/tasks/task_auto_demo/run_auto_demo
+当前工作目录：/mock/baton/tasks/task_auto_demo/run_auto_demo
 
 [本轮待处理事项]
 用途：组织自动化本轮分工。
@@ -621,7 +621,7 @@ read_conversation 分页读取会话，read_context 按搜索结果的 recordId 
 ```text
 [本轮对话上下文]
 对话类型：私聊
-当前工作目录：/mock/agentforge/communications/chat_private_demo
+当前工作目录：/mock/baton/communications/chat_private_demo
 
 [本轮待处理事项]
 用途：回答私聊消息。
@@ -719,7 +719,7 @@ reply 是公开回复，可使用 Markdown。
 ```text
 [本轮对话上下文]
 对话类型：群聊
-当前工作目录：/mock/agentforge/communications/chat_group_demo
+当前工作目录：/mock/baton/communications/chat_group_demo
 成员版本：1
 当前成员：
 - human_operator：本机用户，人类。
@@ -814,10 +814,10 @@ context.md 是读取工具返回的资料。它不会被整篇偷偷拼进 syste
 - human_operator：人类；负责需求取舍和最终确认。
 
 实际共享工作目录：
-/mock/agentforge/tasks/task_demo/run_demo
+/mock/baton/tasks/task_demo/run_demo
 
 冻结工作流：
-/mock/agentforge/records/runs/run_demo/workflow.md
+/mock/baton/records/runs/run_demo/workflow.md
 
 工作流节点：
 - implementation：实现汇总工具。

@@ -45,7 +45,7 @@
 
 - `npm test` 856/856；过期断言按新设计同步（图片 chip 化、焦点 token、条件 chip、分页页码、变更文案、CLI pill 模拟 DOM），未回退产品迎合旧断言。
 - check:ai、check:impact、核心模块语法检查、`git diff --check` 通过。
-- `scripts/test-redesign.mjs` 源码巡检 138 张截图、0 页面错误（`.data/ui-redesign-audit/run-jFYdkg`）；对已安装 `/Applications/AgentForge.app` 复跑同脚本 138 张、0 错误（`run-kTxQN0`）。修复过程中该脚本曾抓出两处真实回归（详情遮罩 inset 覆盖标题栏操作、窄屏详情浮层盖住详情开关），已修并复验。
+- `scripts/test-redesign.mjs` 源码巡检 138 张截图、0 页面错误（`.data/ui-redesign-audit/run-jFYdkg`）；对已安装 `/Applications/Baton.app` 复跑同脚本 138 张、0 错误（`run-kTxQN0`）。修复过程中该脚本曾抓出两处真实回归（详情遮罩 inset 覆盖标题栏操作、窄屏详情浮层盖住详情开关），已修并复验。
 
 ---
 
@@ -124,6 +124,6 @@
 
 证据索引：`.data/paper-review/page-structure-full-unit-final.log`、`packaged-structure-redesign.json`、`packaged-structure-collaboration.log`、`packaged-structure-smoke-final.log`，以及三个分工审查报告与定向证据。最终包完整验收目录为本机临时副本的 `.data/packaged-electron-e2e-emEZN6`。
 
-已构建、安装并启动 `/Applications/AgentForge.app`。安装包、本机测试副本及最终安装内容的 104 个运行文件均与源码逐文件一致，ASAR SHA-256：`f44398898c6e51f9aabd9d0412b1d982211a4d84469f0ead63b814e6317cecba`。ad-hoc 签名深度严格校验通过，未做 Developer ID 公证。
+已构建、安装并启动 `/Applications/Baton.app`。安装包、本机测试副本及最终安装内容的 104 个运行文件均与源码逐文件一致，ASAR SHA-256：`f44398898c6e51f9aabd9d0412b1d982211a4d84469f0ead63b814e6317cecba`。ad-hoc 签名深度严格校验通过，未做 Developer ID 公证。
 
-替换前确认没有运行中 Trace、活跃派工、沟通或插件更新，且无打开的编辑表单；安装后实际进入新待办页面。前后任务/运行/沟通聚合状态完全相同：任务完成9、暂停1、待验收1、阻塞1，暂停任务的一条排队记录原样保留。旧包保留于 `/Applications/.AgentForge-before-structure-review-20261113.app`。未提交、推送或发布。
+替换前确认没有运行中 Trace、活跃派工、沟通或插件更新，且无打开的编辑表单；安装后实际进入新待办页面。前后任务/运行/沟通聚合状态完全相同：任务完成9、暂停1、待验收1、阻塞1，暂停任务的一条排队记录原样保留。旧包保留于 `/Applications/.Baton-before-structure-review-20261113.app`。未提交、推送或发布。

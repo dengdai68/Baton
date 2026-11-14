@@ -24,4 +24,4 @@ data/*.json
 /release/
 
 # Local task workspace metadata.
-/.agentforge-workspace.json
+/.baton-workspace.json

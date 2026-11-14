@@ -12,13 +12,13 @@
 - 设置 / 自动化 / 弹窗（codex 任务 2）：设置八页的填充选中、开关、保存反馈、窄屏横向导航与进度条；自动化列表与详情统一 48px 页头、44px 页签；新建任务、420px 删除确认、看板、归档；登录与初始化 48px 拖动区与 32px 控件；更多菜单越界、命令面板、Toast 与断点（1180/1000/860/760）复查。182 个最终状态审计 issues=0。
 - 测试同步与全量验证（codex 任务 3）：14 个测试/验收脚本断言同步为石墨取值；`npm test` 856 项通过（工作树原位并发运行时 2 项 MCP 读取在外接盘超时，单独复跑 5/5 通过）；`check:ai`、`check:impact`、核心 `node --check`、`git diff --check` 通过；隔离 Electron 验收 13 个脚本全部通过，`test-redesign` 142 张截图逐张巡检 errors=0，期间修复自动化页签对齐、编辑按钮高度、配置成员头像、窄屏控制台成员行、窄屏状态截断、粗指针分段控件触摸目标 6 处。
 
-- 打包与安装（2026-11-14）：`npm run package:mac` 构建 0.1.9；ASAR 与源码逐文件一致；`scripts/test-packaged-electron.mjs` 同步过时断言后 27 项 PASS（证据 `.data/packaged-electron-e2e-2cLCnj`）。安装前确认已安装客户端未在运行（此前 00:40 由操作者自己的 Codex 会话安装过一个改版中途包），旧包移至 `/Applications/.AgentForge-before-graphite-20261114.app`；安装包与构建产物逐文件一致，ASAR SHA-256 `d412fb9305cebc10c92fdad9472c2ae0789d4626205aaaead2d726740526e5c6`，ad-hoc 签名深度校验通过。启动后 macOS 再次请求可移除宗卷访问（工作目录在 `~/Nas/agentforge`），操作者授权后 `business.ready`；CLI 会话有效，任务计数与上次安装一致（待验收 1、暂停 1、阻塞 1、完成 9 含归档 8、执行中 0）。未提交、未推送、未发布。
+- 打包与安装（2026-11-14）：`npm run package:mac` 构建 0.1.9；ASAR 与源码逐文件一致；`scripts/test-packaged-electron.mjs` 同步过时断言后 27 项 PASS（证据 `.data/packaged-electron-e2e-2cLCnj`）。安装前确认已安装客户端未在运行（此前 00:40 由操作者自己的 Codex 会话安装过一个改版中途包），旧包移至 `/Applications/.Baton-before-graphite-20261114.app`；安装包与构建产物逐文件一致，ASAR SHA-256 `d412fb9305cebc10c92fdad9472c2ae0789d4626205aaaead2d726740526e5c6`，ad-hoc 签名深度校验通过。启动后 macOS 再次请求可移除宗卷访问（工作目录在 `~/Nas/baton`），操作者授权后 `business.ready`；CLI 会话有效，任务计数与上次安装一致（待验收 1、暂停 1、阻塞 1、完成 9 含归档 8、执行中 0）。未提交、未推送、未发布。
 
 # 纸张方案落地记录（历史）
 
 > 本文此前的安装与测试记录仅证明当时对应功能的实现/验证，不证明全部页面与最终稿一致。2026-11-13 按用户反馈重新逐页审查 DOM、CSS级联与事件处理；当前结论以 `docs/development/paper-alignment-review.md` 为准（含当日第二轮九维度代码级比对）。
 
-2026-11-13 第二轮已构建并安装；安装包 ASAR SHA-256 为 `56948cce1124466447ca018cc98112e929879a20ce5a0e10dbcabd83521b63b6`（安装内容与 `release/mac-arm64/AgentForge.app` 逐文件一致，各 282 个文件，ad-hoc 签名深度校验通过）。安装前经正式 API 确认实例空闲（无执行中 Run、未读 0、插件更新未运行）；安装后 macOS 可移除宗卷授权由用户完成，`/api/health` 正常、`/api/bootstrap?view=connection` 返回 `businessReady: true`，任务/运行/沟通计数与安装前一致（任务完成 9、暂停 1、待验收 1、阻塞 1）。源码巡检 138 张截图 0 错误（`.data/ui-redesign-audit/run-jFYdkg`）；未提交、未 push、未发布 Release。
+2026-11-13 第二轮已构建并安装；安装包 ASAR SHA-256 为 `56948cce1124466447ca018cc98112e929879a20ce5a0e10dbcabd83521b63b6`（安装内容与 `release/mac-arm64/Baton.app` 逐文件一致，各 282 个文件，ad-hoc 签名深度校验通过）。安装前经正式 API 确认实例空闲（无执行中 Run、未读 0、插件更新未运行）；安装后 macOS 可移除宗卷授权由用户完成，`/api/health` 正常、`/api/bootstrap?view=connection` 返回 `businessReady: true`，任务/运行/沟通计数与安装前一致（任务完成 9、暂停 1、待验收 1、阻塞 1）。源码巡检 138 张截图 0 错误（`.data/ui-redesign-audit/run-jFYdkg`）；未提交、未 push、未发布 Release。
 
 2026-11-13 本轮逐页结构修正已安装；当前包 ASAR 为 `f44398898c6e51f9aabd9d0412b1d982211a4d84469f0ead63b814e6317cecba`。逐页修复、最终包验收及仍存在的原型能力差异集中记录在上述复核报告，以下记录保留为历史。
 
@@ -63,12 +63,12 @@
 
 ## 本机安装与授权后核验
 
-- 已安装并启动 `/Applications/AgentForge.app`。替换前通过正式 API 确认执行中任务、运行记录、派工、沟通及插件更新均为空闲。
+- 已安装并启动 `/Applications/Baton.app`。替换前通过正式 API 确认执行中任务、运行记录、派工、沟通及插件更新均为空闲。
 - 安装包的 136 个运行文件与冻结源码一致，安装后 ASAR 校验一致；SHA-256 为 `aa053a3bd60306463abfaddb433f9dc50594b16d75f802ca32ba01b4ed7c7da5`。
 - 打包版通过品牌巡检（浅色/深色、宽窄布局、对比度、空态/读取失败、图标、原生弹窗）、协作回归（历史定位、消息/CLI 对齐、失败草稿保留与回复滚动）和关键交互回归。证据分别保存在忽略目录 `.data/brand-presentation-159cvs`、`.data/collaboration-flow-VYjGHE`、`.data/ui-redesign-audit/run-By8HsV`。
 - macOS 曾等待可移除宗卷访问授权；用户明确授权并完成弹窗后，`/api/health` 正常，`/api/bootstrap?view=connection` 返回 `businessReady: true`。该等待不是 NAS 连接故障。
 - 授权后任务/运行状态计数与安装前一致：任务完成 9、暂停 1、待验收 1、错误中断 1；未重置或迁移业务数据。安装版 CLI 的 `plugins list --usage unused --json` 和 `mcps list --usage unused --json` 均成功返回。
-- 核验时保留用户当前打开的员工创建表单，未再次重启。旧安装包暂保留在 `/Applications/.AgentForge-before-redesign-20261112.app`。未提交、未 push、未发布 Release。
+- 核验时保留用户当前打开的员工创建表单，未再次重启。旧安装包暂保留在 `/Applications/.Baton-before-redesign-20261112.app`。未提交、未 push、未发布 Release。
 
 ## 2026-11-13 设计稿复核
 
@@ -76,4 +76,4 @@
 
 最终签名包全页面巡检138张、0错误（`.data/ui-redesign-audit/run-vXyhXz`），完整协作回归通过（`.data/collaboration-flow-bGy1UO`）。104个运行文件与源码一致，ASAR SHA-256为 `6c82f8a7eac9bf30cff9818fcf79b003e9467acb56fbc8812d9f8dcfdffc9449`。全量单测856项首次852通过，失败的旧夹具/CSS断言已同步并在相应测试文件复跑通过；MCP冷读取超时在同包本机临时目录5项复跑全部通过，未修改产品超时。
 
-已安装并启动 `/Applications/AgentForge.app`，安装后104个运行文件和ASAR摘要再次核对一致。替换前确认无执行中的Trace/派工、沟通和插件更新；暂停任务的一条排队记录原样保留。安装前后任务状态计数相同（完成9、暂停1、待验收1、阻塞1），运行状态和沟通待办也一致。旧包保留在 `/Applications/.AgentForge-before-paper-review-20261113.app`；未提交、推送或发布。
+已安装并启动 `/Applications/Baton.app`，安装后104个运行文件和ASAR摘要再次核对一致。替换前确认无执行中的Trace/派工、沟通和插件更新；暂停任务的一条排队记录原样保留。安装前后任务状态计数相同（完成9、暂停1、待验收1、阻塞1），运行状态和沟通待办也一致。旧包保留在 `/Applications/.Baton-before-paper-review-20261113.app`；未提交、推送或发布。

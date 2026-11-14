@@ -2,7 +2,7 @@ const parameters = new URLSearchParams(location.search);
 const cancelIndex = Number(parameters.get('cancel')) || 0;
 const defaultIndex = Number(parameters.get('default')) || 0;
 document.body.dataset.kind = parameters.get('kind') === 'error' ? 'error' : 'question';
-const title = parameters.get('title') || 'AgentForge';
+const title = parameters.get('title') || 'Baton';
 document.title = title;
 document.querySelector('[data-dialog-title]').textContent = title;
 document.querySelector('[data-dialog-message]').textContent = parameters.get('message') || '';

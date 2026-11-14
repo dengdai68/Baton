@@ -69,7 +69,7 @@ managerDecision 接受单人 nextNodeId/nextAgentId、批量 assignments 或 wai
 
 ## Provider 适配
 
-- Claude Code：Trace 私有文件 agentforge-instructions.md 经 --append-system-prompt-file 追加；--system-prompt-snapshot off 保证续接使用本轮环境和模式，不保留第一轮旧系统快照。要求 CLI 支持当前参数，不维护旧版本替代分支。
+- Claude Code：Trace 私有文件 baton-instructions.md 经 --append-system-prompt-file 追加；--system-prompt-snapshot off 保证续接使用本轮环境和模式，不保留第一轮旧系统快照。要求 CLI 支持当前参数，不维护旧版本替代分支。
 - Codex：developer_instructions / 原生 developerInstructions 承载应用指令；exec resume / thread/resume 精确续接，不重放历史。
 
 提示词快照证明平台本轮传入的内容，不等于模型已正确遵循，也不等于原生会话中旧指令被删除。真实续接验收中曾出现模型沿用旧回复前缀、旧禁止工具规则的情况；普通员工编辑仍不自动重建会话。扩展是否实际注册、调用及移除必须另以原生配置和工具服务日志验证，不能仅凭自报工具清单或回复格式宣称通过。
@@ -81,9 +81,9 @@ managerDecision 接受单人 nextNodeId/nextAgentId、批量 assignments 或 wai
 
 快照保存平台完整脱敏应用系统指令和本轮输入，下方标记已确认原生会话 ID；不包含 Provider 自动生成的技能/工具目录、内部指令或全部历史。原有快照不改写，缺失与截断如实说明。
 
-tests/prompts.test.mjs 覆盖分层、经理独占工作流、输入游标及两种 CLI 参数。AGENTFORGE_PROMPT_E2E_REAL=1 node scripts/test-prompt-e2e.mjs 在隔离客户端验证真实原生记忆、无历史重放、系统指令生效、澄清阻塞、代码开发、独立测试及界面人类确认；夹具不能冒充真实模型。
+tests/prompts.test.mjs 覆盖分层、经理独占工作流、输入游标及两种 CLI 参数。BATON_PROMPT_E2E_REAL=1 node scripts/test-prompt-e2e.mjs 在隔离客户端验证真实原生记忆、无历史重放、系统指令生效、澄清阻塞、代码开发、独立测试及界面人类确认；夹具不能冒充真实模型。
 
-已单独完成沟通验证时可加 AGENTFORGE_PROMPT_E2E_TASK_ONLY=1，只执行真实任务及界面验收；证据明确标记 communicationSkipped，不宣称本轮同时测试了沟通。经理错误跳过必需澄清直接提交验收时脚本立即失败，不空等超时。
+已单独完成沟通验证时可加 BATON_PROMPT_E2E_TASK_ONLY=1，只执行真实任务及界面验收；证据明确标记 communicationSkipped，不宣称本轮同时测试了沟通。经理错误跳过必需澄清直接提交验收时脚本立即失败，不空等超时。
 
 CLI 员工 systemPrompt、任务消息与精确澄清命令继续生效，不新增输入、权限或全量历史输出。
 

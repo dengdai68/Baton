@@ -1,12 +1,12 @@
 # 测试
 
-仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
+仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 本仓库仅验收客户端。HTTP 夹具模拟自有 IPC 子服务，不是独立 Web 产品；UI 只操作隔离 Electron，真实任务用 test-prompt-e2e，沟通用 test-communication-workbench。
 
 工作目录回归：自定义目录/根文件/大媒体的真实Git状态、任务初始提交比较、1005项分页、根读取/下载、工作流路径和重启保留；路径穿越、内部凭据、链接拒绝。真实开发端到端通过CLI配置、Claude实现与独立测试、非docs产物/媒体、Web与打包界面、人类确认。
 
-plugin-updates.test.mjs 使用本机 HTTPS Git smart-HTTP 真仓库验证提交变化、同版本号更新、原生文件/员工引用、删除项不重装、MCP不重复安装、兼容失败保留和恢复、来源隔离、取消/单飞/持久开关及周期校验。settings/communication 测试覆盖设置草稿、最近执行成员与最近更新会话选择。plugin-git-fixture.mjs 的临时TLS信任仅用于测试进程，不进入安装包。AGENTFORGE_PLUGIN_UPDATE_SCHEDULE_REAL=1 可实等120秒；普通单测仅缩短注入时钟间隔。
+plugin-updates.test.mjs 使用本机 HTTPS Git smart-HTTP 真仓库验证提交变化、同版本号更新、原生文件/员工引用、删除项不重装、MCP不重复安装、兼容失败保留和恢复、来源隔离、取消/单飞/持久开关及周期校验。settings/communication 测试覆盖设置草稿、最近执行成员与最近更新会话选择。plugin-git-fixture.mjs 的临时TLS信任仅用于测试进程，不进入安装包。BATON_PLUGIN_UPDATE_SCHEDULE_REAL=1 可实等120秒；普通单测仅缩短注入时钟间隔。
 
 MCP 编辑覆盖脱敏保留/凭据清除/服务重命名拒绝、不可变文件、当前员工原子绑定、并发冲突回滚及 CLI 部分 PUT。隔离实际 UI 验收涵盖空团队、编辑取消/错误/成功、宽窄布局与 API/CLI 回读，不修改操作者实例。
 
@@ -56,7 +56,7 @@ UI 使用隔离 Electron 实例检查宽窄布局、搜索、展开和滚动。�
 
 控制台展示已保存的公开 thinking 正文；敏感片段仍过滤，首尾空白与换行规范化不标为脱敏。历史正文为空时明确说明“未保存可显示的思考正文”，不以“已脱敏”占位，不补造未公开或未保存内容。
 
-`node scripts/test-brand-presentation.mjs` 在隔离 Electron 中验证两主题、1320/760px：员工可用与 Runtime 支持同色、支持/不支持及头像/按钮/空态文字对比、键盘焦点、三目录空态 computed style 完全一致、详情入口与真实 HTTP 失败。仅展示夹具，不执行 Provider/MCP。`AGENTFORGE_BRAND_APP=/absolute/path/AgentForge.app` 可检查指定构建包；证据在忽略的 `.data/brand-presentation-*`。
+`node scripts/test-brand-presentation.mjs` 在隔离 Electron 中验证两主题、1320/760px：员工可用与 Runtime 支持同色、支持/不支持及头像/按钮/空态文字对比、键盘焦点、三目录空态 computed style 完全一致、详情入口与真实 HTTP 失败。仅展示夹具，不执行 Provider/MCP。`BATON_BRAND_APP=/absolute/path/Baton.app` 可检查指定构建包；证据在忽略的 `.data/brand-presentation-*`。
 
 固定 Runtime 回归在 runtime-profiles/configuration-catalog/configuration-cli：两项稳定、字段拒绝、开关门禁、冻结快照与事务回滚。auth 测试真实 HTTP 的委托签发、父退出/重置/重启失效；CLI 测试实例校验与显式会话隔离。scripts/test-runtime-settings.mjs 补实际页内折叠/开关/共享授权及打包默认安装验收。
 
@@ -100,7 +100,7 @@ task-attachments.test.mjs 覆盖附件原字节、归属、澄清续接、重启
 
 `state-journal.test.mjs` 同时覆盖当前领域数据以快照形式保存时的首次物化：空/部分脏日志、首次事务失败保留原快照，以及已有安装 ID 的 Store 冷启动、列表/详情一致与冻结 Run 历史两次重启不变。
 
-协作发送滚动的真实 DOM 回归在 `AGENTFORGE_COLLABORATION_SCROLL_ONLY=1 node scripts/test-collaboration-flow.mjs`：宽窄窗口、两条待澄清问题、历史页回复、底部连续回复、HTTP 失败保留草稿/位置及“最新”定位。使用暂停 Run 的真实回复端点并核对无 Trace；settings/smoke 的轻量 DOM 夹具补齐 querySelector 和动画帧接口，仅验证原有呈现契约。
+协作发送滚动的真实 DOM 回归在 `BATON_COLLABORATION_SCROLL_ONLY=1 node scripts/test-collaboration-flow.mjs`：宽窄窗口、两条待澄清问题、历史页回复、底部连续回复、HTTP 失败保留草稿/位置及“最新”定位。使用暂停 Run 的真实回复端点并核对无 Trace；settings/smoke 的轻量 DOM 夹具补齐 querySelector 和动画帧接口，仅验证原有呈现契约。
 
 
 workflow-editor.test.mjs覆盖最简节点/连线默认值、回路与依赖环区分、字段冲突原子拒绝、布局坐标、确定性完整Markdown、重启及任务冻结、0600/排他创建/链接拒绝；prompts.test.mjs验证经理只收到工作流文件路径，员工收到当前节点正文。实际画布和认证App/CLI交叉验收由scripts/test-workflow-editor.mjs负责。

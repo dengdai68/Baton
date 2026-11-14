@@ -3,7 +3,7 @@ import {writeStorageLocation} from '../server/storage-layout.mjs';
 // Claude Code and Codex as application system/developer instructions and take
 // effect in both communication and a real task, while unbound employees stay
 // unpolluted. Isolated data home; never substitutes fixtures for real models.
-//   AGENTFORGE_ROLES_REAL=1 node scripts/test-roles-real.mjs
+//   BATON_ROLES_REAL=1 node scripts/test-roles-real.mjs
 import assert from 'node:assert/strict';
 import { _electron as electron } from 'playwright-core';
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 import { createStore } from '../server/store.mjs';
 import { createAuth } from '../server/auth.mjs';
 
-if (process.env.AGENTFORGE_ROLES_REAL !== '1') throw new Error('Requires AGENTFORGE_ROLES_REAL=1; never substitutes a fixture for real models');
+if (process.env.BATON_ROLES_REAL !== '1') throw new Error('Requires BATON_ROLES_REAL=1; never substitutes a fixture for real models');
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/roles-real-'));
 assert.equal(dirname(root), resolve('.data')); assert.match(basename(root), /^roles-real-[a-zA-Z0-9]+$/);
@@ -26,7 +26,7 @@ const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('roles-qa', password);
 auth.close();
 
-const store = createStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const store = createStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 store.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') });
 const q = text => "'" + text.replaceAll("'", "'\\''") + "'";
 const profiles = {};
@@ -58,7 +58,7 @@ const chats = Object.fromEntries([ccBound, cxBound, ccFree].map(agent => [agent.
 store.close();
 
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ args: ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+const app = await electron.launch({ args: ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 const wait = async (label, check, timeout = 600000) => { const start = Date.now(); let logged = 0; for (;;) { const result = await check(); if (result) return result; if (Date.now() - start > timeout) throw new Error('Timed out: ' + label); if (Date.now() - logged > 30000) { console.log('WAIT ' + label); logged = Date.now(); } await new Promise(done => setTimeout(done, 2000)); } };
 const evidence = { root, probeV1, probeV2, providers: {}, task: null };
 try {

@@ -21,7 +21,7 @@ if(!instructions.systemPrompt.includes('{{literal}}'))process.exit(8);
 if(rows.find(r=>r.id==='skill-filesystem').config.includeDefaultRoots!==false)process.exit(9);
 const send=m=>process.stdout.write(JSON.stringify({jsonrpc:'2.0',...m})+'\\n');
 const event=(id,type,data)=>send({method:'session.event',params:{sessionId:id,event:{type,data}}});
-send({method:'agentforge.ready',params:{version:1,models:[{id:'deepseek-official/test'}]}});
+send({method:'baton.ready',params:{version:1,models:[{id:'deepseek-official/test'}]}});
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line),reply=result=>send({id:m.id,result});
  if(m.method==='initialize'){fs.writeFileSync('handshake.json',JSON.stringify({...m.params,nativeHome:process.env.DSH_HOME}));reply({serverInfo:{name:mode==='identity'?'wrong-runtime':'deepseek-harness-sdk-runtime'}});}
@@ -35,13 +35,13 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
 `;
 
 async function setup(t, mode = 'success') {
-  const root = await mkdtemp(join(tmpdir(), 'agentforge-dsh-test-'));
-  const previous = process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT;
-  process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT = join(root, 'config');
+  const root = await mkdtemp(join(tmpdir(), 'baton-dsh-test-'));
+  const previous = process.env.BATON_RUNTIME_CONFIG_ROOT;
+  process.env.BATON_RUNTIME_CONFIG_ROOT = join(root, 'config');
   const executable = join(root, 'dsh'); await writeFile(executable, fixture, { mode: 0o700 });
   await writeFile(join(root, 'mode'), mode);
   const directory = join(root, 'trace'); await mkdir(directory);
-  t.after(async () => { if (previous === undefined) delete process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT; else process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT = previous; await rm(root, { recursive: true, force: true }); });
+  t.after(async () => { if (previous === undefined) delete process.env.BATON_RUNTIME_CONFIG_ROOT; else process.env.BATON_RUNTIME_CONFIG_ROOT = previous; await rm(root, { recursive: true, force: true }); });
   return { root, input: { runtime: { provider: 'dsh', executable, model: 'deepseek-official/test', effort: 'off' }, workspacePath: root, traceDirectory: directory, finalPath: join(directory, 'result.json'), outputSchema: { type: 'object' }, prompt: 'current user input only', systemPrompt: 'application instruction {{literal}}', session: { sessionId: randomUUID(), resume: false }, runId: randomUUID(), idleTimeoutMs: 10000, onEvent: async () => {} } };
 }
 
@@ -93,7 +93,7 @@ test('native DeepSeek Harness bridge keeps diagnostic debug off protocol stdout 
   const frames = stdout.trim().split('\n').map(line => JSON.parse(line));
   const proof = frames.find(frame => frame.proof).proof;
   assert.equal(proof.child, 'tool stdout\n'); assert.equal(proof.text, 'literal {{value}}'); assert.equal(proof.interpolate, false);
-  assert.ok(frames.some(frame => frame.method === 'agentforge.ready'));
+  assert.ok(frames.some(frame => frame.method === 'baton.ready'));
 });
 
 test('DeepSeek Harness waits for native follow-up completion and keeps instructions out of the user message', async t => {

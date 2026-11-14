@@ -1,9 +1,9 @@
 ---
-name: agentforge-development
-description: 在 AgentForge App 仓库新增功能、修复界面或评审交互时，选择共享组件、品牌 tokens、目录和协作呈现方式，并确定相应验收路径。仅适用于本仓库开发，不用于执行用户的业务任务。
+name: baton-development
+description: 在 Baton App 仓库新增功能、修复界面或评审交互时，选择共享组件、品牌 tokens、目录和协作呈现方式，并确定相应验收路径。仅适用于本仓库开发，不用于执行用户的业务任务。
 ---
 
-# AgentForge 开发落地
+# Baton 开发落地
 
 以仓库根为相对路径起点。先读根目录 `AGENTS.md`；它是唯一贡献规则入口，本 skill 只补充产品实现的选型方法。现状和模块入口查 `ai/module-registry.json`、`docs/00-ai-map.md`，不要把本次任务的细节增补成全局规则。
 

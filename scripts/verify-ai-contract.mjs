@@ -32,7 +32,7 @@ async function verifyContract() {
     if (!map.includes(path)) throw new Error(`AI map is missing module path: ${path}`);
   }
   const registry = JSON.parse(await readFile(join(root, "ai/module-registry.json"), "utf8"));
-  if (registry.schemaVersion !== 1 || registry.project !== "agentforge" || registry.instructions?.length !== 2 || registry.modules?.length < 8) {
+  if (registry.schemaVersion !== 1 || registry.project !== "baton" || registry.instructions?.length !== 2 || registry.modules?.length < 8) {
     throw new Error("AI module registry is incomplete");
   }
   for (const moduleRoot of registry.moduleRoots || []) {

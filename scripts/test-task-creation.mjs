@@ -13,12 +13,12 @@ import { createMarketplace } from '../server/runtime/marketplace.mjs';
 
 await mkdir('.data',{recursive:true});
 const root=await mkdtemp(resolve('.data/task-creation-')),home=join(root,'home');
-const bundle=process.env.AGENTFORGE_TASK_CREATION_APP;
-const data=bundle?join(home,'.agentforge/desktop'):join(root,'client');
+const bundle=process.env.BATON_TASK_CREATION_APP;
+const data=bundle?join(home,'.baton/desktop'):join(root,'client');
 await mkdir(home,{recursive:true,mode:0o700});
 const password=randomBytes(24).toString('hex');
 const auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('task-form-qa',password);auth.close();
-const store=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
+const store=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
 const manager=store.createAgent({name:'创建界面经理',kind:'manager'}),worker=store.createAgent({name:'创建界面成员'});
 const extra=store.createAgent({name:'其他团队成员'}),secondManager=store.createAgent({name:'第二位经理',kind:'manager'});
 const inactive=store.createAgent({name:'停用团队成员',status:'inactive'});
@@ -33,7 +33,7 @@ const toolMarket=createMarketplace(join(data,'runtime-configs'));const toolEntry
 const memberTask=store.createTask({title:'成员身份验收',objective:'仅验收暂停任务的成员编辑',memberAgentIds:[worker.id,extra.id],managerAgentId:worker.id}),memberRun=store.createRun(memberTask.id);store.pauseRun(memberRun.id);
 store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')} :{}),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser-profile')],env:{...process.env,HOME:home,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:90000});
+const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')} :{}),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser-profile')],env:{...process.env,HOME:home,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:90000});
 const evidence={root,bundle:bundle||'source',cases:[],geometry:[]},errors=[];
 try{
  const page=await app.firstWindow({timeout:90000});page.setDefaultTimeout(30000);page.on('pageerror',e=>errors.push(e.message));
@@ -52,6 +52,7 @@ try{
   assert.equal(await form.locator('#node-assignment-panel,[data-task-execution-boundary]').count(),0);
   const geometry=await form.evaluate(form=>{const box=node=>{const r=node.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom};};const textarea=form.elements.objective,style=getComputedStyle(textarea);return{modal:box(form.closest('.modal')),textarea:box(textarea),line:parseFloat(style.lineHeight),padding:parseFloat(style.paddingTop)+parseFloat(style.paddingBottom),members:box(form.querySelector('#task-members-picker .extension-picker-control')),flow:box(form.elements.workflowTemplateId),submit:box(form.querySelector('[value="start"]')),overflow:document.documentElement.scrollWidth>innerWidth};});
   evidence.geometry.push({theme,width,height,...geometry});
+  assert.ok(Math.abs(geometry.members.height-geometry.flow.height)<1,'empty member and workflow controls have equal heights');
   await page.screenshot({path:join(root,`initial-${theme}-${width}x${height}.png`)});
   assert.ok(geometry.textarea.height>=geometry.line*4+geometry.padding,'four complete reading lines fit in the compact description');
   assert.ok(geometry.textarea.height<=150.5,'initial description stays within the Graphite 150px cap');
@@ -90,6 +91,7 @@ try{
   await page.goto(origin+'/settings/appearance');await page.locator(`[name=theme][value=${width===1320?'light':'dark'}]`).check();
   await app.evaluate(({BrowserWindow},{origin,width,height})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,height),{origin,width,height});
   await page.goto(origin+'/automations');await page.locator('[data-auto-new]').click();const auto=page.locator('#task-form');await auto.locator('[name=title]').fill('任务级经理 '+width);await auto.locator('[name=objective]').fill('自动化使用所选业务员工协调');
+  assert.ok(await auto.evaluate(form=>Math.abs(form.querySelector('.extension-picker-control').getBoundingClientRect().height-form.elements.workflowTemplateId.getBoundingClientRect().height)<1),'automation uses equal empty selector heights');
   await auto.locator('#task-members').fill(teams[0].name);await page.locator(`[data-add-extension="${teams[0].id}"]`).click();await auto.locator(`[data-select-manager="${worker.id}"]`).click();
   await auto.locator('#task-members').click();await auto.locator('#task-members').fill(bulkTeam.name);await page.locator(`[data-add-extension="${bulkTeam.id}"]`).click();assert.ok(await auto.locator('#task-members-picker .extension-picker-control').evaluate(el=>el.getBoundingClientRect().height>38&&el.scrollWidth<=el.clientWidth+1));
   const response=page.waitForResponse(r=>r.url().endsWith('/api/automations')&&r.request().method()==='POST');await auto.locator('[value=disabled]').click();const saved=await(await response).json();assert.equal(saved.automation.managerAgentId,worker.id);assert.equal(saved.automation.enabled,false);await auto.waitFor({state:'detached'});
@@ -104,6 +106,9 @@ try{
  evidence.cases.push('automation business employee manager persists, editing preserves its star and removal requires reselection; real stdio MCP detail shows non-collapsible configuration before all 23 tools without search, schema controls or pagination, and refreshes in wide/narrow windows');
  await page.goto(origin+'/agents');await page.locator('.employee-runtime-summary').first().waitFor();assert.doesNotMatch(await page.locator('.employee-runtime-summary').allTextContents().then(x=>x.join(' ')),/CLI 默认模型|思考/);await page.locator(`[data-edit-agent="${worker.id}"]`).locator("xpath=ancestor::details").locator("summary").click();await page.locator(`[data-edit-agent="${worker.id}"]`).click();await page.locator('#agent-form').waitFor();assert.equal(await page.locator('#agent-form [name=kind]').count(),0);assert.equal(await page.locator('.employee-kind').count(),0);await page.locator('#agent-form [data-close-modal]').click();
  await page.goto(origin+'/runs/'+memberRun.id);if(!await page.getByRole('button',{name:'编辑任务成员',exact:true}).isVisible())await page.locator('[data-toggle-task-details]').click();await page.getByRole('button',{name:'编辑任务成员',exact:true}).click();await page.locator('#run-members').fill(worker.name);assert.equal(await page.locator(`[data-add-extension="${worker.id}"]`).count(),0,'the current manager source cannot be added twice');await page.locator('#run-members').fill(secondManager.name);await page.locator(`[data-add-extension="${secondManager.id}"]`).click();
+ for(const agent of bulkAgents){await page.locator('#run-members').fill(agent.name);await page.locator(`[data-add-extension="${agent.id}"]`).click();}
+ const liveRoster=await page.locator('#run-member-picker .extension-picker-control').evaluate(control=>{const box=control.getBoundingClientRect(),chips=[...control.querySelectorAll('.extension-chip')].map(el=>el.getBoundingClientRect());return{height:box.height,rows:new Set(chips.map(r=>Math.round(r.y))).size,contained:chips.every(r=>r.left>=box.left&&r.right<=box.right&&r.top>=box.top&&r.bottom<=box.bottom),fits:control.scrollWidth<=control.clientWidth+1};});
+ assert.ok(liveRoster.rows>1&&liveRoster.contained&&liveRoster.fits,'live task member selection wraps and keeps newly added members visible');
  await page.locator('#task-members-form [type=submit]').click();await page.locator('#task-members-form').waitFor({state:'detached'});const memberState=await api('/api/runs/'+memberRun.id+'/workspace?view=compact');assert.equal(memberState.run.manager.sourceAgentId,worker.id);assert.ok(memberState.run.participants.some(p=>p.id===secondManager.id));
  evidence.cases.push('employee edit hides the retained kind field; a business manager has one run alias and can add another stored-manager employee without changing the frozen coordinator');
  evidence.cases.push('11 selected employees and a long name wrap without clipping; native keyboard continuation, manager switching and removal/save remain available; two themes at 1320x1000, 760x760 and 800x560; four to six visible description lines, wide same-row/narrow stacked selectors and reachable submit; optional criteria retain drafts and reopen on validation errors; real HTTP creation persists combined independent employees/workflow and accepts employees of any stored kind and explicit business employee manager, and validates empty or supplied criteria; rejected launch retains backlog task');
@@ -116,8 +121,11 @@ try{
   const before=await prompt.boundingBox(),modalBefore=await page.locator('.modal').boundingBox();
   await page.mouse.move(before.x+before.width-6,before.y+before.height-6);await page.mouse.down();await page.mouse.move(before.x+before.width-6,before.y+before.height+74,{steps:8});await page.mouse.up();
   const after=await prompt.boundingBox(),modalAfter=await page.locator('.modal').boundingBox();assert.ok(after.height-before.height>65,'native resize follows the pointer');assert.ok(Math.abs(modalAfter.y-modalBefore.y)<2,'resizing keeps the form top stable');
-  await page.mouse.click(2,2);await page.keyboard.press('Escape');assert.equal(await roleForm.isVisible(),true,'background and Escape do not discard a new form');
-  assert.equal(await roleForm.locator('[name=name]').inputValue(),'不应因拖动或背景点击丢失的草稿');await page.screenshot({path:join(root,`resize-${theme}.png`)});await page.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();
+  assert.equal(await page.locator('.detail-drawer #role-form').count(),1,'role creation uses the directory drawer');
+  await page.screenshot({path:join(root,`resize-${theme}.png`)});
+  await page.mouse.click(2,2);await roleForm.waitFor({state:'detached'});
+  assert.ok(!(await api('/api/roles')).roles.some(role=>role.name==='不应因拖动或背景点击丢失的草稿'),'dismissed role drawer never saves a draft');
+  await page.locator('[data-action="new-role"]').click();await roleForm.waitFor();await page.keyboard.press('Escape');await roleForm.waitFor({state:'detached'});
   await page.goto(origin+'/teams');await page.locator('[data-action="new-team"]').click();
   const mission=page.locator('#team-form textarea');
   await page.evaluate(()=>document.getAnimations().filter(animation=>Number.isFinite(animation.effect.getComputedTiming().endTime)).forEach(animation=>animation.finish()));
@@ -133,18 +141,18 @@ try{
   }
   await page.locator('#team-members').fill(worker.name);await page.locator(`[data-add-extension="${worker.id}"]`).click();assert.equal(await page.locator('#team-form .extension-chip-name').textContent(),worker.name);await page.locator('#team-members').click();await page.locator('#team-members-options').waitFor();await page.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();assert.equal(await page.locator('.floating-list:popover-open').count(),0,'closing the owner releases its popup');
  }
- evidence.cases.push('native role/Team textarea resizing keeps the modal top fixed; backdrop/Escape retain drafts; Team dropdowns escape clipped modal bodies, flip by viewport space and keep the mouse gap reachable in two themes');
+ evidence.cases.push('native role/Team textarea resizing keeps the modal top fixed; role drawers dismiss without auto-save; Team dropdowns escape clipped modal bodies, flip by viewport space and keep the mouse gap reachable in two themes');
  await page.goto(origin+'/teams');await page.locator('[data-action="new-team"]').click();
  await page.locator('#team-form [name=name]').fill('界面可空团队');
  const teamCreated=page.waitForResponse(response=>response.url().endsWith('/api/teams')&&response.request().method()==='POST');
  await page.locator('#team-form [type=submit]').click();const {team:uiTeam}=await(await teamCreated).json();await page.locator('#team-form').waitFor({state:'detached'});
  assert.deepEqual(uiTeam.memberAgentIds,[]);
- await page.locator(`[data-edit-team="${uiTeam.id}"]`).locator('xpath=ancestor::details').locator('summary').click();await page.locator(`[data-edit-team="${uiTeam.id}"]`).click();
+ await page.locator(`.team-row-open[data-edit-team="${uiTeam.id}"]`).click();
  for(const member of [worker,inactive]){await page.locator('#team-members').fill(member.name);await page.locator(`[data-add-extension="${member.id}"]`).click();}
  await page.locator('#team-members').press('Escape');await page.screenshot({path:join(root,'manager-free-team-edit.png')});
  await page.locator('#team-form [type=submit]').click();await page.locator('#team-form').waitFor({state:'detached'});
  assert.deepEqual((await api('/api/teams')).teams.find(team=>team.id===uiTeam.id).memberAgentIds,[worker.id,inactive.id]);
- await page.locator(`[data-edit-team="${uiTeam.id}"]`).locator('xpath=ancestor::details').locator('summary').click();await page.locator(`[data-edit-team="${uiTeam.id}"]`).click();await page.locator('#team-form [name=name]').fill('重命名保留停用成员');await page.locator('#team-form [type=submit]').click();await page.locator('#team-form').waitFor({state:'detached'});
+ await page.locator(`.team-row-open[data-edit-team="${uiTeam.id}"]`).click();await page.locator('#team-form [name=name]').fill('重命名保留停用成员');await page.locator('#team-form [type=submit]').click();await page.locator('#team-form').waitFor({state:'detached'});
  assert.deepEqual((await api('/api/teams')).teams.find(team=>team.id===uiTeam.id).memberAgentIds,[worker.id,inactive.id]);
  evidence.cases.push('actual team form creates an empty manager-free team and preserves inactive employee chips through name-only edits');
  const cli=async(args,value,expected=0)=>{
@@ -185,7 +193,7 @@ try{
   assert.equal(await page.locator('#agent-form [name=description]').inputValue(),'独立简介');assert.equal(await page.locator('#agent-form [name=capabilities]').inputValue(),'独立审片');
   await page.screenshot({path:join(root,`parity-agent-${theme}.png`)});await page.locator('#agent-form [type=submit]').click();await page.locator('#agent-form').waitFor({state:'detached'});
   const agent=await cli(['agents','get',worker.id]);assert.deepEqual(agent.capabilities,['独立审片']);assert.deepEqual(agent.roleIds,[role.id]);assert.equal((await cli(['agents','list','--search','独立审片'])).total,1);
-  await page.goto(origin+'/teams');await page.locator(`[data-edit-team="${uiTeam.id}"]`).locator('xpath=ancestor::details').locator('summary').click();await page.locator(`[data-edit-team="${uiTeam.id}"]`).click();await page.locator('#team-form [data-enabled-toggle]').uncheck();assert.equal(await page.locator('#team-form [name=status]').inputValue(),'inactive');await page.screenshot({path:join(root,`parity-team-${theme}.png`)});await page.locator('#team-form [type=submit]').click();await page.locator('#team-form').waitFor({state:'detached'});
+  await page.goto(origin+'/teams');await page.locator(`.team-row-open[data-edit-team="${uiTeam.id}"]`).click();await page.locator('#team-form [data-enabled-toggle]').uncheck();assert.equal(await page.locator('#team-form [name=status]').inputValue(),'inactive');await page.screenshot({path:join(root,`parity-team-${theme}.png`)});await page.locator('#team-form [type=submit]').click();await page.locator('#team-form').waitFor({state:'detached'});
   assert.equal((await cli(['teams','get',uiTeam.id])).status,'inactive');await cli(['tasks','create','--file','-'],{...cliInput,teamIds:[uiTeam.id]},4);
   await cli(['teams','update',uiTeam.id,'--file','-'],{status:'active'});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

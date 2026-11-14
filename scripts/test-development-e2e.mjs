@@ -16,19 +16,19 @@ import { setupCliConfiguration } from "./cli-e2e.mjs";
 let origin;
 await mkdir(resolve(".data"), { recursive: true });
 await mkdir(resolve("screenshots"), { recursive: true });
-const resume = process.env.AGENTFORGE_DEVELOPMENT_E2E_RESUME;
-const cliMode = process.env.AGENTFORGE_CLI_E2E === '1';
-const taskCliMode = process.env.AGENTFORGE_TASK_CLI_E2E === '1';
+const resume = process.env.BATON_DEVELOPMENT_E2E_RESUME;
+const cliMode = process.env.BATON_CLI_E2E === '1';
+const taskCliMode = process.env.BATON_TASK_CLI_E2E === '1';
 const root = resume ? resolve(resume) : await mkdtemp(resolve(".data/development-e2e-"));
-process.env.AGENTFORGE_LOG_DIR=join(root,'logs');
+process.env.BATON_LOG_DIR=join(root,'logs');
 assert.equal(dirname(root), resolve(".data"));
 assert.match(basename(root), /^development-e2e-[a-zA-Z0-9]+$/);
-const pluginFixture = process.env.AGENTFORGE_PLUGIN_E2E === '1' || process.env.AGENTFORGE_MARKETPLACE_E2E === '1' || (cliMode && process.env.AGENTFORGE_CLI_PUBLIC_IMPORT !== '1') ? await preparePluginFixture(root) : null;
+const pluginFixture = process.env.BATON_PLUGIN_E2E === '1' || process.env.BATON_MARKETPLACE_E2E === '1' || (cliMode && process.env.BATON_CLI_PUBLIC_IMPORT !== '1') ? await preparePluginFixture(root) : null;
 const pluginEnv = pluginFixture?.env || {};
 const password = randomBytes(24).toString("hex");
 const auth = createAuth({ databasePath: join(root, "auth.sqlite") });
 await auth.setAdministrator("development-e2e", password); auth.close();
-const store = createStore({ databasePath: join(root, "agentforge.sqlite"), workspaceRoot: join(root, "workspaces") });
+const store = createStore({ databasePath: join(root, "baton.sqlite"), workspaceRoot: join(root, "workspaces") });
 if (!resume) store.updateWorkspaceSettings({ workspaceRoot: join(root, "workspaces") });
 const agents = store.snapshot().agents;
 const repository = { url: "https://github.com/octocat/Hello-World.git", ref: "master" };
@@ -49,8 +49,8 @@ let flow = cliMode ? null : (resume && store.snapshot().workflowTemplates.find(i
   { id: "develop", title: "实现任务搜索工具", staffingGuidance: "熟悉 Node.js ESM、内容工具开发，能实际执行测试并记录证据的成员", dependsOn: [], artifactPaths: ["docs/development/"], deliverable: "在绑定代码仓库实现 task-search.mjs 和 task-search.test.mjs，执行 node --test，提交本地 Git commit（不 push），在 docs/development/report.md 记录真实测试与 SHA。" },
   { id: "verify", title: "独立边界验证", staffingGuidance: "不是本次代码作者，能独立读取源码、执行 Node.js 测试并验证边界条件的成员", dependsOn: ["develop"], artifactPaths: ["docs/verification/"], deliverable: "独立读取代码并运行测试，验证空数组、非法输入、中文名称、状态和团队交集，在 docs/verification/report.md 记录实际命令、结果与必要缺陷。" }
 ] });
-const shellEnvTest = process.env.AGENTFORGE_SHELL_ENV_E2E === '1';
-const guiPath = process.env.AGENTFORGE_GUI_PATH_E2E === '1' || shellEnvTest;
+const shellEnvTest = process.env.BATON_SHELL_ENV_E2E === '1';
+const guiPath = process.env.BATON_GUI_PATH_E2E === '1' || shellEnvTest;
 let launchEnvironment = { ...process.env, ...pluginEnv, ...(guiPath ? { PATH: '/usr/bin:/bin:/usr/sbin:/sbin' } : {}) };
 if (shellEnvTest) {
   const shellRoot = join(root, 'shell-profile'), bin = join(shellRoot, 'version-manager/bin');
@@ -99,7 +99,7 @@ async function taskCli(args, input, expected = 0) {
 }
 try {
   {
-    desktop = await electron.launch({ args: ["apps/electron/main.mjs", `--user-data-dir=${join(root, 'browser')}`], env: { ...launchEnvironment, AGENTFORGE_DESKTOP_DATA_ROOT: root }, timeout: 60000 });
+    desktop = await electron.launch({ args: ["apps/electron/main.mjs", `--user-data-dir=${join(root, 'browser')}`], env: { ...launchEnvironment, BATON_DESKTOP_DATA_ROOT: root }, timeout: 60000 });
     page = await desktop.firstWindow();
     await wait('client endpoint', async () => {
       const endpoint = await readFile(join(root, 'desktop-endpoint.json'), 'utf8').then(JSON.parse, () => null);
@@ -132,7 +132,7 @@ try {
   await page.locator("#username").fill("development-e2e"); await page.locator("#password").fill(password);
   await page.getByRole("button", { name: "登录", exact: true }).click();
   await page.locator("#account-name").waitFor();
-  const createdWorkspaceRoot=process.env.AGENTFORGE_WORKSPACE_E2E==='1' ? join(root,'auto-created-workspaces','任务目录') : null;
+  const createdWorkspaceRoot=process.env.BATON_WORKSPACE_E2E==='1' ? join(root,'auto-created-workspaces','任务目录') : null;
   if(createdWorkspaceRoot){
     await page.goto(origin+'/settings/workspace');await page.locator('#default-workspace-root').fill(createdWorkspaceRoot);
     await page.getByRole('button',{name:'保存目录',exact:true}).click();await page.getByText('已保存，仅新任务使用此目录。',{exact:true}).waitFor();
@@ -142,11 +142,11 @@ try {
   }
   if (taskCliMode) await taskCli(['auth', 'login', '--username', 'development-e2e', '--password-stdin'], password + '\n');
   if (cliMode) ({ developer, tester, team, flow } = await setupCliConfiguration({ root, api, page, username: 'development-e2e', password, repository }));
-  if (process.env.AGENTFORGE_RUNTIME_E2E === '1' || guiPath) {
+  if (process.env.BATON_RUNTIME_E2E === '1' || guiPath) {
     await page.goto(`${origin}/settings/runtime`);
     const profiles = (await api('/api/settings/runtime-profiles')).profiles;
     assert.equal(profiles.length,2);
-    for (const profile of profiles.filter(item=>item.provider==='claude-code'||process.env.AGENTFORGE_RUNTIME_E2E==='1')) {
+    for (const profile of profiles.filter(item=>item.provider==='claude-code'||process.env.BATON_RUNTIME_E2E==='1')) {
       const row=page.locator(`[data-runtime-profile="${profile.id}"]`);
       await row.locator('summary').click();
       const drawer=page.locator('.runtime-inline-editor'); assert.equal(await drawer.locator('input,select').count(),2);
@@ -156,7 +156,7 @@ try {
     }
     await page.screenshot({path:'screenshots/runtime-settings-web.png',fullPage:true});
   }
-  if (process.env.AGENTFORGE_LOGS_E2E === "1") {
+  if (process.env.BATON_LOGS_E2E === "1") {
     assert.equal((await fetch(`${origin}/api/settings/execution-logs`)).status, 401);
     for (const [kind, targetId, source] of [["agent", developer.id, "private"], ["team", team.id, "group"]]) {
       // Fixed Runtime paths are not writable; real diagnostic events come from the requested call below.
@@ -187,7 +187,7 @@ try {
     assert.equal(await page.locator('[data-log-list]').count(), 0);
     await page.screenshot({path: 'screenshots/execution-logs-web.png'});
   }
-  const verifyMarketplace = process.env.AGENTFORGE_PLUGIN_E2E === '1' ? await setupPluginMarketplace({page,api,root,developer,tester,manager}) : process.env.AGENTFORGE_MARKETPLACE_E2E === '1' ? await setupMarketplace({page,api,root,developer,tester,manager}) : null;
+  const verifyMarketplace = process.env.BATON_PLUGIN_E2E === '1' ? await setupPluginMarketplace({page,api,root,developer,tester,manager}) : process.env.BATON_MARKETPLACE_E2E === '1' ? await setupMarketplace({page,api,root,developer,tester,manager}) : null;
   const created = (resume && store.listTasks().find(task => task.title.startsWith("DEV-E2E｜"))) || await api("/api/tasks", {managerAgentId:'system_project_manager', title: "DEV-E2E｜真实执行日志与任务检索开发", memberAgentIds: team.memberAgentIds, workflowTemplateId: flow.id, nodeAssignments: { develop: developer.id, verify: tester.id }, objective: "完成真实 Node.js ESM 代码开发：在已绑定的公共 Hello-World 克隆目录中新增 task-search.mjs，导出 filterTasks(tasks, {name='',status='',teamId=''}={})。按名称不区分大小写子串、状态和团队精确交集过滤，保留顺序、不修改输入。空数组返回 []；tasks 非数组或元素缺少字符串 name/status/teamId 时抛 TypeError。新增 task-search.test.mjs，使用 node:test 覆盖中文/大小写、组合条件、无匹配、空数组、非法输入和不修改输入。开发者先用普通 assistant 正文简短说明即将实施的工作（不要求隐藏思维），再实际执行一次预期失败探针：node -e \"console.error('EXPECTED_FAILURE_PROBE');process.exit(1)\"，记录这是有意测试工具失败展示而不是交付缺陷，随后正常开发和修复到测试通过。开发者执行真实测试并仅本地 commit，测试者独立执行和验证；所有文档仅写自己的 artifactPaths。不能 push/发布/部署、不能改凭据。验收后等待人类确认。", acceptanceCriteria: ["真实 ESM 函数通过名称、状态、团队组合过滤且不修改输入", "真实 node --test 覆盖成功路径及 TypeError/无匹配边界，并记录预期失败探针后正常交付", "独立测试报告引用实际结果且代码有本地 Git commit，无远程写入"] });
   const task = created.task || created;
   if(createdWorkspaceRoot)assert.equal(task.workspacePath,join(createdWorkspaceRoot,task.id));
@@ -197,7 +197,7 @@ try {
   if (resume && existingRun?.status === "failed" && existingRun.failure?.phase === "workspace_preparation") {
     await api(`/api/runs/${runId}/retry-orchestration`, {});
   }
-  if(resume && process.env.AGENTFORGE_DEVELOPMENT_E2E_REPAIR_PROBE === '1') {
+  if(resume && process.env.BATON_DEVELOPMENT_E2E_REPAIR_PROBE === '1') {
     await api(`/api/runs/${runId}/messages`, {recipientAgentId:developer.id,content:'测试操作者拒绝当前失败探针证据：你在非零退出命令后追加 echo，导致 Bash 工具整体返回 0。请通过一次独立 Bash 调用严格执行 node -e "console.error(\'EXPECTED_FAILURE_PROBE\');process.exit(1)"。不要追加 echo、分号后的命令、|| true 或任何吞掉退出码的包装，工具自身必须返回失败。此预期失败不是代码缺陷；随后再用另一次独立调用运行代码测试。保留现有源码和技能/MCP 核验值，更新自己的开发报告记录这次真实失败与修正。请项目经理重新复核，仍等待人类确认。'});
   }
   await page.goto(`${origin}/runs/${runId}`);

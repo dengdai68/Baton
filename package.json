@@ -1,21 +1,21 @@
 {
-  "name": "agentforge-app",
+  "name": "baton-app",
   "version": "0.1.9",
   "private": true,
   "license": "Apache-2.0",
   "description": "Local AI teams, collaborative tasks and scheduled automation",
   "repository": {
     "type": "git",
-    "url": "https://github.com/dengdai68/AgentForge.git"
+    "url": "https://github.com/dengdai68/Baton.git"
   },
-  "homepage": "https://github.com/dengdai68/AgentForge#readme",
+  "homepage": "https://github.com/dengdai68/Baton#readme",
   "bugs": {
-    "url": "https://github.com/dengdai68/AgentForge/issues"
+    "url": "https://github.com/dengdai68/Baton/issues"
   },
   "type": "module",
   "main": "apps/electron/main.mjs",
   "bin": {
-    "agentforge": "cli/main.mjs"
+    "baton": "cli/main.mjs"
   },
   "scripts": {
     "cli": "node cli/main.mjs",
@@ -59,8 +59,8 @@
     "playwright-core": "1.63.0"
   },
   "build": {
-    "appId": "com.agentforge.desktop",
-    "productName": "AgentForge",
+    "appId": "com.baton.desktop",
+    "productName": "Baton",
     "electronDist": "node_modules/electron/dist",
     "asar": true,
     "directories": {
@@ -94,8 +94,8 @@
         "to": "licenses/electron/LICENSES.chromium.html"
       },
       {
-        "from": "cli/agentforge",
-        "to": "cli/agentforge"
+        "from": "cli/baton",
+        "to": "cli/baton"
       },
       {
         "from": "scripts/migrate-data-home.mjs",
@@ -126,7 +126,7 @@
       {
         "provider": "github",
         "owner": "dengdai68",
-        "repo": "AgentForge",
+        "repo": "Baton",
         "releaseType": "release"
       }
     ]

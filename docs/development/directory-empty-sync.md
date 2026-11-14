@@ -8,8 +8,8 @@
 
 范围仅renderer呈现及Electron响应式覆盖；未改变HTTP/CLI、认证、SSE订阅时机、执行协调、任务及消息数据。CLI核对无参数、输出、help或schema变化。同步设计文档、地图、注册表、README、CHANGELOG及仓库开发skill，移除旧空态约定。
 
-验证：同一工作树复制到本机临时目录执行npm test，546通过、0失败；check:ai/check:impact、规定server/app语法检查、communication/marketplace及验收脚本语法检查、git diff --check通过。现有隔离Electron品牌验收扩展到8种目录，两主题×1320/760窗口逐项比较computed style和左右边缘，误差小于1px，常规两行提示不超过80px，无页面横向溢出；角色原始空列表、搜索无结果、市场HTTP503读取失败、状态在账号区且顶栏无重复、长账号及窄侧栏均通过。截图已目检。证据：本机临时验证目录.data/brand-presentation-TD6Htv/evidence.json；日志/private/tmp/agentforge-beta105-presentation.log。均使用隔离数据，未调用Provider。
+验证：同一工作树复制到本机临时目录执行npm test，546通过、0失败；check:ai/check:impact、规定server/app语法检查、communication/marketplace及验收脚本语法检查、git diff --check通过。现有隔离Electron品牌验收扩展到8种目录，两主题×1320/760窗口逐项比较computed style和左右边缘，误差小于1px，常规两行提示不超过80px，无页面横向溢出；角色原始空列表、搜索无结果、市场HTTP503读取失败、状态在账号区且顶栏无重复、长账号及窄侧栏均通过。截图已目检。证据：本机临时验证目录.data/brand-presentation-TD6Htv/evidence.json；日志/private/tmp/baton-beta105-presentation.log。均使用隔离数据，未调用Provider。
 
-打包为beta.105本机候选应用：复用已安装Electron和生产依赖，覆盖105个项目文件并逐文件比对，沿用entitlements并ad-hoc签名，codesign深度严格校验通过。候选位置记录于/private/tmp/agentforge-beta105-preview-path。本轮未发布GitHub Release或生成标准ZIP/DMG。
+打包为beta.105本机候选应用：复用已安装Electron和生产依赖，覆盖105个项目文件并逐文件比对，沿用entitlements并ad-hoc签名，codesign深度严格校验通过。候选位置记录于/private/tmp/baton-beta105-preview-path。本轮未发布GitHub Release或生成标准ZIP/DMG。
 
-安装已完成：用户暂停任务并明确要求安装后，正式CLI与客户端均确认已暂停、无正在执行任务；正常退出并将beta.105安装到/Applications/AgentForge.app，签名与ASAR哈希核对通过。启动后首轮正式CLI对比15个任务ID与状态均一致，客户端登录保留。实机AX与截图确认同步状态位于账号旁、顶栏无重复。随后实机显示该任务已继续执行，安装操作未发送恢复任务命令，未再干预。目录空态两主题宽窄布局已在同版本隔离候选应用验收，实际客户端本轮未额外筛选目录。未提交或推送当前混合工作树。
+安装已完成：用户暂停任务并明确要求安装后，正式CLI与客户端均确认已暂停、无正在执行任务；正常退出并将beta.105安装到/Applications/Baton.app，签名与ASAR哈希核对通过。启动后首轮正式CLI对比15个任务ID与状态均一致，客户端登录保留。实机AX与截图确认同步状态位于账号旁、顶栏无重复。随后实机显示该任务已继续执行，安装操作未发送恢复任务命令，未再干预。目录空态两主题宽窄布局已在同版本隔离候选应用验收，实际客户端本轮未额外筛选目录。未提交或推送当前混合工作树。

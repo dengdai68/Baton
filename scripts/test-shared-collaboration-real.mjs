@@ -9,21 +9,21 @@ import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
 import { writeStorageLocation } from '../server/storage-layout.mjs';
 
-if (process.env.AGENTFORGE_SHARED_COLLABORATION_REAL !== '1') throw Error('Requires AGENTFORGE_SHARED_COLLABORATION_REAL=1; invokes real models');
+if (process.env.BATON_SHARED_COLLABORATION_REAL !== '1') throw Error('Requires BATON_SHARED_COLLABORATION_REAL=1; invokes real models');
 await mkdir('.data',{recursive:true});
-const resume=process.env.AGENTFORGE_SHARED_COLLABORATION_RESUME;
+const resume=process.env.BATON_SHARED_COLLABORATION_RESUME;
 if(resume && (dirname(resolve(resume))!==resolve('.data') || !/^shared-collaboration-[A-Za-z0-9]+$/.test(basename(resume)))) throw Error('Resume requires this test’s isolated evidence directory');
-const bundle=process.env.AGENTFORGE_SHARED_COLLABORATION_APP;
-const root=resume?resolve(resume):await mkdtemp(resolve('.data/shared-collaboration-')),home=join(root,'home'),data=bundle?join(home,'.agentforge','desktop'):join(root,'client');
+const bundle=process.env.BATON_SHARED_COLLABORATION_APP;
+const root=resume?resolve(resume):await mkdtemp(resolve('.data/shared-collaboration-')),home=join(root,'home'),data=bundle?join(home,'.baton','desktop'):join(root,'client');
 const previous=resume?JSON.parse(await readFile(join(root,'evidence.json'),'utf8')):null;
 await mkdir(home,{recursive:true});
 if(resume && bundle)await cp(join(root,'client'),data,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('shared-qa',password);auth.close();
-const seed=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});
+const seed=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});
 const profileId=seed.listRuntimeProfiles().find(item=>item.provider==='claude-code').id;seed.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
 let proofA='PUBLIC_A_'+randomBytes(10).toString('hex'),proofB='OWN_B_'+randomBytes(10).toString('hex');
-const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')}:{ }),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser-profile')],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});
+const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')}:{ }),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser-profile')],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});
 const evidence={root,realModel:true,bundle:bundle||'source',...(resume?{resumedAfterFailure:previous.error}:{})};console.log('EVIDENCE '+root);
 try {
   const page=await app.firstWindow({timeout:180000});page.setDefaultTimeout(60000);page.setDefaultNavigationTimeout(120000);await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:120000,waitUntil:'domcontentloaded'});const origin=new URL(page.url()).origin;

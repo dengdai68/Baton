@@ -1,5 +1,5 @@
 // UI 重设计审查：隔离 Electron 截图采集（仅展示夹具，不调用 Provider，不触碰操作者实例）。
-// 运行：node scripts/test-redesign.mjs；AGENTFORGE_REDESIGN_APP 可指定安装包。
+// 运行：node scripts/test-redesign.mjs；BATON_REDESIGN_APP 可指定安装包。
 // 产物：.data/ui-redesign-audit/run-<随机>/shots/*.png 与 evidence.json（均被 git 忽略）。
 import assert from 'node:assert/strict';
 import { writeStorageLocation } from '../server/storage-layout.mjs';
@@ -18,10 +18,10 @@ const root = await mkdtemp(resolve('.data/ui-redesign-audit/run-'));
 const shots = join(root, 'shots');
 await mkdir(shots, { recursive: true });
 const home = join(root, 'home');
-const bundle=process.env.AGENTFORGE_REDESIGN_APP;
-const data = bundle?join(home,'.agentforge','desktop'):join(root, 'client');
+const bundle=process.env.BATON_REDESIGN_APP;
+const data = bundle?join(home,'.baton','desktop'):join(root, 'client');
 await mkdir(home, { recursive: true });
-process.env.AGENTFORGE_LOG_DIR = join(root, 'logs');
+process.env.BATON_LOG_DIR = join(root, 'logs');
 
 // 1) 隔离 PATH：claude/codex/dsh 均为立即失败的假命令，任何意外派工都不会调用真实模型。
 const bin = join(home, 'test-bin');
@@ -33,7 +33,7 @@ for (const name of ['.zprofile', '.zshrc']) await writeFile(join(home, name), 'e
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('design-audit', password); auth.close();
-const s = createCatalogFixtureStore({ databasePath: join(root, 'work', 'records', 'agentforge.sqlite'), configurationDirectory: data, workspaceRoot: join(root, 'work') });
+const s = createCatalogFixtureStore({ databasePath: join(root, 'work', 'records', 'baton.sqlite'), configurationDirectory: data, workspaceRoot: join(root, 'work') });
 const files = createRunFiles({ root: join(root, 'work', 'records') });
 const seeded = { tasks: {}, chats: {}, notes: [] };
 const attempt = async (label, action) => { try { return await action(); } catch (error) { seeded.notes.push(`${label}: ${error.message}`); log('SEED WARN', label, error.message); return null; } };
@@ -160,7 +160,7 @@ await writeFile(join(pluginSource, 'skills', 'review', 'SKILL.md'), '---\nname: 
 await writeFile(join(pluginSource, '.claude-plugin', 'plugin.json'), JSON.stringify({ name: 'code-review-kit', description: '代码评审清单与提交前检查 Skill（展示夹具，不执行）。', version: '1.2.0', settings: {} }));
 
 // 3) 启动隔离 Electron 并截图。
-const app = await electron.launch({ ...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge'),args:[]}:{args:['apps/electron/main.mjs']}), env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 120000 });
+const app = await electron.launch({ ...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton'),args:[]}:{args:['apps/electron/main.mjs']}), env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 120000 });
 const evidence = { root, seeded, shots: [], errors: [], metrics: {} };
 try {
   const page = await app.firstWindow({ timeout: 120000 });
@@ -280,7 +280,7 @@ try {
   assert.equal(await page.locator('#modal-backdrop').evaluate(node => node.open), true, 'centered employee configuration still requires explicit dismissal');
   await page.locator('#modal-close').click();
 
-  for (const theme of (process.env.AGENTFORGE_REDESIGN_INTERACTION_ONLY ? [] : ['light', 'dark'])) {
+  for (const theme of (process.env.BATON_REDESIGN_INTERACTION_ONLY ? [] : ['light', 'dark'])) {
     await step('theme ' + theme, async () => { await page.goto(origin + '/settings/appearance'); await page.locator(`[name=theme][value=${theme}]`).check(); await settle(300); });
     const sizes = [[1440,900,'wide'],[760,640,'narrow']];
     for (const [width, height, label] of sizes) {
@@ -419,10 +419,10 @@ try {
   await page.locator('[data-toggle-chat-members]').click();await page.locator('[data-chat-member-console]').first().click();
   await page.locator('[data-communication-console]').waitFor();assert.equal(await page.locator('.communication-sidebar').isVisible(),false);
   await page.locator('[data-close-chat-console]').click();assert.equal(await page.locator('#communication-input').isVisible(),true);
-  await page.goto(origin+'/settings/updates'); await page.locator('[name=intervalMinutes]').waitFor();
-  await page.locator('[name=intervalMinutes]').fill('3'); await page.locator('[name=intervalMinutes]').blur();
-  await page.waitForFunction(()=>document.querySelector('[data-plugin-update-note]').textContent.includes('已保存'));
-  await page.locator('[name=intervalMinutes]').fill('0');await page.locator('[name=intervalMinutes]').blur();assert.equal(await page.locator('[name=intervalMinutes]').getAttribute('aria-invalid'),'true');
+  await page.goto(origin+'/settings/updates');await page.locator('[data-settings-panel="updates"]:not([hidden])').waitFor();
+  assert.equal(await page.locator('[name=intervalMinutes], [data-plugin-update-note]').count(),0,'settings contains no retired plugin automatic-update controls');
+  await page.goto(origin+'/marketplace');await page.locator('[data-extension-update="all"]').waitFor();
+  assert.equal(await page.getByRole('button',{name:'更新全部',exact:true}).count(),1,'plugins expose one explicit manual update entry');
   // 量化：主要页面的 computed style 采样（字号/控件高度/圆角），用于审查依据。
   await resize(1440, 900);
   await page.goto(origin + '/tasks'); await page.locator('#tasks-table .task-list').waitFor();

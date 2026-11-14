@@ -18,7 +18,7 @@
 
 ## 决策
 
-使用 `@antv/x6` 3.1.8 作为关系图画布依赖，并使用 EPL-2.0 的 `elkjs` 0.10.0 作为自动布局依赖。浏览器通过 AgentForge 服务显式提供的 `/vendor/x6.js` 与 `/vendor/elk.js` 读取已安装包的 UMD 构建物；不使用 CDN，不把整个 `node_modules/` 暴露为静态目录，也不引入 React/Vue。
+使用 `@antv/x6` 3.1.8 作为关系图画布依赖，并使用 EPL-2.0 的 `elkjs` 0.10.0 作为自动布局依赖。浏览器通过 Baton 服务显式提供的 `/vendor/x6.js` 与 `/vendor/elk.js` 读取已安装包的 UMD 构建物；不使用 CDN，不把整个 `node_modules/` 暴露为静态目录，也不引入 React/Vue。
 
 开发手册三图及工作流管理/任务空间的流程拓扑统一使用声明式 `nodes[]` 与 `edges[]`：
 

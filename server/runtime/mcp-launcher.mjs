@@ -45,7 +45,7 @@ try {
   } else {
   const env = {...process.env, ...service.env};
   delete env.ELECTRON_RUN_AS_NODE;
-  delete env.AGENTFORGE_BOOTSTRAP_TOKEN;
+  delete env.BATON_BOOTSTRAP_TOKEN;
   const child = spawn(service.command, service.args || [], {env, ...(service.cwd?{cwd:service.cwd}:{}), stdio: ['pipe', 'pipe', 'pipe']});
   process.stdin.pipe(child.stdin); child.stdout.pipe(process.stdout);
   const redact = diagnosticRedactor({ secrets: Object.values(service.env || {}) });

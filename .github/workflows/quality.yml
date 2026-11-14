@@ -1,4 +1,4 @@
-name: AgentForge App quality gates
+name: Baton App quality gates
 
 on:
   push:

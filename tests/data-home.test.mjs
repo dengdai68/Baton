@@ -3,27 +3,27 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentforgeDataHome, legacyDataRequiresMigration, migrationGuidance, desktopServiceDataRoot, desktopServiceStoragePaths } from "../server/data-home.mjs";
+import { batonDataHome, legacyDataRequiresMigration, migrationGuidance, desktopServiceDataRoot, desktopServiceStoragePaths } from "../server/data-home.mjs";
 
 test("business storage follows the work root while authentication stays private", () => {
   const home = "/fixture-home";
-  assert.equal(agentforgeDataHome(home), "/fixture-home/.agentforge");
-  assert.equal(desktopServiceDataRoot(home), "/fixture-home/.agentforge/desktop");
+  assert.equal(batonDataHome(home), "/fixture-home/.baton");
+  assert.equal(desktopServiceDataRoot(home), "/fixture-home/.baton/desktop");
   const storage = desktopServiceStoragePaths({ home, env: {} });
-  assert.equal(storage.databasePath, "/fixture-home/.agentforge/workspace/records/agentforge.sqlite");
-  assert.equal(storage.authDatabasePath, "/fixture-home/.agentforge/desktop/auth.sqlite");
-  assert.equal(storage.runFilesRoot, "/fixture-home/.agentforge/workspace/records");
-  assert.equal(storage.runtimeConfigRoot, "/fixture-home/.agentforge/desktop/runtime-configs");
-  assert.equal(storage.workspaceRoot, "/fixture-home/.agentforge/workspace");
+  assert.equal(storage.databasePath, "/fixture-home/.baton/workspace/records/baton.sqlite");
+  assert.equal(storage.authDatabasePath, "/fixture-home/.baton/desktop/auth.sqlite");
+  assert.equal(storage.runFilesRoot, "/fixture-home/.baton/workspace/records");
+  assert.equal(storage.runtimeConfigRoot, "/fixture-home/.baton/desktop/runtime-configs");
+  assert.equal(storage.workspaceRoot, "/fixture-home/.baton/workspace");
 });
 
 test("explicit environment overrides always win over the new defaults", () => {
   const env = {
-    AGENTFORGE_DB_PATH: "/override/state.sqlite",
-    AGENTFORGE_AUTH_DB_PATH: "/override/auth.sqlite",
-    AGENTFORGE_RUN_FILES_ROOT: "/override/runs",
-    AGENTFORGE_RUNTIME_CONFIG_ROOT: "/override/runtime",
-    AGENTFORGE_WORKSPACE_ROOT: "/override/workspaces"
+    BATON_DB_PATH: "/override/state.sqlite",
+    BATON_AUTH_DB_PATH: "/override/auth.sqlite",
+    BATON_RUN_FILES_ROOT: "/override/runs",
+    BATON_RUNTIME_CONFIG_ROOT: "/override/runtime",
+    BATON_WORKSPACE_ROOT: "/override/workspaces"
   };
   const storage = desktopServiceStoragePaths({ home: "/fixture-home", env });
   assert.equal(storage.databasePath, "/override/state.sqlite");
@@ -35,10 +35,10 @@ test("explicit environment overrides always win over the new defaults", () => {
 
 test("legacy data detection blocks only a real legacy instance with an empty new location", async () => {
   const root = await mkdtemp(join(tmpdir(), "af-data-home-"));
-  const legacy = join(root, "legacy"), current = join(root, "new", "agentforge.sqlite");
+  const legacy = join(root, "legacy"), current = join(root, "new", "baton.sqlite");
   await mkdir(legacy, { recursive: true });
   assert.equal(await legacyDataRequiresMigration({ legacyRoot: legacy, currentDatabasePath: current }), false, "empty legacy root never blocks");
-  await writeFile(join(legacy, "agentforge.sqlite"), "metadata");
+  await writeFile(join(legacy, "baton.sqlite"), "metadata");
   assert.equal(await legacyDataRequiresMigration({ legacyRoot: legacy, currentDatabasePath: current }), true, "legacy database with empty new location blocks startup");
   await mkdir(join(root, "new"), { recursive: true });
   await writeFile(current, "fresh");
@@ -48,7 +48,7 @@ test("legacy data detection blocks only a real legacy instance with an empty new
 test("legacy detection also blocks on an authentication-only legacy instance", async () => {
   const root = await mkdtemp(join(tmpdir(), "af-data-home-auth-"));
   await writeFile(join(root, "auth.sqlite"), "auth");
-  assert.equal(await legacyDataRequiresMigration({ legacyRoot: root, currentDatabasePath: join(root, "new", "agentforge.sqlite") }), true);
+  assert.equal(await legacyDataRequiresMigration({ legacyRoot: root, currentDatabasePath: join(root, "new", "baton.sqlite") }), true);
 });
 
 test("migration guidance names both locations and the one-time script without deleting anything", () => {

@@ -44,7 +44,7 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     else if (['get', 'update', 'delete', 'test', 'start', 'terminate', 'progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'trigger', 'triggers', 'members', 'tools', 'check-compatibility'].includes(operation)) { if (args.length !== 3 || !(group === 'runtimes' && Object.values(RUNTIME_PROVIDERS).some(item=>item.label===id)) && !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw usage('需要精确资源ID，不能使用名称或路径'); }
     else if (operation === 'models') { if (args.length !== 3 || !RUNTIME_IDS.includes(id)) throw usage('models 需要已支持的 Provider ID'); }
     else if (args.length !== 2) throw usage('此命令不接受额外参数');
-    if (['create', 'update', 'import', 'auto-update'].includes(operation)) allowed.push('file');
+    if (['create', 'update', 'import'].includes(operation)) allowed.push('file');
     if (group === 'runtimes' && operation === 'models') allowed.push('refresh');
     if (group === 'mcps' && operation === 'tools') allowed.push('refresh','search','page','all');
     if (operation === 'list') allowed.push('page', 'all', 'search');
@@ -70,7 +70,7 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
   if (group === 'auth') {
     if (operation === 'status') return client.request('/api/auth/session');
     if (operation === 'logout') return client.logout();
-    if (!flags.username || !/^[A-Za-z0-9_.-]{1,64}$/.test(flags.username)) throw usage('login 需要有效的 --username 用户名', '使用 AgentForge 工作区管理员用户名；回车后隐藏输入密码。');
+    if (!flags.username || !/^[A-Za-z0-9_.-]{1,64}$/.test(flags.username)) throw usage('login 需要有效的 --username 用户名', '使用 Baton 工作区管理员用户名；回车后隐藏输入密码。');
     if (flags['password-stdin'] && stdin.isTTY) throw usage('--password-stdin 需要管道输入', '交互终端请去掉 --password-stdin，回车后按提示输入密码。');
     if (!flags['password-stdin'] && !stdin.isTTY) throw usage('非交互登录需要 --password-stdin', '通过标准输入管道提供密码；不要把密码放在命令参数中。');
     const password = flags['password-stdin'] ? (await readBounded(stdin, 1024)).replace(/\r?\n$/, '') : await readPassword({ input: stdin, output: stderr });
@@ -92,11 +92,8 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
   if (group === 'tasks') return executeTaskCommand(client, operation, id, flags, page, stdin);
   const resource = resources[group], path = resource.path;
   if(['plugins','mcps'].includes(group) && operation==='check-compatibility')return client.request(`${path}/${id}/compatibility`,{method:'POST',body:{}});
-  if(group==='plugins' && ['updates','check-updates','auto-update'].includes(operation)) {
-    if(operation==='updates')return client.request(`${path}/updates`);
-    if(operation==='check-updates')return client.request(`${path}/updates`,{method:'POST',body:{}});
-    const input=await readInput(flags.file,stdin);validateInput(input,resource.operationInputs[operation].schema);
-    return client.request(`${path}/updates/settings`,{method:'PUT',body:input});
+  if(group==='plugins' && ['updates','check-updates'].includes(operation)) {
+    return client.request(`${path}/updates`,operation==='check-updates'?{method:'POST',body:{}}:{});
   }
   if (group === 'runtimes' && operation === 'models') return client.request(`${path}/models?provider=${id}${flags.refresh?'&refresh=true':''}`);
   let resourceId = id;
@@ -262,7 +259,7 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
   if(!task)throw new CliError('NOT_FOUND','任务ID不存在','用 tasks list 查询精确ID。',4);
   const run=task.runs?.find(run=>!flags.run||run.id===flags.run);
   if (!run && flags.run) throw new CliError('NOT_FOUND', '所选执行不属于此任务或不存在', '用 tasks progress 查看最新执行，不使用其他任务的 Run ID。', 4);
-  if (!run && input) throw new CliError('RUN_REQUIRED', '任务尚未启动，无法发送协作消息', '先运行 agentforge tasks start 任务ID。', 4);
+  if (!run && input) throw new CliError('RUN_REQUIRED', '任务尚未启动，无法发送协作消息', '先运行 baton tasks start 任务ID。', 4);
   if (operation === 'terminate') {
     if (!run) throw new CliError('RUN_REQUIRED', '任务尚未启动，没有可终止执行', '可直接删除尚未启动的任务。', 4);
     const result = await client.request(`/api/runs/${run.id}/terminate`, { method: 'POST', body: { reason: '用户通过 CLI 终止任务' } });

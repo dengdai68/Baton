@@ -6,13 +6,13 @@
 
 实现：模型/思考等级使用同一行网格，展开隐藏重复摘要，正常字段说明隐藏，保留加载失败/不适配清除等真实错误；两类菜单均4px间距，模型输入到菜单增加4px悬停桥，六项可见。常规关闭选项两列；Token输入、保存与已有移除操作同行等高。目录打开为零参数IPC：宿主核对本窗口主frame当前Run页面，通过同Session认证workspace summary读取绝对目录，校验Run ID与真实目录后调用shell.openPath。renderer不能提供任意路径；失败toast且恢复按钮，不切页。
 
-验证：同一工作树文件复制到本机临时目录执行 `npm test`，546通过、0失败（`/private/tmp/agentforge-beta103-tests-local.log`，47.6秒）。初次全量测试有1个旧宿主方法数断言失败（545/546），更新为新增受限方法后全量通过；未放宽宿主边界。check:ai/check:impact、规定server/app语法及settings/main/preload语法、git diff --check通过。
+验证：同一工作树文件复制到本机临时目录执行 `npm test`，546通过、0失败（`/private/tmp/baton-beta103-tests-local.log`，47.6秒）。初次全量测试有1个旧宿主方法数断言失败（545/546），更新为新增受限方法后全量通过；未放宽宿主边界。check:ai/check:impact、规定server/app语法及settings/main/preload语法、git diff --check通过。
 
 隔离安装包UI首次脚本在夹具准备时报错：createRun返回Run而非嵌套Task，改为读取completedRun.workspacePath后通过。`.data/runtime-settings-NS7IAj/evidence.json`（本机临时验证目录）覆盖两主题×1320/760窗口、双字段同行、两类下拉4px间距和跨间隙选第六项、折叠DOM/草稿保留、保存/正式CLI回读、停用门禁与共享登录回归；通过真实宿主和Finder打开隔离Run目录。截图目检发现输入框/按钮高度略不同，统一为36px后再次运行完整UI验收。仅夹具使用创建/归档/恢复/确认操作，不对真实实例任务发命令，不把夹具当作真实Provider执行证据。
 
 CLI核对：本轮仅展示及桌面目录打开能力；现有配置输入输出、帮助、schema和任务协议未变，无CLI扩权或协议变更。未重复调用模型。
 
-本机交付采用临时目录重打包：复用已安装beta.102的Electron与生产依赖，覆盖当前105个项目文件与版本为beta.103，逐文件比对一致，沿用entitlements并重新ad-hoc签名，codesign深度严格验证通过。本轮未生成标准ZIP/DMG或发布GitHub Release。已安装到 `/Applications/AgentForge.app` 并正常启动。
+本机交付采用临时目录重打包：复用已安装beta.102的Electron与生产依赖，覆盖当前105个项目文件与版本为beta.103，逐文件比对一致，沿用entitlements并重新ad-hoc签名，codesign深度严格验证通过。本轮未生成标准ZIP/DMG或发布GitHub Release。已安装到 `/Applications/Baton.app` 并正常启动。
 
 最终UI验收通过：本机临时验证目录 `.data/runtime-settings-t35pqN/evidence.json`，两主题及1320/760窗口全部通过，Token与保存等高，目录打开真实成功。包内105个项目文件与当前源码一致；安装asar SHA256为 `4e0a0e5e2db1942ecf27f5b39cd815aad61be33b2056dfd15526d059f9e52bcb`。
 

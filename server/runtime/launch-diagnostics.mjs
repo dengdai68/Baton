@@ -63,7 +63,7 @@ export async function diagnoseLaunch({ command, cwd, searchPath = "/usr/bin:/bin
   }
   if (interpreter?.usable === false) {
     problems.push("CLI 脚本存在，但其 shebang 解释器不可用；常见情况是 /usr/bin/env node 无法在 App 的 PATH 中找到 Node。");
-    nextSteps.push("检查 interpreter 的 launcher/candidates；在当前用户环境修复 CLI 安装及解释器可用性，再测试连接。AgentForge 内置控制面 Node 不等于外部 CLI 的 Node。");
+    nextSteps.push("检查 interpreter 的 launcher/candidates；在当前用户环境修复 CLI 安装及解释器可用性，再测试连接。Baton 内置控制面 Node 不等于外部 CLI 的 Node。");
   }
   if (!problems.length) nextSteps.push("CLI 和工作目录检查未发现缺失；查看同次调用的 provider.spawn_error 原始错误或 provider.stderr、provider.exit，不要只依据摘要判断原因。");
   return { command, cwd, searchPath, platform: process.platform, architecture: process.arch, workingDirectory, candidates, interpreter, commonLocations, problems, nextSteps };

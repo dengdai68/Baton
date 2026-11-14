@@ -20,13 +20,13 @@
 
 工作流 artifactPaths 是工作目录内建议交付位置（文件或目录），可为空，不再限定/补齐 docs。持久化与冻结配置保留原路径，不进行路径迁移或重置。当前文件/CHANGE覆盖所有普通业务路径，repos 仍可保留历史冻结检出或员工自行准备的仓库及初始提交关系；读取排除内部元数据、凭据和符号链接。执行快照记录各业务路径，仍受20MiB单文件与5000文件上限，快照失败不是员工执行权限或任务结论；大文件可在工作目录查看元数据并下载，不能冒充已保存不可变快照。
 
-Store 保存 pluginAutoUpdate 开关（默认开启）与 pluginUpdateIntervalMinutes（默认2，整数1–1440），非空部分设置经过同一命令校验并记录 configuration.plugin_auto_update；按来源替换插件时核对员工 Runtime 未被并发编辑，原子更新当前选择者并退役旧目录版本，configuration.plugins_updated 的 actor 是系统插件更新而非人类。Task/Run/排队调用的冻结 manifest 与原始文件不改。关闭开关仅停止后续定时检查，已开始检查仍完成；退出本机服务不再检查。
+插件更新仅由人类的“更新全部”/CLI check-updates命令触发，不保存自动开关、周期或未来检查状态。按来源替换插件时核对当前员工和角色未被并发编辑，原子更新当前选择者并退役旧目录版本，保留configuration.plugins_updated审计。Task/Run/排队调用的冻结manifest与原始文件不改。状态仅包含当前是否运行、最近完成时间和结果；重启不伪装为跨服务历史。
 
 MCP 编辑生成不可变新版本；Store.replaceMcpExtension 在一个事务中核对当前员工 Runtime 未被并发修改、更新所有当前选择者并退役旧版本，记录 configuration.mcp_updated。Task/Run/排队投递的冻结 manifest、原始私有文件及历史消息不改写；不兼容或配置冲突拒绝整次更新。新版本 ID 由回执提供，旧 ID 从当前目录退役。
 
 沟通附件属于 Conversation，消息冻结 ID、名称、相对路径、字节和 SHA-256，引用只能来自同会话。CommunicationDelivery 每次 attempt 保存自己的原生会话绑定，ID 不进入通用审计事件；控制台投影实际投递/尝试，不创建 Task/Run。只有员工新回复计入未读，人类发送与 pending 均不计入。
 
-任务默认工作根统一为 `~/.agentforge/workspace`，不分 Web/Desktop；配置与鉴权仍按实例隔离。新 taskId 使用 `task_<随机UUID>` 这一不透明引用，避免跨实例同毫秒任务共用目录；目录层次仍为 `<workspaceRoot>/tasks/<taskId>/<runId>`。目录分配使用不透明 ID，拒绝路径穿越；清除所有数据以整个当前工作目录为范围，工作目录外的文件保留。保存的工作根与已有任务/运行路径不变，不自动搬迁。
+任务默认工作根统一为 `~/.baton/workspace`，不分 Web/Desktop；配置与鉴权仍按实例隔离。新 taskId 使用 `task_<随机UUID>` 这一不透明引用，避免跨实例同毫秒任务共用目录；目录层次仍为 `<workspaceRoot>/tasks/<taskId>/<runId>`。目录分配使用不透明 ID，拒绝路径穿越；清除所有数据以整个当前工作目录为范围，工作目录外的文件保留。保存的工作根与已有任务/运行路径不变，不自动搬迁。
 
 已安装插件/MCP 可由人类删除：认证 HTTP 验证安装 ID 后调用 Store `removeExtension`。当前员工（包括停用员工）仍选择该版本时拒绝，不隐式解除绑定；Store 同步拒绝删除后到达的过期绑定写入。`extensionRemovals` 与 `configuration.extension_deleted` 事件在同一事务持久化，目录与详情不再暴露已删项。不可变文件与冻结 Task/Run 不变，历史执行仍可核验/恢复；插件删除不连带删除独立 MCP。
 
@@ -184,7 +184,7 @@ Role.extensionSelection 保存 pluginIds/mcpIds，省略创建为空、更新保
 
 工作根是宿主当前启动配置，生产 Store 通过 workspaceRootAuthoritative 使用该根创建新 Task，不再用业务库内旧工作目录设置决定资料位置。既有 Task/Run.workspacePath、冻结成员/扩展、不可变消息及原生会话 ID 保持；物理文件搬运与地址解析不产生业务重判或新派工，见 docs/30。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 沟通 workspacePath 为首次执行时分配的持久业务目录，形如 `<workspaceRoot>/communications/<conversationId>`；所有成员共享 cwd，原生会话仍保存在各自 sessions[agentId] 下。工作根变化不改已分配路径，改变成员启动目录按既有协议显式重建原生上下文，历史消息和调用事实保留。
 

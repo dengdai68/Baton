@@ -10,15 +10,15 @@ import { createCatalogFixtureStore } from '../tests/fixture-store.mjs';
 
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/brand-presentation-'));
-const bundle = process.env.AGENTFORGE_BRAND_APP, home = join(root, 'home');
-const iconsOnly = process.env.AGENTFORGE_BRAND_ICONS_ONLY === '1';
-const data = bundle ? join(home, '.agentforge/desktop') : join(root, 'client');
+const bundle = process.env.BATON_BRAND_APP, home = join(root, 'home');
+const iconsOnly = process.env.BATON_BRAND_ICONS_ONLY === '1';
+const data = bundle ? join(home, '.baton/desktop') : join(root, 'client');
 await mkdir(home, { recursive: true });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('brand-qa', password); auth.close();
 await writeFile(join(data, 'desktop-preferences.json'), JSON.stringify({closeMode:'tray'}), {mode:0o600});
-const store = createCatalogFixtureStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const store = createCatalogFixtureStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 store.updateAgent('agent_analyst', { status: 'inactive' });
 store.createRole({ name: '品牌展示角色', prompt: '仅用于品牌展示验收的提示词。' }); store.close();
 const source = join(root, 'plugin');
@@ -27,7 +27,7 @@ await mkdir(join(source, 'skills/brand'), { recursive: true });
 await writeFile(join(source, 'skills/brand/SKILL.md'), '---\nname: brand\ndescription: Presentation fixture only\n---\nNo execution.');
 await writeFile(join(source, '.claude-plugin/plugin.json'), JSON.stringify({ name: 'brand-presentation-fixture', description: '仅用于静态展示，不执行插件。', version: '1.0.0', settings: {} }));
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/AgentForge') } : {}), args: bundle ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/Baton') } : {}), args: bundle ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 const evidence = { root, bundle: bundle || 'source', cases: [] }, errors = [];
 const presentation = node => {
   const c=getComputedStyle(node), result=Object.fromEntries(['backgroundColor','color','borderTopColor','borderTopWidth','borderTopStyle','borderRadius','padding','margin','fontSize','lineHeight'].map(k=>[k,c[k]]));
@@ -42,10 +42,10 @@ const checkApplicationIcon = async page => {
   const icon = await page.locator('.application-icon').evaluate(n => {
     const style=getComputedStyle(n), canvas=document.createElement('canvas'); canvas.width=canvas.height=1024;
     const c=canvas.getContext('2d');c.drawImage(n,0,0);const pixel=(x,y)=>[...c.getImageData(x,y,1,1).data];
-    return {border:style.borderTopWidth,background:style.backgroundColor,shadow:style.boxShadow,corner:pixel(0,0),edge:pixel(512,2),width:n.width,height:n.height};
+    return {border:style.borderTopWidth,background:style.backgroundColor,shadow:style.boxShadow,corner:pixel(0,0),edge:pixel(512,2),mark:pixel(300,400),width:n.width,height:n.height};
   });
   assert.equal(icon.border,'0px');assert.equal(icon.background,'rgba(0, 0, 0, 0)');assert.equal(icon.shadow,'none');
-  assert.equal(icon.corner[3],0);assert.equal(icon.edge[3],255);assert.ok(Math.min(...icon.edge.slice(0,3))<100,'no white matte');
+  assert.equal(icon.corner[3],0);assert.equal(icon.edge[3],255);assert.ok(Math.min(...icon.edge.slice(0,3))>180,'supplied B icon retains its white tile');assert.ok(icon.mark[2]>icon.mark[0]+45 && icon.mark[2]>160,'supplied blue B mark remains visible');
   assert.equal(icon.width,icon.height,'no distorted sidebar image');
   return icon;
 };

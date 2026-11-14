@@ -253,7 +253,7 @@ test('dual manifests keep Claude Hooks and explicit empty Codex Hooks independen
   const {plugins:[entry]}=await market.import({path:source}),detail=await market.detail(entry.id,'plugin');
   assert.deepEqual(entry.providers,['claude-code','codex','dsh']);assert.deepEqual(detail.components.hooks[0].providers,['claude-code']);
   const runtime=await market.resolve({pluginIds:[entry.id],mcpIds:[]},'codex');
-  const projection=JSON.parse(await readFile(join(runtime.extensionManifest[0].path,'../../.agentforge/codex.json'),'utf8'));
+  const projection=JSON.parse(await readFile(join(runtime.extensionManifest[0].path,'../../.baton/codex.json'),'utf8'));
   assert.deepEqual(projection.hooks,[],'explicit empty Codex Hooks do not inherit the Claude startup Hook');
   assert.equal(entry.compatibility.codex.supported,true);
 });
@@ -313,7 +313,7 @@ test('plain Command instructions project as Skills; dynamic source Commands are 
     const result=await market.import({path:source});assert.equal(result.plugins[0].components.skills,2);assert.equal(result.plugins[0].components.commands,1);
     const selected=await market.resolve({pluginIds:[result.plugins[0].id],mcpIds:[]},'codex');assert.equal(selected.skillPaths.length,2);
     assert.match(await readFile(selected.skillPaths.at(-1),'utf8'),/不提供斜杠参数展开/);
-    await assert.rejects(stat(join(source,'.agentforge')),{code:'ENOENT'});
+    await assert.rejects(stat(join(source,'.baton')),{code:'ENOENT'});
     await writeFile(join(source,'commands/review.md'),'---\nargument-hint: file\n---\nReview $ARGUMENTS. !`echo unexpanded`');
     const dynamic=await market.import({path:source});
     for(const provider of ['codex','dsh']) await assert.rejects(market.resolve({pluginIds:[dynamic.plugins[0].id],mcpIds:[]},provider),/参数\/预处理/);
@@ -384,7 +384,7 @@ test('MCP details redact credentials; unsupported fields and multi-server input 
   const {market}=await fixture(t),entry=await market.add(mcp),detail=await market.detail(entry.id,'mcp');
   assert.match(detail.configuration.mcpServers.calculator.env.EXAMPLE_TOKEN,/REDACTED|已隐藏/);
   assert.doesNotMatch(JSON.stringify(detail),/PRIVATE_SENTINEL/);
-  for(const content of ['{bad','{"mcpServers":{"a":{"command":"node"},"b":{"command":"node"}}}','{"mcpServers":{"agentforge_history":{"command":"node"}}}','{"mcpServers":{"x":{"command":"node","unknown":true}}}']) await assert.rejects(market.add({...mcp,content}));
+  for(const content of ['{bad','{"mcpServers":{"a":{"command":"node"},"b":{"command":"node"}}}','{"mcpServers":{"baton_history":{"command":"node"}}}','{"mcpServers":{"x":{"command":"node","unknown":true}}}']) await assert.rejects(market.add({...mcp,content}));
   const remote=await market.add({...mcp,content:'{"mcpServers":{"remote":{"type":"http","url":"https://example.com/mcp"}}}'});
   assert.equal((await market.resolve({...empty,mcpIds:[remote.id]},'codex')).extensionManifest.length,1);
 });
@@ -414,7 +414,7 @@ test('market versions are immutable, private, selectable and persistent without 
 test('market rejects invalid, duplicate, reserved, incompatible and missing selections', async t => {
   const {root,market} = await fixture(t);
   await assert.rejects(market.add({...mcp,content:'{bad'}));
-  await assert.rejects(market.add({...mcp,content:'{"mcpServers":{"agentforge_history":{"command":"node"}}}'}));
+  await assert.rejects(market.add({...mcp,content:'{"mcpServers":{"baton_history":{"command":"node"}}}'}));
   await assert.rejects(market.add({...mcp,content:'{"mcpServers":{"x":{"command":"node","unknown":true}}}'}));
   const a = await market.add(mcp), b = await market.add(mcp);
   await assert.rejects(market.resolve({pluginIds:[],mcpIds:[a.id,a.id]},'claude-code'));

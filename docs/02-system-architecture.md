@@ -8,11 +8,11 @@ Store 拥有员工逻辑删除、成员校验和公开消息的定向投递；HT
 
 协作记录只展示员工、经理、人类之间的沟通 Message；系统提示、启动、投递、重试和结算事件不作为记录行。底层不可变事件、Dispatch 和 Trace 继续保留，关联执行元数据供查询。消息保存本轮 `startMessageId`，对应 Trace 的 `inputMessageId`；“本轮控制台”按该 ID 打开、定位本次提示词，不受日志分页影响。成员原生会话贯穿任务且彼此隔离，每次执行拥有独立输入轮次 ID。 sourceMessageId 由 Store 校验同 Run；共享投影供 Web/Electron 与 CLI 使用，不按正文或时间猜测关联。
 
-本仓库为 AgentForge App 独立客户端，完整抽取边界见 [ADR：客户端抽取](23-desktop-extraction.md)。默认 start/dev 启动 Electron，自带本机控制面与全部界面；服务要求父进程 IPC 与 bootstrap 信息，不能直接启动；父进程断开时退出。
+本仓库为 Baton App 独立客户端，完整抽取边界见 [ADR：客户端抽取](23-desktop-extraction.md)。默认 start/dev 启动 Electron，自带本机控制面与全部界面；服务要求父进程 IPC 与 bootstrap 信息，不能直接启动；父进程断开时退出。
 
 工作目录展示由 Run Files 直接读取真实任务根，取代 manifest 白名单；HTTP 按 path/offset 每页200项，界面按需展开。工作流只提供交付位置建议，Store 校验规范相对路径，CLI同步，未提供时不填 docs。Orchestrator 采集各业务路径的有限不可变快照，CHANGE 通过只读 Git 观察已提交/未提交/未跟踪文件；大媒体不因快照上限从目录/CHANGE消失。不新增索引库、文件监控服务或自动提交。
 
-插件定时更新决策：复用本机服务生命周期和 Node 定时器，不新增系统 cron、常驻守护进程、队列或依赖。服务运行期间默认每120000ms检查，上轮结束后安排下一轮，不重叠；开关与1–1440整数分钟周期（默认2）由 Store 持久保存，设置入口独立于插件市场，检查状态/最近结果仅为当前服务进程观察。按安装来源分组，使用真实 Git 提交及外部 ref/sha 依赖判断变化；无变化不克隆/安装、不写审计。新候选经完整校验与全部当前选择者兼容检查，再由一个 Store 事务替换该来源插件引用；失败保留该来源旧版，其他来源可继续。安装不执行来源脚本/Hook，自动检出的临时源码用后清理，已冻结安装文件不删除。重置时阻止与活动更新并发，重置后清除检查状态。
+插件手动更新决策：由插件页更新全部或等价CLI显式发起，同一服务进程singleflight执行；没有自动开关、分钟周期、Node计时调度或系统cron。状态/最近结果只是当前进程观察。来源按Git提交与外部ref分组，无变化不安装；候选完整校验并检查当前员工/角色兼容后，在Store事务内切换引用，失败保留旧版，冻结历史不重写。临时检出用后清理，应用自身更新仍属Electron。
 
 原生 Skill 传输决策：完整插件安装/员工选择协议不变。Claude 使用既有 --plugin-dir 原生 Skill，不全局禁用。Codex 仅在有所选 Skill 时使用调用独占的 stdio App Server：额外根注册、原生发现、线程级启用列表、thread/turn 执行；无 Skill 的 exec 不作无关迁移，二者共用 Provider thread 身份和控制台投影。这是能力驱动的传输选择，不是旧数据兼容或失败回退。单次进程避免共享工作目录员工混用进程级根；取消/超时清理自有进程组。不新增服务、依赖、凭据副本或领域状态来源，最终完成仍由人类确认。
 
@@ -22,7 +22,7 @@ Runtime 外部故障立即保留脱敏原始错误并标记任务失败，禁止
 
 沟通工作台复用任务控制台 renderer 和按需内容读取器，但以 Conversation/Delivery/attempt 为归属。HTTP 接受同源认证二进制附件，Run Files 保存会话原文件和私有执行内容，Store 只保存元数据、消息关联与调用事实。控制台只在展开时按成员/50 条事件分页轮询，历史按 Map 分组，不重复扫描全事件。现有 CLI 未覆盖长期沟通，本轮不扩展 CLI 权限或命令；配置与任务协议不变。
 
-CLI 仅供客户端使用，私有 endpoint 发现与实例校验统一在 cli/client.mjs；不接受 Web/Desktop 目标，不默认连接 4310。应用数据根仍隔离；默认任务根统一为 ~/.agentforge/workspace，由 server/data-home.mjs 的纯路径函数供客户端自有服务使用。保存的工作根和历史路径不改写。新 Task ID 使用随机 UUID，避免独立实例共享工作根时因毫秒/进程序号相同而碰撞，不增加平台子目录。
+CLI 仅供客户端使用，私有 endpoint 发现与实例校验统一在 cli/client.mjs；不接受 Web/Desktop 目标，不默认连接 4310。应用数据根仍隔离；默认任务根统一为 ~/.baton/workspace，由 server/data-home.mjs 的纯路径函数供客户端自有服务使用。保存的工作根和历史路径不改写。新 Task ID 使用随机 UUID，避免独立实例共享工作根时因毫秒/进程序号相同而碰撞，不增加平台子目录。
 
 ```text
 Electron renderer / CLI
@@ -73,7 +73,7 @@ Dispatch 持久化投递与尝试状态；Trace 记录一次实际调用。失�
 
 ### 仓库开发 Skill 的边界
 
-`.codex/skills/agentforge-development/` 是本仓库 Codex 开发辅助入口，按用户要求随源码维护，不进入运行时插件目录、员工提示词、模型上下文协议或安装包。它只将开发任务路由到既有 AGENTS、设计契约与验收脚本，不建立第二套贡献规则，也不授予发布或操作真实任务的权限。
+`.codex/skills/baton-development/` 是本仓库 Codex 开发辅助入口，按用户要求随源码维护，不进入运行时插件目录、员工提示词、模型上下文协议或安装包。它只将开发任务路由到既有 AGENTS、设计契约与验收脚本，不建立第二套贡献规则，也不授予发布或操作真实任务的权限。
 
 Runtime 固定目录和当前可用门禁归 Store，HTTP/CLI 只接受模型、档位、enabled 部分更新；Orchestrator 与沟通服务调用前核对开关，不终止已执行 Provider。CLI 登录共享由 Electron 宿主经认证端点获取父会话关联委托并发布私有实例文件，认证层逐次验证父会话；CLI 不直接读取 Chromium 或数据库。此设计复用现有目录、HTTP 和宿主能力，不新增依赖或通用桥。
 
@@ -81,11 +81,11 @@ Runtime 固定目录和当前可用门禁归 Store，HTTP/CLI 只接受模型、
 
 桌面应用更新采用现有 electron-builder 配套的 electron-updater 与显式 semver 依赖，不自建应用替换服务。更新生命周期只属于宿主，Store/CLI不拥有更新状态；正式发现、临时签名手动安装及签名原生安装、原子空闲锁与CI交付契约见 [架构决策：应用更新](24-desktop-updates.md)。
 
-DeepSeek Harness 使用独立 SDK JSON-RPC 适配器 dsh.mjs；dsh-plugin.mjs 作为每次调用的私有原生 Cordis 插件提供 system-role 指令与模型元数据，不进入 renderer/HTTP 控制器。会话目录归 AgentForge Runtime 配置根，凭据由 DeepSeek Harness 原生服务从原 DSH_HOME 读取，不解析/复制密钥。SDK session/wait 结束全部托管后续工作后才结算；Store 仍拥有身份/任务状态。决策见 docs/25。
+DeepSeek Harness 使用独立 SDK JSON-RPC 适配器 dsh.mjs；dsh-plugin.mjs 作为每次调用的私有原生 Cordis 插件提供 system-role 指令与模型元数据，不进入 renderer/HTTP 控制器。会话目录归 Baton Runtime 配置根，凭据由 DeepSeek Harness 原生服务从原 DSH_HOME 读取，不解析/复制密钥。SDK session/wait 结束全部托管后续工作后才结算；Store 仍拥有身份/任务状态。决策见 docs/25。
 
 Runtime 展示名称为 Claude Code、Codex、DeepSeek Harness，内部 Provider/CLI 命令仍为 claude-code/codex/dsh。服务通过与执行相同的 CLI 环境检查可执行文件（不运行模型、不读取凭据）；Store 注入该只读事实，在 list/get 返回 installed 和实际 enabled。未安装或客户端 PATH 找不到可执行文件时 enabled=false、界面开关关闭并锁定，HTTP/CLI 拒绝修改 enabled 和发起新调用；安装检查不改写用户开关偏好、员工或 Task 冻结事实。安装/PATH 修复后重开客户端或重新进入 Runtime 设置重新读取；已安装但未登录不属于未安装。
 
-插件自动更新仍通过 Marketplace 准备不可变候选、Store 原子更新员工绑定；组件定义错误的 warnings 随候选结果进入检查状态，由更新区域提示并在插件详情查看。来源/完整性等致命错误保留当前版本，冻结任务与排队投递不改写。
+插件手动更新仍通过 Marketplace 准备不可变候选、Store 原子更新员工绑定；组件定义错误的 warnings 随候选结果进入检查状态，由更新区域提示并在插件详情查看。来源/完整性等致命错误保留当前版本，冻结任务与排队投递不改写。
 
 `server/task-patrol.mjs` 每 10 秒检测运行元数据。存在执行中的 Trace/Dispatch 或正在准备的执行时跳过；已有可执行队列则继续队列；运行中没有执行者和待执行交接时，由 Store 创建经理巡检投递，异步调用 Orchestrator。单飞覆盖准备阶段，定时器不等待模型。错误、等待人类澄清、暂停、验收及结束不会触发经理推进；终态已有独立答疑队列仍可执行。经理根据状态和角色沟通记录继续协调，平台不评价业务结果。
 
@@ -101,7 +101,7 @@ Orchestrator 每轮按 removedParticipantIds 过滤当前派工名单；已有�
 
 沟通媒体展示由 renderer 管理；HTTP 附件 preview 分支负责认证、归属、完整性与位图类型校验，Run Files 继续保存原字节，Store 不新增媒体状态。具体端点见 docs/17-communication.md。
 
-插件/MCP 当前目录归 Store/SQLite；Runtime 只准备不可变文件并返回摘要。HTTP 在同一 Store 事务中登记目录、替换绑定与软删除旧版本。列表用数据库分页，详情/实际绑定按条读取 Runtime 文件；自动更新从数据库取活跃目录。见 docs/15 与 docs/07。
+插件/MCP 当前目录归 Store/SQLite；Runtime 只准备不可变文件并返回摘要。HTTP 在同一 Store 事务中登记目录、替换绑定与软删除旧版本。列表用数据库分页，详情/实际绑定按条读取 Runtime 文件；手动更新从数据库取活跃目录。见 docs/15 与 docs/07。
 
 长任务调度按需读取：getRunExecutionContext 只投影最近18个 Trace 状态、未结束投递、基线所需文件摘要、最近30条巡检消息和待答问题/决策；源消息和输入游标单独查询，不展开 UI 工作区或全量运行事件。工作目录/Artifact HTTP 查询同样使用 getRunTask/getRunArtifact。原生上下文压缩告警不等同于应用编排 RangeError；不同 runId 的日志按运行归属排查。
 
@@ -124,7 +124,7 @@ Orchestrator 每轮按 removedParticipantIds 过滤当前派工名单；已有�
 
 六种新增 Runtime 的扩展适配决策见 docs/29：市场拥有源解析/不可变安装/兼容计划，Store 拥有当前目录摘要与冻结绑定，portable-extensions 仅生成原生调用配置。复用既有 MCP 私有启动器和历史桥，不引入第二套工具协议、模型客户端或全局安装服务；兼容性检查通过受认证命令更新目录派生数据，列表仍为数据库分页。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 

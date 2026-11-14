@@ -19,14 +19,14 @@ const child = spawn(process.execPath, ["server/index.mjs"], {
   stdio: ["ignore", "pipe", "pipe", "ipc"],
   env: {
     ...process.env,
-    AGENTFORGE_DESKTOP_PORT: "0",
-    AGENTFORGE_BOOTSTRAP_TOKEN: bootstrapToken,
-    AGENTFORGE_DB_PATH: join(dataRoot, "agentforge.sqlite"),
-    AGENTFORGE_AUTH_DB_PATH: join(dataRoot, "auth.sqlite"),
-    AGENTFORGE_RUN_FILES_ROOT: join(dataRoot, "runs"),
-    AGENTFORGE_RUNTIME_CONFIG_ROOT: join(dataRoot, "runtime-configs"),
-    AGENTFORGE_WORKSPACE_ROOT: join(dataRoot, "workspaces"),
-    AGENTFORGE_LOG_DIR: join(dataRoot, "logs")
+    BATON_DESKTOP_PORT: "0",
+    BATON_BOOTSTRAP_TOKEN: bootstrapToken,
+    BATON_DB_PATH: join(dataRoot, "baton.sqlite"),
+    BATON_AUTH_DB_PATH: join(dataRoot, "auth.sqlite"),
+    BATON_RUN_FILES_ROOT: join(dataRoot, "runs"),
+    BATON_RUNTIME_CONFIG_ROOT: join(dataRoot, "runtime-configs"),
+    BATON_WORKSPACE_ROOT: join(dataRoot, "workspaces"),
+    BATON_LOG_DIR: join(dataRoot, "logs")
   }
 });
 child.stderr.on("data", chunk => process.stderr.write(`[server] ${chunk}`));
@@ -58,7 +58,7 @@ console.log("PASS unauthenticated models query refused (401)");
 
 // 2. Real bootstrap setup flow: GET /setup with the token header issues the
 // bootstrap cookie; POST /api/auth/bootstrap creates the admin + session.
-const setup = await fetch(`${origin}/setup`, { headers: { "X-AgentForge-Bootstrap": bootstrapToken }, redirect: "manual" });
+const setup = await fetch(`${origin}/setup`, { headers: { "X-Baton-Bootstrap": bootstrapToken }, redirect: "manual" });
 if (setup.status !== 303) fail(`setup redirect expected, got ${setup.status}`);
 cookie = setup.headers.get("set-cookie").split(",")[0].split(";")[0];
 const boot = await api("/api/auth/bootstrap", { method: "POST", body: { username: "e2e", password } });

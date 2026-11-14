@@ -12,10 +12,10 @@ import {createStore} from '../server/store.mjs';
 import {createAuth} from '../server/auth.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
-const real=process.env.AGENTFORGE_TASK_DRAFTS_REAL==='1',bundle=process.env.AGENTFORGE_TASK_DRAFTS_APP;
-const root=await mkdtemp(join(tmpdir(),'agentforge-task-drafts-')),home=join(root,'home'),data=bundle?join(home,'.agentforge/desktop'):join(root,'config');await mkdir(home,{mode:0o700});
+const real=process.env.BATON_TASK_DRAFTS_REAL==='1',bundle=process.env.BATON_TASK_DRAFTS_APP;
+const root=await mkdtemp(join(tmpdir(),'baton-task-drafts-')),home=join(root,'home'),data=bundle?join(home,'.baton/desktop'):join(root,'config');await mkdir(home,{mode:0o700});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('draft-qa',password);auth.close();
-const options={databasePath:join(root,'work/records/agentforge.sqlite'),workspaceRoot:join(root,'work'),configurationDirectory:data};
+const options={databasePath:join(root,'work/records/baton.sqlite'),workspaceRoot:join(root,'work'),configurationDirectory:data};
 const store=createStore(options);
 const a=store.createAgent({name:'草稿成员 A'}),b=store.createAgent({name:'草稿成员 B',systemPrompt:'你具备文本编辑能力。被本任务选为经理时，自行完成简单文本文件操作并读取核对，完成后按协议提交人类验收，不派工、不咨询。'}),c=store.createAgent({name:'草稿成员 C'}),off=store.createAgent({name:'停用成员'});
 const team=store.createTeam({name:'草稿替换团队',memberAgentIds:[b.id,c.id]});
@@ -24,8 +24,8 @@ const draft=store.createTask({title:'待编辑草稿',objective:'原始目标',m
 const stale=store.createTask({title:'成员失效的草稿',objective:'重新选择可用成员',memberAgentIds:[a.id,off.id],managerAgentId:off.id});store.updateAgent(off.id,{status:'inactive'});
 const started=store.createTask({title:'已启动不可编辑',objective:'仅校验已启动任务拒绝编辑',memberAgentIds:[a.id],managerAgentId:a.id});const paused=store.createRun(started.id);store.pauseRun(paused.id);store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const env={...testEnvironment({...process.env,HOME:home,AGENTFORGE_LOG_DIR:join(root,'logs')}),AGENTFORGE_DESKTOP_DATA_ROOT:data,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')}:{})};
-const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')} :{}),args:[...(bundle?[]:[resolve('apps/electron/main.mjs')]),'--user-data-dir='+join(root,'browser')],env,timeout:120000});
+const env={...testEnvironment({...process.env,HOME:home,BATON_LOG_DIR:join(root,'logs')}),BATON_DESKTOP_DATA_ROOT:data,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')}:{})};
+const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')} :{}),args:[...(bundle?[]:[resolve('apps/electron/main.mjs')]),'--user-data-dir='+join(root,'browser')],env,timeout:120000});
 const evidence={root,realModel:real,cases:[]},errors=[];console.log('EVIDENCE '+root);
 try{
  const page=await app.firstWindow();page.setDefaultTimeout(45000);page.on('pageerror',e=>errors.push(e.message));await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:90000});const origin=new URL(page.url()).origin;
@@ -34,7 +34,7 @@ try{
  const task=async()=>(await api('/api/tasks/'+draft.id)).data.task;
  const cli=async(args,input)=>{
   let file=[];if(input!==undefined){const path=join(root,'input-'+randomBytes(6).toString('hex')+'.json');await writeFile(path,JSON.stringify(input));file=['--file',path];}
-  const r=await promisify(execFile)(bundle?join(resolve(bundle),'Contents/Resources/cli/agentforge'):process.execPath,[...(bundle?[]:[resolve('cli/main.mjs')]),...args,...file,'--endpoint-file',join(data,'desktop-endpoint.json'),'--json'],{env:{...testEnvironment(process.env),HOME:home},timeout:60000});const out=JSON.parse(r.stdout);assert.equal(out.ok,true);return out.data;
+  const r=await promisify(execFile)(bundle?join(resolve(bundle),'Contents/Resources/cli/baton'):process.execPath,[...(bundle?[]:[resolve('cli/main.mjs')]),...args,...file,'--endpoint-file',join(data,'desktop-endpoint.json'),'--json'],{env:{...testEnvironment(process.env),HOME:home},timeout:60000});const out=JSON.parse(r.stdout);assert.equal(out.ok,true);return out.data;
  };
  await page.getByRole('button',{name:'待编辑草稿',exact:true}).click();let form=page.locator('#task-form');await form.waitFor();assert.equal(await form.locator('[name=title]').inputValue(),draft.title);assert.equal(await form.locator('[name=objective]').inputValue(),draft.objective);assert.equal(await form.locator('[name=acceptanceCriteria]').inputValue(),'原始标准');assert.equal(await form.locator('[name=workflowTemplateId]').inputValue(),flow.id);assert.equal(await form.locator(`[data-select-manager="${a.id}"]`).getAttribute('aria-pressed'),'true');await form.getByRole('button',{name:'取消',exact:true}).click();assert.equal((await task()).title,draft.title);evidence.cases.push('title opens editor; full prefill; cancellation has no write');
  await page.locator(`button.small-button[data-edit-task="${stale.id}"]`).click();form=page.locator('#task-form');await form.getByText('不可用',{exact:true}).waitFor();await form.getByRole('button',{name:'保存修改',exact:true}).click();await form.getByText('已选成员不可用，请移除后重新选择。',{exact:true}).waitFor();await form.locator(`[data-remove-extension="${off.id}"]`).click();await form.locator(`[data-select-manager="${a.id}"]`).click();await form.getByRole('button',{name:'保存修改',exact:true}).click();await page.locator('#task-form').waitFor({state:'detached'});assert.deepEqual((await api('/api/tasks/'+stale.id)).data.task.memberAgentIds,[a.id]);evidence.cases.push('unavailable saved members remain visible and can be replaced');

@@ -19,15 +19,15 @@ import {loadLoginShellEnvironment} from '../apps/electron/login-shell-env.mjs';
 import {cliEnvironment} from '../server/runtime/cli-environment.mjs';
 import {RUNTIME_EFFORT_LEVELS} from '../web/settings.mjs';
 
-if(process.env.AGENTFORGE_PLUGIN_RUNTIMES_REAL!=='1')throw new Error('Requires AGENTFORGE_PLUGIN_RUNTIMES_REAL=1; invokes all three real Runtimes');
+if(process.env.BATON_PLUGIN_RUNTIMES_REAL!=='1')throw new Error('Requires BATON_PLUGIN_RUNTIMES_REAL=1; invokes all three real Runtimes');
 assert.deepEqual(Object.keys(RUNTIME_EFFORT_LEVELS).filter(provider=>['claude-code','codex','dsh'].includes(provider)).sort(),['claude-code','codex','dsh'],'This suite covers full Claude/Codex dialect bridges; six additional native Skill/MCP cases are covered by test-portable-extensions-real.mjs');
 await mkdir('.data',{recursive:true});
 const root=await realpath(await mkdtemp(resolve('.data/plugin-runtimes-real-')));
 // Match the desktop host's account-shell environment. A test checkout may
 // otherwise pick a different, older CLI from its inherited shell PATH.
 Object.assign(process.env,await loadLoginShellEnvironment());
-process.env.AGENTFORGE_LOG_DIR=join(root,'logs');
-process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT=join(root,'runtime');
+process.env.BATON_LOG_DIR=join(root,'logs');
+process.env.BATON_RUNTIME_CONFIG_ROOT=join(root,'runtime');
 const market=createMarketplace(join(root,'market')),cases=[],remoteCalls=[],transports=[],ssePeers=new Map();
 const versions={};
 for(const [provider,command] of Object.entries({'claude-code':'claude',codex:'codex',dsh:'dsh'})) {
@@ -86,7 +86,7 @@ try {
       const row={key,sourceDialect,provider,workspace,trace,testToken:randomUUID(),expected:{skillProof:skill,agentProof:digest,stdio:'STDIO-'+randomUUID(),http:'HTTP-'+randomUUID(),sse:'SSE-'+randomUUID()},status:'pending'};cases.push(row);
       const configurations={stdio:{command:process.execPath,args:[resolve('scripts/marketplace-probe-mcp.mjs'),'mcp-proof.log',row.expected.stdio],cwd:workspace,env_vars:['PATH']},http:{type:'http',url:origin+'/'+key+'/http',headers:{Authorization:'Bearer '+row.testToken}},sse:{type:'sse',url:origin+'/'+key+'/sse',headers:{Authorization:'Bearer '+row.testToken}}};
       const mcpIds=[];for(const [transport,configuration] of Object.entries(configurations))mcpIds.push((await market.add({kind:'mcp',name:key+'-'+transport,description:'Isolated compatibility proof',content:JSON.stringify({mcpServers:{['matrix_'+transport]:configuration}})})).id);
-      row.runtime={provider,executable:versions[provider].path,effort:'low',...(provider==='dsh'?{model:process.env.AGENTFORGE_DSH_MODEL || 'deepseek-official/deepseek-flash'}:{}),...await market.resolve({pluginIds:[installed.id],mcpIds},provider)};
+      row.runtime={provider,executable:versions[provider].path,effort:'low',...(provider==='dsh'?{model:process.env.BATON_DSH_MODEL || 'deepseek-official/deepseek-flash'}:{}),...await market.resolve({pluginIds:[installed.id],mcpIds},provider)};
       row.alias=provider==='codex'?codexAgentKey(row.runtime.extensionManifest.find(ref=>ref.kind==='plugin'),0,'checksum-worker'):'runtime-proof:checksum-worker';
     }
   }

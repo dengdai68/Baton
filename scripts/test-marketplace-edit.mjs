@@ -1,8 +1,8 @@
 // Isolated UI/API/CLI acceptance. No real model calls or operator instance writes.
 import{mkdtemp,mkdir,writeFile}from'node:fs/promises';import{resolve,join}from'node:path';import{randomBytes}from'node:crypto';import{_electron as electron}from'playwright-core';import{createAuth}from'../server/auth.mjs';import assert from'node:assert/strict';
-const packaged=process.env.AGENTFORGE_MCP_EDIT_APP;
-const root=await mkdtemp(resolve('.data/mcp83-ui-'));await mkdir(join(root,'home'));const password=randomBytes(16).toString('hex');const auth=createAuth({databasePath:(packaged?join(root,'home/.agentforge/desktop/auth.sqlite'):join(root,'auth.sqlite'))});await auth.setAdministrator('edit-qa',password);auth.close();
-const app=await electron.launch({...(packaged?{executablePath:resolve(packaged,'Contents/MacOS/AgentForge')}:{}),args:packaged?[]:['apps/electron/main.mjs'],env:{...process.env,HOME:join(root,'home'),AGENTFORGE_DESKTOP_DATA_ROOT:root},timeout:90000});
+const packaged=process.env.BATON_MCP_EDIT_APP;
+const root=await mkdtemp(resolve('.data/mcp83-ui-'));await mkdir(join(root,'home'));const password=randomBytes(16).toString('hex');const auth=createAuth({databasePath:(packaged?join(root,'home/.baton/desktop/auth.sqlite'):join(root,'auth.sqlite'))});await auth.setAdministrator('edit-qa',password);auth.close();
+const app=await electron.launch({...(packaged?{executablePath:resolve(packaged,'Contents/MacOS/Baton')}:{}),args:packaged?[]:['apps/electron/main.mjs'],env:{...process.env,HOME:join(root,'home'),BATON_DESKTOP_DATA_ROOT:root},timeout:90000});
 try{
 const page=await app.firstWindow({timeout:90000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;
 await page.goto(origin+'/login');await page.locator('#username').fill('edit-qa');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('#account-name').waitFor();await page.goto(origin+'/teams');await page.getByText('还没有团队',{exact:true}).waitFor();console.log('TEAM_EMPTY',await page.locator('#teams-grid').innerText());await page.screenshot({path:join(root,'teams.png')});

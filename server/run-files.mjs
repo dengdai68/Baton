@@ -16,10 +16,10 @@ const DIRECTORY_PAGE_SIZE = 200;
 const DEFAULT_MAX_TREE_ENTRIES = 1000;
 const execFileAsync = promisify(execFile);
 const repositoryScans = new Map();
-const ignoredDirectories = new Set([".git", "node_modules", ".data", ".agentforge"]);
+const ignoredDirectories = new Set([".git", "node_modules", ".data", ".baton"]);
 const sensitiveWorkspaceEntry = (name) => [".npmrc", ".pypirc", "credentials.json"].includes(name) || /^\.env(?:\.|$)/i.test(name) || /\.(pem|key|p12|pfx)$/i.test(name) || /^id_(rsa|ed25519)(?:\.|$)/.test(name);
-const hiddenWorkspaceEntry = (name) => ignoredDirectories.has(name) || [".DS_Store", "__pycache__", ".cache", ".venv", "coverage", ".agentforge-workspace.json"].includes(name) || sensitiveWorkspaceEntry(name);
-const privateWorkspaceEntry = (name) => [".git", ".agentforge", ".agentforge-workspace.json", ".DS_Store"].includes(name) || sensitiveWorkspaceEntry(name);
+const hiddenWorkspaceEntry = (name) => ignoredDirectories.has(name) || [".DS_Store", "__pycache__", ".cache", ".venv", "coverage", ".baton-workspace.json"].includes(name) || sensitiveWorkspaceEntry(name);
+const privateWorkspaceEntry = (name) => [".git", ".baton", ".baton-workspace.json", ".DS_Store"].includes(name) || sensitiveWorkspaceEntry(name);
 
 function workspaceRelative(path) {
   if (typeof path !== "string" || !path || isAbsolute(path) || path.includes("\\") || path.includes("\0") || path.split("/").some((part) => !part || part === "." || part === "..")) throw new Error("工作目录路径必须是规范的相对路径");
@@ -315,10 +315,10 @@ process.stdin.on("end", () => {
     const index = line.indexOf("=");
     return index < 0 ? [line, ""] : [line.slice(0, index), line.slice(index + 1)];
   }));
-  const expectedHost = String(process.env.AGENTFORGE_GIT_CREDENTIAL_HOST || "").toLowerCase();
+  const expectedHost = String(process.env.BATON_GIT_CREDENTIAL_HOST || "").toLowerCase();
   if (fields.protocol !== "https" || String(fields.host || "").toLowerCase() !== expectedHost) return;
-  const username = process.env.AGENTFORGE_GIT_CREDENTIAL_USERNAME;
-  const token = process.env.AGENTFORGE_GIT_CREDENTIAL_TOKEN;
+  const username = process.env.BATON_GIT_CREDENTIAL_USERNAME;
+  const token = process.env.BATON_GIT_CREDENTIAL_TOKEN;
   if (!username || !token) return;
   process.stdout.write(\`username=\${username}\\npassword=\${token}\\n\`);
 });
@@ -336,17 +336,17 @@ function gitCredential(value) {
 
 async function runGit(args, { credential = null, helperDirectory = null } = {}) {
   const environment = { ...process.env, GIT_TERMINAL_PROMPT: "0", GIT_LFS_SKIP_SMUDGE: "1" };
-  delete environment.AGENTFORGE_GIT_CREDENTIAL_HOST;
-  delete environment.AGENTFORGE_GIT_CREDENTIAL_USERNAME;
-  delete environment.AGENTFORGE_GIT_CREDENTIAL_TOKEN;
+  delete environment.BATON_GIT_CREDENTIAL_HOST;
+  delete environment.BATON_GIT_CREDENTIAL_USERNAME;
+  delete environment.BATON_GIT_CREDENTIAL_TOKEN;
   let helperPath = null;
   try {
     if (credential) {
       helperPath = join(helperDirectory, `git-credential-${randomUUID()}.mjs`);
       await writeFile(helperPath, gitCredentialHelper, { encoding: "utf8", mode: 0o700, flag: "wx" });
-      environment.AGENTFORGE_GIT_CREDENTIAL_HOST = credential.host;
-      environment.AGENTFORGE_GIT_CREDENTIAL_USERNAME = credential.username;
-      environment.AGENTFORGE_GIT_CREDENTIAL_TOKEN = credential.token;
+      environment.BATON_GIT_CREDENTIAL_HOST = credential.host;
+      environment.BATON_GIT_CREDENTIAL_USERNAME = credential.username;
+      environment.BATON_GIT_CREDENTIAL_TOKEN = credential.token;
       const helper = `!${shellQuote(process.execPath)} ${shellQuote(helperPath)}`;
       return await execFileAsync("git", ["-c", "credential.helper=", "-c", `credential.helper=${helper}`, ...args], { timeout: 180000, maxBuffer: 1024 * 1024, env: environment });
     }
@@ -592,7 +592,7 @@ export function createRunFiles({ root, maxFiles = DEFAULT_MAX_FILES, maxFileByte
       const source=await open(file.path,constants.O_RDONLY|constants.O_NOFOLLOW);let temporary;
       try {
         const info=await source.stat();if(info.dev!==file.info.dev||info.ino!==file.info.ino)throw new Error('附件完整性校验失败');
-        const directory=scope==='communications'?await communicationDirectory(key,['.agentforge','.transfers']):await privateDirectory(['.transfers']),path=join(directory,randomUUID());
+        const directory=scope==='communications'?await communicationDirectory(key,['.baton','.transfers']):await privateDirectory(['.transfers']),path=join(directory,randomUUID());
         temporary=await open(path,'wx+',0o600);await unlink(path);
         const hash=createHash('sha256'),buffer=Buffer.allocUnsafe(64*1024);let bytes=0,head=Buffer.alloc(0);
         while(true){const {bytesRead}=await source.read(buffer,0,buffer.length,null);if(!bytesRead)break;bytes+=bytesRead;if(bytes>DEFAULT_MAX_FILE_BYTES)throw new Error('附件最大 20 MiB');const chunk=buffer.subarray(0,bytesRead);if(!head.length)head=Buffer.from(chunk.subarray(0,64));hash.update(chunk);await temporary.writeFile(chunk);}
@@ -615,7 +615,7 @@ export function createRunFiles({ root, maxFiles = DEFAULT_MAX_FILES, maxFileByte
       if (!/^chat_delivery_[A-Za-z0-9_-]+$/.test(deliveryId) || !Number.isSafeInteger(attempt) || attempt < 1) throw new Error('沟通调用归属无效');
       const text = JSON.stringify(content);
       if (Buffer.byteLength(text) > 300000) throw new Error('执行内容超过大小限制');
-      const directory = await communicationDirectory(key, ['.agentforge', deliveryId, String(attempt)]);
+      const directory = await communicationDirectory(key, ['.baton', deliveryId, String(attempt)]);
       const destination = join(directory, `content-${randomUUID()}.json`);
       await writeFile(destination, text, { mode: 0o600, flag: 'wx' });
       return { storagePath: `communications/${key}/`+relative(communicationRecordPath(key),destination).replaceAll('\\','/'), bytes: Buffer.byteLength(text), sha256: createHash('sha256').update(text).digest('hex') };
@@ -632,7 +632,7 @@ export function createRunFiles({ root, maxFiles = DEFAULT_MAX_FILES, maxFileByte
       await this.prepareTaskWorkspace({workspaceManaged:true,workspacePath:task.taskWorkspacePath || task.workspacePath});
       await mkdir(task.workspacePath, { recursive: true });
       for (const path of [task.taskWorkspacePath, task.workspacePath].filter(Boolean)) { const info = await lstat(path); if (info.isSymbolicLink() || !info.isDirectory()) throw new Error("执行目录不能是符号链接或文件"); }
-      const internal = join(task.workspacePath, ".agentforge");
+      const internal = join(task.workspacePath, ".baton");
       await mkdir(internal, { recursive: true });
       for (const path of [internal, ...(workspaceRepositories(task).length?[join(task.workspacePath, "repos")]:[])]) {
         await mkdir(path, { recursive: true });

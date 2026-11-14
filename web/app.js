@@ -14,7 +14,7 @@ import { createFloatingList, closeFloatingList, closeFloatingLists } from './flo
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
 import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
 
-/* AgentForge Console：任务空间信息架构 + 轻盈视觉系统。
+/* Baton Console：任务空间信息架构 + 轻盈视觉系统。
    视图：overview / tasks / teams / agents / workspace（普通任务与自动化共用任务空间）。 */
 function routeFromLocation() {
   const automation = location.pathname.match(/^\/automations(?:\/([^/]+))?$/);
@@ -225,9 +225,9 @@ async function refresh({ quiet = false } = {}) {
     const result = await bootstrapPromise;
     if(request!==refreshRequest || currentView!==state.currentView)return false;
     try {
-      const previous = localStorage.getItem("agentforge.installation");
+      const previous = localStorage.getItem("baton.installation");
       if (result.installationId && previous && previous !== result.installationId) { localStorage.removeItem(PREFERENCES_KEY); presentationPreferences = readPreferences(); applyPreferences(document, presentationPreferences); }
-      if (result.installationId) localStorage.setItem("agentforge.installation", result.installationId);
+      if (result.installationId) localStorage.setItem("baton.installation", result.installationId);
     } catch { /* Storage may be unavailable in this container. */ }
     Object.assign(state, result);
     if (view === 'shell') { state.navigationNotifications = result; state.businessReady = true; }
@@ -566,9 +566,10 @@ async function refreshInbox() {
   const request = ++inboxRequest, view = state.inboxView || 'pending', groups = inboxVisibleGroups();
   state.inboxLoading = !state.inboxResults || state.inboxLoadedView !== view;
   if (state.inboxLoading) renderInbox();
+  const current = () => request === inboxRequest && state.currentView === 'inbox' && (state.inboxView || 'pending') === view;
   const previous = JSON.stringify([state.inboxResults,state.inboxErrors,state.inboxDetails]);
   const results = await Promise.allSettled(groups.map(async ([status]) => [status, await api('/api/tasks?' + new URLSearchParams({status,archived:'false',page:String(status === 'done' ? 1 : state.inboxPages?.[status] || 1),pageSize:'20'}))]));
-  if (request !== inboxRequest || state.currentView !== 'inbox' || (state.inboxView || 'pending') !== view) return;
+  if (!current()) return;
   const next = {}, errors = {}, details = {};
   results.forEach((result,index) => { if (result.status === 'fulfilled') next[result.value[0]] = result.value[1]; else errors[groups[index][0]] = result.reason.message; });
   if (view === 'recent' && next.done) {
@@ -578,19 +579,32 @@ async function refreshInbox() {
       .sort((a,b) => new Date(b.inboxAnsweredAt || b.updatedAt) - new Date(a.inboxAnsweredAt || a.updatedAt)).slice(0,20);
     next.done = {...next.done,tasks,total:tasks.length,totalPages:1};
   }
-  // Bound parallel detail reads to the visible directory pages; never expand execution history for rows.
-  const queue = Object.values(next).flatMap(result => result.tasks);
-  await Promise.all(Array.from({length:Math.min(4,queue.length)}, async () => {
-    while (queue.length && request === inboxRequest) {
-      const task = queue.shift(), run = task.runs?.[0];
-      if (!run) continue;
-      try { details[task.id] = await api(`/api/runs/${encodeURIComponent(run.id)}/workspace?view=compact`); }
-      catch (error) { details[task.id] = {error:error.message}; }
-    }
-  }));
-  if (request !== inboxRequest || state.currentView !== 'inbox' || (state.inboxView || 'pending') !== view) return;
+  // Directory rows are already confirmed facts. Paint them before their
+  // independent compact details, retaining explicit loading in the preview.
+  const queue = Object.values(next).flatMap(result => result.tasks).filter(task => task.runs?.[0]);
+  for (const task of queue) details[task.id] = {loading:true};
   state.inboxResults = next; state.inboxErrors = errors; state.inboxDetails = details;
   state.inboxLoading = false; state.inboxLoadedView = view;
+  renderInbox();
+  let paintQueued = false;
+  const paintDetails = () => {
+    if (paintQueued) return;
+    paintQueued = true;
+    requestAnimationFrame(() => { paintQueued = false; if (current()) renderInbox(); });
+  };
+  // Keep detail reads bounded to the visible pages and four concurrent requests.
+  await Promise.all(Array.from({length:Math.min(4,queue.length)}, async () => {
+    while (queue.length && current()) {
+      const task = queue.shift(), run = task.runs[0];
+      let detail;
+      try { detail = await api(`/api/runs/${encodeURIComponent(run.id)}/workspace?view=compact`); }
+      catch (error) { detail = {error:error.message}; }
+      if (!current()) return;
+      details[task.id] = detail;
+      paintDetails();
+    }
+  }));
+  if (!current()) return;
   return previous !== JSON.stringify([next,errors,details]);
 }
 function inboxStatusIcon(status) {
@@ -635,6 +649,7 @@ async function renderInboxPreview(task) {
   const valid = () => request === inboxPreviewRequest && target.isConnected && state.currentView === 'inbox';
   try {
     const cached = state.inboxDetails?.[task.id];
+    if (cached?.loading) { target.innerHTML = '<div class="directory-empty" role="status" aria-busy="true">正在读取事项详情…</div>'; return; }
     if (cached?.error) throw new Error(cached.error);
     const workspace = cached || (task.runs?.[0] ? await api(`/api/runs/${encodeURIComponent(task.runs[0].id)}/workspace?view=compact`) : {});
     if (!valid()) return;
@@ -738,15 +753,15 @@ function renderOverview() {
         <div class="run-card-top"><span class="run-name">${esc(current.task?.title || "执行中")}</span>${pill(current.status)}</div>
         <p class="run-objective">${esc(current.task?.objective || "")}</p>
         <div class="run-meta"><span>${statusText[current.status] || current.status} · ${current.traceCount || 0} 条 Trace · ${current.artifactCount || 0} 个文件</span><span>${esc(current.id)}</span></div>
-      </div>` : `<div class="empty-state"><strong>没有进行中或待处理任务</strong>创建一个任务，AgentForge 会自动组建流程并开始交付。<br /><button class="primary-button compact" data-goto="tasks">去任务中心创建</button></div>`}`;
+      </div>` : `<div class="empty-state"><strong>没有进行中或待处理任务</strong>创建一个任务，Baton 会自动组建流程并开始交付。<br /><button class="primary-button compact" data-goto="tasks">去任务中心创建</button></div>`}`;
 
   const latest = state.events.slice(-6).reverse();
   $("#activity-panel").innerHTML = `
     <div class="panel-header"><div><div class="panel-kicker">SIGNAL</div><h3 class="panel-title">团队信号</h3></div></div>
     <div class="activity-list">${latest.length ? latest.map((event) => `
       <div class="activity-row">
-        <div class="activity-avatar ${roleColor(event.actor)}">${esc((event.actor?.name || "AF").slice(0, 1))}</div>
-        <div class="activity-copy"><p><strong>${esc(event.actor?.name || "AgentForge")}</strong> · ${esc(runtimeAuditText(event).slice(0, 56))}${runtimeAuditText(event).length > 56 ? "…" : ""}</p>
+        <div class="activity-avatar ${roleColor(event.actor)}">${esc((event.actor?.name || "B").slice(0, 1))}</div>
+        <div class="activity-copy"><p><strong>${esc(event.actor?.name || "Baton")}</strong> · ${esc(runtimeAuditText(event).slice(0, 56))}${runtimeAuditText(event).length > 56 ? "…" : ""}</p>
         <time>${timeAgo(event.timestamp)} · ${KIND_LABEL[classifyEvent(event)] || esc(event.type)}</time></div>
       </div>`).join("") : `<div class="empty-state" style="margin:0"><strong>暂无记录</strong>执行事件会出现在这里。</div>`}</div>`;
 
@@ -1177,7 +1192,7 @@ function svgFrame(label, body, viewBox = "0 0 1600 980") {
 }
 
 function dataModelSvg() {
-  return svgFrame("AgentForge 当前数据模型 ER 图", `
+  return svgFrame("Baton 当前数据模型 ER 图", `
     <text class="svg-caption" x="50" y="48">领域 metadata（SQLite 快照）</text>
     <rect class="diagram-boundary" x="36" y="64" width="1518" height="765" rx="24" />
     <g class="diagram-edge"><path d="M422 211 L304 211" marker-end="url(#diagram-arrow)" /><text x="334" y="197">memberAgentIds[]</text>
@@ -1206,9 +1221,9 @@ function dataModelSvg() {
 }
 
 function systemArchitectureSvg() {
-  return svgFrame("AgentForge 当前系统架构图", `
+  return svgFrame("Baton 当前系统架构图", `
     <rect class="diagram-boundary soft" x="46" y="72" width="400" height="800" rx="25" /><text class="svg-caption" x="72" y="110">本机浏览器边界</text>
-    <rect class="diagram-boundary" x="490" y="72" width="698" height="800" rx="25" /><text class="svg-caption" x="516" y="110">AgentForge Node.js 进程边界</text>
+    <rect class="diagram-boundary" x="490" y="72" width="698" height="800" rx="25" /><text class="svg-caption" x="516" y="110">Baton Node.js 进程边界</text>
     <rect class="diagram-boundary storage-boundary" x="1230" y="72" width="324" height="800" rx="25" /><text class="svg-caption" x="1254" y="110">本机持久化边界</text>
     <g class="diagram-edge"><path d="M400 250 L555 250" marker-end="url(#diagram-arrow)" /><text x="438" y="235">HTTP /api</text><path class="dashed" d="M555 292 L400 292" marker-end="url(#diagram-arrow)" /><text x="438" y="315">SSE run-event</text>
       <path d="M765 326 L765 410" marker-end="url(#diagram-arrow)" /><text x="780" y="370">命令 / 只读聚合</text><path d="M946 326 L946 410" marker-end="url(#diagram-arrow)" /><text x="960" y="370">启动 / 恢复 Run</text>
@@ -1228,7 +1243,7 @@ function systemArchitectureSvg() {
 }
 
 function taskFlowSvg() {
-  return svgFrame("AgentForge 任务执行与协作流程图", `
+  return svgFrame("Baton 任务执行与协作流程图", `
     <text class="svg-caption" x="60" y="48">正常推进：项目经理在依赖护栏内选择候选节点</text>
     <g class="diagram-edge"><path d="M240 150 L350 150" marker-end="url(#diagram-arrow)" /><path d="M595 150 L700 150" marker-end="url(#diagram-arrow)" /><path d="M960 150 L1060 150" marker-end="url(#diagram-arrow)" /><path d="M1310 150 L1400 150" marker-end="url(#diagram-arrow)" />
       <path d="M1488 215 L1488 300 L1060 300" marker-end="url(#diagram-arrow)" /><text x="1230" y="286">下一候选节点</text>
@@ -2448,12 +2463,13 @@ function renderCollaboration(workspace, agents) {
       ${view.collaborationError ? `<div class="collaboration-read-error" role="alert">${esc(view.collaborationError)}<button type="button" class="text-action" data-retry-collaboration>重试</button></div>` : ''}
       ${view.collaborationHasMore ? '<button class="small-button" data-collaboration-older>加载更早协作记录</button>' : ""}
       ${records.length ? visibleRecords.map((item, index) => {
-        // A saved Trace supplies identity; unlinked messages keep a neutral avatar.
-        const trace = workspace.traces?.find(trace => trace.id === item.traceId);
-        const sender = agents.find(agent => agent.id === trace?.agentId) || { name: item.from };
+        // Sender identity is saved with the Message. Frozen participants also
+        // cover historical members missing from the compact latest Trace page.
+        const sender = item.senderId && (run.participants?.find(agent => agent.id === item.senderId || agent.sourceAgentId === item.senderId)
+          || agents.find(agent => agent.id === item.senderId)) || { name: item.from };
         const day = new Date(item.timestamp).toDateString();
         const divider = !index || new Date(visibleRecords[index - 1].timestamp).toDateString() !== day ? `<div class="communication-day-divider"><time datetime="${esc(item.timestamp)}">${esc(communicationDayLabel(item.timestamp))}</time></div>` : "";
-        return `${divider}<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}"${item.outgoing ? ` data-outgoing-state="${esc(item.outgoing.status)}"` : ''} data-tone="${esc(item.tone)}" data-record-status="${esc(item.statusCode)}">
+        return `${divider}<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}"${item.outgoing ? ` data-outgoing-state="${esc(item.outgoing.status)}"` : ''} data-tone="${esc(item.tone)}" data-sender-color="${esc(sender.color || 'system')}" data-record-status="${esc(item.statusCode)}">
         ${item.senderType === "human" ? "" : `<span class="agent-card-avatar collaboration-avatar ${esc(roleColor(sender))}" aria-hidden="true">${esc(initialsOf(sender))}</span>`}<div class="collaboration-message-main">
         <header><strong>${esc(item.from)}</strong><span class="collaboration-kind">${esc(item.title)}${item.to ? ` <span aria-label="交给">→</span> ${esc(item.to)}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(new Date(item.timestamp).toLocaleTimeString("zh-CN", {hour:"2-digit", minute:"2-digit", hour12:false}))}</time>${item.status ? `<span class="collaboration-status">${esc(item.status)}</span>` : ""}</header>
         <div class="collaboration-content">
@@ -2881,13 +2897,13 @@ async function newTaskModal({ automation = false, existing = null, teamId = null
         <div class="form-field"><label for="task-acceptance">验收标准（每行一条）</label>
           <textarea id="task-acceptance" name="acceptanceCriteria" rows="3" placeholder="每行填写一条，可留空"></textarea><div class="field-error"></div></div>
       </details>
-      ${automation ? `<div class="automation-schedule-fields"><h3>执行计划</h3><div class="automation-schedule-top"><div class="automation-frequency-presets" role="group" aria-label="重复规则">${[['daily','每天'],['weekdays','工作日'],['weekly','每周一'],['monthly','每月'],['custom','自定义']].map(([value,label])=>`<button type="button" class="ghost-button" data-automation-frequency="${value}" aria-pressed="false">${label}</button>`).join('')}</div><select id="automation-frequency" aria-label="重复规则" hidden><option value="weekdays">每个工作日</option><option value="daily">每天</option><option value="weekly">每周一</option><option value="monthly">每月</option><option value="custom">自定义 Cron</option></select><label class="automation-time-control" for="automation-time">执行时间<input id="automation-time" type="time" value="09:00"></label></div><div class="automation-cron-row"><div class="form-field"><label for="automation-cron">Cron · 分 时 日 月 周 <b>*</b></label><input id="automation-cron" name="cron" value="${esc(source?.cron || '0 9 * * 1-5')}" placeholder="0 9 * * 1-5"><div class="field-error"></div><p class="field-hint">按服务所在本机的时区执行。</p></div><div class="automation-next-runs"><strong>未来 5 次执行</strong><div class="automation-preview" aria-live="polite"></div></div></div><p class="field-hint">全自动协作；下一轮开始前自动确认上一轮待验收记录。</p></div>` : ''}
+      ${automation ? `<section class="automation-schedule-fields" aria-labelledby="automation-schedule-title"><h3 id="automation-schedule-title">执行计划</h3><div class="form-field"><label for="automation-cron">Cron · 分 时 日 月 周 <b>*</b></label><input id="automation-cron" name="cron" value="${esc(source?.cron || '0 9 * * 1-5')}" placeholder="0 9 * * 1-5"><div class="field-error"></div></div></section>` : ''}
         <div class="form-grid task-selectors">
           <div class="form-field"><div id="task-members-picker"></div><div class="field-error"></div></div>
           <div class="form-field"><label for="task-workflow">流程模板（选填）</label>
             <select id="task-workflow" name="workflowTemplateId"><option value="">默认协作</option>${source?.workflowTemplateId && !catalog.workflowTemplates.some(template=>template.id===source.workflowTemplateId) ? `<option value="${esc(source.workflowTemplateId)}">${esc(source.workflowSnapshot?.name || '原流程模板')}（已删除，请重新选择）</option>` : ''}${catalog.workflowTemplates.map((template) => `<option value="${template.id}">${esc(template.name)}</option>`).join("")}</select></div>
         </div>
-        ${automation ? '' : `<small class="task-workspace-hint">系统工作根目录 ${esc(state.settings?.workspaceRoot || "/tmp/AgentForge")}/tasks/任务ID/RunID</small>`}
+        ${automation ? '' : `<small class="task-workspace-hint">系统工作根目录 ${esc(state.settings?.workspaceRoot || "/tmp/Baton")}/tasks/任务ID/RunID</small>`}
       <div class="form-actions task-form-footer">${automation ? `<span class="automation-create-note">${existing ? existing.enabled ? '已启用' : '已停用' : '创建后默认启用'}</span>` : ''}
         <div class="task-submit-actions"><button type="button" class="ghost-button" data-close-modal>取消</button>${automation && !existing ? '<button type="submit" class="ghost-button" value="disabled">保存为停用</button>' : !automation ? `<button type="submit" class="secondary-button" value="draft">${existing ? '保存修改' : '保存草稿'}</button>` : ''}<button type="submit" class="primary-button" value="start">${automation ? existing ? "保存修改" : "创建并启用" : "保存并开始"}</button></div>
       </div>
@@ -2905,19 +2921,6 @@ async function newTaskModal({ automation = false, existing = null, teamId = null
   const memberSelection = createEmployeeMultiSelect($('#task-members-picker'), { selectedIds:selectedMembers, managerId:source?.managerAgentId || null, onManagerChange:()=>clearInvalidField($('#task-members')), id: 'task-members', label:'任务成员 *', placeholder:'添加团队或数字员工', esc, items:[...teams,...candidates,...unavailable], available:item=>item.selectionKind==='team'||item.status==='active', hideUnavailable:true, unavailableLabel:'不可用', detail:item=>`<small>${esc(item.description || '数字员工')}</small>`, expand:expandMembers, onChange:values=>{selectedMembers=values;clearInvalidField($('#task-members'));} });
   if (source) { form.elements.title.value=source.title; form.elements.objective.value=source.objective; form.elements.acceptanceCriteria.value=source.acceptanceCriteria.join("\n"); form.elements.workflowTemplateId.value=source.workflowTemplateId || ""; }
   if (source?.acceptanceCriteria?.length) form.querySelector('.task-acceptance').open = true;
-  let previewTicket=0, previewTimer;
-  if (automation) {
-    const frequency=form.querySelector('#automation-frequency'),time=form.querySelector('#automation-time');
-    const syncFrequency=()=>form.querySelectorAll('[data-automation-frequency]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.automationFrequency===frequency.value)));
-    const infer=()=>{const fields=form.elements.cron.value.trim().split(/\s+/);const numeric=/^\d+$/.test(fields[0]||'')&&/^\d+$/.test(fields[1]||'');const monthly=numeric&&/^\d+$/.test(fields[2]||'')&&(fields[3]||'')==='*'&&(fields[4]||'*')==='*';const weekly=numeric&&(fields[2]||'')==='*'&&(fields[3]||'')==='*';frequency.value=monthly?'monthly':weekly?({'1-5':'weekdays','*':'daily','1':'weekly'}[fields[4]]||'custom'):'custom';if(frequency.value!=='custom')time.value=fields[1].padStart(2,'0')+':'+fields[0].padStart(2,'0');time.disabled=frequency.value==='custom';syncFrequency();};
-    infer();
-    const applyPreset=()=>{syncFrequency();time.disabled=frequency.value==='custom';if(time.disabled)return;const [hour,minute]=(time.value||'09:00').split(':').map(Number);form.elements.cron.value=`${minute} ${hour} ${{monthly:'1'}[frequency.value]||'*'} * ${{weekdays:'1-5',weekly:'1'}[frequency.value]||'*'}`;form.elements.cron.dispatchEvent(new Event('input'));};
-    form.querySelectorAll('[data-automation-frequency]').forEach(button=>button.onclick=()=>{frequency.value=button.dataset.automationFrequency;applyPreset();});
-    frequency.addEventListener('change',applyPreset);time.addEventListener('change',applyPreset);form.elements.cron.addEventListener('change',infer);
-    const preview=async()=>{ const ticket=++previewTicket; const target=form.querySelector('.automation-preview'); try { const data=await api('/api/automations/preview',{method:'POST',body:JSON.stringify({cron:form.elements.cron.value})}); if(ticket===previewTicket && form.isConnected)target.innerHTML='<span class="visually-hidden">下次执行：</span><ol>'+data.times.slice(0,5).map(value=>`<li><time datetime="${esc(value)}" title="${esc(exactTime(value))}">${esc(new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)))}</time></li>`).join('')+'</ol>'; } catch(error) { if(ticket===previewTicket && form.isConnected)target.textContent=error.message; } };
-    for(const name of ['cron'])form.elements[name].addEventListener('input',()=>{++previewTicket;clearTimeout(previewTimer);previewTimer=setTimeout(preview,300);});
-    void preview();
-  }
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (form.dataset.saving) return;
@@ -2970,7 +2973,7 @@ function workflowModal(template = null) {
   openModal(`<form id="workflow-form" novalidate><header class="workflow-editor-topbar"><button type="button" class="ghost-button workflow-back" data-close-modal aria-label="返回工作流"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><h2 class="workflow-editor-heading" aria-label="${template ? '编辑工作流' : '新建工作流'}"><input id="workflow-name" name="workflowName" aria-label="工作流名称" aria-required="true" value="${esc(template?.name || '')}" placeholder="新建工作流" /></h2><span class="workflow-save-state" role="status">${template?'已保存':'新工作流'}</span><div class="workflow-editor-top-actions"><button type="button" class="ghost-button" data-flow-action="preview" aria-pressed="false">文本预览</button><button type="button" class="small-button" data-close-modal>放弃</button><button type="submit" class="primary-button" aria-label="${template ? '保存工作流' : '创建工作流'}">保存 <kbd>⌘S</kbd></button></div></header><div id="workflow-canvas-editor"></div></form>`);
   const form = $('#workflow-form');
   form.closest('.modal').classList.add('workflow-editor-modal');
-  form.closest('.modal').toggleAttribute('data-native-chrome', Boolean(window.agentforgeDesktop));
+  form.closest('.modal').toggleAttribute('data-native-chrome', Boolean(window.batonDesktop));
   const editor = createWorkflowEditor($('#workflow-canvas-editor'), {workflow:template || {},loadVendor,esc,nameInput:$('#workflow-name'),onChange:dirty=>{const status=form.querySelector('.workflow-save-state');status.textContent=dirty?'有未保存的更改':template?'已保存':'新工作流';status.classList.toggle('is-dirty',dirty);}});
   form.querySelector('[data-flow-action=preview]').onclick = () => editor.togglePreview();
   form.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); form.requestSubmit(form.querySelector('[type=submit]')); } });
@@ -3443,8 +3446,8 @@ document.addEventListener("click", (event) => {
     const button = target;
     button.disabled = true;
     Promise.resolve().then(() => {
-      if (!window.agentforgeDesktop?.openWorkspaceDirectory) throw new Error("客户端打开目录接口不可用，请重新打开应用。");
-      return window.agentforgeDesktop.openWorkspaceDirectory();
+      if (!window.batonDesktop?.openWorkspaceDirectory) throw new Error("客户端打开目录接口不可用，请重新打开应用。");
+      return window.batonDesktop.openWorkspaceDirectory();
     }).catch(error => { toast(error.message || "打开工作目录失败，请重试。", true); })
       .finally(() => { button.disabled = false; });
     return;
@@ -3452,8 +3455,8 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-copy]"))) {
     const button = target;
     button.disabled = true;
-    const copy = window.agentforgeDesktop?.copyWorkspacePath
-      ? () => window.agentforgeDesktop.copyWorkspacePath(button.dataset.copy)
+    const copy = window.batonDesktop?.copyWorkspacePath
+      ? () => window.batonDesktop.copyWorkspacePath(button.dataset.copy)
       : () => navigator.clipboard?.writeText ? navigator.clipboard.writeText(button.dataset.copy) : Promise.reject(new Error("当前环境不支持剪贴板"));
     Promise.resolve().then(copy).then(() => {
       button.textContent = "已复制";

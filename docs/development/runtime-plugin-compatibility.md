@@ -17,7 +17,7 @@
 - npm test：585 pass / 0 fail（最终回归日志 /private/tmp/af-source-standard-install-regression.log）。
 - check:ai、check:impact、规定 node --check、git diff --check 通过。
 - 真实 Claude/Codex 源插件在 DeepSeek Harness 独立子代理与 command Hook 调用通过；Hook 拒绝测试确实未创建 canary 文件。
-- 完整真实团队任务含 Skill、MCP、历史工具、独立 reviewer、人类澄清、交接、可见人类确认和归档：隔离源码 .data/dsh-real-ceWl48；打包版 Codex 源 .data/dsh-real-cdwuTS；最终 DeepSeek 打包执行 .data/dsh-real-hNTsok。这些目录均在 /private/tmp/agentforge-beta102-verification-path 指向的可丢弃检出下。
+- 完整真实团队任务含 Skill、MCP、历史工具、独立 reviewer、人类澄清、交接、可见人类确认和归档：隔离源码 .data/dsh-real-ceWl48；打包版 Codex 源 .data/dsh-real-cdwuTS；最终 DeepSeek 打包执行 .data/dsh-real-hNTsok。这些目录均在 /private/tmp/baton-beta102-verification-path 指向的可丢弃检出下。
 - 最终打包版 Codex 子代理工具拒绝：/private/tmp/af-source-standard-packaged-codex-final.log，真实 apply_patch 被拒、canary 不存在，子代理正常交回；该日志首行给出完整私有证据目录。
 - Claude Code 的源 reviewer 与带 cwd/env_vars 的 MCP 实际调用：/private/tmp/af-source-standard-claude-native-second.log。
 - 窄/宽、minimal/warm 两主题的实际 Electron Markdown 排版通过：scripts/test-console-layout.mjs；源码 .data/console-layout-5lxcss、打包 .data/console-layout-36BbG8，均有 PNG 与 evidence.json。
@@ -35,4 +35,4 @@
 
 已通过正式只读接口对比：17 个任务/Run 的状态与 Messages SHA-256 一致；16 插件、2 MCP 均重新识别 DeepSeek Harness 支持。实际客户端查看了市场与带 reviewer 的插件详情；发现旧组件重复后增加回归并修正。最终实机详情为 Skill 1 / Subagent 1 / Hook 0，每项均合并显示 Claude Code / Codex / DeepSeek Harness，无重复 Skill。原视频 run_mvw97nan_3 的实际控制台也已目检：编号完整、普通正文无内层纵向滚动条；代码块保留横向滚动。
 
-安装：/Applications/AgentForge.app，版本保持 0.1.1，本地 ad-hoc 签名校验通过；ASAR SHA-256 746250fec55539b7fc6cac6f13946fd3f7d41855a791f31c2d67e99c5c1a8f67。回退副本 /Applications/.AgentForge-source-standard-eb405dc8209d48eda4ee4ca1f9a20bf7/Previous-AgentForge.app。最终只读核对记录 /private/tmp/af-source-standard-installed-final-review.json；17 个任务/Run 的状态与消息摘要均未改变。
+安装：/Applications/Baton.app，版本保持 0.1.1，本地 ad-hoc 签名校验通过；ASAR SHA-256 746250fec55539b7fc6cac6f13946fd3f7d41855a791f31c2d67e99c5c1a8f67。回退副本 /Applications/.Baton-source-standard-eb405dc8209d48eda4ee4ca1f9a20bf7/Previous-Baton.app。最终只读核对记录 /private/tmp/af-source-standard-installed-final-review.json；17 个任务/Run 的状态与消息摘要均未改变。

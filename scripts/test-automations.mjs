@@ -10,9 +10,9 @@ import { promisify } from 'node:util';
 import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
 await mkdir('.data',{recursive:true});
-const root=await mkdtemp(resolve('.data/automations-ui-')),home=join(root,'home'),data=process.env.AGENTFORGE_AUTOMATIONS_APP?join(home,'.agentforge','desktop'):join(root,'client');await mkdir(home,{recursive:true});
+const root=await mkdtemp(resolve('.data/automations-ui-')),home=join(root,'home'),data=process.env.BATON_AUTOMATIONS_APP?join(home,'.baton','desktop'):join(root,'client');await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('automation-qa',password);auth.close();
-const store=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
+const store=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
 const input={managerAgentId:'system_project_manager',title:'验收自动化',objective:'只用于隔离界面检查',memberAgentIds:['system_project_manager','agent_analyst'],workflowTemplateId:'content_delivery',cron:'0 9 * * 1-5',enabled:false};
 const automation=store.saveAutomation(input);const first=store.triggerAutomation(automation.id);assert.ok(first.runId,first.reason);store.requestHumanAcceptance(first.runId);
 store.updateAgent('agent_analyst',{status:'inactive'});for(let i=0;i<24;i++)store.triggerAutomation(automation.id);store.updateAgent('agent_analyst',{status:'active'});
@@ -20,7 +20,7 @@ for(let i=0;i<24;i++)store.saveAutomation({...input,title:`分页自动化 ${i}`
 const task=store.createTask({managerAgentId:'system_project_manager',title:'唯一普通任务',objective:'普通流程保持',memberAgentIds:input.memberAgentIds,workflowTemplateId:input.workflowTemplateId});const run=store.createRun(task.id);store.requestHumanAcceptance(run.id);
 const storeTitle=store.getRunTask(first.runId).title;assert.match(storeTitle,/^验收自动化#\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({...process.env.AGENTFORGE_AUTOMATIONS_APP ? {executablePath:resolve(process.env.AGENTFORGE_AUTOMATIONS_APP,'Contents/MacOS/AgentForge'),args:['--user-data-dir='+join(root,'profile')]} : {args:['apps/electron/main.mjs']},env:{...process.env,HOME:home,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:90000});
+const app=await electron.launch({...process.env.BATON_AUTOMATIONS_APP ? {executablePath:resolve(process.env.BATON_AUTOMATIONS_APP,'Contents/MacOS/Baton'),args:['--user-data-dir='+join(root,'profile')]} : {args:['apps/electron/main.mjs']},env:{...process.env,HOME:home,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:90000});
 const errors=[],evidence={root,cases:[]};
 try {
   const page=await app.firstWindow({timeout:90000});page.setDefaultTimeout(20000);page.on('pageerror',error=>errors.push(error.message));await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:90000});const origin=new URL(page.url()).origin;
@@ -48,16 +48,18 @@ try {
     await page.waitForFunction(async id=>(await(await fetch('/api/automations/'+id)).json()).automation.enabled,toggleId);
     assert.equal(new URL(page.url()).pathname,'/automations','switch does not open details');
     await page.locator('[data-auto-status=enabled]').click();await page.waitForFunction(()=>document.querySelectorAll('[data-auto-results] tbody tr').length===1&&document.querySelector('[data-auto-status=enabled]').getAttribute('aria-pressed')==='true');assert.equal(await page.locator('[data-auto-results] tbody tr').count(),1);
-    await page.locator('[data-auto-enable]').uncheck();await page.getByText('没有匹配的自动化',{exact:true}).waitFor();
+    const disabled=page.waitForResponse(response=>response.url().endsWith('/api/automations/'+toggleId)&&response.request().method()==='PUT');await page.locator('[data-auto-enable]').click();assert.equal((await disabled).ok(),true);await page.getByText('没有匹配的自动化',{exact:true}).waitFor();
     await page.locator('[data-auto-status=all]').click();await page.locator('[data-auto-nav]').first().waitFor();
     await page.screenshot({path:join(root,`list-${theme}-${width}.png`)});
     await page.locator('[data-auto-new]').click();const form=page.locator('#task-form');await form.waitFor();
     assert.equal(await form.locator('[name=priority]').count(),0);
     assert.equal(await form.locator('[name=timeZone]').count(),0);assert.equal(await form.locator('[name=workflowTemplateId]').inputValue(),'');
     await form.locator('[name=title]').fill('自动化草稿');await form.locator('[name=objective]').fill('先保存规则，等待定时执行。');
-    await form.locator('[name=cron]').fill('invalid');await page.locator('.automation-preview').filter({hasText:'Cron'}).waitFor();
-    await form.locator('[name=cron]').fill('0 9 * * 1-5');await page.locator('.automation-preview').filter({hasText:'下次执行：'}).waitFor();
-    const cronBox=await form.locator('[name=cron]').boundingBox(),previewBox=await form.locator('.automation-preview').boundingBox();assert.ok(previewBox.x>cronBox.x+cronBox.width,'schedule preview is beside Cron');assert.equal(await form.locator('.automation-preview li').count(),5,'all five server previews are shown');
+    assert.equal(await form.locator('.automation-frequency-presets,#automation-time,.automation-preview').count(),0,'schedule only exposes Cron');
+    assert.ok(await form.evaluate(form=>Math.abs(form.querySelector('.extension-picker-control').getBoundingClientRect().height-form.elements.workflowTemplateId.getBoundingClientRect().height)<1),'automation empty selectors share one height');
+    const schedule=await form.locator('.automation-schedule-fields').evaluate(section=>{const heading=section.querySelector('h3').getBoundingClientRect(),field=section.querySelector('.form-field').getBoundingClientRect();return{heading:{x:heading.x,right:heading.right,y:heading.y},field:{x:field.x,right:field.right,y:field.y},count:section.querySelectorAll('input,select').length};});
+    assert.ok(schedule.field.x>schedule.heading.right&&schedule.count===1,'execution-plan heading and Cron share one compact row');
+    await form.locator('[name=cron]').fill('0 9 * * 1-5');
     const box=await form.locator('[type=submit].primary-button').boundingBox();assert.ok(box.y>=0&&box.y+box.height<=height,'submit reachable');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:join(root,`modal-${theme}-${width}.png`)});await form.getByRole('button',{name:'取消',exact:true}).click();
@@ -75,8 +77,8 @@ try {
     const tabStyle=await page.locator('[data-auto-tab=records]').evaluate(el=>{const s=getComputedStyle(el);return {color:s.color,border:s.borderBottomWidth,background:s.backgroundColor};});assert.equal(tabStyle.border,'0px');assert.notEqual(tabStyle.background,'rgba(0, 0, 0, 0)');
     await page.locator('[data-pagination=automation-triggers] [data-page="2"]').click();
     const taskTitle=storeTitle;
-    assert.equal(await page.locator('.automation-trigger-table').evaluate(el=>getComputedStyle(el).minWidth),'0px');
     await page.locator('.automation-trigger-title').filter({hasText:taskTitle}).waitFor();
+    assert.equal(await page.locator('.automation-trigger-table').evaluate(el=>getComputedStyle(el).minWidth),'0px');
     assert.equal(await page.locator('.automation-trigger-title').filter({hasText:taskTitle}).getAttribute('title'),taskTitle);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     const actionBounds=await page.locator('[data-auto-run]').boundingBox();assert.ok(actionBounds.x>=0&&actionBounds.x+actionBounds.width<=width,'detail action visible without horizontal scrolling');
@@ -110,7 +112,7 @@ try {
   const createForm=page.locator('#task-form');await createForm.locator('[name=title]').fill('App 新建自动化');await createForm.locator('[name=objective]').fill('保存输入与选择，不执行模型');
   for(const [id,name] of [['system_project_manager','项目经理'],['agent_analyst','内容编辑']]){await createForm.locator('#task-members').fill(name);await createForm.locator(`[data-add-extension="${id}"]`).click();}
   const layout=await createForm.evaluate(form=>{const control=form.querySelector('.extension-picker-control'),box=control.getBoundingClientRect(),items=[...control.querySelectorAll('.extension-chip,input')].map(n=>n.getBoundingClientRect());return {height:box.height,rows:new Set(items.map(r=>Math.round(r.y+r.height/2))).size,contained:items.every(r=>r.left>=box.left&&r.right<=box.right&&r.top>=box.top&&r.bottom<=box.bottom),fits:control.scrollWidth<=control.clientWidth+1,selectorsScroll:!!form.querySelector('.modal-scroll .task-selectors'),footerSelectors:!!form.querySelector('.form-actions .task-selectors')};});
-  assert.ok(layout.height>=32&&layout.height<=layout.rows*32+8&&layout.contained&&layout.fits,'member picker stays compact while fitting all selected chips: '+JSON.stringify(layout));assert.equal(layout.selectorsScroll,true);assert.equal(layout.footerSelectors,false);
+  assert.ok(layout.height>=27.5&&layout.height<=layout.rows*32+8&&layout.contained&&layout.fits,'member picker stays compact while fitting all selected chips: '+JSON.stringify(layout));assert.equal(layout.selectorsScroll,true);assert.equal(layout.footerSelectors,false);
   await createForm.locator('#task-members').press('Escape');await createForm.locator('[data-select-manager=system_project_manager]').click();await createForm.getByRole('button',{name:'保存为停用',exact:true}).click();await page.locator('#modal-backdrop.open').waitFor({state:'hidden'});
   const saved=await cli('list','--search','App 新建自动化');assert.equal(saved.data.items.length,1);assert.equal(saved.data.items[0].enabled,false);assert.equal((await cli('get',saved.data.items[0].id)).data.automation.workflowTemplateId,null);await cli('delete',saved.data.items[0].id,'--yes');
   const file=join(root,'create.json');

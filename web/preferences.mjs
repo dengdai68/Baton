@@ -1,5 +1,5 @@
 // Browser-container presentation only. Never put credentials or domain facts here.
-export const PREFERENCES_KEY = "agentforge.presentation.v1";
+export const PREFERENCES_KEY = "baton.presentation.v1";
 export const NAVIGATION = [
   { id: "inbox", label: "待我处理", group: "工作" },
   { id: "tasks", label: "任务", group: "工作" },
@@ -67,7 +67,7 @@ export function applyPreferences(document, value) {
   const dark = preferences.theme === "dark" || (preferences.theme === "system" && Boolean(view?.matchMedia?.("(prefers-color-scheme: dark)").matches));
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[dark ? "dark" : "light"]);
   // The desktop host mirrors the choice so native dialogs and the next launch match.
-  view?.agentforgeDesktop?.setAppearance?.(preferences.theme)?.catch?.(() => {});
+  view?.batonDesktop?.setAppearance?.(preferences.theme)?.catch?.(() => {});
   for (const item of document.querySelectorAll(".sidebar .nav-item[data-view]")) {
     item.hidden = preferences.hiddenViews.includes(item.dataset.view);
   }

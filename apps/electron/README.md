@@ -2,7 +2,7 @@
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
 
-仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
+仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，表单仍仅显式关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。
 
@@ -20,7 +20,7 @@
 
 沟通附件、未读与右侧半屏控制台复用认证 HTTP 和共享 renderer，compact.css 仅调整紧凑间距；不新增通用宿主桥。测试使用隔离 HOME、实例与下载目录；真实模型专项只在源码隔离客户端调用已授权 Claude Code，安装包使用受控 CLI。
 
-runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.agentforge/workspace；当前 locator 指定业务根，认证实例保持独立。已有任务路径不搬动。测试使用显式 fixture locator。CLI 源码/安装版统一只发现客户端，无 Web 目标；CLI 安装入口仅宿主界面显示。
+runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.baton/workspace；当前 locator 指定业务根，认证实例保持独立。已有任务路径不搬动。测试使用显式 fixture locator。CLI 源码/安装版统一只发现客户端，无 Web 目标；CLI 安装入口仅宿主界面显示。
 
 员工、插件/MCP 目录共享同行搜索/操作与卡片；compact.css 只调整桌面密度。市场详情删除使用共享应用确认框与认证 HTTP，失败就地提示，不新增原生弹框或宿主接口。
 
@@ -39,7 +39,7 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.age
 
 运行与边界见 [Electron 文档](../../docs/18-electron-client.md)。共享业务 UI 在 `web/`，此目录不拥有 Store 或 Provider 状态。
 
-`runtime-paths.mjs` 同时定义 Chromium userData/sessionData、日志和崩溃目录，作为认证 profile/日志默认位于 ~/.agentforge 的实例目录；main 在 ready 前设置。业务资料与任务文件共用工作目录；设置、认证、Runtime、扩展与启动定位留在配置目录。
+`runtime-paths.mjs` 同时定义 Chromium userData/sessionData、日志和崩溃目录，作为认证 profile/日志默认位于 ~/.baton 的实例目录；main 在 ready 前设置。业务资料与任务文件共用工作目录；设置、认证、Runtime、扩展与启动定位留在配置目录。
 
 员工和插件/MCP 市场使用响应式紧凑卡片，保留既有命令与信息；创建员工也可停用，插件与 MCP 搜索器分行。插件详情用概要和组件标签页，不扩展宿主接口。
 
@@ -96,9 +96,9 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.age
 
 更新缓存属于配置目录，不随工作目录更换搬运；宿主仍保护正在下载的文件。
 
-当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.agentforge/desktop/agentforge-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 

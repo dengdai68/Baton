@@ -22,7 +22,7 @@ export async function runCodexAppServer(input, { args, normalizeEvent, authentic
   if (input.canStart && !input.canStart()) throw cancelledError('执行在启动前已暂停或终止');
   if (hasActiveExecution(key)) throw new Error('该执行会话已有本地 Agent 进程在执行');
   const command = runtime.executable || 'codex';
-  const child = spawn(command, args, {cwd:workspacePath, env:cliEnvironment(command,{AGENTFORGE_TRACE_OUTPUT_DIR:`${traceDirectory}/output`}), stdio:['pipe','pipe','pipe'], detached:process.platform !== 'win32'});
+  const child = spawn(command, args, {cwd:workspacePath, env:cliEnvironment(command,{BATON_TRACE_OUTPUT_DIR:`${traceDirectory}/output`}), stdio:['pipe','pipe','pipe'], detached:process.platform !== 'win32'});
   const pending = new Map(); let serial=0, closed=false, cancelled=null, finalText='', threadId=null, turnId=null, failure=null;
   let killTimer;
   const signal = name => {try {process.platform==='win32'?child.kill(name):process.kill(-child.pid,name);}catch{}};
@@ -79,7 +79,7 @@ export async function runCodexAppServer(input, { args, normalizeEvent, authentic
   })();
   diagnostic('provider.spawn',{command,cwd:workspacePath,childPid:child.pid,provider:'Codex app-server'});touch();
   try {
-    await request('initialize',{clientInfo:{name:'agentforge',title:'AgentForge',version:'1.0.0'},capabilities:{experimentalApi:true}});send({method:'initialized'});
+    await request('initialize',{clientInfo:{name:'baton',title:'Baton',version:'1.0.0'},capabilities:{experimentalApi:true}});send({method:'initialized'});
     await request('skills/extraRoots/set',{extraRoots:[...new Set((runtime.skillPaths || []).map(path=>dirname(path)))]});
     const catalog=await request('skills/list',{cwds:[workspacePath],forceReload:true});
     const selected=new Set((runtime.skillPaths || []).map(path=>resolve(path)));

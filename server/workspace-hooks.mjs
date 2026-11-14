@@ -29,7 +29,7 @@ export async function withWorkspaceHooks(files, task, input, invoke) {
     await chmod(socket,0o600);
     await scan();
     const quote=value=>"'"+value.replaceAll("'","'\\''")+"'";
-    const executable=process.env.AGENTFORGE_ELECTRON_NODE || process.execPath;
+    const executable=process.env.BATON_ELECTRON_NODE || process.execPath;
     // The helper only sends a trigger; no tool inputs/outputs or secrets cross it.
     const command=(process.versions.electron?'ELECTRON_RUN_AS_NODE=1 ':'')+[executable,fileURLToPath(new URL('./workspace-hook-client.mjs',import.meta.url)),socket].map(quote).join(' ');
     return await invoke({...input,workspaceHook:{command,socket}});

@@ -30,8 +30,8 @@
 
 追加源码验收通过：`.data/runtime-settings-urSCRT/evidence.json`。已目检760px仓库页、Runtime展开页和任务操作列，二级标题与分组明确，按钮完整可见。两主题/1320及760px归档恢复往返及删除确认通过，未执行任何真实实例删除或任务运行。此前两次新增展示夹具初始化失败，是未依次经过 running/review 的测试数据准备错误；按真实状态转换修正后通过，未放宽产品状态机。首次全量检查还发现旧“更多”静态断言，已同步为直接操作呈现。
 
-追加改动的全量 `npm test` 再次通过：545 pass / 0 fail（`/private/tmp/agentforge-settings-density-tests2.log`）；check:ai、check:impact、规定语法检查及 diff --check 全部通过。
+追加改动的全量 `npm test` 再次通过：545 pass / 0 fail（`/private/tmp/baton-settings-density-tests2.log`）；check:ai、check:impact、规定语法检查及 diff --check 全部通过。
 
 最终打包验收通过：`.data/runtime-settings-Bw9Ym2/evidence.json`，包含两主题宽窄界面、下拉衔接、直接操作、确认流程以及 CLI 自动安装/客户端授权回归。macOS arm64 ZIP/DMG 已生成，签名完整性通过，asar 中四个修改的界面文件与源码逐字节一致。
 
-已安装 `/Applications/AgentForge.app` beta.100；asar SHA256：`a68ea624bc8663aaf2226cb324deb6219a193343fac7abca07d41f4c1968c7c2`。实机通过客户端核对默认折叠、页内展开、六个可见大写模型标签、仓库主/子标题及分隔布局、真实任务列表直接按钮。仅查看配置和列表，未保存 Runtime/Token 或修改真实任务。更新前确认无执行中任务，正常退出并替换应用；正式只读 CLI 更新前后15个 Task ID摘要与状态分布一致（6待验收、3已终止、1阻塞、5完成），客户端登录保留。暂存副本已清理。
+已安装 `/Applications/Baton.app` beta.100；asar SHA256：`a68ea624bc8663aaf2226cb324deb6219a193343fac7abca07d41f4c1968c7c2`。实机通过客户端核对默认折叠、页内展开、六个可见大写模型标签、仓库主/子标题及分隔布局、真实任务列表直接按钮。仅查看配置和列表，未保存 Runtime/Token 或修改真实任务。更新前确认无执行中任务，正常退出并替换应用；正式只读 CLI 更新前后15个 Task ID摘要与状态分布一致（6待验收、3已终止、1阻塞、5完成），客户端登录保留。暂存副本已清理。

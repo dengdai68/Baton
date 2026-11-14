@@ -34,9 +34,9 @@ export async function writeStorageLocation(controlRoot,value) {
   try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(location));await file.sync();}finally{await file.close();}await rename(temporary,path);}finally{await unlink(temporary).catch(e=>{if(e.code!=='ENOENT')throw e;});}
   return location;
 }
-export function runtimeStoragePath(path,{currentRoot=process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT,previousRoots}={}) {
+export function runtimeStoragePath(path,{currentRoot=process.env.BATON_RUNTIME_CONFIG_ROOT,previousRoots}={}) {
   if(typeof path!=='string'||!isAbsolute(path)||!currentRoot)return path;
-  previousRoots??=JSON.parse(process.env.AGENTFORGE_RUNTIME_PREVIOUS_ROOTS||'[]');
+  previousRoots??=JSON.parse(process.env.BATON_RUNTIME_PREVIOUS_ROOTS||'[]');
   if(!Array.isArray(previousRoots))throw new Error('受管扩展位置记录无效');
   for(const old of previousRoots){
     if(typeof old!=='string'||!isAbsolute(old))throw new Error('受管扩展位置记录无效');

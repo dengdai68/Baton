@@ -55,12 +55,12 @@ test('source control shows actual root/child changes and diffs additions, staged
 
 test('whole workspace listing and CHANGE include root files, custom media and committed work without a manifest',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-all-workspace-'));t.after(()=>rm(root,{recursive:true,force:true}));
- const files=createRunFiles({root:join(root,'.agentforge/audit')}),task={runId:'run-fixture',workspacePath:root,repositoryMode:'agent',repositorySources:[]};
+ const files=createRunFiles({root:join(root,'.baton/audit')}),task={runId:'run-fixture',workspacePath:root,repositoryMode:'agent',repositorySources:[]};
  await initializeWorkspaceGit(root);
  await mkdir(join(root,'artifacts/preparation/assets'),{recursive:true});
  const media=await open(join(root,'artifacts/preparation/assets/source.mp4'),'w');await media.truncate(298473832);await media.close();
  await writeFile(join(root,'summary.md'),'first\n');await git(root,['add','summary.md']);await git(root,['commit','-m','employee work']);
- await writeFile(join(root,'summary.md'),'updated\n');await writeFile(join(root,'.env'),'private');await writeFile(join(root,'.agentforge-workspace.json'),'{invalid old display list');
+ await writeFile(join(root,'summary.md'),'updated\n');await writeFile(join(root,'.env'),'private');await writeFile(join(root,'.baton-workspace.json'),'{invalid old display list');
  const changes=(await files.listWorkingChanges(task)).repositories.flatMap(repo=>repo.changes);
  assert.deepEqual(changes.map(c=>c.path),['artifacts/preparation/assets/source.mp4','summary.md']);
  assert.equal(changes.find(c=>c.path==='summary.md').status,'A','comparison includes committed work since task initialization');
@@ -73,7 +73,7 @@ test('whole workspace listing and CHANGE include root files, custom media and co
 
 test('directory paging reaches every ordinary file beyond 1000 without reading contents or following links',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-directory-pages-'));t.after(()=>rm(root,{recursive:true,force:true}));
- const files=createRunFiles({root:join(root,'.agentforge/audit')}),task={runId:'run-fixture',workspacePath:root};await mkdir(join(root,'node_modules'));
+ const files=createRunFiles({root:join(root,'.baton/audit')}),task={runId:'run-fixture',workspacePath:root};await mkdir(join(root,'node_modules'));
  await Promise.all(Array.from({length:1005},(_,i)=>writeFile(join(root,'node_modules',String(i).padStart(4,'0')+'.txt'),'x')));
  await writeFile(join(root,'node_modules/.env'),'private');await symlink('/etc',join(root,'node_modules/escape'));
  const paths=[];let offset=0;do{const page=await files.listWorkingDirectory(task,{path:'node_modules',offset});assert.ok(page.entries.length<=200);paths.push(...page.entries.map(entry=>entry.path));offset=page.nextOffset;}while(offset!==null);

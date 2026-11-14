@@ -10,10 +10,10 @@ import {StringDecoder} from 'node:string_decoder';
 
 export default async function(pi){
   const config=JSON.parse(await readFile(new URL('./pi-agents.json',import.meta.url),'utf8')),agents=config.agents;
-  pi.registerTool({name:'agentforge_subagent',label:'独立子代理',description:'Invoke one selected plugin subagent in an independent native Pi session and wait for its result. '+agents.map(a=>`${a.name}: ${a.description}`).join('\n'),parameters:Type.Object({agent:Type.Union(agents.map(a=>Type.Literal(a.name))),task:Type.String({minLength:1,maxLength:100000})}),
+  pi.registerTool({name:'baton_subagent',label:'独立子代理',description:'Invoke one selected plugin subagent in an independent native Pi session and wait for its result. '+agents.map(a=>`${a.name}: ${a.description}`).join('\n'),parameters:Type.Object({agent:Type.Union(agents.map(a=>Type.Literal(a.name))),task:Type.String({minLength:1,maxLength:100000})}),
     async execute(toolCallId,params,signal,onUpdate,ctx){
       const agent=agents.find(item=>item.name===params.agent);if(!agent)throw Error('Unknown selected subagent');if(signal?.aborted)throw Error('Subagent invocation cancelled');
-      const directory=join(ctx.cwd,'.agentforge','pi-plugin-agent-sessions',randomUUID());await mkdir(directory,{recursive:true,mode:0o700});
+      const directory=join(ctx.cwd,'.baton','pi-plugin-agent-sessions',randomUUID());await mkdir(directory,{recursive:true,mode:0o700});
       const tools=agent.toolNames.filter(tool=>!agent.deniedTools?.includes(tool));
       const args=['--mode','json','--print','--no-extensions','--no-skills','--no-prompt-templates','--no-mcp','--no-context-files','--no-approve','--session-dir',directory,'--system-prompt',agent.promptFile,...(tools.length?['--tools',tools.join(',')]:['--no-tools']),...(ctx.model?['--model',ctx.model.provider+'/'+ctx.model.id]:[]),...(pi.getThinkingLevel?.()?['--thinking',pi.getThinkingLevel()]:[])];
       const metadata=join(dirname(fileURLToPath(import.meta.url)),'pi-agent-invocations.jsonl');

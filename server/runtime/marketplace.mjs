@@ -403,7 +403,7 @@ export function createMarketplace(root) {
         Object.assign(info,await pluginExecutionPlan(info,target,provider));
         const commandSkills=[];
         for(const [index,command] of info.components.commands.entries()) {
-          const path=`.agentforge/command-skills/${digest(command.path).slice(0,16)}/SKILL.md`,name=`command-${command.name}`.slice(0,64);
+          const path=`.baton/command-skills/${digest(command.path).slice(0,16)}/SKILL.md`,name=`command-${command.name}`.slice(0,64);
           const body=(await readFile(join(target,command.path),'utf8')).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/,'');
           await mkdir(dirname(join(target,path)),{recursive:true,mode:0o700});
           await writeFile(join(target,path),`---\nname: ${name}\ndescription: ${JSON.stringify(command.description || 'Adapted reusable command instructions')}\n---\n原 Command 作为可复用 Skill 说明加载；不提供斜杠参数展开或命令预处理。缺少参数时先询问，不自动执行预处理片段。\n\n${body}`,{mode:0o600});
@@ -416,7 +416,7 @@ export function createMarketplace(root) {
           variant.manifest.skills=[...new Set(variant.components.skills.map(item=>'./'+dirname(item.path)))];
           variant.manifest.agents=variant.components.agents.map(item=>'./'+item.path);
           variant.manifest.commands=variant.components.commands.map(item=>'./'+item.path);
-          const hooksPath=`.agentforge/${provider}-hooks.json`;
+          const hooksPath=`.baton/${provider}-hooks.json`;
           await mkdir(dirname(join(target,hooksPath)),{recursive:true,mode:0o700});
           const events={};for(const item of variant.components.hooks)(events[item.event] ||= []).push(...item.matchers);
           await writeFile(join(target,hooksPath),JSON.stringify({hooks:events}),{mode:0o600});
@@ -440,8 +440,8 @@ export function createMarketplace(root) {
         for(const file of ['.mcp.json','mcp.json']) if(await exists(join(target,file))) await writeFile(join(target,file),'{"mcpServers":{}}',{mode:0o600});
         await mkdir(join(target,'.claude-plugin'),{recursive:true,mode:0o700});
         await writeFile(join(target,'.claude-plugin/plugin.json'),JSON.stringify(info.manifest),{mode:0o600});
-        await mkdir(join(target,'.agentforge'),{recursive:true,mode:0o700});
-        await writeFile(join(target,'.agentforge/codex.json'),JSON.stringify({hooks:codex.components.hooks,agents:codex.components.agents}),{mode:0o600});
+        await mkdir(join(target,'.baton'),{recursive:true,mode:0o700});
+        await writeFile(join(target,'.baton/codex.json'),JSON.stringify({hooks:codex.components.hooks,agents:codex.components.agents}),{mode:0o600});
         const entry={protocol:3,warnings:warnings.filter(item=>item.plugin===plugin.name),originalTreeSha256,sourceDialects:Object.fromEntries(Object.entries(variants).map(([provider,info])=>[provider,info.sourceDialect])),id,kind:'plugin',name:plugin.name,description:plugin.bareSkill?plugin.description:String(plugin.description || info.manifest.description || '').slice(0,500),version:info.manifest.version || '',createdAt:new Date().toISOString(),source:{...(plugin.source || {url:catalog.url,revision:catalog.revision}),origin:{url:catalog.url,revision:catalog.revision}},components,compatibility,runtimeComponents:Object.fromEntries(Object.entries(variants).map(([provider,variant])=>[provider,{skills:variant.components.skills.map(item=>item.path)}])),providers:Object.keys(variants).filter(provider=>compatibility[provider].supported),sha256:digest(await readFile(join(target,'.claude-plugin/plugin.json'))),treeSha256:await tree(target)};
         await writeFile(join(dirname(target),'entry.json'),JSON.stringify(entry),{flag:'wx',mode:0o600}); entries.push(entry);
         for(const {name,service,providers} of includeMcps?mcpVariants:[]) {
@@ -464,7 +464,7 @@ export function createMarketplace(root) {
     async add(input, location, entryId) {
       if(!input || input.kind!=='mcp' || typeof input.name!=='string' || !input.name.trim() || input.name.length>80 || typeof input.description!=='string' || input.description.length>500) throw new Error('请填写 MCP 名称（最多 80 字）和说明（最多 500 字）');
       const configuration=parseMcpJson(input.content), names=Object.keys(configuration.mcpServers);
-      if(names.length!==1 || ['agentforge_history','__proto__','prototype','constructor'].includes(names[0])) throw new Error('每次只安装一个 MCP Server，不能使用平台保留名称');
+      if(names.length!==1 || ['baton_history','__proto__','prototype','constructor'].includes(names[0])) throw new Error('每次只安装一个 MCP Server，不能使用平台保留名称');
       const service=configuration.mcpServers[names[0]], remote=['http','sse'].includes(service.type), allowed=remote?['type','url','headers']:['type','command','args','env','cwd','env_vars'];
       if(Object.keys(service).some(key=>!allowed.includes(key))) throw new Error('MCP 包含不支持的字段');
       if(service.cwd && !service.cwd.startsWith('/'))throw new Error('MCP cwd 必须为绝对目录');

@@ -12,11 +12,11 @@ import {runClaudeCodeCli,runCodexCli,runDshCli} from '../server/runtime/local-cl
 import {loadLoginShellEnvironment} from '../apps/electron/login-shell-env.mjs';
 import {cliEnvironment} from '../server/runtime/cli-environment.mjs';
 
-if(process.env.AGENTFORGE_DIRECT_COMMUNICATION_REAL!=='1')throw new Error('Requires AGENTFORGE_DIRECT_COMMUNICATION_REAL=1; invokes actual installed Runtimes');
+if(process.env.BATON_DIRECT_COMMUNICATION_REAL!=='1')throw new Error('Requires BATON_DIRECT_COMMUNICATION_REAL=1; invokes actual installed Runtimes');
 Object.assign(process.env,await loadLoginShellEnvironment());
-await mkdir('.data',{recursive:true});const resume=process.env.AGENTFORGE_DIRECT_COMMUNICATION_RESUME;const root=resume?resolve(resume):await mkdtemp(resolve('.data/direct-communication-real-'));
+await mkdir('.data',{recursive:true});const resume=process.env.BATON_DIRECT_COMMUNICATION_RESUME;const root=resume?resolve(resume):await mkdtemp(resolve('.data/direct-communication-real-'));
 assert.ok(root.startsWith(resolve('.data/direct-communication-real-')),'resume only isolated evidence data');
-process.env.AGENTFORGE_LOG_DIR=join(root,'logs');process.env.AGENTFORGE_RUNTIME_CONFIG_ROOT=join(root,'runtime');
+process.env.BATON_LOG_DIR=join(root,'logs');process.env.BATON_RUNTIME_CONFIG_ROOT=join(root,'runtime');
 const store=createStore({databasePath:join(root,'state.sqlite')}),files=createRunFiles({root:join(root,'files'),communicationsRoot:join(root,'communications'),resolveCommunicationWorkspace:key=>store.getCommunicationWorkspace(key)}),chatRoot=join(root,'communications');
 const evidence={root,cases:[]},versions={};console.log('EVIDENCE '+root);
 const oldSchema={type:'object',additionalProperties:false,properties:{reply:{type:'string'},handoffToAgentId:{type:['string','null']}},required:['reply','handoffToAgentId']};
@@ -33,8 +33,8 @@ try{
     for(const item of failed){store.retryCommunication(item.conversationId,item.id);await createCommunicationService(store,{root:chatRoot,files,invoke:runners[item.agentSnapshot.runtime.provider]}).kick(item.conversationId);const result=store.getCommunication(item.conversationId);assert.ok(result.deliveries.every(row=>row.status==='done'),JSON.stringify(result.deliveries));const marker=result.messages.find(message=>message.sender.type==='human'&&message.content.includes('PEER-')).content.match(/PEER-[a-f0-9-]+/)[0];assert.ok(result.messages.at(-1).content.includes(marker));evidence.cases.push({provider:item.agentSnapshot.runtime.provider,retriedDeliveryId:item.id,peerMentionAndReplyPassed:true,allDeliveriesDone:true});}
     await writeFile(join(root,'resume-evidence.json'),JSON.stringify({...evidence,versions},null,2),{mode:0o600});console.log('PASS resumed failed peer Runtime calls');
   } else {
-  await Promise.all(Object.entries(runners).map(async([provider,invoke])=>{
-    const agent=store.createAgent({name:'Direct '+provider,kind:'business',systemPrompt:'只按当前消息直接答复。',runtime:{provider,executable:versions[provider].path,effort:provider==='dsh'?'off':'low',...(provider==='dsh'?{model:process.env.AGENTFORGE_DSH_MODEL || 'deepseek-official/deepseek-flash'}:{})}});
+  const outcomes=await Promise.allSettled(Object.entries(runners).map(async([provider,invoke])=>{
+    const agent=store.createAgent({name:'Direct '+provider,kind:'business',systemPrompt:'只按当前消息直接答复。',runtime:{provider,executable:versions[provider].path,effort:provider==='dsh'?'off':'low',...(provider==='dsh'?{model:process.env.BATON_DSH_MODEL || 'deepseek-official/deepseek-flash'}:{})}});
     const chat=store.openCommunication({kind:'agent',targetId:agent.id}),mark='DIRECT-'+randomUUID();send(chat,agent,'请仅回复 '+mark+'，不使用工具。');
     // Deliberately seed the real native session with the retired protocol. The
     // new service must reject that envelope, then resume it using reply only.
@@ -61,6 +61,8 @@ try{
     assert.equal(peers.conversation.pending,0);assert.equal(store.snapshot().tasks.length,0);
     evidence.cases.push({provider,legacySchemaRejected:true,sameNativeSession:true,replyOnlyPassed:true,groupDirectReplyPassed:true,peerMentionAndReplyPassed:true,noTaskCreated:true});console.log('PASS '+provider);
   }));
+  const failures=outcomes.flatMap((item,index)=>item.status==='rejected'?[{provider:Object.keys(runners)[index],error:String(item.reason?.message || item.reason).slice(0,1500)}]:[]);
+  if(failures.length){await writeFile(join(root,'evidence.json'),JSON.stringify({...evidence,versions,status:'failed',failures},null,2),{mode:0o600});throw new AggregateError(outcomes.filter(item=>item.status==='rejected').map(item=>item.reason),'Real communication failed: '+failures.map(item=>item.provider).join(', '));}
   assert.equal(evidence.cases.length,3);await writeFile(join(root,'evidence.json'),JSON.stringify({...evidence,versions},null,2),{mode:0o600});console.log('PASS three real Runtimes: private schema resume, independent group loading and actual A→B replies');
   }
 }finally{store.close();}

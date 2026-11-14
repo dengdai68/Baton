@@ -24,7 +24,7 @@
 
 使用当前客户端界面，只读导航与展开；不读取认证数据库、浏览器 cookie 或领域数据库，不发送任务消息、不重启/确认/终止任务。CLI 既有登录失效，操作者选择继续通过客户端界面审阅。
 
-安装前盘点：2 个团队，5 个未归档任务，4 个已完成、1 个已终止。beta.93 安装和健康检查已通过，数据目录保持 ~/.agentforge/desktop，任务列表名称与状态一致。以下均已在实际安装客户端中打开审阅；数量为“全部”筛选下的完整读模型计数。
+安装前盘点：2 个团队，5 个未归档任务，4 个已完成、1 个已终止。beta.93 安装和健康检查已通过，数据目录保持 ~/.baton/desktop，任务列表名称与状态一致。以下均已在实际安装客户端中打开审阅；数量为“全部”筛选下的完整读模型计数。
 
 | 任务 | 状态 | 审阅情况 |
 | --- | --- | --- |
@@ -66,7 +66,7 @@ beta.94 已安装并在视频任务实测移除当前投递和平台失败主线
 
 本轮目标与范围：移除控制台顶部摘要，由最新 Trace 决定员工错误/执行中/正常状态；协作正文完整渲染 Markdown，仅将超过5行的区域收起并原位展开；已知员工交接信封提取原报告并去掉重复结构化结果；不自动附加验收文件清单与平台说明。原始消息、事件、文件、调度、Provider 输入与验收状态不变。CLI 共用正文投影，保留完整投递/历史/文件引用，没有新增输入或权限。
 
-验证：npm test 541 pass / 0 fail；补充 CLI 回归32项通过；check:ai/check:impact、规定语法检查和 git diff --check 通过。源码 Electron 隔离验收通过，证据 .data/collaboration-flow-DZIZ6j；验证5行裁剪时 Markdown 已在 DOM、键盘原位展开、短消息无入口、JSON 报告提取、验收无附件、无顶部错误摘要、日志红色及员工失败/恢复状态。首轮打包版验收通过，截图复核发现错误状态颜色被通用样式覆盖，修正 CSS 优先级并新增真实颜色断言后，源码 Electron 再次通过（.data/collaboration-flow-gC8KB1，含折叠/展开和验收截图）。最终打包版隔离验收通过（.data/collaboration-flow-9PCROk），含员工错误状态红色断言。beta.96 DMG/ZIP 构建成功，codesign --verify --deep --strict 通过；asar 中 web/app.js、web/styles.css、client/console-projections.mjs、cli/commands.mjs 的 SHA-256 与受测源码一致。安装器先在独立目录验证版本、签名和 asar，再正常退出旧客户端并替换应用；仅替换 /Applications/AgentForge.app。本轮不调用模型、不确认或重启真实任务。
+验证：npm test 541 pass / 0 fail；补充 CLI 回归32项通过；check:ai/check:impact、规定语法检查和 git diff --check 通过。源码 Electron 隔离验收通过，证据 .data/collaboration-flow-DZIZ6j；验证5行裁剪时 Markdown 已在 DOM、键盘原位展开、短消息无入口、JSON 报告提取、验收无附件、无顶部错误摘要、日志红色及员工失败/恢复状态。首轮打包版验收通过，截图复核发现错误状态颜色被通用样式覆盖，修正 CSS 优先级并新增真实颜色断言后，源码 Electron 再次通过（.data/collaboration-flow-gC8KB1，含折叠/展开和验收截图）。最终打包版隔离验收通过（.data/collaboration-flow-9PCROk），含员工错误状态红色断言。beta.96 DMG/ZIP 构建成功，codesign --verify --deep --strict 通过；asar 中 web/app.js、web/styles.css、client/console-projections.mjs、cli/commands.mjs 的 SHA-256 与受测源码一致。安装器先在独立目录验证版本、签名和 asar，再正常退出旧客户端并替换应用；仅替换 /Applications/Baton.app。本轮不调用模型、不确认或重启真实任务。
 
 
 ### beta.96 安装后真实任务复查
@@ -84,10 +84,10 @@ beta.94 已安装并在视频任务实测移除当前投递和平台失败主线
 - 移除协作顶部总条数、强制 @ 提示及答复的“回复的问题”折叠副本；正文、原问题和回复关联继续保留，CLI/历史仍可查询。
 - 未 @ 成员的任务新消息由 Store 默认投递给本次 Run 的冻结经理。明确 @ 单一成员、精确问题回复、归档只读和终态仅答疑均保持；CLI message 的 recipientAgentId 改为可选，help/schema/example/文档/回执已核对。
 - 任务/沟通共用的 prompt-snapshot 会话 ID 使用与提示词内容框相同的左缩进，不修改原生会话 ID。
-- `npm test`：577 pass / 0 fail；check:ai、check:impact、规定 node --check、git diff --check 通过。日志 `/private/tmp/agentforge-collaboration-default-manager-tests-final.log`。
-- 源码 UI 与最终打包 UI 通过：两主题、1320/760 宽度，验证冗余入口消失、Markdown/分页保持及会话 ID 与提示词框真实 bounding-box 左边缘相同。源码证据 `.data/collaboration-flow-Vk9Zne`；打包证据临时目录 `.data/collaboration-flow-PksONK`，位于 `/private/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/agentforge-beta102-verification-03cen7_y`。
-- 同一最终打包版的真实 DeepSeek Harness 完整任务、人类确认及归档通过，并新增 UI 不 @ / CLI 不指定接收人的两次真实经理答疑，均有真实答复且 Run 保持 completed；证据为同一临时目录 `.data/dsh-real-9he38v`，日志 `/private/tmp/agentforge-collaboration-default-manager-real-final.log`。初次验证脚本误用目录经理模板 ID 对比任务经理 ID，已改为校验冻结 Run 经理并重跑通过；失败证据 `.data/dsh-real-rvQcG8` 保留，未据此修改正确的产品路由。
-- 安装包签名通过，25 个变更资源与源码逐字节一致；ASAR SHA-256 `252860e46d943117e758f27135e090dea564b4f94278c68c691a553a0fe85bcc`。确认真实服务空闲后正常退出并安装 `/Applications/AgentForge.app`；仍为本地 0.1.1，未 push、发布 Release 或提交源码。
+- `npm test`：577 pass / 0 fail；check:ai、check:impact、规定 node --check、git diff --check 通过。日志 `/private/tmp/baton-collaboration-default-manager-tests-final.log`。
+- 源码 UI 与最终打包 UI 通过：两主题、1320/760 宽度，验证冗余入口消失、Markdown/分页保持及会话 ID 与提示词框真实 bounding-box 左边缘相同。源码证据 `.data/collaboration-flow-Vk9Zne`；打包证据临时目录 `.data/collaboration-flow-PksONK`，位于 `/private/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/baton-beta102-verification-03cen7_y`。
+- 同一最终打包版的真实 DeepSeek Harness 完整任务、人类确认及归档通过，并新增 UI 不 @ / CLI 不指定接收人的两次真实经理答疑，均有真实答复且 Run 保持 completed；证据为同一临时目录 `.data/dsh-real-9he38v`，日志 `/private/tmp/baton-collaboration-default-manager-real-final.log`。初次验证脚本误用目录经理模板 ID 对比任务经理 ID，已改为校验冻结 Run 经理并重跑通过；失败证据 `.data/dsh-real-rvQcG8` 保留，未据此修改正确的产品路由。
+- 安装包签名通过，25 个变更资源与源码逐字节一致；ASAR SHA-256 `252860e46d943117e758f27135e090dea564b4f94278c68c691a553a0fe85bcc`。确认真实服务空闲后正常退出并安装 `/Applications/Baton.app`；仍为本地 0.1.1，未 push、发布 Release 或提交源码。
 - 安装后实际打开原视频任务归档记录：顶部不再出现条数和 @ 提示，答疑回复不再出现引用折叠块；原有 15 条 Message 及最后消息 ID 与安装前一致。用户在本轮期间自行归档了该任务，归档和 completed 状态保留、输入框维持只读；没有发送消息、启动或改变操作者任务。已在本机控制台打开原经理提示词及原生会话信息核对。
 
 本轮不移除历史回复关系，不改变模型生成的正文，不把普通消息猜成澄清回答；同时 @ 多名成员仍要求选择单一处理对象。执行数据、截图及日志只在本地隔离目录，不提交。安装保留前一应用作为本次替换回退入口；沿用既有 ad-hoc 签名，不新增 notarization 或发布流程。

@@ -1,13 +1,13 @@
-# AgentForge 首轮推广素材
+# Baton 首轮推广素材
 
 目标读者：已经使用 AI 编程 CLI、需要协调多个助手的中文独立开发者与小团队。首轮集中在 V2EX「分享创造」和掘金实操教程。此文件的帖子与文章均为待发布成稿，不代表已经对外发帖。
 
 ## 统一产品信息
 
-- 仓库：https://github.com/dengdai68/AgentForge
-- Beta 下载：https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1
-- 正式版：https://github.com/dengdai68/AgentForge/releases/latest
-- 上手教程：https://github.com/dengdai68/AgentForge/blob/main/docs/quickstart.md
+- 仓库：https://github.com/dengdai68/Baton
+- Beta 下载：https://github.com/dengdai68/Baton/releases/tag/v0.1.6-beta.1
+- 正式版：https://github.com/dengdai68/Baton/releases/latest
+- 上手教程：https://github.com/dengdai68/Baton/blob/main/docs/quickstart.md
 - 定位：为使用 AI 编程工具的独立开发者，把多个 AI 员工的分工、沟通和文件交付集中到一个本机工作台。
 - 平台：macOS 13+ / Apple Silicon；当前没有 Intel、Windows、Linux 安装包或在线体验版。
 - 成本：Apache-2.0 开源；模型订阅、API 和第三方工具费用由对应服务另计，需自行安装并授权至少一种模型 CLI。
@@ -31,28 +31,28 @@ Topics：`ai-agents`、`multi-agent`、`developer-tools`、`desktop-app`、`maco
 标题：
 
 ```text
-[开源自荐] AgentForge：把 Claude Code、Codex 的分工、沟通和文件交付放进一个 Mac 工作台
+[开源自荐] Baton：把 Claude Code、Codex 的分工、沟通和文件交付放进一个 Mac 工作台
 ```
 
 正文：
 
 ---
 
-大家好，自荐一个开源桌面项目 AgentForge。
+大家好，自荐一个开源桌面项目 Baton。
 
 如果你已经在用 AI 编程 CLI，可能遇到过这种场景：一个窗口分析需求，一个窗口实现，另一个窗口审校；分工、上下文传递和最后的文件检查都需要自己来回协调。
 
-AgentForge 尝试把这部分工作放进同一个本机工作台：为数字员工分别设置职责、Runtime 和工具，在任务里选入一位项目经理和其他成员，由经理推进分工和交接。每位员工保留独立会话，协作记录可以关联到控制台和实际文件。
+Baton 尝试把这部分工作放进同一个本机工作台：为数字员工分别设置职责、Runtime 和工具，在任务里选入一位项目经理和其他成员，由经理推进分工和交接。每位员工保留独立会话，协作记录可以关联到控制台和实际文件。
 
 目前接入 Claude Code、Codex 和 DeepSeek Harness。除了任务协作，也支持员工私聊/群聊、插件与 MCP、Cron 自动化，以及配置和任务操作的 CLI。普通任务最终由人来检查和确认。
 
-![AgentForge 数字员工配置界面](../media/employees.png)
+![Baton 数字员工配置界面](../media/employees.png)
 
 上图是 v0.1.6 隔离实例的真实员工界面，展示示例员工，不是模型已经完成任务的效果图；功能以对应 Release 说明为准。
 
 第一次建议用一个小任务试：给出几条产品素材，让编辑生成 `release-note.md`，审校生成 `review.md`，最后自己打开文件核对。我整理了可直接复制的素材和员工提示词：
 
-https://github.com/dengdai68/AgentForge/blob/main/docs/quickstart.md
+https://github.com/dengdai68/Baton/blob/main/docs/quickstart.md
 
 使用前说明几个边界：
 
@@ -62,9 +62,9 @@ https://github.com/dengdai68/AgentForge/blob/main/docs/quickstart.md
 - 当前是本机单管理员应用，不提供 Agent 沙箱；安装包为 ad-hoc 签名，尚未经过 Apple 公证。
 - 这是迭代中的项目，普通任务的交付质量仍需自己检查。
 
-仓库：https://github.com/dengdai68/AgentForge
+仓库：https://github.com/dengdai68/Baton
 
-Beta 下载：https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1
+Beta 下载：https://github.com/dengdai68/Baton/releases/tag/v0.1.6-beta.1
 
 想先听听有类似需求的朋友反馈：从安装到创建第一个任务，哪一步最容易卡住？如果你已经在多个 CLI 之间手动分工，也欢迎说说目前最费力的部分。
 
@@ -79,14 +79,14 @@ Beta 下载：https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1
 标题：
 
 ```text
-用 AgentForge 配置一个 AI 编辑小队：从安装到检查 Markdown 交付
+用 Baton 配置一个 AI 编辑小队：从安装到检查 Markdown 交付
 ```
 
 正文：
 
 ---
 
-当一个 AI 助手负责起草、另一个负责审校时，除了提示词，还要处理上下文交接、执行记录和文件位置。AgentForge 是一个开源本机工作台，把这些内容放在同一任务里，并接入 Claude Code、Codex 和 DeepSeek Harness。
+当一个 AI 助手负责起草、另一个负责审校时，除了提示词，还要处理上下文交接、执行记录和文件位置。Baton 是一个开源本机工作台，把这些内容放在同一任务里，并接入 Claude Code、Codex 和 DeepSeek Harness。
 
 本文用“整理产品发布说明”演示第一次配置。先了解员工和任务，再启动模型，最后检查实际文件。本教程由项目维护方提供；截图来自 v0.1.6-beta.1 的隔离实例，示例仅保存草稿，没有执行模型，也没有固定耗时或效果承诺。
 
@@ -94,7 +94,7 @@ Beta 下载：https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1
 
 需要 macOS 13+ / Apple Silicon，以及至少一种已经安装并授权的模型 CLI。应用本身按 Apache-2.0 开源，模型订阅、API 和远程工具费用由对应服务计收。
 
-从 [v0.1.6-beta.1 下载页](https://github.com/dengdai68/AgentForge/releases/tag/v0.1.6-beta.1) 获取 DMG，拖入 Applications。当前安装包为 ad-hoc 签名，未经 Apple 公证；若系统拦截，确认来源可信后按系统设置允许打开，不要关闭系统安全保护。
+从 [v0.1.6-beta.1 下载页](https://github.com/dengdai68/Baton/releases/tag/v0.1.6-beta.1) 获取 DMG，拖入 Applications。当前安装包为 ad-hoc 签名，未经 Apple 公证；若系统拦截，确认来源可信后按系统设置允许打开，不要关闭系统安全保护。
 
 首次打开创建本机管理员，在设置里检查 Runtime 和可写的任务目录。无需部署服务器；目前没有在线体验版。
 
@@ -145,7 +145,7 @@ Markdown 导出。仅提供 macOS 测试版，价格尚未确定。
 
 如果第一轮顺利，再考虑复用团队、导入工具或配置自动化。先把“任务输入、实际文件、人工检查”走通，更容易判断这些功能是否适合自己的工作。
 
-[项目仓库](https://github.com/dengdai68/AgentForge) · [完整上手指南与排错](https://github.com/dengdai68/AgentForge/blob/main/docs/quickstart.md) · [问题反馈](https://github.com/dengdai68/AgentForge/issues)
+[项目仓库](https://github.com/dengdai68/Baton) · [完整上手指南与排错](https://github.com/dengdai68/Baton/blob/main/docs/quickstart.md) · [问题反馈](https://github.com/dengdai68/Baton/issues)
 
 ---
 

@@ -10,13 +10,13 @@ import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
-if(process.env.AGENTFORGE_TASK_RETRY_REAL!=='1')throw Error('Requires AGENTFORGE_TASK_RETRY_REAL=1; invokes real Claude');
+if(process.env.BATON_TASK_RETRY_REAL!=='1')throw Error('Requires BATON_TASK_RETRY_REAL=1; invokes real Claude');
 await mkdir('.data',{recursive:true});
-const resume=process.env.AGENTFORGE_TASK_RETRY_RESUME;
+const resume=process.env.BATON_TASK_RETRY_RESUME;
 if(resume&&!resolve(resume).startsWith(resolve('.data/task-retry-real-')))throw Error('Resume requires this test’s isolated evidence directory');
 const root=resume?resolve(resume):await mkdtemp(resolve('.data/task-retry-real-')),home=join(root,'home'),data=join(root,'client');await mkdir(home,{recursive:true});
 const previous=resume?JSON.parse(await readFile(join(root,'evidence.json'),'utf8')):null;
-const command=process.env.AGENTFORGE_RETRY_CLAUDE||execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
+const command=process.env.BATON_RETRY_CLAUDE||execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
 const workerMarker='RETRY_WORKER_'+randomBytes(8).toString('hex');
 const launcher=join(root,'claude');
 if(!resume)await writeFile(launcher,`#!${process.execPath}
@@ -30,9 +30,9 @@ p.on('exit',code=>{if(worker&&code===0&&!existsSync(${JSON.stringify(join(root,'
 const quote=v=>"'"+v.replaceAll("'","'\\''")+"'";
 for(const name of ['.zprofile','.zshrc'])await writeFile(join(home,name),'export PATH='+quote(root)+':"$PATH"\n');
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('retry-qa',password);auth.close();
-const seed=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});const profileId=seed.listRuntimeProfiles().find(p=>p.provider==='claude-code').id;seed.close();
+const seed=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});const profileId=seed.listRuntimeProfiles().find(p=>p.provider==='claude-code').id;seed.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});
+const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});
 console.log('EVIDENCE '+root);const evidence={root,realModel:true,injectedFailure:'worker process exits 1 after first successful real turn'};
 try{
  const page=await app.firstWindow({timeout:180000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;

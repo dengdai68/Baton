@@ -40,12 +40,12 @@ async function launch(input, { content = () => null, cancelledError = message =>
   const sessionId = input.session?.sessionId || randomUUID();
   if (!/^[A-Za-z0-9-]{16,100}$/.test(sessionId)) throw new Error('DeepSeek Harness 会话 ID 无效');
   const temporary = !input.traceDirectory;
-  const directory = input.traceDirectory || await mkdtemp(join(tmpdir(), 'agentforge-dsh-catalog-'));
+  const directory = input.traceDirectory || await mkdtemp(join(tmpdir(), 'baton-dsh-catalog-'));
   const env = cliEnvironment(command), credentialHome = env.DSH_HOME || join(homedir(), '.dsh');
   const nativeHome = catalog || !input.session ? join(directory, 'home') : join(desktopServiceStoragePaths().runtimeConfigRoot, 'dsh', sessionId);
   await mkdir(directory, { recursive: true, mode: 0o700 });
   await mkdir(nativeHome, { recursive: true, mode: 0o700 });
-  const plugin = join(directory, 'dsh-agentforge.mjs'), instructionsPath = join(directory, 'dsh-instructions.json'), patch = join(directory, 'dsh-patch.yml');
+  const plugin = join(directory, 'dsh-baton.mjs'), instructionsPath = join(directory, 'dsh-instructions.json'), patch = join(directory, 'dsh-patch.yml');
   await writeFile(plugin, await readFile(new URL('./dsh-plugin.mjs', import.meta.url)), { mode: 0o600 });
   const servers = catalog ? {} : await selectedExtensions(runtime);
   const nativeRuntime=catalog?runtime:await nativePluginRuntime(runtime,directory);
@@ -58,9 +58,9 @@ async function launch(input, { content = () => null, cancelledError = message =>
   }
   if(plugins.some(item=>item.hooks.length)) for(const name of ['hooks-claude-code.mjs','hooks-codex.mjs','hook-protocol.mjs','hook-guard.mjs']) await writeFile(join(directory,name),await readFile(new URL(`./vendor/dsh-hooks/${name}`,import.meta.url)),{mode:0o600});
   await writeFile(instructionsPath, JSON.stringify({ systemPrompt: input.systemPrompt || '', outputSchema: input.outputSchema,plugins,workspacePath:input.workspacePath,workspaceHook:input.workspaceHook }), { mode: 0o600 });
-  const entries = Object.entries(servers).map(([name, { ref }]) => ({ id: `agentforge-mcp-${ref.id}`, name: '@deepseek-ai/dsh-mcp-client', config: { transport: 'stdio', serverName: ref.mcpAdapterVersion===2 ? name : `market_${ref.id.replaceAll('-', '').slice(0, 24)}`, command: process.execPath, args: [fileURLToPath(new URL('./mcp-launcher.mjs', import.meta.url)), ref.path, ref.sha256, name], env: process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}, failOnStartupError: true } }));
-  if (input.historyMcp) entries.push({ id: 'agentforge-history', name: '@deepseek-ai/dsh-mcp-client', config: { transport: 'stdio', serverName: 'agentforge_history', command: input.historyMcp.command, args: input.historyMcp.args, env: input.historyMcp.env || {}, failOnStartupError: true } });
-  entries.push({ id: 'agentforge', name: plugin, config: { instructionsPath } });
+  const entries = Object.entries(servers).map(([name, { ref }]) => ({ id: `baton-mcp-${ref.id}`, name: '@deepseek-ai/dsh-mcp-client', config: { transport: 'stdio', serverName: ref.mcpAdapterVersion===2 ? name : `market_${ref.id.replaceAll('-', '').slice(0, 24)}`, command: process.execPath, args: [fileURLToPath(new URL('./mcp-launcher.mjs', import.meta.url)), ref.path, ref.sha256, name], env: process.versions.electron ? { ELECTRON_RUN_AS_NODE: '1' } : {}, failOnStartupError: true } }));
+  if (input.historyMcp) entries.push({ id: 'baton-history', name: '@deepseek-ai/dsh-mcp-client', config: { transport: 'stdio', serverName: 'baton_history', command: input.historyMcp.command, args: input.historyMcp.args, env: input.historyMcp.env || {}, failOnStartupError: true } });
+  entries.push({ id: 'baton', name: plugin, config: { instructionsPath } });
   const rows = [
     { id: 'credentials', config: { path: join(credentialHome, '.credentials.yaml'), watch: false } },
     { id: 'skill-filesystem', config: { includeDefaultRoots: false, customSkillDirs: (nativeRuntime.skillPaths || []).map(path => dirname(path)), watch: false } },
@@ -71,7 +71,7 @@ async function launch(input, { content = () => null, cancelledError = message =>
   await writeFile(patch, JSON.stringify(rows), { mode: 0o600 });
   if (input.canStart && !input.canStart()) throw cancelledError('执行在启动前已暂停或终止');
   if (hasActiveExecution(key)) throw new Error('该执行会话已有本地 Agent 进程在执行');
-  const child = spawn(command, ['sdk', '--patch', patch], { cwd: input.workspacePath || directory, env: { ...env, DSH_HOME: nativeHome, DSH_PERMISSION_MODE: 'danger-full-access', DSH_PRIMARY_RUNTIME: '', DSH_BUNDLED_OFFICE_CLI: '', AGENTFORGE_TRACE_OUTPUT_DIR: join(directory, 'output') }, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
+  const child = spawn(command, ['sdk', '--patch', patch], { cwd: input.workspacePath || directory, env: { ...env, DSH_HOME: nativeHome, DSH_PERMISSION_MODE: 'danger-full-access', DSH_PRIMARY_RUNTIME: '', DSH_BUNDLED_OFFICE_CLI: '', BATON_TRACE_OUTPUT_DIR: join(directory, 'output') }, stdio: ['pipe', 'pipe', 'pipe'], detached: process.platform !== 'win32' });
   const pending = new Map(); let serial = 0, failure, closed = false, stopping = false, graceful = false, cancelled, idle, killTimer, finalText = '', reason, nativeWaiting = false, stderr = '';
   let resolveReady, rejectReady;
   const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; }); ready.catch(() => {});
@@ -103,9 +103,9 @@ async function launch(input, { content = () => null, cancelledError = message =>
           else waiter.resolve(frame.result);
           continue;
         }
-        if (frame.method === 'agentforge.ready') { if (frame.params?.error) rejectReady(new Error(frame.params.error)); else if (frame.params?.version !== 1) rejectReady(new Error('DeepSeek Harness Bridge 协议不兼容')); else resolveReady(frame.params); continue; }
-        if (frame.method === 'agentforge.extension_failure') throw new Error(frame.params?.message || '插件兼容执行失败');
-        if (frame.method === 'agentforge.subagent') {await input.onEvent?.({providerEventType:'dsh.subagent',message:frame.params?.phase==='started'?'插件子代理已开始独立执行':'插件子代理已结束',data:{auditVersion:2,presentation:'system',subagentId:identifier(frame.params?.id),status:identifier(frame.params?.status)}});continue;}
+        if (frame.method === 'baton.ready') { if (frame.params?.error) rejectReady(new Error(frame.params.error)); else if (frame.params?.version !== 1) rejectReady(new Error('DeepSeek Harness Bridge 协议不兼容')); else resolveReady(frame.params); continue; }
+        if (frame.method === 'baton.extension_failure') throw new Error(frame.params?.message || '插件兼容执行失败');
+        if (frame.method === 'baton.subagent') {await input.onEvent?.({providerEventType:'dsh.subagent',message:frame.params?.phase==='started'?'插件子代理已开始独立执行':'插件子代理已结束',data:{auditVersion:2,presentation:'system',subagentId:identifier(frame.params?.id),status:identifier(frame.params?.status)}});continue;}
         if (frame.method !== 'session.event' || frame.params?.sessionId !== sessionId) continue;
         const event = frame.params.event;
         if (event.type === 'turn/start') { nativeWaiting = false; touch(); }

@@ -1,5 +1,7 @@
 # 代码导航
 
+Baton更名：App/CLI/更新仓库与环境变量统一；当前协议、私有配置位置及显式本机切换见 `docs/development/baton-identity-cutover.md`。发送者配色按共享senderId引用，表单/成员换行复用共享控件。待办详情与市场辅助计数渐进加载，不扩大API或派工语义。
+
 首屏与发送反馈（延迟/失败验收：`scripts/test-progressive-loading.mjs`）：`app.js` 拆开任务元信息/协作和目录/引用加载；`automations.mjs` 先显示当前页，再补计数与触发历史；`app.js`/`communication.js` 按Run/会话保留本地发送记录与真实确认。控制台保持点击后读取；任务消息由App/CLI共享可选`clientRequestId`，Store原子保存并去重，协作投影保留请求引用。工作流指定端口对齐与空心命中在编辑器/布局模块；共享CSS统一协作边距、Markdown与设置入口。
 
 目录抽屉外部点击关闭与团队编辑入口由 `web/app.js` 管理；分组缩进在 `web/styles.css`；工作流菱形与箭头在编辑器/只读图。回归见 `test-redesign`、`test-directory-headers`、`test-workflow-editor`；均复用既有业务命令。
@@ -10,9 +12,9 @@
 
 石墨设计落地（2026-11-13 替代纸张）：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
 
-仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 面向超级个体介绍 AI Team OS，依次提供能力概览、任务主流程图、CLI 命令目录、macOS 安装和源码启动；首次体验见 docs/quickstart.md，详细开发入口见 CONTRIBUTING。首轮中文推广成稿见 docs/development/promotion-kit.md；不改变 App/CLI/HTTP/Store 契约。
+仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 面向超级个体介绍 AI Team OS，依次提供能力概览、任务主流程图、CLI 命令目录、macOS 安装和源码启动；首次体验见 docs/quickstart.md，详细开发入口见 CONTRIBUTING。首轮中文推广成稿见 docs/development/promotion-kit.md；不改变 App/CLI/HTTP/Store 契约。
 
-GitHub 发布入口：`.codex/skills/agentforge-release/SKILL.md`；默认 Beta、正式版补丁递增、仅正式版显式打 tag，以及版本标题/简洁说明规则由该 skill 定义。现有旧 CI 发布入口的差异在 skill 中列明。
+GitHub 发布入口：`.codex/skills/baton-release/SKILL.md`；默认 Beta、正式版补丁递增、仅正式版显式打 tag，以及版本标题/简洁说明规则由该 skill 定义。现有旧 CI 发布入口的差异在 skill 中列明。
 
 核心管理双端对齐：Store.createTask 展开 teamIds/个人成员，cli/main.mjs 支持 create --start 与部分成功回执；web/app.js 独立保存员工 capabilities、工作流 handoffFrom，编辑团队状态并移除任务优先级。configuration-cli/catalog 测试及 test-task-creation 隔离 App/CLI 交叉验收覆盖协议与回读。
 
@@ -44,15 +46,15 @@ Runtime 恢复结算：local-cli 仅在原生明确成功完成且进程正常�
 
 普通沟通：communication.mjs 的输出 schema 仅要求 reply；communication-store 只完成当前成员答复，不生成候选转交或子投递，原生会话/消息/历史保留。经理安排独立员工不被其他在途投递阻塞，同一成员的消息排队；Run 进入验收或确认完成时，Store 取消未执行的平台协调跟进投递并记录审计，归档不再被残留复核投递阻塞。
 
-工作目录：run-files 不再读写 .agentforge-workspace.json 或限定 docs；目录按 path/offset 分页读取，界面按需展开、继续加载和同层重试。CHANGE 将所有业务路径按真实层级合并，工作根与绑定子仓库比较任务初始提交。Workflow artifactPaths 仅为规范相对交付位置，可为空；Store/CLI/提示词同步，不再改写到 docs。执行快照覆盖全部业务路径但保留大小/敏感文件限制，历史冻结文件不迁移。
+工作目录：run-files 不再读写 .baton-workspace.json 或限定 docs；目录按 path/offset 分页读取，界面按需展开、继续加载和同层重试。CHANGE 将所有业务路径按真实层级合并，工作根与绑定子仓库比较任务初始提交。Workflow artifactPaths 仅为规范相对交付位置，可为空；Store/CLI/提示词同步，不再改写到 docs。执行快照覆盖全部业务路径但保留大小/敏感文件限制，历史冻结文件不迁移。
 
-插件更新：plugin-updates.mjs 以两分钟单飞检查 Git 来源及外部依赖提交；configuration 提供 ls-remote 和可清理的临时检出，marketplace 只安装已装名称的新快照且不拆装 MCP，Store 事务更新当前员工。状态/开关/分钟周期经认证 HTTP、设置 → 更新 → 插件更新和 CLI plugins updates/check-updates/auto-update 共用。沟通无选择时打开最后更新会话，任务控制台首次无选择时打开最近执行者；显式选择不被刷新切走。
+插件更新：`plugin-updates.mjs` 只按插件页「更新全部」或 CLI `plugins check-updates` 的显式命令运行；GET读取单飞状态，旧自动设置入口返回410，未提供自动周期或服务端定时器。App仅执行中轮询进度，离页停止。应用自身更新仍由Electron updates管理。
 
 MCP 编辑：marketplace.mjs 复用安装校验并保留未改动脱敏值；HTTP 准备新版本与员工绑定，Store 事务更新当前员工、退役旧版本，冻结任务/排队投递不改。界面详情编辑与 CLI mcps update 同协议；团队空态仅保留创建团队引导。
 
 原生 Skill：local-cli 保留 Claude --plugin-dir 但不禁用 Skill；所选 Codex Skill 走调用独占 codex-app-server.mjs，额外根注册、目录核对、线程级启用、精确续接，复用控制台投影。无 Skill 保留 exec，不作失败回退。prompts 不生成技能路径指引；history/mcp 的服务说明和 schema 拥有目录/分页。test-prompt-e2e 的 NATIVE_SKILLS_REAL 模式真实验证；CLI 字段不变、帮助同步。
 
-CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，无目标环境分支；客户端始终提供 CLI 分类。server/data-home.mjs 与 storage-layout.mjs 统一默认数据根 ~/.agentforge/workspace，Electron 解析独立启动定位并经 storage-relocation.mjs 整理资料；Store 随机 Task UUID 防止共享根碰撞，历史路径不变。真实 CLI 开发 E2E 启动独立 Electron 随机端口，不伪装 Web endpoint。
+CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，无目标环境分支；客户端始终提供 CLI 分类。server/data-home.mjs 与 storage-layout.mjs 统一默认数据根 ~/.baton/workspace，Electron 解析独立启动定位并经 storage-relocation.mjs 整理资料；Store 随机 Task UUID 防止共享根碰撞，历史路径不变。真实 CLI 开发 E2E 启动独立 Electron 随机端口，不伪装 Web endpoint。
 
 规则入口：[AGENTS.md](../AGENTS.md)。机器可读模块及联动文件见 `ai/module-registry.json`。
 
@@ -106,7 +108,7 @@ CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，�
 - 角色：Store 拥有 roles 集合与员工有序 `roleIds` 多选绑定校验/删除拒绝；Task 创建把角色文本冻结为员工快照的 `roleSnapshots`，沟通投递快照在发送/重试时嵌入；`prompts.mjs` 把快照中的角色提示词并入应用系统指令（任务与沟通共用，Claude `--append-system-prompt-file` / Codex `developer_instructions` 通道不变），Runtime 无角色状态。界面 BUILD 组有独立角色目录；CLI 为 `roles` 组与 `agents` 的 `roleIds`。
 - 角色侧栏展示：`web/preferences.mjs` 的 NAVIGATION 包含 roles，隐藏选择可重载保留、默认恢复与空 BUILD 分组共用现有偏好逻辑；`web/index.html` 用 SVG 人物名牌替代字体符号，`apps/electron/compact.css` 补同形蒙版以修复实心方块。`test-roles-ui.mjs` 验证偏好及宽窄窗口、两种主题；只改展示，CLI 无变动。
 - 配置能力：HTTP/Store、界面与 CLI 一起核对；当前输入协议见员工配置和 CLI 文档。员工/插件/MCP 目录共用同行搜索工具栏与卡片；插件/MCP 删除经 Store 记录 extensionRemovals 并拒绝当前员工引用，文件保留供冻结任务使用。
-- 插件/MCP：`web/marketplace.mjs` → 认证目录/详情与来源整批 import → Runtime 不可变插件版本及拆分 MCP；员工只选 pluginIds/mcpIds，创建/编辑均可设置 active/inactive。`mcp-launcher.mjs` 通过现有 SDK 桥接 SSE/Streamable HTTP；`plugin-hooks.mjs` 为 Codex 执行完整性校验的选定命令 Hook，Subagent 配置投影到 Trace。Electron 认证/启动定位仍在 ~/.agentforge，业务资料指向配置根内 .agentforge/<实例>，见 docs/30。
+- 插件/MCP：`web/marketplace.mjs` → 认证目录/详情与来源整批 import → Runtime 不可变插件版本及拆分 MCP；员工只选 pluginIds/mcpIds，创建/编辑均可设置 active/inactive。`mcp-launcher.mjs` 通过现有 SDK 桥接 SSE/Streamable HTTP；`plugin-hooks.mjs` 为 Codex 执行完整性校验的选定命令 Hook，Subagent 配置投影到 Trace。Electron 认证/启动定位仍在 ~/.baton，业务资料指向配置根内 .baton/<实例>，见 docs/30。
 - 市场整批导入解析 Claude/Codex 本地及 HTTPS Git 条目，ref/sha 记录实际来源；配置根先归一祖先别名。清单/Hook/Skill 分 Runtime 投影，目录/CLI 展示静态兼容性与原因，员工绑定拒绝不兼容。Codex MCP cwd 在私有启动器生效，npm/archive/command 来源仍明确拒绝，详见 docs/15。
 - 展示：优先共享投影和现有样式，桌面差异放入 `compact.css`；工具命令/文件摘要解析在共享投影，可见行加载与 Read/Write 正文展示在 `web/app.js`。
 - 消息方向由 renderer 的真实 sender 判断：人类右、员工左，不改变协作投影/CLI。市场整行空/错误状态在 `marketplace.mjs` 的网格外；工作根设置在 HTTP 校验并创建目录后交 Store 保存，见 docs/02、06。
@@ -125,7 +127,7 @@ CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，�
 
 全部目录空态共用 directory-empty，整行对齐、14px 16px 内边距、主题浅色背景、虚线边框和6px圆角。
 
-品牌与目录视觉：web/styles.css 维护蓝/青/紫 tokens、状态标签与 directory-empty；apps/electron/compact.css 复用品牌，仅覆盖宿主密度和主题表面。用户新 PNG 生成同源 ICNS，菜单栏用彩色缩略图而非 alpha 模板。开发方法入口 `.codex/skills/agentforge-development/SKILL.md` 引用 AGENTS 与 docs/06；隔离验收 `scripts/test-brand-presentation.mjs`。
+品牌与目录视觉：web/styles.css 维护蓝/青/紫 tokens、状态标签与 directory-empty；apps/electron/compact.css 复用品牌，仅覆盖宿主密度和主题表面。用户新 PNG 生成同源 ICNS，菜单栏用彩色缩略图而非 alpha 模板。开发方法入口 `.codex/skills/baton-development/SKILL.md` 引用 AGENTS 与 docs/06；隔离验收 `scripts/test-brand-presentation.mjs`。
 
 Runtime 设置入口：固定两项与 Store enabled 门禁见 docs/15，宿主默认 CLI 安装及委托凭证发布见 docs/18，认证生命周期见 docs/14，CLI 部分更新协议见 docs/21；验收脚本 scripts/test-runtime-settings.mjs 支持隔离源码/安装包及显式真实 Provider 模式。
 
@@ -231,13 +233,13 @@ Store.updateRunMembers 管理当前成员并保留冻结历史；CLI tasks membe
 
 已有快照首次进入实体存储：`persistence.save` 在同一事务完整物化未初始化集合，再剥离快照数组；`tests/state-journal.test.mjs` 覆盖干净/部分脏日志、失败回滚及已有实例列表/详情与重启一致。
 
-协作回复后的滚动：`web/app.js` 的 `renderCollaboration` 统一捕获/恢复阅读位置；`sendInstruction` 成功后退出历史页并请求最新页，“最新”按钮使用同一跟随规则。定向宽窄隔离验收使用 `AGENTFORGE_COLLABORATION_SCROLL_ONLY=1 node scripts/test-collaboration-flow.mjs`，包含真实澄清回复与发送失败保留阅读位置；无 Provider 调用或 CLI 协议变化。
+协作回复后的滚动：`web/app.js` 的 `renderCollaboration` 统一捕获/恢复阅读位置；`sendInstruction` 成功后退出历史页并请求最新页，“最新”按钮使用同一跟随规则。定向宽窄隔离验收使用 `BATON_COLLABORATION_SCROLL_ONLY=1 node scripts/test-collaboration-flow.mjs`，包含真实澄清回复与发送失败保留阅读位置；无 Provider 调用或 CLI 协议变化。
 
 工作流画布：web/workflow-editor.mjs复用X6编辑节点/连线与正文，client/workflow-description.mjs共享确定性预览/Markdown；Store维护edges及派生节点关系、校验与冻结。Run Files为经理Trace写workflow.md，prompts仅引用路径，员工只收到当前节点正文。App/CLI字段与默认语义同轮对齐；验收见scripts/test-workflow-editor.mjs。
 
 工作流分支：nodes.type=process/condition，edges.condition为自然语言条件（最多2000字符），默认流程/空条件；App/CLI同协议并冻结。条件节点菱形、经理选择满足条件的一条分支；预览返回保留画布有效尺寸。test-workflow-editor覆盖反复切换、宽窄布局、类型切换与分支保存回读。
 
-工作流编辑呈现由web/workflow-editor.mjs和app.js维护：标题输入、全宽总体说明、画布删除、140px节点及稳定中心附近插入；右栏仅标题/提示词。键盘操作直接作用画布元素，原有节点补充资料与关系标识继续保留，HTTP/CLI与执行协议不变；scripts/test-workflow-editor.mjs同时支持源码与AGENTFORGE_WORKFLOW_EDITOR_APP指定的包。
+工作流编辑呈现由web/workflow-editor.mjs和app.js维护：标题输入、全宽总体说明、画布删除、140px节点及稳定中心附近插入；右栏仅标题/提示词。键盘操作直接作用画布元素，原有节点补充资料与关系标识继续保留，HTTP/CLI与执行协议不变；scripts/test-workflow-editor.mjs同时支持源码与BATON_WORKFLOW_EDITOR_APP指定的包。
 
 工作流名称输入框：web/app.js workflowModal与web/styles.css .workflow-editor-heading保留直接命名，宽度480px封顶，13px/600及32px高，完整2px焦点环；其他创建页面保持原布局。CLI tasks create --workflow ID_OR_NAME经当前catalog-references解析后调用相同Task/Run接口，冲突在写入前拒绝。
 
@@ -263,13 +265,13 @@ Runtime 扩展：portable-extensions.mjs 在既有市场完整性校验后物化
 
 存储搬运后的冻结 MCP 资源在 history/bridge 的前置检查前即解析，不能仅在 local-cli 执行边界解析；完整性和保留名称规则不变。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 `server/configuration-store.mjs` 管理私有配置 JSON 的缓存、阶段提交与崩溃恢复；`server/persistence.mjs` 原子提交业务变更和配置 revision，不存扩展清单正文。
 
 共享启动目录：store.buildTask 分配 tasks/TaskID，createRun 分配 RunID；communication-store.prepareCommunicationWorkspace 首次持久分配 communications/会话ID，communication 服务把 cwd 与内部成员/尝试记录分离，prompts 区分共享工作文件和附件资料位置。真实验收见 test-storage-layout，群成员 FIFO/会话隔离与共享文件见 communication tests。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.agentforge/desktop/agentforge-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 

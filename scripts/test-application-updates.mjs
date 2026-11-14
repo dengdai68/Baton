@@ -10,21 +10,21 @@ import { createAuth } from '../server/auth.mjs';
 import { createCatalogFixtureStore } from '../tests/fixture-store.mjs';
 
 await mkdir('.data',{recursive:true});
-const root=await mkdtemp(resolve('.data/application-updates-')),home=join(root,'home'),bundle=process.env.AGENTFORGE_UPDATES_APP;
-const data=bundle?join(home,'.agentforge/desktop'):join(root,'client');
+const root=await mkdtemp(resolve('.data/application-updates-')),home=join(root,'home'),bundle=process.env.BATON_UPDATES_APP;
+const data=bundle?join(home,'.baton/desktop'):join(root,'client');
 await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});
 await auth.setAdministrator('updates-qa',password);auth.close();
-const store=createCatalogFixtureStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});store.close();
+const store=createCatalogFixtureStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const desktop=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')}:{args:['apps/electron/main.mjs']}),env:{...process.env,HOME:home,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:90000});
+const desktop=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')}:{args:['apps/electron/main.mjs']}),env:{...process.env,HOME:home,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:90000});
 const evidence={root,bundle:bundle||'source',cases:[]};
 try{
   const page=await desktop.firstWindow();await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});
   const origin=new URL(page.url()).origin;
   await page.goto(origin+'/login');await page.locator('#username').fill('updates-qa');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('#account-name').waitFor();
   await page.goto(origin+'/tasks');
-  assert.match(await page.evaluate(()=>window.agentforgeDesktop.checkAppUpdate().then(()=>'',e=>e.message)),/设置.*更新/,'production command rejects wrong route');
+  assert.match(await page.evaluate(()=>window.batonDesktop.checkAppUpdate().then(()=>'',e=>e.message)),/设置.*更新/,'production command rejects wrong route');
   const moduleRoot=bundle?resolve(bundle,'Contents/Resources/app.asar'):resolve('.');
   // Inject fixture adapters into the real controller, not replacement DOM.
   await desktop.evaluate(async({ipcMain,BrowserWindow},{moduleRoot,root,origin})=>{
@@ -36,7 +36,7 @@ try{
     const {createHash}=process.getBuiltinModule('node:crypto');
     const bytes=Buffer.from('isolated fake DMG for update UI, never executed'),digest=createHash('sha256').update(bytes).digest('hex');
     const window=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)),contents=window.webContents;
-    const state=globalThis.agentforgeUpdateFixture={mode:'stable',native:false,busy:true,installed:0,opened:null,finish:null,controller:null};
+    const state=globalThis.batonUpdateFixture={mode:'stable',native:false,busy:true,installed:0,opened:null,finish:null,controller:null};
     const send=contents.send.bind(contents);
     contents.send=(channel,...args)=>{
       if(channel==='desktop:updates:changed' && args[0]?.currentVersion!=='1.0.0-beta.1')return;
@@ -49,7 +49,7 @@ try{
           if(state.mode==='offline')throw Error('离线检查失败');
           if(state.mode==='none')return null;
           const version=state.mode==='beta'?'2.0.0-beta.2':'1.0.0';
-          return {tag_name:'v'+version,draft:false,prerelease:state.mode==='beta',assets:[`AgentForge-${version}-arm64.dmg`,'latest-mac.yml'].map(name=>({name,state:'uploaded',size:bytes.length,digest:'sha256:'+digest,browser_download_url:`${RELEASE_ROOT}/download/v${version}/${name}`}))};
+          return {tag_name:'v'+version,draft:false,prerelease:state.mode==='beta',assets:[`Baton-${version}-arm64.dmg`,'latest-mac.yml'].map(name=>({name,state:'uploaded',size:bytes.length,digest:'sha256:'+digest,browser_download_url:`${RELEASE_ROOT}/download/v${version}/${name}`}))};
         },
         downloadInstaller:async(release,cache,progress,options)=>{
           state.progress=progress;progress({percent:25});await new Promise(resolve=>{state.finish=resolve;});
@@ -74,34 +74,27 @@ try{
   await page.goto(origin+'/settings/updates');await page.locator('[data-app-version]').filter({hasText:'1.0.0-beta.1'}).waitFor();
   assert.equal(await page.locator('[data-settings-page="updates"]').innerText(),'更新');
   assert.equal(await page.locator('[data-settings-page="plugins"]').count(),0);
-  await page.getByRole('heading',{name:'应用更新',level:3,exact:true}).waitFor();
-  assert.equal(await page.locator('[data-settings-panel=updates]').getByRole('heading',{name:'更新',exact:true}).count(),0);
-  await page.getByRole('heading',{name:'插件更新',level:3,exact:true}).waitFor();
-  await page.locator('[data-plugin-update-form] [name=intervalMinutes]:not(:disabled)').waitFor();
-  await page.locator('[data-plugin-update-form] [name=intervalMinutes]').fill('7');
-  await page.locator('[data-plugin-update-form] [type=submit]').click();
-  await page.locator('[data-plugin-update-note]').filter({hasText:'已保存'}).waitFor();
-  assert.equal(await page.evaluate(async()=> (await (await fetch('/api/runtime/marketplace/updates')).json()).intervalMinutes),7);
-  await page.locator('[data-plugin-update-form] [name=intervalMinutes]').fill('2');
-  await page.locator('[data-plugin-update-form] [type=submit]').click();
-  await page.locator('[data-plugin-update-note]').filter({hasText:'已保存'}).waitFor();
+  await page.getByRole('heading',{name:'更新',level:3,exact:true}).waitFor();
+  await page.getByRole('heading',{name:'应用',level:4,exact:true}).waitFor();
+  assert.equal(await page.locator('[data-plugin-update-form],[data-check-plugin-updates]').count(),0,'update settings contain application controls only');
+  assert.equal(await page.getByText('自动更新 Git 插件',{exact:true}).count(),0);
   assert.equal(await page.locator('[data-app-release]').count(),0);
   assert.equal(await page.locator('[data-app-github]').innerText(),'GitHub');
   assert.equal(await page.locator('[data-app-version]').evaluate(el=>el.parentElement.querySelector('[data-app-github]')?.textContent),'GitHub');
-  assert.equal(await page.locator('[data-app-github]').getAttribute('href'),'https://github.com/dengdai68/AgentForge');
+  assert.equal(await page.locator('[data-app-github]').getAttribute('href'),'https://github.com/dengdai68/Baton');
   assert.equal(await page.locator('[data-app-github].small-button').count(),0);
   const check=()=>page.getByRole('button',{name:'检查更新',exact:true}).click();
   for(const mode of ['beta','none','offline']){
-    await desktop.evaluate((_electron,mode)=>{globalThis.agentforgeUpdateFixture.mode=mode;},mode);await check();
+    await desktop.evaluate((_electron,mode)=>{globalThis.batonUpdateFixture.mode=mode;},mode);await check();
     await page.locator('[data-app-update-status]').filter({hasText:mode==='offline'?'离线检查失败':mode==='none'?'尚未发布正式版':'没有可用'}).waitFor();
     assert.equal(await page.locator('[data-app-update-download]').isVisible(),false);evidence.cases.push(mode);
     assert.equal(await page.locator('[data-app-update-progress]').isVisible(),false);
   }
-  await desktop.evaluate(()=>{globalThis.agentforgeUpdateFixture.mode='stable';});await check();
+  await desktop.evaluate(()=>{globalThis.batonUpdateFixture.mode='stable';});await check();
   await page.locator('[data-app-update-status]').filter({hasText:'发现正式版 1.0.0'}).waitFor();
   assert.equal(await page.locator('.app-update-notice').count(),0,'available update is displayed only in update settings');
   await page.getByRole('button',{name:'任务',exact:true}).click();
-  await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.controller.check());
+  await desktop.evaluate(()=>globalThis.batonUpdateFixture.controller.check());
   assert.equal(await page.locator('.app-update-notice').count(),0,'background check never inserts a notification card');
   await page.getByRole('button',{name:'设置',exact:true}).click();
   await page.getByRole('button',{name:'下载更新',exact:true}).waitFor();
@@ -110,33 +103,33 @@ try{
   assert.equal(await page.locator('[data-app-update-percent]').innerText(),'25%');
   assert.equal(await page.locator('[data-app-update-note]').isVisible(),false,'downloading has no separate note box');
   await page.screenshot({path:join(root,'downloading.png')});
-  await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.finish());
+  await desktop.evaluate(()=>globalThis.batonUpdateFixture.finish());
   await page.getByRole('button',{name:'打开安装包',exact:true}).waitFor();
   assert.equal(await page.locator('[data-app-update-progress]').isVisible(),false);
   assert.equal(await page.locator('[data-app-update-note]').isVisible(),true);
   assert.equal(await page.locator('.app-update-notice').count(),0,'download completion stays inside update settings');
   await page.getByRole('button',{name:'打开安装包',exact:true}).click();
-  const opened=await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.opened);
+  const opened=await desktop.evaluate(()=>globalThis.batonUpdateFixture.opened);
   assert.equal(createHash('sha256').update(await readFile(opened)).digest('hex'),createHash('sha256').update('isolated fake DMG for update UI, never executed').digest('hex'));
   evidence.cases.push('verified manual download/open');
-  await desktop.evaluate(()=>{const s=globalThis.agentforgeUpdateFixture;s.native=true;s.reset();});
+  await desktop.evaluate(()=>{const s=globalThis.batonUpdateFixture;s.native=true;s.reset();});
   await page.goto(origin+'/settings/updates');await check();
   await page.getByRole('button',{name:'下载更新',exact:true}).click({noWaitAfter:true});await page.locator('progress:visible').waitFor();
   assert.equal(await page.locator('[data-app-update-percent]').innerText(),'50%');
-  await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.finish());await page.getByRole('button',{name:'重启并安装',exact:true}).waitFor();
+  await desktop.evaluate(()=>globalThis.batonUpdateFixture.finish());await page.getByRole('button',{name:'重启并安装',exact:true}).waitFor();
   await page.getByRole('button',{name:'重启并安装',exact:true}).click();await page.locator('[data-app-update-status]').filter({hasText:'仍有任务'}).waitFor();
-  assert.equal(await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.installed),0);
-  await desktop.evaluate(()=>{globalThis.agentforgeUpdateFixture.busy=false;});await page.getByRole('button',{name:'重启并安装',exact:true}).click();
-  assert.equal(await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.installed),1);evidence.cases.push('native adapter busy/idle');
-  for(const theme of ['minimal','warm'])for(const width of [1320,760]){
+  assert.equal(await desktop.evaluate(()=>globalThis.batonUpdateFixture.installed),0);
+  await desktop.evaluate(()=>{globalThis.batonUpdateFixture.busy=false;});await page.getByRole('button',{name:'重启并安装',exact:true}).click();
+  assert.equal(await desktop.evaluate(()=>globalThis.batonUpdateFixture.installed),1);evidence.cases.push('native adapter busy/idle');
+  for(const theme of ['light','dark'])for(const width of [1320,760]){
     await page.goto(origin+'/settings/appearance');await page.locator(`[name=theme][value=${theme}]`).check();
     await desktop.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,760),{origin,width});
     await page.waitForFunction(width=>innerWidth===width,width);
-    await desktop.evaluate(()=>{const s=globalThis.agentforgeUpdateFixture;s.native=false;s.reset();});
+    await desktop.evaluate(()=>{const s=globalThis.batonUpdateFixture;s.native=false;s.reset();});
     await page.goto(origin+'/settings/updates');await page.locator('[data-app-version]').filter({hasText:'1.0.0-beta.1'}).waitFor();
     await check();await page.getByRole('button',{name:'下载更新',exact:true}).click({noWaitAfter:true});
     await page.locator('[data-app-update-percent]').filter({hasText:'25%'}).waitFor();
-    await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.progress({percent:100}));
+    await desktop.evaluate(()=>globalThis.batonUpdateFixture.progress({percent:100}));
     await page.locator('[data-app-update-percent]').filter({hasText:'100%'}).waitFor();
     const layout=await page.locator('[data-app-update-progress]').evaluate(row=>{
       const bar=row.querySelector('progress').getBoundingClientRect(),percent=row.querySelector('[data-app-update-percent]').getBoundingClientRect(),bounds=row.getBoundingClientRect(),style=getComputedStyle(row);
@@ -146,7 +139,7 @@ try{
     assert.equal(await page.locator('[data-app-update-note]').isVisible(),false);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:join(root,`${theme}-${width}-updates.png`)});evidence.cases.push(`${theme}-${width}`);
-    await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.finish());
+    await desktop.evaluate(()=>globalThis.batonUpdateFixture.finish());
     await page.getByRole('button',{name:'打开安装包',exact:true}).waitFor();
   }
   evidence.result='PASS';await writeFile(join(root,'evidence.json'),JSON.stringify(evidence,null,2));console.log('PASS application updates:',root);

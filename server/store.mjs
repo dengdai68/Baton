@@ -90,7 +90,7 @@ function documentPaths(value = []) {
   if(!Array.isArray(value))throw new Error('节点交付位置必须是相对路径数组');
   return [...new Set(value.map(item=>{
     const path=text(item,'节点交付位置'),parts=path.replace(/\/$/,'').split('/');
-    if(isAbsolute(path) || /[\\\0]/.test(path) || parts.some(part=>!part || ['.','..','.git','.agentforge','.agentforge-workspace.json'].includes(part)))throw new Error('交付位置必须是工作目录内的规范相对路径，不得包含内部目录');
+    if(isAbsolute(path) || /[\\\0]/.test(path) || parts.some(part=>!part || ['.','..','.git','.baton','.baton-workspace.json'].includes(part)))throw new Error('交付位置必须是工作目录内的规范相对路径，不得包含内部目录');
     return path;
   }))];
 }
@@ -248,9 +248,9 @@ function runtimeConnection(value = {}) {
   return result;
 }
 
-export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || ":memory:", workspaceRoot = null,workspaceRootAuthoritative=false, onSaveDiagnostic, onLoadDiagnostic, configurationDirectory, configurationPublish, runtimeInstalled = () => true } = {}) {
+export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memory:", workspaceRoot = null,workspaceRootAuthoritative=false, onSaveDiagnostic, onLoadDiagnostic, configurationDirectory, configurationPublish, runtimeInstalled = () => true } = {}) {
   if (workspaceRoot !== null && (!isAbsolute(workspaceRoot) || resolve(workspaceRoot) === "/")) throw new Error("系统工作根目录必须是非根绝对目录");
-  const persistence = createSqlitePersistence(databasePath, { onSaveDiagnostic, onLoadDiagnostic, configurationDirectory, configurationPublish }), loaded = persistence.load({lazy:true}); const initialState = (loaded?.settings?.installationId ? loaded : migrate(loaded)) || { agents: clone(agents), teams: [], tasks: [], workflowTemplates: [workflow(exampleWorkflow, { templateId: exampleWorkflow.id, current: true })], runs: [], traces: [], artifacts: [], messages: [], decisions: [], roles: [], events: [{ id: "evt_welcome", type: "workspace.ready", runId: null, timestamp: now(), actor: { type: "system", name: "AgentForge" }, message: "工作区已就绪。", data: {} }] };
+  const persistence = createSqlitePersistence(databasePath, { onSaveDiagnostic, onLoadDiagnostic, configurationDirectory, configurationPublish }), loaded = persistence.load({lazy:true}); const initialState = (loaded?.settings?.installationId ? loaded : migrate(loaded)) || { agents: clone(agents), teams: [], tasks: [], workflowTemplates: [workflow(exampleWorkflow, { templateId: exampleWorkflow.id, current: true })], runs: [], traces: [], artifacts: [], messages: [], decisions: [], roles: [], events: [{ id: "evt_welcome", type: "workspace.ready", runId: null, timestamp: now(), actor: { type: "system", name: "Baton" }, message: "工作区已就绪。", data: {} }] };
   if(!loaded){const values=persistence.configurationValues();initialState.settings={...values.settings,...initialState.settings};for(const key of ['extensionCatalog','extensionRemovals'])if(values[key])initialState[key]=values[key];}
   const journal = createStateJournal(initialState), state = journal.state;
   state.roles ||= [];
@@ -356,7 +356,7 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
   const listeners = new Set(), save = () => { if (!transactionDepth) { persistence.save(state, journal); journal.commit(); } }, getAgent = (value) => journal.get("agents", value), getTeam = (value) => journal.get("teams", value), getTask = (value) => journal.get("tasks", value), getRun = (value) => journal.get("runs", value), getTrace = (value) => journal.get("traces", value), getRole = (value) => journal.get("roles", value);
   const taskRuns = taskId => journal.select('runs','taskId',taskId).sort((a,b)=>b.startedAt.localeCompare(a.startedAt)||(journal.entry('runs',b.id).position-journal.entry('runs',a.id).position));
   const runAgent = (current, agentId) => current?.participants?.find((item) => item.type === "agent" && item.id === agentId && !(current.removedParticipantIds || []).includes(item.id)) || (current?.manager?.id === agentId ? current.manager : null);
-  const addEvent = ({ type, runId = null, actor = { type: "system", name: "AgentForge" }, message, data = {} }) => { const item = { id: id("evt"), type, runId, timestamp: now(), actor: clone(actor), message: text(message, "事件说明"), data: clone(data) }; state.events.push(item); save();
+  const addEvent = ({ type, runId = null, actor = { type: "system", name: "Baton" }, message, data = {} }) => { const item = { id: id("evt"), type, runId, timestamp: now(), actor: clone(actor), message: text(message, "事件说明"), data: clone(data) }; state.events.push(item); save();
     if(['run.awaiting_acceptance','run.completed'].includes(type)) {
       const task=getTask(getRun(runId)?.taskId);
       if(task)notify({id:item.id,type,runId,taskId:task.id,title:task.title});
@@ -801,7 +801,7 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
         item.status = "cancelled"; item.nextRetryAt = null;
         item.lastError = String(error); item.lastErrorKind = kind; item.lastErrorSignature = signature; item.errorStreak = streak || 1;
         item.escalatedAt = now(); item.updatedAt = now();
-        const note = this.addMessage({ runId: item.runId, workflowNodeId: item.workflowNodeId, sender: { type: "system", id: "agentforge", name: "AgentForge" }, recipientAgentId: current.manager.id, kind: "escalation", content: `自动升级：投递 ${dispatchId}（职责 ${item.workflowNodeId} → 成员 ${item.recipientAgentId}）连续两次遭确定性拒收，最近一次是${kindLabel}错误；自动重试已停止，原投递作为事实保留为已终止。失败摘要：${item.lastError}。请先安排团队成员做具体修复（例如由责任成员清理其引入的受限文件/符号链接、修正交付路径或结果格式），并核对修复后的真实 Artifact；只有确需产品取舍、额外权限或团队无法取得的外部事实时才询问人类。无法修复时在协作记录中明确阻塞原因；失败 Trace 与投递历史均未改写。` });
+        const note = this.addMessage({ runId: item.runId, workflowNodeId: item.workflowNodeId, sender: { type: "system", id: "baton", name: "Baton" }, recipientAgentId: current.manager.id, kind: "escalation", content: `自动升级：投递 ${dispatchId}（职责 ${item.workflowNodeId} → 成员 ${item.recipientAgentId}）连续两次遭确定性拒收，最近一次是${kindLabel}错误；自动重试已停止，原投递作为事实保留为已终止。失败摘要：${item.lastError}。请先安排团队成员做具体修复（例如由责任成员清理其引入的受限文件/符号链接、修正交付路径或结果格式），并核对修复后的真实 Artifact；只有确需产品取舍、额外权限或团队无法取得的外部事实时才询问人类。无法修复时在协作记录中明确阻塞原因；失败 Trace 与投递历史均未改写。` });
         this.enqueueDispatch(item.runId, { recipientAgentId: current.manager.id, workflowNodeId: item.workflowNodeId, purpose: "manager", messageIds: [note.id], sourceMessageId: note.id, dedupeKey: "escalate:" + dispatchId });
         addEvent({ type: "dispatch.escalated", runId: item.runId, message: `连续两次确定性拒收，最近一次为${kindLabel}错误；已停止重试并升级项目经理处置。`, data: { dispatchId, failureKind: kind, attempts: item.attempts, errorStreak: item.errorStreak, error: item.lastError } });
         return clone(item);
@@ -1191,19 +1191,6 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
     isExtensionRemoved(kind, extensionId) {
       return state.extensionRemovals.some(item => item.kind === kind && item.id === extensionId);
     },
-    getPluginUpdateSettings() {return {enabled:state.settings?.pluginAutoUpdate !== false,intervalMinutes:state.settings?.pluginUpdateIntervalMinutes ?? 2};},
-    setPluginUpdateSettings(input) {
-      if(!input || typeof input!=='object' || Array.isArray(input) || !Object.keys(input).length || Object.keys(input).some(key=>!['enabled','intervalMinutes'].includes(key)))throw new Error('仅接受 enabled 与 intervalMinutes，至少提供一项');
-      if('enabled' in input && typeof input.enabled!=='boolean')throw new Error('enabled 必须为布尔值');
-      if('intervalMinutes' in input && (!Number.isInteger(input.intervalMinutes) || input.intervalMinutes<1 || input.intervalMinutes>1440))throw new Error('检查周期必须为 1–1440 的整数分钟');
-      return this.transaction(()=>{
-        state.settings ||= {};
-        if('enabled' in input)state.settings.pluginAutoUpdate=input.enabled;
-        if('intervalMinutes' in input)state.settings.pluginUpdateIntervalMinutes=input.intervalMinutes;
-        addEvent({type:'configuration.plugin_auto_update',actor:humanMember,message:'已保存插件更新设置',data:this.getPluginUpdateSettings()});
-        return this.getPluginUpdateSettings();
-      });
-    },
     replaceRoleExtensions(replacements,bindings=[]) {
       const users=state.roles.filter(role=>replacements.some(item=>role.extensionSelection?.[(item.kind || 'plugin')==='plugin'?'pluginIds':'mcpIds']?.includes(item.previousId)));
       if(bindings.length!==users.length || users.some(role=>!bindings.some(binding=>binding.roleId===role.id && JSON.stringify(binding.previousSelection)===JSON.stringify(role.extensionSelection))))throw new Error('角色扩展配置已变化，请重试');
@@ -1452,7 +1439,7 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
         recoveredDispatchIds: recoverableDispatches.map((item) => item.id),
       };
     },
-    recoverInterruptedRun(runId, reason = "AgentForge 服务重启，未完成的本机执行已中断") {
+    recoverInterruptedRun(runId, reason = "Baton 服务重启，未完成的本机执行已中断") {
       const plan = this.getRunRecoveryPlan(runId), current = getRun(runId);
       if (!plan.interruptedTraceIds.length && !plan.recoveredDispatchIds.length) return { run: clone(current), ...plan };
       return this.transaction(() => {

@@ -12,8 +12,8 @@
 
 - npm test：600 pass / 0 fail。保留历史仓库检出、缺失基线失败/修复、文件变化与旧冻结执行验证；测试通过显式冻结夹具建历史任务，不借废弃输入创建新员工。
 - 规定 check:ai/check:impact、四个 node --check 与 git diff --check 通过；CLI 另测退休类型/仓库拒绝、普通员工提示词输入及实际认证数组操作。沟通不在 CLI 功能边界内，不增加 CLI 命令。
-- AGENTFORGE_DIRECT_COMMUNICATION_REAL=1 node scripts/test-communication-direct-real.mjs：Claude Code、Codex、DeepSeek Harness 三种真实 Runtime 均先运行旧 handoff schema，再用新 reply-only 协议重试成功，原生 session ID 保持不变；群聊明确 @ 一人只产生一份投递，未选成员不调用。证据隔离检出 .data/direct-communication-real-QkeSit。
-- AGENTFORGE_DSH_REAL=1 node scripts/test-dsh-real.mjs：真实沟通、共享工作根无仓库绑定的新任务、MCP/Skill/子代理、精确澄清→人类确认→归档及后续答疑通过，证据 .data/dsh-real-YIYanG。
+- BATON_DIRECT_COMMUNICATION_REAL=1 node scripts/test-communication-direct-real.mjs：Claude Code、Codex、DeepSeek Harness 三种真实 Runtime 均先运行旧 handoff schema，再用新 reply-only 协议重试成功，原生 session ID 保持不变；群聊明确 @ 一人只产生一份投递，未选成员不调用。证据隔离检出 .data/direct-communication-real-QkeSit。
+- BATON_DSH_REAL=1 node scripts/test-dsh-real.mjs：真实沟通、共享工作根无仓库绑定的新任务、MCP/Skill/子代理、精确澄清→人类确认→归档及后续答疑通过，证据 .data/dsh-real-YIYanG。
 - 源码 UI .data/roles-ui-WX7JZ8 和打包 UI .data/roles-ui-owm6HJ：普通员工/经理选项、没有仓库输入，HTTP 拒绝旧字段，创建/保存与两主题宽窄布局通过。
 - 打包完整验收 scripts/test-packaged-electron.mjs 通过：含 reply-only 沟通未读、CLI、文件、任务/确认、隔离重置及关闭生命周期。证据 .data/packaged-electron-e2e-aa7qOG。
 - 初轮旧功能测试仍断言转交/仓库字段，按新协议同步；历史夹具重载后曾误用默认 CLI，改为恢复原夹具专用 executable 后完整回归通过。保留原错误，不把摘要当通过证据。

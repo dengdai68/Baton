@@ -10,13 +10,16 @@ import { execFileSync, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
-if(process.env.AGENTFORGE_TASK_COLLABORATION_REAL!=='1')throw Error('Requires AGENTFORGE_TASK_COLLABORATION_REAL=1; invokes real Claude');
+import { loadLoginShellEnvironment } from '../apps/electron/login-shell-env.mjs';
+if(process.env.BATON_TASK_COLLABORATION_REAL!=='1')throw Error('Requires BATON_TASK_COLLABORATION_REAL=1; invokes real Claude');
+Object.assign(process.env,await loadLoginShellEnvironment());
 await mkdir('.data',{recursive:true});
-const resume=process.env.AGENTFORGE_TASK_COLLABORATION_RESUME;
+const resume=process.env.BATON_TASK_COLLABORATION_RESUME;
 if(resume&&!resolve(resume).startsWith(resolve('.data/task-collaboration-real-')))throw Error('Resume requires this test’s isolated evidence directory');
 const root=resume?resolve(resume):await mkdtemp(resolve('.data/task-collaboration-real-')),home=join(root,'home'),data=join(root,'client');await mkdir(home,{recursive:true});
 const previous=resume?JSON.parse(await readFile(join(root,'evidence.json'),'utf8')):null;
-const command=process.env.AGENTFORGE_RETRY_CLAUDE||execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
+const command=process.env.BATON_RETRY_CLAUDE||execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
+const commandVersion=execFileSync(command,['--version'],{encoding:'utf8'}).trim();
 const managerMarker='PATROL_MANAGER_'+randomBytes(8).toString('hex');
 const workerMarker='RETRY_WORKER_'+randomBytes(8).toString('hex');
 const launcher=join(root,'claude');
@@ -33,10 +36,10 @@ p.on('exit',code=>{if(worker&&code===0&&!existsSync(${JSON.stringify(join(root,'
 const quote=v=>"'"+v.replaceAll("'","'\\''")+"'";
 for(const name of ['.zprofile','.zshrc'])await writeFile(join(home,name),'export PATH='+quote(root)+':"$PATH"\n');
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('retry-qa',password);auth.close();
-const seed=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});const profileId=seed.listRuntimeProfiles().find(p=>p.provider==='claude-code').id;seed.close();
+const seed=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});const profileId=seed.listRuntimeProfiles().find(p=>p.provider==='claude-code').id;seed.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});
-console.log('EVIDENCE '+root);const evidence={root,realModel:true,injectedFailure:'worker process exits 1 after first successful real turn'};
+const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude'),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});
+console.log('EVIDENCE '+root);const evidence={root,realModel:true,runtime:{executable:command,version:commandVersion},injectedFailure:'worker process exits 1 after first successful real turn'};
 try{
  const page=await app.firstWindow({timeout:180000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;
  const api=(path,body,method=body===undefined?'GET':'POST')=>page.evaluate(async({path,body,method})=>{const r=await fetch(path,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const v=await r.json();if(!r.ok)throw Error(JSON.stringify(v));return v;},{path,body,method});
@@ -61,7 +64,7 @@ try{
  const directed=failed.messages.find(m=>m.kind==='handoff'&&m.sender.id===run.manager.id&&m.recipient.id===worker.id);assert.equal(directed.content,managerResult.managerDecision.instruction);assert.ok(failed.traces.filter(t=>t.agentId===run.manager.id).length>=2);
  const failure=failed.traces.at(-1);assert.equal(failure.agentId,worker.id);assert.match(failure.error,/token expired/);assert.ok(failure.providerSessionId);const dispatchId=failure.dispatchId;
  evidence.failedTraceId=failure.id;evidence.sessionId=failure.providerSessionId;
- await page.goto(origin+'/runs/'+run.id);const button=page.locator('[data-retry-failed-node]');if(!alreadyResumed){await button.waitFor();assert.equal(await page.locator('#instruction-text').isDisabled(),true);
+ await page.goto(origin+'/runs/'+run.id);const button=page.locator('.workspace-failure [data-retry-failed-node]');if(!alreadyResumed){await button.waitFor();assert.equal(await page.locator('#instruction-text').isDisabled(),true);
  for(const width of [1320,760]){await app.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,760),{origin,width});await page.waitForFunction(width=>innerWidth===width,width);assert.ok(await button.isVisible());assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:join(root,'failure-'+width+'.png')});}
  const blocked=await page.evaluate(async id=>{const r=await fetch('/api/runs/'+id+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:'错误时禁止派工'})});return r.status;},run.id);assert.equal(blocked,400);
  await new Promise(r=>setTimeout(r,11000));assert.equal((await workspace()).traces.length,failed.traces.length);

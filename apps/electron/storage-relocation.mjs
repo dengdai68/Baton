@@ -5,7 +5,7 @@ import {join,resolve,relative,dirname} from 'node:path';
 import {assertStorageRoot,storageBusinessRoot,storageLocation,writeStorageLocation,validateStorageDestination} from '../../server/storage-layout.mjs';
 import {pathToFileURL} from 'node:url';
 
-const entries=['agentforge.sqlite','agentforge.sqlite-wal','agentforge.sqlite-shm','agentforge.sqlite.history.sqlite','agentforge.sqlite.history.sqlite-wal','agentforge.sqlite.history.sqlite-shm','runs','communications','.deleting'];
+const entries=['baton.sqlite','baton.sqlite-wal','baton.sqlite-shm','baton.sqlite.history.sqlite','baton.sqlite.history.sqlite-wal','baton.sqlite.history.sqlite-shm','runs','communications','.deleting'];
 const cleanupName='.storage-relocation.json';
 async function exists(path){try{return await lstat(path);}catch(error){if(error.code==='ENOENT')return null;throw error;}}
 async function fingerprint(root,exclude=null){
@@ -69,7 +69,7 @@ if(process.argv[1]&&pathToFileURL(resolve(process.argv[1])).href===import.meta.u
     if(!flags.yes){console.log(JSON.stringify({sourceRoot,controlRoot,workspaceRoot,businessRoot:storageBusinessRoot(workspaceRoot,instance),execute:'显式添加 --yes；必须先退出此实例。'}));}
     else{
       let endpoint;try{const path=join(controlRoot,'desktop-endpoint.json'),info=await lstat(path);if(!info.isFile()||info.isSymbolicLink()||info.size>1024)throw new Error('连接文件无效');endpoint=JSON.parse(await readFile(path,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
-      if(endpoint){if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(endpoint.origin))throw new Error('连接地址无效');const health=await fetch(endpoint.origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(1500)}).catch(()=>null);if(health?.ok)throw new Error('本机服务仍在运行，请先退出此 AgentForge 实例；未搬运数据');}
+      if(endpoint){if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(endpoint.origin))throw new Error('连接地址无效');const health=await fetch(endpoint.origin+'/api/health',{redirect:'error',signal:AbortSignal.timeout(1500)}).catch(()=>null);if(health?.ok)throw new Error('本机服务仍在运行，请先退出此 Baton 实例；未搬运数据');}
       const previous=await readFile(join(controlRoot,'storage.json'),'utf8').then(JSON.parse).catch(error=>{if(error.code==='ENOENT')return {previousRuntimeRoots:[]};throw error;});
       const result=await relocateStorage({sourceRoot,controlRoot,workspaceRoot,instance,previousRuntimeRoots:previous.previousRuntimeRoots||[]});
       console.log(JSON.stringify({location:result.location,sourcePreserved:true,next:'启动更新后的客户端；健康检查成功后自动完成旧资料清理。'}));

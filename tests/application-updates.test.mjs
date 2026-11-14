@@ -14,7 +14,7 @@ const payload = Buffer.from('isolated installer fixture, never executed');
 const digest = createHash('sha256').update(payload).digest('hex');
 function release(version = '1.2.3', extra = {}) {
   const asset = name => ({name,state:'uploaded',size:payload.length,digest:'sha256:'+digest,browser_download_url:`${RELEASE_ROOT}/download/v${version}/${name}`});
-  return {tag_name:'v'+version,draft:false,prerelease:false,assets:[asset(`AgentForge-${version}-arm64.dmg`),asset('latest-mac.yml'),asset('SHA256SUMS.txt')],...extra};
+  return {tag_name:'v'+version,draft:false,prerelease:false,assets:[asset(`Baton-${version}-arm64.dmg`),asset('latest-mac.yml'),asset('SHA256SUMS.txt')],...extra};
 }
 const options = extra => ({currentVersion:'1.0.0-beta.109',arch:'arm64',packaged:true,readLatest:async()=>release(),...extra});
 
@@ -23,22 +23,22 @@ test('only stable published versions upgrade, including beta-to-same-stable; no 
   assert.equal(selectRelease(release('1.0.0'),'1.0.0-beta.109','arm64').version,'1.0.0');
   assert.equal(selectRelease(release('1.0.0'),'1.0.0','arm64'),null);
   assert.equal(selectRelease(release('1.0.0'),'2.0.0-beta.1','arm64'),null);
-  const malicious = release(); malicious.assets[0].browser_download_url='https://example.com/AgentForge-1.2.3-arm64.dmg';
+  const malicious = release(); malicious.assets[0].browser_download_url='https://example.com/Baton-1.2.3-arm64.dmg';
   assert.equal(selectRelease(malicious,'1.0.0','arm64').installer,null);
   assert.equal(selectRelease(release(),'1.0.0','x64').installer,null);
 });
 
 test('renamed repository is used for discovery, package publishing and strict asset selection', async () => {
   const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
-  assert.equal(pkg.build.publish[0].repo, 'AgentForge');
-  assert.equal(RELEASE_ROOT, 'https://github.com/dengdai68/AgentForge/releases');
+  assert.equal(pkg.build.publish[0].repo, 'Baton');
+  assert.equal(RELEASE_ROOT, 'https://github.com/dengdai68/Baton/releases');
   const result = await fetchLatestRelease(async (url, options) => {
-    assert.equal(url, 'https://api.github.com/repos/dengdai68/AgentForge/releases/latest');
+    assert.equal(url, 'https://api.github.com/repos/dengdai68/Baton/releases/latest');
     assert.equal(options.redirect, 'error');
     return Response.json(release());
   });
   assert.ok(selectRelease(result, '1.0.0', 'arm64').installer);
-  result.assets[0].browser_download_url = result.assets[0].browser_download_url.replace('/AgentForge/', '/AgentForge-App/');
+  result.assets[0].browser_download_url = result.assets[0].browser_download_url.replace('/Baton/', '/Baton-App/');
   assert.equal(selectRelease(result, '1.0.0', 'arm64').installer, null);
 });
 
@@ -90,9 +90,9 @@ test('real streamed download verifies checksum/size, publishes only a complete f
     const selected=selectRelease(release(),'1.0.0','arm64');
     const path=await downloadReleaseInstaller(selected,root,()=>{}, {fetcher:async()=>new Response(payload)});
     assert.deepEqual(await readFile(path),payload);
-    assert.deepEqual(await readdir(root),['AgentForge-1.2.3-arm64.dmg']);
+    assert.deepEqual(await readdir(root),['Baton-1.2.3-arm64.dmg']);
     await assert.rejects(downloadReleaseInstaller(selected,root,()=>{},{fetcher:async()=>new Response(Buffer.alloc(payload.length))}),/校验/);
-    assert.deepEqual(await readdir(root),['AgentForge-1.2.3-arm64.dmg']);
+    assert.deepEqual(await readdir(root),['Baton-1.2.3-arm64.dmg']);
     assert.deepEqual(await readFile(path),payload,'failed replacement preserves complete download');
     selected.installer.digest=null;
     const fromChecksum=await downloadReleaseInstaller(selected,root,()=>{},{fetcher:async url=>new Response(url.endsWith('SHA256SUMS.txt')?`${digest}  ${selected.installer.name}\n`:payload)});
@@ -123,19 +123,19 @@ test('update mutations accept only the owned settings main frame',()=>{
 test('owned service restart lease atomically blocks writes, rejects busy writes and releases on matching ID',async()=>{
   const root=await mkdtemp(join(tmpdir(),'af-update-lease-')),password=randomBytes(16).toString('hex');
   const auth=createAuth({databasePath:join(root,'auth.sqlite')});await auth.setAdministrator('updates-qa',password);auth.close();
-  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','ignore','ipc'],env:{...process.env,HOME:root,AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:randomBytes(32).toString('hex'),AGENTFORGE_DB_PATH:join(root,'state.sqlite'),AGENTFORGE_AUTH_DB_PATH:join(root,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'runs'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(root,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work'),AGENTFORGE_LOG_DIR:join(root,'logs')}});
+  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','ignore','ipc'],env:{...process.env,HOME:root,BATON_DESKTOP_PORT:'0',BATON_BOOTSTRAP_TOKEN:randomBytes(32).toString('hex'),BATON_DB_PATH:join(root,'state.sqlite'),BATON_AUTH_DB_PATH:join(root,'auth.sqlite'),BATON_RUN_FILES_ROOT:join(root,'runs'),BATON_RUNTIME_CONFIG_ROOT:join(root,'runtime'),BATON_WORKSPACE_ROOT:join(root,'work'),BATON_LOG_DIR:join(root,'logs')}});
   const receive=(predicate,timeout=20000)=>new Promise((resolve,reject)=>{const timer=setTimeout(()=>{child.off('message',listener);reject(Error('IPC timeout'));},timeout);const listener=value=>{if(predicate(value)){clearTimeout(timer);child.off('message',listener);resolve(value);}};child.on('message',listener);});
   let held;
   try{
-    const ready=await receive(m=>m.type==='agentforge-ready',Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||20000)),origin='http://127.0.0.1:'+ready.port;
+    const ready=await receive(m=>m.type==='baton-ready',Number(process.env.BATON_TEST_STARTUP_TIMEOUT_MS||20000)),origin='http://127.0.0.1:'+ready.port;
     const login=await fetch(origin+'/api/auth/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({username:'updates-qa',password})});assert.equal(login.status,200);
     const cookie=login.headers.get('set-cookie').split(';')[0],headers={Origin:origin,Cookie:cookie,'Content-Type':'application/json'};
-    const prepare=async()=>{const id=randomUUID(),pending=receive(m=>m.type==='agentforge-update-readiness' && m.id===id);child.send({type:'agentforge-update-prepare',id});return {...await pending,id};};
-    const release=async id=>{const pending=receive(m=>m.type==='agentforge-update-released' && m.id===id);child.send({type:'agentforge-update-release',id});await pending;};
+    const prepare=async()=>{const id=randomUUID(),pending=receive(m=>m.type==='baton-update-readiness' && m.id===id);child.send({type:'baton-update-prepare',id});return {...await pending,id};};
+    const release=async id=>{const pending=receive(m=>m.type==='baton-update-released' && m.id===id);child.send({type:'baton-update-release',id});await pending;};
     const lease=await prepare();assert.equal(lease.ready,true);
     assert.equal((await fetch(origin+'/api/tasks',{method:'POST',headers,body:'{}'})).status,503);
     assert.equal((await fetch(origin+'/api/health')).status,200);
-    child.send({type:'agentforge-update-release',id:randomUUID()});assert.equal((await prepare()).ready,false);
+    child.send({type:'baton-update-release',id:randomUUID()});assert.equal((await prepare()).ready,false);
     await release(lease.id);assert.equal((await fetch(origin+'/api/tasks',{method:'POST',headers,body:'{}'})).status,400);
     held=httpRequest(origin+'/api/tasks',{method:'POST',headers:{...headers,'Content-Length':'10000'}});held.on('error',()=>{});held.write('{"title":');
     await new Promise(resolve=>setTimeout(resolve,50));

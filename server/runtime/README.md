@@ -76,7 +76,7 @@ mcp-tools.mjs复用mcp-launcher读取真实工具定义（initialize/tools/list�
 
 工具发现适配器仅首次显式读取工具时动态加载；普通Runtime启动器、元数据列表和安装配置读取不导入工具发现客户端，不额外启动服务。
 
-桌面安装版的工具发现使用宿主提供的 `AGENTFORGE_ELECTRON_NODE` 启动 Node 子进程，与历史桥保持一致；不使用后台 Electron Helper 作为启动器。源码运行回退到当前 Node 可执行文件。
+桌面安装版的工具发现使用宿主提供的 `BATON_ELECTRON_NODE` 启动 Node 子进程，与历史桥保持一致；不使用后台 Electron Helper 作为启动器。源码运行回退到当前 Node 可执行文件。
 
 新增 portable-cli.mjs 适配 Cursor、Gemini、Qwen、Kimi、Pi、OpenCode 的原生非交互输出、精确会话续接和控制台内容；local-cli.runRuntime 统一分派并复用进程注册/取消/脱敏。市场插件/MCP 由 portable-extensions 投影，拒绝未映射的源行为及不能隔离的全局扩展配置；详见 docs/29。
 
@@ -84,7 +84,7 @@ Gemini 非交互调用显式信任任务工作目录并指定 extensions none，
 
 Gemini 使用稳定的成员私有 GEMINI_CLI_HOME 只投影连接配置，原生钥匙串/旧 OAuth 路径仍由 CLI 自行读取。Qwen 使用 safe-mode 禁用扩展而保留认证；不使用会跳过账号设置的 bare 模式。
 
-Cursor 在成员稳定的私有 HOME 中保存原生会话，仅引用已有钥匙串/文件认证并投影 model/permissions，关闭全局扩展隐式加载。原用户目录通过调用指令及 AGENTFORGE_HOST_HOME 提供；不限制本机文件操作。
+Cursor 在成员稳定的私有 HOME 中保存原生会话，仅引用已有钥匙串/文件认证并投影 model/permissions，关闭全局扩展隐式加载。原用户目录通过调用指令及 BATON_HOST_HOME 提供；不限制本机文件操作。
 
 portable-extensions.mjs 复用 selectedExtensions/readPluginExecutionPlan 校验与 MCP 私有启动器，为六个新增 Runtime 生成命名空间 Skill 及原生 MCP 配置。Skill 相对资源保留，子代理映射各 Runtime 原生接口；pi-agents.mjs 只由原生 Pi 扩展加载器执行，独立进程/会话传递冻结正文、源工具选择、模型及取消，不拥有领域状态。Cursor 拒绝源工具约束，Pi 要求显式基础工具清单。Hook/未映射工具/专用字段整插件明确拒绝。不得用拼接 Skill 全文或 Shell 客户端替代原生加载。
 
@@ -92,7 +92,7 @@ model-catalog 投影新增六种原生模型目录与思考档位，忽略提供
 
 业务配置根与认证分离：插件/MCP、DSH 受管会话等位于配置数据根，Git 托管凭据位于宿主传入的 credentials/。local-cli 日志入口对 Runtime 副本解析受管旧地址，marketplace 读取目录/冻结清单也使用相同解析；完整性与计划摘要照常验证，不更改旧快照或全局 CLI 配置。docs/30 说明物理整理边界。
 
-当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.agentforge`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.agentforge/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 裸 Skill：configuration 无清单时仅识别根 SKILL.md 或 skills/<目录>/SKILL.md，安全读取 name/description；marketplace 在 plugin/skills/<name>/ 复制完整目录并生成外壳，source 保留原字节。Git 更新复用 source.origin 与名称身份，不改 Runtime 协议；本地重新导入更新。完整描述不截断，元信息无效整批失败。测试见 marketplace/plugin-updates 与 test-bare-skills。
 

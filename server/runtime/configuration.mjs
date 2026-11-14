@@ -150,7 +150,7 @@ export function parseMcpJson(input) {
   return value;
 }
 
-export function createRuntimeConfiguration(root,{credentialsRoot=process.env.AGENTFORGE_CREDENTIALS_ROOT || root}={}) {
+export function createRuntimeConfiguration(root,{credentialsRoot=process.env.BATON_CREDENTIALS_ROOT || root}={}) {
   const managedRoot = resolve(root), credentialRoot=resolve(credentialsRoot),pluginRoot = resolve(root, "plugins"), catalogRoot = resolve(root, "catalogs"), gitCredentialsPath = resolve(credentialRoot, "git-credentials.json");
   let gitCredentialWrite = Promise.resolve();
   const queueGitCredentialWrite = (work) => {

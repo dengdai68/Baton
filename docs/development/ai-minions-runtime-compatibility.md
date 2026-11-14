@@ -12,13 +12,13 @@ CLI 命令、输入 schema 和引用输出保持原协议，help/文档同步自
 
 ## 验证
 
-- `npm test` 最终 593 pass / 0 fail；日志 `/private/tmp/agentforge-minions-tests-pass.log`。AI、模块影响、规定语法与 diff 检查通过。
-- `AGENTFORGE_AI_MINIONS_REAL=1 AGENTFORGE_AI_MINIONS_SOURCE=… node scripts/test-ai-minions-real.mjs`：26 个插件、78 个插件/Runtime 组合全部导入、解析及严格原生 YAML 投影通过。三个真实 Runtime 均读取原始 nyx-build，并调用来源内独立分析子代理返回隔离 JS 文件中的随机常数；检查原生子代理生命周期和源摘要，检出 Git 状态不变。
+- `npm test` 最终 593 pass / 0 fail；日志 `/private/tmp/baton-minions-tests-pass.log`。AI、模块影响、规定语法与 diff 检查通过。
+- `BATON_AI_MINIONS_REAL=1 BATON_AI_MINIONS_SOURCE=… node scripts/test-ai-minions-real.mjs`：26 个插件、78 个插件/Runtime 组合全部导入、解析及严格原生 YAML 投影通过。三个真实 Runtime 均读取原始 nyx-build，并调用来源内独立分析子代理返回隔离 JS 文件中的随机常数；检查原生子代理生命周期和源摘要，检出 Git 状态不变。
 - 实测版本：Claude Code 2.1.310、Codex 0.164.0、DeepSeek Harness 0.2.1-rc.2。实际源证据 `.data/ai-minions-real-nfzqXv/evidence.json`。
-- `AGENTFORGE_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs` 六组全部通过，覆盖原生 Skill、独立子代理、command Hook 与 stdio/HTTP/SSE MCP。证据 `.data/plugin-runtimes-real-n96GG1/evidence.json`，日志 `/private/tmp/agentforge-minions-matrix.log`。
-- `AGENTFORGE_DSH_REAL=1 node scripts/test-dsh-real.mjs` 真实沟通及完整任务、澄清、交接、可见人类确认、归档与完成后经理答疑通过。证据 `.data/dsh-real-wGu0PF/evidence.json`，日志 `/private/tmp/agentforge-minions-lifecycle-final.log`。
-- 上述相对证据目录均位于 `/private/tmp/agentforge-beta102-verification-path` 指向的可丢弃检出；未提交截图、日志、会话或源插件内容。
-- 安装包 `package:mac:check` 全部通过；额外用实际包内 ASAR 模块及内置 Electron Node 为三个 Runtime 生成合法 YAML，源摘要不变。另覆盖签名篡改拒绝、认证、CLI、MCP、任务确认、窗口与重置隔离；证据 `.data/packaged-electron-e2e-7qilgl`，日志 `/private/tmp/agentforge-minions-packaged.log`。
+- `BATON_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs` 六组全部通过，覆盖原生 Skill、独立子代理、command Hook 与 stdio/HTTP/SSE MCP。证据 `.data/plugin-runtimes-real-n96GG1/evidence.json`，日志 `/private/tmp/baton-minions-matrix.log`。
+- `BATON_DSH_REAL=1 node scripts/test-dsh-real.mjs` 真实沟通及完整任务、澄清、交接、可见人类确认、归档与完成后经理答疑通过。证据 `.data/dsh-real-wGu0PF/evidence.json`，日志 `/private/tmp/baton-minions-lifecycle-final.log`。
+- 上述相对证据目录均位于 `/private/tmp/baton-beta102-verification-path` 指向的可丢弃检出；未提交截图、日志、会话或源插件内容。
+- 安装包 `package:mac:check` 全部通过；额外用实际包内 ASAR 模块及内置 Electron Node 为三个 Runtime 生成合法 YAML，源摘要不变。另覆盖签名篡改拒绝、认证、CLI、MCP、任务确认、窗口与重置隔离；证据 `.data/packaged-electron-e2e-7qilgl`，日志 `/private/tmp/baton-minions-packaged.log`。
 
 ## 失败记录
 
@@ -26,7 +26,7 @@ CLI 命令、输入 schema 和引用输出保持原协议，help/文档同步自
 
 ## 安装与限制
 
-已安装到 `/Applications/AgentForge.app`，本机版本仍为 0.1.2，严格签名验证通过。ASAR SHA-256：86ce50ed95e8361d9dda19f8e7ca2f1cc79c34cae64992600176ef2cc6561a25。回退包在 `/Applications/.AgentForge-minions-compat-8c31db04770e426d9e458860799d4f7a/Previous-AgentForge.app`。
+已安装到 `/Applications/Baton.app`，本机版本仍为 0.1.2，严格签名验证通过。ASAR SHA-256：86ce50ed95e8361d9dda19f8e7ca2f1cc79c34cae64992600176ef2cc6561a25。回退包在 `/Applications/.Baton-minions-compat-8c31db04770e426d9e458860799d4f7a/Previous-Baton.app`。
 
 重启后通过真实客户端查看插件市场，现有 16 项正常加载；正式只读接口核对 17 个 Task/Run 的状态、消息摘要及插件 ID 清单与安装前一致。
 

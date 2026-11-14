@@ -13,11 +13,11 @@
 
 - npm test：最终 599 pass / 0 fail。早轮暴露未同步的 DSH 单角色测试，已改为数组；并行重负载下一次 SDK 夹具启动超过其10秒门限，未改产品超时，后续完整门禁通过。
 - npm run check:ai、npm run check:impact、规定四个 node --check、git diff --check 通过。影响门禁先指出遗漏的架构说明，补齐后通过。
-- AGENTFORGE_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs：两种源 × Claude Code/Codex/DeepSeek Harness 共6组通过。每份源加入错误 Skill/Subagent/Hook，同时验证有效原生 Skill、独立子代理、真实 Hook、stdio/HTTP/SSE MCP 与两角色提示词实际生效。证据 `.data/plugin-runtimes-real-jcVvV4/`，不执行外部业务 Hook。
-- AGENTFORGE_DSH_REAL=1 node scripts/test-dsh-real.mjs：实际沟通、多角色冻结、独立子代理、MCP/历史工具、澄清精确回复、完整任务→可见人类确认→归档及后续咨询通过。隔离验证检出证据 `.data/dsh-real-XakH32/`。
+- BATON_PLUGIN_RUNTIMES_REAL=1 node scripts/test-plugin-runtimes-real.mjs：两种源 × Claude Code/Codex/DeepSeek Harness 共6组通过。每份源加入错误 Skill/Subagent/Hook，同时验证有效原生 Skill、独立子代理、真实 Hook、stdio/HTTP/SSE MCP 与两角色提示词实际生效。证据 `.data/plugin-runtimes-real-jcVvV4/`，不执行外部业务 Hook。
+- BATON_DSH_REAL=1 node scripts/test-dsh-real.mjs：实际沟通、多角色冻结、独立子代理、MCP/历史工具、澄清精确回复、完整任务→可见人类确认→归档及后续咨询通过。隔离验证检出证据 `.data/dsh-real-XakH32/`。
 - node scripts/test-roles-ui.mjs：实际 Electron 多角色添加/重排/保存回读/清空、被引用角色删除拒绝、废弃HTTP字段拒绝、部分安装警告/详情、相对路径和正文不泄露通过；保留两主题宽窄目录与窄屏表单截图。证据 `.data/roles-ui-2iSWM0/`。测试中修正表单异步读取等待和截图动画等待，未按摘要推断通过。
 - ai-minions 原始本机来源只读导入：26插件、78个 Runtime 计划可解析，warnings为空；不安装到真实业务实例、不执行其业务脚本或上传 Hook。证据临时目录 af-partial-minions-lvOdoi/evidence.json。
 
 限制：静态格式检查不能证明任意源 Shell/脚本的业务行为正确，也不能实现尚无等价映射的专有 Runtime 功能；这些仍明确拒绝。多个角色冲突由配置者安排，平台按顺序传递，不自动裁决。原生会话可能保留旧角色历史影响。真实业务插件完整工作流不属于本轮机制验证。
 
-打包验证：electron-builder arm64 ad-hoc 开发包；完整 test-packaged-electron 通过（隔离配置/登录、扩展、CLI、任务到可见确认、文件与关闭生命周期）。AGENTFORGE_ROLES_APP 指向应用包运行同一角色/部分安装 UI 验收和真实认证 CLI 数组写入/清空，通过于隔离验证检出 `.data/roles-ui-k3JFam/`。初次额外打包验收发现测试仍将配置种在源码数据路径，改用打包版的隔离 HOME/.agentforge/desktop 后通过；不改产品数据路径。
+打包验证：electron-builder arm64 ad-hoc 开发包；完整 test-packaged-electron 通过（隔离配置/登录、扩展、CLI、任务到可见确认、文件与关闭生命周期）。BATON_ROLES_APP 指向应用包运行同一角色/部分安装 UI 验收和真实认证 CLI 数组写入/清空，通过于隔离验证检出 `.data/roles-ui-k3JFam/`。初次额外打包验收发现测试仍将配置种在源码数据路径，改用打包版的隔离 HOME/.baton/desktop 后通过；不改产品数据路径。

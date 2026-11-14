@@ -33,7 +33,7 @@ export function createExecutionBudget({total=8,perProvider=4}={}) {
 }
 const budgets=new WeakMap();
 export function executionBudget(store){
-  if(!budgets.has(store))budgets.set(store,createExecutionBudget({total:Number(process.env.AGENTFORGE_MAX_EXECUTIONS||8),perProvider:Number(process.env.AGENTFORGE_MAX_PROVIDER_EXECUTIONS||4)}));
+  if(!budgets.has(store))budgets.set(store,createExecutionBudget({total:Number(process.env.BATON_MAX_EXECUTIONS||8),perProvider:Number(process.env.BATON_MAX_PROVIDER_EXECUTIONS||4)}));
   return budgets.get(store);
 }
 

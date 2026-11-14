@@ -116,7 +116,7 @@ const graphs = {
   "system-architecture": {
     nodes: [
       boundary("browser-boundary", 24, 32, 178, 356, "① Browser boundary", "读模型 · HTTP 命令 · SSE", "var(--bg-subtle)"),
-      boundary("control-boundary", 222, 32, 460, 356, "② AgentForge Node.js boundary", "传输 · 状态 · 编排 · 本机 Runtime", "var(--bg-subtle)"),
+      boundary("control-boundary", 222, 32, 460, 356, "② Baton Node.js boundary", "传输 · 状态 · 编排 · 本机 Runtime", "var(--bg-subtle)"),
       boundary("persistence-boundary", 702, 32, 228, 356, "③ Local persistence boundary", "metadata 与 Run 文件分离", "var(--bg-subtle)"),
       card("web", 43, 184, 140, 78, "web/ Console", ["路由 · 渲染 · 命令", "不写领域状态"], "agent"),
       card("http", 246, 104, 170, 78, "server/index.mjs", ["auth.guard → HTTP / SSE", "登录鉴权 · 协议边界"], "task"),

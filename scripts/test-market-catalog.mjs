@@ -17,9 +17,9 @@ const plugins=[];for(let i=0;i<45;i++){
 }
 await writeFile(join(source,'.claude-plugin/marketplace.json'),JSON.stringify({name:'catalog-benchmark',plugins}));
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('catalog-qa',password);auth.close();
-const store=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});const manager=store.createAgent({name:'目录验收经理',kind:'manager'});store.setPluginUpdateSettings({enabled:false});store.close();
+const store=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});const manager=store.createAgent({name:'目录验收经理',kind:'manager'});store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});const evidence={root};console.log('EVIDENCE '+root);
+const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});const evidence={root};console.log('EVIDENCE '+root);
 try{
  const page=await app.firstWindow({timeout:180000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:90000});const origin=new URL(page.url()).origin;
  await page.goto(origin+'/login');await page.locator('#username').waitFor();
@@ -33,7 +33,7 @@ try{
   await page.screenshot({path:join(root,`login-${theme}-${width}.png`)});
  }
  await page.locator('#toggle-password').click();assert.equal(await page.locator('#password').getAttribute('type'),'text');await page.locator('#toggle-password').click();
- await page.locator('#username').fill('catalog-qa');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('#account-name').waitFor({state:'attached'});assert.equal(await page.locator('#account-name').textContent(),'catalog-qa');
+ await page.locator('#username').fill('catalog-qa');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.waitForFunction(()=>document.querySelector('#account-name')?.textContent==='catalog-qa');
  const api=(path,body,method=body===undefined?'GET':'POST',status=200)=>page.evaluate(async({path,body,method,status})=>{const r=await fetch(path,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const v=await r.json();if(r.status!==status)throw Error(`${r.status} expected ${status}: ${JSON.stringify(v)}`);return v;},{path,body,method,status});
  assert.equal((await fetch(origin+'/api/runtime/marketplace')).status,401);
  const imported=await api('/api/runtime/marketplace',{path:source},'POST',201);assert.equal(imported.plugins.length,45);assert.equal(imported.mcps.length,45);

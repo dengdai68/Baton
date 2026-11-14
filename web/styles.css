@@ -1976,13 +1976,13 @@ html .runtime-model-row .model-refresh:hover { background:var(--bg-active); }
   .console-open .communication-chat > :not(.communication-header) { display:none; }
 }
 
-/* Member rosters stay readable; other multi-selects retain their compact row. */
-:is(#task-members-picker,#team-members-picker) .extension-picker-control { height:auto; max-height:none; flex-wrap:wrap; overflow:visible; }
-:is(#task-members-picker,#team-members-picker) .extension-picked { display:contents; }
-#task-members-picker input { scroll-margin-block:10px; }
-:is(#task-members-picker,#team-members-picker) .extension-chip { flex:0 1 auto; max-width:100%; height:auto; min-height:26px; white-space:normal; }
-:is(#task-members-picker,#team-members-picker) .extension-chip-name { flex:1 1 auto; white-space:normal; overflow:visible; text-overflow:clip; }
-.communication-picker .extension-picker-control { max-height:96px; overflow:auto; }
+/* Member rosters grow with their chips in task creation, live tasks and chats. */
+:is(#task-members-picker,#team-members-picker,#run-member-picker,[data-group-member-picker]) .extension-picker-control { height:auto; min-height:var(--control-h); max-height:none; padding:1px 8px; flex-wrap:wrap; overflow:visible; }
+:is(#task-members-picker,#team-members-picker,#run-member-picker,[data-group-member-picker]) .extension-picked { display:contents; }
+:is(#task-members-picker,#run-member-picker,[data-group-member-picker]) input { scroll-margin-block:10px; }
+:is(#task-members-picker,#team-members-picker,#run-member-picker,[data-group-member-picker]) .extension-chip { flex:0 1 auto; max-width:100%; height:auto; min-height:24px; white-space:normal; }
+:is(#task-members-picker,#team-members-picker,#run-member-picker,[data-group-member-picker]) .extension-chip-name { flex:1 1 auto; white-space:normal; overflow:visible; text-overflow:clip; }
+.communication-picker { overflow-y:auto; }
 
 [data-close-chat-members] { display:none; }
 .members-open [data-close-chat-members] { display:inline-block; }
@@ -2022,7 +2022,6 @@ html .runtime-model-row .model-refresh:hover { background:var(--bg-active); }
 .automation-trigger-status { overflow:hidden; text-overflow:ellipsis; }
 .automation-table .automation-reason { display:inline; margin:0 0 0 8px; color:var(--text-secondary); font-size:12px; }
 .automation-schedule-fields { padding-top: 12px; border-top: 1px solid var(--border); }
-.automation-preview { font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 8px; }
 #automation-search { flex-wrap: wrap; }
 #automation-search input { flex: 1; min-width: 140px; }
 #automation-search select { width: auto; }
@@ -2061,7 +2060,6 @@ html .runtime-model-row .model-refresh:hover { background:var(--bg-active); }
 
 .automation-cron-row { display:flex; align-items:center; gap:14px; min-width:0; }
 .automation-cron-row > input { flex:0 0 33%; min-width:120px; max-width:240px; font-family:ui-monospace,monospace; }
-.automation-cron-row .automation-preview { min-width:0; margin:0; white-space:nowrap; overflow:auto; font-size:12px; color:var(--text-secondary); }
 .automation-schedule { display:flex; flex-wrap:wrap; gap:6px 20px; margin:0; font-size:12px; }
 .automation-schedule > span { display:inline-flex; align-items:center; gap:4px; }
 .automation-schedule-label { color:var(--text-secondary); }
@@ -4138,21 +4136,10 @@ html:root #modal-backdrop .workflow-editor-modal .workflow-properties-toggle { d
 }
 
 html:root .modal.automation-create-modal { width:760px; max-width:calc(100vw - 32px); }
-html:root #modal-backdrop .automation-create-modal .automation-schedule-fields { margin:12px 0 16px; padding:16px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--bg-subtle); }
-.automation-schedule-fields > h3 { margin:0 0 12px; font-size:13px; font-weight:600; }
-.automation-schedule-top { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:16px; }
-.automation-frequency-presets { display:flex; align-items:center; gap:2px; padding:2px; border:1px solid var(--border); border-radius:var(--r-sm); background:var(--bg-canvas); }
-html:root .automation-frequency-presets button { min-height:var(--control-h-sm); height:var(--control-h-sm); padding:0 8px; font-size:12px; }
-html:root .automation-frequency-presets button[aria-pressed="true"] { background:var(--bg-active); color:var(--text); }
-.automation-time-control { display:flex; align-items:center; gap:8px; color:var(--text-secondary); font-size:12px; }
-html:root .automation-time-control input { width:96px; min-height:var(--control-h); height:var(--control-h); padding:0 8px; }
-html:root #modal-backdrop .automation-create-modal .automation-cron-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); align-items:start; gap:20px; }
-html:root #modal-backdrop .automation-create-modal .automation-cron-row .form-field { margin:0; }
-html:root #modal-backdrop .automation-create-modal .automation-cron-row input { width:100%; font:12px var(--font-mono); height:var(--control-h); min-height:var(--control-h); }
-.automation-next-runs > strong { display:block; margin-bottom:6px; color:var(--text-secondary); font-size:12px; line-height:18px; font-weight:500; }
-html:root #modal-backdrop .automation-create-modal .automation-preview { margin:0; font-size:12px; line-height:20px; }
-.automation-preview ol { margin:0; padding-left:18px; }
-.automation-preview li { padding-left:4px; font-variant-numeric:tabular-nums; }
+html:root #modal-backdrop .automation-create-modal .automation-schedule-fields { display:grid; grid-template-columns:96px minmax(0,1fr); align-items:center; gap:16px; margin:12px 0 16px; padding:12px 16px; border:1px solid var(--border); border-radius:var(--r-md); background:var(--bg-subtle); }
+.automation-schedule-fields > h3 { margin:0; font-size:13px; font-weight:600; }
+html:root #modal-backdrop .automation-create-modal .automation-schedule-fields .form-field { margin:0; }
+html:root #modal-backdrop .automation-create-modal .automation-schedule-fields input { width:100%; font:12px var(--font-mono); height:var(--control-h); min-height:var(--control-h); }
 .automation-create-note { margin-right:auto; color:var(--text-tertiary); font-size:12px; }
 @media(max-height:680px) { html:root #modal-backdrop .automation-create-modal .task-description-field #task-objective { min-height:72px; height:72px; } }
 
@@ -4173,8 +4160,6 @@ html:root #automations-root .automation-config-layout { margin:0 var(--pad-page)
 html:root #modal-backdrop:has(.workflow-editor-modal),html:root #modal-backdrop .workflow-editor-modal { animation:none; }
 html:root #modal-backdrop .workflow-editor-modal :is(.workflow-editor-toolbar,.workflow-zoom-controls) button { border:0; background:transparent; }
 html:root #modal-backdrop .workflow-editor-modal .workflow-editor-top-actions > .ghost-button { border:0; background:transparent; }
-html:root #modal-backdrop .automation-frequency-presets button { border:0; background:transparent; }
-html:root #modal-backdrop .automation-frequency-presets button[aria-pressed="true"] { background:var(--bg-active); }
 html:root #modal-backdrop .workflow-editor-modal[data-native-chrome] .workflow-editor-topbar { padding-left:92px; -webkit-app-region:drag; }
 html:root #modal-backdrop .workflow-editor-modal .workflow-editor-topbar :is(button,input) { -webkit-app-region:no-drag; }
 html:root #automations-root .automation-switch { display:flex; justify-content:flex-start; align-items:center; width:28px; min-width:28px; min-height:var(--control-h-sm); padding:0; border:0; gap:0; }
@@ -4197,3 +4182,17 @@ html:root :is(#run-workspace,.communication-messages) .communication-markdown .m
 html:root :is(#run-workspace,.communication-messages) .communication-markdown blockquote { margin:8px 0; padding:4px 12px; border-left:2px solid var(--border-strong); background:var(--bg-subtle); color:var(--text-secondary); }
 html:root :is(#run-workspace,.communication-messages) .communication-markdown :not(pre) > code { padding:1px 5px; border-radius:4px; background:var(--code-bg); box-shadow:inset 0 0 0 1px var(--border-subtle); color:var(--accent-violet); font:12.5px var(--font-mono); }
 html:root :is(#run-workspace,.communication-messages) .communication-markdown pre { background:var(--code-bg); color:var(--text); }
+
+/* Message emphasis follows its saved sender's avatar hue. Dark surfaces lift
+   that hue for readable text; plain prose and syntax highlighting stay legible. */
+:is(.collaboration-row,.communication-message)[data-sender-color] { --sender-avatar:var(--av-system); --sender-accent:light-dark(var(--sender-avatar),color-mix(in srgb,var(--sender-avatar),var(--text) 45%)); --sender-soft:color-mix(in srgb,var(--sender-avatar) 9%,var(--bg-canvas)); --record-accent:var(--sender-accent); --record-soft:var(--sender-soft); }
+:is(.collaboration-row,.communication-message)[data-sender-color=violet] { --sender-avatar:var(--av-violet); }
+:is(.collaboration-row,.communication-message)[data-sender-color=cyan] { --sender-avatar:var(--av-cyan); }
+:is(.collaboration-row,.communication-message)[data-sender-color=blue] { --sender-avatar:var(--av-blue); }
+:is(.collaboration-row,.communication-message)[data-sender-color=amber] { --sender-avatar:var(--av-orange); }
+:is(.collaboration-row,.communication-message)[data-sender-color=green] { --sender-avatar:var(--av-green); }
+html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] header > strong,
+html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown :is(strong,em,h1,h2,h3,h4,a),
+html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown :not(pre) > code { color:var(--sender-accent); }
+html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown blockquote { border-left-color:var(--sender-accent); background:var(--sender-soft); }
+html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown .member-mention { color:var(--sender-accent); background:var(--sender-soft); }

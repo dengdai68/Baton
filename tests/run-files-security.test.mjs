@@ -61,7 +61,7 @@ test("working downloads preserve complete bytes beyond preview size and retain f
     await writeFile(join(root, "outside.txt"), "outside sentinel");
     const rootDownload=await files.readWorkingFile(task,'outside.txt',{download:true});for await(const chunk of rootDownload.content)assert.equal(chunk.toString(),'outside sentinel');
     await symlink(join(root, "outside.txt"), join(root, "docs/link.txt"));
-    for (const path of ["../outside.txt", "docs/.env", "docs/link.txt", "docs/missing.txt", "docs",'.git/config','.agentforge/private.json']) {
+    for (const path of ["../outside.txt", "docs/.env", "docs/link.txt", "docs/missing.txt", "docs",'.git/config','.baton/private.json']) {
       await assert.rejects(files.readWorkingFile(task, path, { download: true }));
     }
     await assert.rejects(files.readWorkingFile(task, "docs/empty.txt", { raw: true, download: true }), /不能同时/);
@@ -135,7 +135,7 @@ test("workspace readiness marker rejects a symlink before it can overwrite an ex
     const files = createRunFiles({ root: join(root, "audit") });
     assert.deepEqual(await files.prepareRunWorkspace(task), []);
 
-    const marker = join(task.workspacePath, ".agentforge", "workspace-ready.json");
+    const marker = join(task.workspacePath, ".baton", "workspace-ready.json");
     assert.equal(JSON.parse(await readFile(marker, "utf8")).taskId, task.id);
     const outside = join(root, "outside-marker.json");
     const original = JSON.stringify({ taskId: task.id, preparedAt: "outside sentinel" });
@@ -208,7 +208,7 @@ else if (args.includes("config") && args.includes("remote.origin.url")) console.
       const task = { id, workspaceManaged: true, workspacePath: join(root, id), repositoryMode: "agent", repositorySources: [{ path: "repos/app", url, ref: "main" }], workflowSnapshot: { nodes: [] } };
       const files = createRunFiles({ root: join(root, `${id}-audit`), resolveGitCredential: (repositoryUrl) => configuration.resolveGitCredential(repositoryUrl) });
       await files.prepareRunWorkspace(task);
-      return { task, marker: await readFile(join(task.workspacePath, ".agentforge", "workspace-ready.json"), "utf8"), capture: JSON.parse(await readFile(capture, "utf8")) };
+      return { task, marker: await readFile(join(task.workspacePath, ".baton", "workspace-ready.json"), "utf8"), capture: JSON.parse(await readFile(capture, "utf8")) };
     };
 
     const github = await prepare("github-workspace", "https://github.com/acme/private.git");
@@ -267,7 +267,7 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(result) }));
     await executeRun(store, run.id, { runFilesRoot: join(root, "run-files") });
     assert.equal(store.getRun(run.id).status, "awaiting_acceptance");
     assert.ok(store.getRunWorkspace(run.id).artifacts.some((artifact) => artifact.name === "docs/verify/marker.md" && artifact.bytes === 524289));
-    const marker = join(store.getRunTask(run.id).workspacePath, ".agentforge", "workspace-ready.json");
+    const marker = join(store.getRunTask(run.id).workspacePath, ".baton", "workspace-ready.json");
     assert.equal((await lstat(marker)).isFile(), true);
     assert.deepEqual(JSON.parse(await readFile(marker, "utf8")).repositoryRevisions, []);
     store.confirmRunCompletion(run.id);
@@ -292,9 +292,9 @@ test('common records preserve communication content refs while attachments stay 
  assert.equal(await readFile(join(pinned,attachment.path),'utf8'),'shared bytes');
  await assert.rejects(lstat(join(records,'communications',key,attachment.path)),{code:'ENOENT'});
  const reference=await files.writeCommunicationContent(key,'chat_delivery_test',1,{type:'text',text:'immutable body'});
- assert.match(reference.storagePath,/^communications\/chat_recordtest\/\.agentforge\//);
+ assert.match(reference.storagePath,/^communications\/chat_recordtest\/\.baton\//);
  assert.deepEqual(await files.readConsoleContent(reference),{type:'text',text:'immutable body'});
- await assert.rejects(lstat(join(pinned,'.agentforge')),{code:'ENOENT'});
+ await assert.rejects(lstat(join(pinned,'.baton')),{code:'ENOENT'});
  const attempt=await files.prepareCommunicationAttempt(key,'agent_a','chat_delivery_test',1);
  assert.equal(attempt,join(records,'communications',key,'agent_a/chat_delivery_test/1'));
  const other=join(root,'other/records');await cp(records,other,{recursive:true});

@@ -9,7 +9,7 @@ import {createStore} from '../server/store.mjs';
 import {createAuth} from '../server/auth.mjs';
 async function fixture(t){const root=await realpath(await mkdtemp(join(tmpdir(),'af-work-reset-')));t.after(()=>rm(root,{recursive:true,force:true}));const configurationRoot=join(root,'private/desktop'),workspaceRoot=join(root,'private/workspace');await mkdir(configurationRoot,{recursive:true});await mkdir(workspaceRoot);const options={workspaceRoot,configurationRoot};return {root,options,reset:createDataReset(options)};}
 test('reset deletes the entire current work root and preserves authentication, configuration, and outside files',async t=>{
- const {root,options,reset}=await fixture(t),databasePath=join(options.workspaceRoot,'.agentforge/desktop/agentforge.sqlite'),authPath=join(options.configurationRoot,'auth.sqlite');
+ const {root,options,reset}=await fixture(t),databasePath=join(options.workspaceRoot,'.baton/desktop/baton.sqlite'),authPath=join(options.configurationRoot,'auth.sqlite');
  let store=createStore({databasePath,workspaceRoot:options.workspaceRoot,configurationDirectory:options.configurationRoot});const before=store.getBootstrap().installationId;
  const employee=store.createAgent({name:'Business employee'});store.openCommunication({kind:'agent',targetId:employee.id});store.registerExtensions([{id:randomUUID(),kind:'mcp',name:'Retained service',createdAt:new Date().toISOString(),providers:['codex']}]);
  const auth=createAuth({databasePath:authPath});await auth.setAdministrator('fixture-admin','Fixture-only-reset-2847');

@@ -15,7 +15,7 @@ after(() => rm(endpointRoot, { recursive: true, force: true }));
 function connected(command, args, options = {}) {
   if (!args.includes('--session-file')) return command(args, options);
   return command([...args, '--endpoint-file', endpointFile], { ...options, fetcher: async (url, init) => url === origin + '/api/health'
-    ? new Response(JSON.stringify({ service: 'agentforge-control-plane', instanceId })) : options.fetcher(url, init) });
+    ? new Response(JSON.stringify({ service: 'baton-control-plane', instanceId })) : options.fetcher(url, init) });
 }
 const execute = (args, options) => connected(executeCommand, args, options);
 const run = (args, options) => connected(runCommand, args, options);
@@ -76,7 +76,7 @@ test('unsupported terminals, input errors, oversized paste and output failure fa
 
 test('interactive login uses existing HTTP auth/session and keeps passwords out of output and session files', async () => {
   const root = await mkdtemp(join(tmpdir(), 'af-hidden-login-')), sessionFile = join(root, 'private/session.json');
-  const tty = terminal(), password = 'synthetic-login-secret', cookie = 'agentforge_session=' + 'b'.repeat(64);
+  const tty = terminal(), password = 'synthetic-login-secret', cookie = 'baton_session=' + 'b'.repeat(64);
   const fetcher = async (url, options) => {
     assert.ok(url.startsWith(origin + '/api/auth/'));
     if (url.endsWith('/login')) {

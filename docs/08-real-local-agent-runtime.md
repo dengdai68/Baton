@@ -16,7 +16,7 @@ Codex 平台历史 MCP 使用 Bridge 提供的完整子进程环境；打包版�
 
 提示词快照完整保留并展示脱敏后的系统指令与本轮输入，下方标记已确认原生会话 ID；未确认 Codex 占位 ID 不冒充原生 ID。控制台不显示重复范围说明和工具审计详情，不改变实际 Provider 指令分层。Codex 同一调用的完成阶段不重复保存已记录输入，首次在完成阶段出现或改变的参数仍保留，web_search action 亦保留；原始诊断不删改。
 
-沟通同样保存脱敏公开 text/thinking/tools 和实际调用的 promptSnapshot，事件只持文件引用。内容位于 `communications/<会话ID>/.agentforge/<投递ID>/<尝试>/`，与附件分开；原生会话 ID 仅绑定到 Store 的投递尝试元数据，不进入通用审计。读取先验证会话/事件归属，再校验 SHA-256/字节；历史没有内容时不补造。
+沟通同样保存脱敏公开 text/thinking/tools 和实际调用的 promptSnapshot，事件只持文件引用。内容位于 `communications/<会话ID>/.baton/<投递ID>/<尝试>/`，与附件分开；原生会话 ID 仅绑定到 Store 的投递尝试元数据，不进入通用审计。读取先验证会话/事件归属，再校验 SHA-256/字节；历史没有内容时不补造。
 
 插件来源内部符号链接在安装时展开为普通文件/目录，保留内容、名称及可执行标记；范围限于传入的来源目录/所属 Git 仓库。断链、循环、越界和特殊文件给出插件名及相对路径，原子安装不发布部分结果；已安装副本仍拒绝链接、执行前仍核验完整性，见 docs/15。该兼容不执行来源脚本，不改变员工扩展隔离。
 
@@ -82,7 +82,7 @@ Codex 在 Provider 确认 thread.started 之前出现明确鉴权/未登录错�
 
 Provider 重试和错误的详细正文通过 execution content 保存：错误类别/信息、HTTP 状态、请求 ID、重试次数/上限/延迟与可用 stderr 错误行。只提取允许的诊断字段，不序列化请求或整个 Provider frame；系统与用户提示分别脱敏，凭据过滤继续生效。持久事件仅保留摘要，控制台按 contentRef 展开。Provider 未提供的信息及旧记录不能补造。
 
-同一任务不同成员可以并行调用 Provider，每个成员保留独立原生会话与串行输入。Runtime 注册键为 Run/员工、停止分组为 Run；暂停/终止向组内全部调用发送停止。模型共享任务工作目录，不提供自动 worktree 或 Git 合并。文件快照记录本轮观察到的内容，不证明并行修改的唯一作者。真实并发验收入口为 `AGENTFORGE_TASK_PARALLEL_REAL=1 node scripts/test-task-parallel-real.mjs`，使用隔离 Electron/HOME/数据与实际 Claude。
+同一任务不同成员可以并行调用 Provider，每个成员保留独立原生会话与串行输入。Runtime 注册键为 Run/员工、停止分组为 Run；暂停/终止向组内全部调用发送停止。模型共享任务工作目录，不提供自动 worktree 或 Git 合并。文件快照记录本轮观察到的内容，不证明并行修改的唯一作者。真实并发验收入口为 `BATON_TASK_PARALLEL_REAL=1 node scripts/test-task-parallel-real.mjs`，使用隔离 Electron/HOME/数据与实际 Claude。
 
 插件/MCP 当前目录由 Store 数据库管理，Runtime 继续负责不可变文件与绑定/执行完整性。软删除解除所有员工的当前配置，不撤销已经冻结的调用；后续任务/沟通按新的当前选择运行。列表索引不会替代执行前校验。
 
@@ -92,7 +92,7 @@ Provider 重试和错误的详细正文通过 execution content 保存：错误�
 
 ## 资源和诊断预算
 
-任务/沟通共享实例执行池：默认总并发 8、每 Provider 4；环境变量 `AGENTFORGE_MAX_EXECUTIONS` 和 `AGENTFORGE_MAX_PROVIDER_EXECUTIONS` 可设置 1–64。排队记录资源等待，暂停/终止可取消；各员工独立会话与同成员串行不变。模型目录缓存 30 秒、并发去重，账号/配置/二进制版本变动失效，界面刷新及 CLI `runtimes models PROVIDER --refresh` 显式重查。
+任务/沟通共享实例执行池：默认总并发 8、每 Provider 4；环境变量 `BATON_MAX_EXECUTIONS` 和 `BATON_MAX_PROVIDER_EXECUTIONS` 可设置 1–64。排队记录资源等待，暂停/终止可取消；各员工独立会话与同成员串行不变。模型目录缓存 30 秒、并发去重，账号/配置/二进制版本变动失效，界面刷新及 CLI `runtimes models PROVIDER --refresh` 显式重查。
 
 诊断由独立 Worker 写 JSONL：普通队列 4 MiB、关键队列 6 MiB，超载普通日志记录丢弃计数，关键错误同步兜底，退出刷新。保留自有日志最多 256 MiB/30 天、10 MiB 分卷并保留当前分卷；不删除领域事件/Trace/Artifact。详细原始诊断仍先脱敏，不能从日志恢复凭据或完整提示词。
 
@@ -116,3 +116,6 @@ Provider 重试和错误的详细正文通过 execution content 保存：错误�
 裸 Skill 导入先包装为插件（根 SKILL.md 或 skills/<名称>/SKILL.md），原生加载、完整性与兼容性仍使用同一插件链路；不会自动安装技能声明的 CLI 或执行脚本。Git 更新保持冻结版本隔离，详见 docs/15、26。
 
 Skill 的 allowed-tools/allowedTools 为可选元信息，不作为平台 Runtime 兼容性门禁；保留原字段，实际执行由目标 Runtime 自身规则处理。无需修改原始插件或历史快照，详情按当前规则重算，列表可通过检查兼容性刷新。
+
+
+2026-11-14本轮真实验收使用官方Claude Code 2.1.325、Codex 0.167.2、DeepSeek Harness 0.2.2-rc.1。升级解决旧Claude缺少system-prompt-snapshot选项、旧DSH stdout混入目录日志的问题，未添加适配回退。验证包含普通App登录shell解析的实际CLI、原生会话续接、真实任务到人类验收及三Runtime私聊/群聊问答；resume系统指令另有请求形状检查，不能把模型输出服从性当请求未送达。后续仍应从官方来源更新并按实际executable验证。

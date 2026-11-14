@@ -328,9 +328,9 @@ test("shared Console projections remain behind authenticated HTTP", async () => 
 });
 
 test("collaboration excludes platform escalation audit and coordination notes", () => {
-  const records = collaborationRecords({ events: [{ id: "escalated", type: "dispatch.escalated", timestamp: "2026-10-24T00:00:00.000Z", actor: { type: "system", name: "AgentForge" }, message: "相同协议/结果校验错误连续 2 次，自动重试停止并升级项目经理处置。", data: { dispatchId: "dispatch-1", failureKind: "protocol", attempts: 2, errorStreak: 2 } }] });
+  const records = collaborationRecords({ events: [{ id: "escalated", type: "dispatch.escalated", timestamp: "2026-10-24T00:00:00.000Z", actor: { type: "system", name: "Baton" }, message: "相同协议/结果校验错误连续 2 次，自动重试停止并升级项目经理处置。", data: { dispatchId: "dispatch-1", failureKind: "protocol", attempts: 2, errorStreak: 2 } }] });
   assert.deepEqual(records, []);
-  const note = collaborationRecords({ messages: [{ id: "message-1", kind: "escalation", createdAt: "2026-10-24T00:00:01.000Z", sender: { type: "system", id: "agentforge", name: "AgentForge" }, recipient: { type: "agent", id: "manager-1", name: "项目经理" }, content: "自动升级：投递 dispatch-1 连续失败" }] });
+  const note = collaborationRecords({ messages: [{ id: "message-1", kind: "escalation", createdAt: "2026-10-24T00:00:01.000Z", sender: { type: "system", id: "baton", name: "Baton" }, recipient: { type: "agent", id: "manager-1", name: "项目经理" }, content: "自动升级：投递 dispatch-1 连续失败" }] });
   assert.deepEqual(note, []);
 });
 
@@ -488,4 +488,15 @@ test("worker result projection shows the recorded Markdown report without duplic
   assert.equal(project({...message,sender:{type:"human"}}),message.content);
   assert.equal(project({...message,kind:"instruction"}),message.content);
   assert.equal(project({...message,content:JSON.stringify({...result,rawResponse:JSON.stringify(result)})}),"状态：completed\n\n交接文件：docs/handoff.json");
+});
+
+
+test("collaboration preserves exact sender identity independently of same names and missing Traces", () => {
+  const records=collaborationRecords({messages:[
+    {id:'one',kind:'handoff',createdAt:'2026-11-14T00:00:00Z',sender:{type:'agent',id:'agent-one',name:'相同姓名'},content:'报告一'},
+    {id:'two',kind:'handoff',createdAt:'2026-11-14T00:01:00Z',sender:{type:'agent',id:'agent-two',name:'相同姓名'},content:'报告二'},
+    {id:'old',kind:'handoff',createdAt:'2026-11-14T00:02:00Z',sender:{type:'agent',name:'相同姓名'},content:'没有身份引用'},
+  ]});
+  assert.deepEqual(records.map(record=>record.senderId),['agent-one','agent-two',null]);
+  assert.deepEqual(records.map(record=>record.from),['相同姓名','相同姓名','相同姓名']);
 });

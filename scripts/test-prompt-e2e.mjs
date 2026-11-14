@@ -12,24 +12,24 @@ import { createStore } from '../server/store.mjs';
 import { createAuth } from '../server/auth.mjs';
 import { tomlValue } from '../server/runtime/extensions.mjs';
 
-if (process.env.AGENTFORGE_PROMPT_E2E_REAL !== '1') throw new Error('Requires AGENTFORGE_PROMPT_E2E_REAL=1; never substitutes a fixture for real models');
-const resume = process.env.AGENTFORGE_PROMPT_E2E_RESUME;
+if (process.env.BATON_PROMPT_E2E_REAL !== '1') throw new Error('Requires BATON_PROMPT_E2E_REAL=1; never substitutes a fixture for real models');
+const resume = process.env.BATON_PROMPT_E2E_RESUME;
 const root = resume ? resolve(resume) : await mkdtemp(resolve('.data/prompt-e2e-'));
 console.log('EVIDENCE ' + root);
 assert.equal(dirname(root), resolve('.data')); assert.match(basename(root), /^prompt-e2e-[a-zA-Z0-9]+$/);
-const packaged = process.env.AGENTFORGE_PROMPT_E2E_PACKAGED === '1';
-const nativeSkills = process.env.AGENTFORGE_NATIVE_SKILLS_REAL === '1';
-const taskOnly = process.env.AGENTFORGE_PROMPT_E2E_TASK_ONLY === '1';
-const membership = process.env.AGENTFORGE_MEMBERSHIP_REAL === '1';
-const home = join(root, 'home'), data = packaged ? join(home, '.agentforge/desktop') : join(root, 'client'); await mkdir(home, { recursive: true, mode: 0o700 });
+const packaged = process.env.BATON_PROMPT_E2E_PACKAGED === '1';
+const nativeSkills = process.env.BATON_NATIVE_SKILLS_REAL === '1';
+const taskOnly = process.env.BATON_PROMPT_E2E_TASK_ONLY === '1';
+const membership = process.env.BATON_MEMBERSHIP_REAL === '1';
+const home = join(root, 'home'), data = packaged ? join(home, '.baton/desktop') : join(root, 'client'); await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') }); await auth.setAdministrator('prompt-qa', password); auth.close();
-const store = createStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') }); store.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') });
+const store = createStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') }); store.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') });
 const profiles = {};
 for (const [provider, command] of [['claude-code', 'claude'], ['codex', 'codex']]) {
   const actual = execFileSync('/usr/bin/which', [command], { encoding: 'utf8' }).trim(), wrapper = join(root, command);
   const q = text => "'" + text.replaceAll("'", "'\\''") + "'";
-  const ambient = 'mcp_servers.agentforge_unselected_probe=' + tomlValue({ command: process.execPath, args: [resolve('scripts/marketplace-probe-mcp.mjs'), join(root, 'codex-unselected.log'), 'must-not-start'] });
+  const ambient = 'mcp_servers.baton_unselected_probe=' + tomlValue({ command: process.execPath, args: [resolve('scripts/marketplace-probe-mcp.mjs'), join(root, 'codex-unselected.log'), 'must-not-start'] });
   await writeFile(wrapper, '#!/bin/sh\nHOME=' + q(homedir()) + ' exec ' + q(actual) + (provider === 'codex' ? ' -c ' + q(ambient) : '') + ' "$@"\n', { mode: 0o700 });
   profiles[provider] = store.listRuntimeProfiles().find(item => item.provider === provider).id;
 }
@@ -54,7 +54,7 @@ const existingTask = resume && store.listTasks().find(item => item.title.startsW
 const existingRun = existingTask && store.listRuns().find(item => item.taskId === existingTask.id);
 const chats = [cc, codex].map(agent => ({ agent, chat: store.openCommunication({ kind: 'agent', targetId: agent.id }) })); store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-let app = await electron.launch({ ...(packaged ? { executablePath: resolve('release/mac-arm64/AgentForge.app/Contents/MacOS/AgentForge') } : {}), args: packaged ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+let app = await electron.launch({ ...(packaged ? { executablePath: resolve('release/mac-arm64/Baton.app/Contents/MacOS/Baton') } : {}), args: packaged ? [] : ['apps/electron/main.mjs'], env: { ...process.env, HOME: home, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 const previous = resume ? JSON.parse(await readFile(join(root, 'evidence.json'), 'utf8')) : null;
 const evidence = { root, surface: packaged ? 'packaged Electron / real models' : 'Electron', providers: previous?.providers || {}, task: null, result: 'RUNNING', priorFailures: previous ? [...(previous.priorFailures || []), previous.error].filter(Boolean) : [] }; let page;
 const wait = async (label, check, timeout = 900000) => { const start = Date.now(); let logged = 0; while (Date.now() - start < timeout) { const result = await check(); if (result) return result; if (Date.now() - logged > 30000) { console.log('WAIT ' + label); logged = Date.now(); } await new Promise(done => setTimeout(done, 1000)); } throw new Error('Timed out: ' + label); };
@@ -93,7 +93,7 @@ try {
     const proof = randomBytes(16).toString('hex'), log = join(root, agent.runtime.provider + '-mcp.log');
     const installed = await api('/api/runtime/mcp-marketplace', { name: '会话扩展验证 ' + agent.runtime.provider, description: '隔离本机验收服务', content: JSON.stringify({ mcpServers: { selected_proof: { command: process.execPath, args: [resolve('scripts/marketplace-probe-mcp.mjs'), log, proof] } } }) });
     await api('/api/agents/' + agent.id, { description: '本轮更新简介', capabilities: ['原生会话', 'MCP'], systemPrompt: '当前职责已更新。回复必须以【更新指令生效】开头。只调用用户本轮明确请求的工具；保持原生会话记忆，不读取其他会话或配置。', runtime: { profileId: profiles[agent.runtime.provider], extensionSelection: { pluginIds: nativePlugin?[nativePlugin.id]:[], mcpIds: [installed.id] } } }, 'PUT');
-    await api('/api/communications/' + chat.id + '/messages', { content: '复述上轮给你的校验码，并实际调用 read_validation_code 工具，把它返回的 verificationCode 原样写在回复中。另外必须实际使用 agentforge_history 的 search_private_chat 搜索“' + historyQuery + '”，再用 read_context 读取匹配原文，回复原文的随机值和 recordId。'+(nativeSkills?'另外执行原生能力验证，输出 native-proof.json。可以按技能使用文件和脚本工具，但不要读取数据库或凭据。':'只使用这三个 MCP 工具，不读文件或数据库；找不到工具就如实报错。'), clientRequestId: randomBytes(12).toString('hex') });
+    await api('/api/communications/' + chat.id + '/messages', { content: '复述上轮给你的校验码，并实际调用 read_validation_code 工具，把它返回的 verificationCode 原样写在回复中。另外必须实际使用 baton_history 的 search_private_chat 搜索“' + historyQuery + '”，再用 read_context 读取匹配原文，回复原文的随机值和 recordId。'+(nativeSkills?'另外执行原生能力验证，输出 native-proof.json。可以按技能使用文件和脚本工具，但不要读取数据库或凭据。':'只使用这三个 MCP 工具，不读文件或数据库；找不到工具就如实报错。'), clientRequestId: randomBytes(12).toString('hex') });
     const result = await settle();
     const reply = result.messages.filter(item => item.sender.type === 'agent').at(-1); assert.ok(reply.content.includes(marker) && reply.content.includes(proof), 'native memory and an actually called MCP return are required, not a prose capability claim');
     assert.ok(reply.content.includes(historyValue), 'a real history tool result must supply the unprompted random value');
@@ -110,7 +110,7 @@ try {
     const snapshot = await api('/api/communications/' + chat.id + '/traces/' + traces[1].id + '/prompt');
     assert.match(snapshot.prompt.text, /\[应用系统指令\]/); assert.match(snapshot.prompt.text, /\[本轮输入\]/); assert.ok(!snapshot.prompt.text.includes(marker), 'marker was recalled from native memory, not platform replay');
     assert.match(snapshot.prompt.text, /当前职责已更新/);
-    assert.doesNotMatch(snapshot.prompt.text.split('[本轮输入]')[0],/已配置技能文件|mcp__agentforge_history__|installed-plugins|平台已向本次调用注册/);
+    assert.doesNotMatch(snapshot.prompt.text.split('[本轮输入]')[0],/已配置技能文件|mcp__baton_history__|installed-plugins|平台已向本次调用注册/);
     if(nativeSkills && agent.runtime.provider==='claude-code')assert.ok(console.events.some(event=>event.data?.toolName==='Skill'&&event.data?.toolUseId),'Claude native Skill activation recorded');
     evidence.providers[agent.runtime.provider] = { reply: reply.content, sameNativeSession: true, noHistoryReplay: true, platformHistoryCalled: true, historyValue, updatedSystemInstructionDispatched: true, updatedPrefixFollowed: reply.content.includes('更新指令生效'), selectedMcpCalled: true, removedMcpNotStarted: true, ambientMcpNotStarted: true };
     await page.goto(origin + '/communication/' + chat.id);
@@ -156,7 +156,7 @@ try {
     if (trace.agentId === final.run.manager.id) assert.match(system, /工作流定义/);
     else assert.doesNotMatch(snapshot.prompt.text, /工作流定义|"dependsOn"|"handoffFrom"/);
     assert.match(system, /可咨询角色：/);
-    assert.doesNotMatch(system,/已配置技能文件|mcp__agentforge_history__|installed-plugins|平台已向本次调用注册/);
+    assert.doesNotMatch(system,/已配置技能文件|mcp__baton_history__|installed-plugins|平台已向本次调用注册/);
     assert.doesNotMatch(input, /^(角色工作法|团队共享仓库|本次运行目录|群聊\/私聊记录|相关消息：|可咨询角色：)/m);
   }
   const work = final.run.task.workspacePath;

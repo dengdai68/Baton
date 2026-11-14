@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, open, readFile, rename, rm } from 'node:fs/promises';
 import { join, basename } from 'node:path';
 import semver from 'semver';
 
-export const RELEASE_ROOT = 'https://github.com/dengdai68/AgentForge/releases';
-const latestApi = 'https://api.github.com/repos/dengdai68/AgentForge/releases/latest';
+export const RELEASE_ROOT = 'https://github.com/dengdai68/Baton/releases';
+const latestApi = 'https://api.github.com/repos/dengdai68/Baton/releases/latest';
 const stableVersion = tag => typeof tag === 'string' && /^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag) ? semver.valid(tag.replace(/^v/, '')) : null;
 
 export function selectRelease(release, currentVersion, arch = process.arch) {
@@ -13,7 +13,7 @@ export function selectRelease(release, currentVersion, arch = process.arch) {
   if (!version || release.draft !== false || release.prerelease !== false || !semver.valid(currentVersion) || !semver.gt(version, currentVersion)) return null;
   const tag = release.tag_name, prefix = `${RELEASE_ROOT}/download/${encodeURIComponent(tag)}/`;
   const assets = (release.assets || []).filter(a => a?.state === 'uploaded' && typeof a.name === 'string' && a.browser_download_url === prefix + encodeURIComponent(a.name));
-  const installer = assets.find(a => a.name === `AgentForge-${version}-${arch}.dmg` && Number.isSafeInteger(a.size) && a.size > 0);
+  const installer = assets.find(a => a.name === `Baton-${version}-${arch}.dmg` && Number.isSafeInteger(a.size) && a.size > 0);
   return { version, tag, releaseUrl: `${RELEASE_ROOT}/tag/${encodeURIComponent(tag)}`, feedUrl: prefix,
     installer: installer ? { name: installer.name, url: installer.browser_download_url, size: installer.size, digest: /^sha256:[a-f0-9]{64}$/i.test(installer.digest || '') ? installer.digest.slice(7).toLowerCase() : null } : null,
     checksums: assets.find(a => a.name === 'SHA256SUMS.txt')?.browser_download_url || null,
@@ -26,7 +26,7 @@ async function boundedText(response, limit) {
   return Buffer.concat(chunks).toString('utf8');
 }
 export async function fetchLatestRelease(fetcher = fetch) {
-  const response = await fetcher(latestApi, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'AgentForge-Updater' }, signal: AbortSignal.timeout(20000), redirect: 'error' });
+  const response = await fetcher(latestApi, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Baton-Updater' }, signal: AbortSignal.timeout(20000), redirect: 'error' });
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('暂时无法连接 GitHub 检查更新，请稍后重试');
   return JSON.parse(await boundedText(response, 1024 * 1024));
@@ -122,7 +122,7 @@ export function createApplicationUpdates({ currentVersion, packaged, arch, nativ
           });
           await nativeUpdater.download(candidate.version);
         } else {installerCache=currentCacheRoot();installerPath = await downloadInstaller(candidate, installerCache, progress, { signal: downloadAbort.signal });}
-        publish({ phase: 'downloaded', percent: 100, message: state.installMode === 'native' ? '下载完成，可在任务结束后重启安装。' : '下载完成。打开安装包后，将 AgentForge 拖入“应用程序”安装。' });
+        publish({ phase: 'downloaded', percent: 100, message: state.installMode === 'native' ? '下载完成，可在任务结束后重启安装。' : '下载完成。打开安装包后，将 Baton 拖入“应用程序”安装。' });
       } catch (error) { nativeUpdater = null; installerPath = null; failure(error); }
       finally { operation = null; }
       return snapshot();

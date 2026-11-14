@@ -12,7 +12,7 @@ export async function probeRuntime(profile, { timeoutMs = 90000, invoke } = {}) 
   return withDiagnosticContext({ source: "runtime-test", testId, profileId: profile.id }, async () => {
     let directory, timer, expired = false;
     try {
-      directory = await mkdtemp(join(tmpdir(), "agentforge-runtime-test-"));
+      directory = await mkdtemp(join(tmpdir(), "baton-runtime-test-"));
       const traceDirectory = join(directory, "trace");
       await mkdir(join(traceDirectory, "output"), { recursive: true });
       const outputSchema = { type: "object", properties: { status: { type: "string", enum: ["ok"] } }, required: ["status"], additionalProperties: false };

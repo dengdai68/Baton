@@ -4,9 +4,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { historyTools, historyToolInstructions } from "./index.mjs";
 
-const socketPath = process.env.AGENTFORGE_HISTORY_SOCKET;
+const socketPath = process.env.BATON_HISTORY_SOCKET;
 if (!socketPath) throw new Error("历史查询桥未配置");
-const server = new Server({name:"agentforge-history",version:"1.0.0"},{capabilities:{tools:{}},instructions:historyToolInstructions});
+const server = new Server({name:"baton-history",version:"1.0.0"},{capabilities:{tools:{}},instructions:historyToolInstructions});
 server.setRequestHandler(ListToolsRequestSchema,async () => ({tools:historyTools}));
 server.setRequestHandler(CallToolRequestSchema,async request => {
   try {

@@ -1,6 +1,6 @@
 # 客户端独立仓库决策
 
-状态：实施；来源提交 `dengdai68/AgentForge@c1277e57a715d31ae6d64f15ecb4d7fbecd8ec31`。目标仓库为 `https://github.com/dengdai68/AgentForge-App`。这是源码抽取，不是原仓库的历史镜像。
+状态：实施；来源提交 `dengdai68/Baton@c1277e57a715d31ae6d64f15ecb4d7fbecd8ec31`。目标仓库为 `https://github.com/dengdai68/Baton-App`。这是源码抽取，不是原仓库的历史镜像。
 
 ## 边界与依赖
 
@@ -22,11 +22,11 @@ Electron 当前从自己的本机 HTTP 服务加载页面，界面通过认证 H
 
 npm start/dev 是客户端入口。已移除独立服务命令、终端管理员初始化、公开域名配置和独立浏览器产品验收。保留客户端内部的认证 HTTP；子服务要求 IPC 所有者，固定 loopback 主机与随机端口，断开父进程即停止。renderer 始终加载客户端样式。
 
-发布链路使用当前仓库 `github.repository`；下载位于 AgentForge-App 的相同版本标签，package 元信息与锁文件同步。安装包包含宿主、界面、本机服务、CLI 及所需资源，不依赖全局 Node；Claude/Codex 仍由操作者安装授权。
+发布链路使用当前仓库 `github.repository`；下载位于 Baton-App 的相同版本标签，package 元信息与锁文件同步。安装包包含宿主、界面、本机服务、CLI 及所需资源，不依赖全局 Node；Claude/Codex 仍由操作者安装授权。
 
 ## 身份和数据
 
-保留 `com.agentforge.desktop`、产品名 AgentForge、CLI 名 agentforge 和既有 `~/.agentforge/desktop` 数据位置，以保持当前应用语义。源码开发实例为 `desktop-dev`。两份相同身份的安装版不能作为并行隔离实例，安装或测试不能覆盖活动实例；本轮不修改或迁移操作者数据。任务根继续由设置决定。
+保留 `com.baton.desktop`、产品名 Baton、CLI 名 baton 和既有 `~/.baton/desktop` 数据位置，以保持当前应用语义。源码开发实例为 `desktop-dev`。两份相同身份的安装版不能作为并行隔离实例，安装或测试不能覆盖活动实例；本轮不修改或迁移操作者数据。任务根继续由设置决定。
 
 ## 来源与开源审查
 

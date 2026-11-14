@@ -10,7 +10,7 @@ import { registerExecution } from '../server/runtime/registry.mjs';
 
 test('missing Runtime is effectively disabled and locked without rewriting preferences or frozen facts', () => {
   let installed = true;
-  const store = createStore({ workspaceRoot: join(tmpdir(), 'agentforge-missing-runtime'), runtimeInstalled: provider => provider !== 'dsh' || installed });
+  const store = createStore({ workspaceRoot: join(tmpdir(), 'baton-missing-runtime'), runtimeInstalled: provider => provider !== 'dsh' || installed });
   const profile = store.listRuntimeProfiles().find(item => item.provider === 'dsh');
   const worker = store.createAgent({ name: 'Worker', runtime: { profileId: profile.id } });
   const team = store.createTeam({ name: 'T', memberAgentIds: [worker.id, store.createAgent({name:'Manager',kind:'manager',runtime:worker.runtime}).id] });
@@ -74,7 +74,7 @@ test('fixed Runtime slots retain IDs, gate new work and preserve frozen snapshot
 });
 
 test('central runtime edits update bound employees but preserve queued work and survive restart', async () => {
-  const root = await mkdtemp(join(tmpdir(), 'agentforge-profiles-'));
+  const root = await mkdtemp(join(tmpdir(), 'baton-profiles-'));
   const options = { databasePath: join(root, 'state.sqlite'), workspaceRoot: root };
   let store = createStore(options);
   const profile = store.saveRuntimeProfile({ model: 'test-model' }, store.listRuntimeProfiles().find(item => item.provider === 'claude-code').id);
@@ -116,10 +116,10 @@ test('runtime probe checks structured response, isolates extensions, and exposes
   assert.equal(success.ok, true); assert.match(success.logPath, /\.jsonl$/);
   const invalid = await probeRuntime(profile, { invoke: async () => ({ finalText: 'model says done' }) });
   assert.equal(invalid.ok, false); assert.equal(invalid.error, undefined);
-  const missing = await probeRuntime({ ...profile, executable: '/agentforge-test-missing-cli' });
+  const missing = await probeRuntime({ ...profile, executable: '/baton-test-missing-cli' });
   assert.equal(missing.ok, false);
   assert.match(await readFile(missing.logPath, 'utf8'), /provider.spawn_error/);
-  const codexMissing = await probeRuntime({ ...profile, provider: 'codex', executable: '/agentforge-test-missing-codex' });
+  const codexMissing = await probeRuntime({ ...profile, provider: 'codex', executable: '/baton-test-missing-codex' });
   assert.equal(codexMissing.ok, false);
   assert.match(await readFile(codexMissing.logPath, 'utf8'), /provider.configuration_probe_failed/);
 });

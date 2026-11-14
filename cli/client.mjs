@@ -8,7 +8,7 @@ export const maxBytes = 1024 * 1024;
 export class CliError extends Error {
   constructor(code, message, hint, exitCode = 2, status) { super(message); Object.assign(this, { code, hint, exitCode, ...(status ? { status } : {}) }); }
 }
-export const usage = (message, hint = '在原命令后加 --help 查看参数；完整字段示例可用 agentforge schema agents 查看。') => new CliError('USAGE', message, hint);
+export const usage = (message, hint = '在原命令后加 --help 查看参数；完整字段示例可用 baton schema agents 查看。') => new CliError('USAGE', message, hint);
 
 export async function readBounded(stream, limit = maxBytes) {
   const chunks = []; let bytes = 0;
@@ -69,7 +69,7 @@ export function validateInput(value, schema, path = 'input', partial = false) {
 function privateStat(info) {
   return (!process.getuid || info.uid === process.getuid()) && (info.mode & 0o077) === 0;
 }
-export function defaultEndpointFile(home = homedir()) { return join(home, '.agentforge', 'desktop', 'desktop-endpoint.json'); }
+export function defaultEndpointFile(home = homedir()) { return join(home, '.baton', 'desktop', 'desktop-endpoint.json'); }
 export async function resolveEndpoint(endpointFile = defaultEndpointFile(), fetcher = fetch, onInstance) {
   if (!isAbsolute(endpointFile)) throw usage('--endpoint-file 必须是绝对路径');
   let file;
@@ -83,16 +83,16 @@ export async function resolveEndpoint(endpointFile = defaultEndpointFile(), fetc
     if (!/^http:\/\/127\.0\.0\.1:(?:[1-9]\d{0,4})$/.test(origin) || new URL(origin).port > 65535 || !/^[a-f0-9-]{36}$/.test(instanceId)) throw new Error('invalid endpoint');
     const response = await fetcher(`${origin}/api/health`, { redirect: 'error', signal: AbortSignal.timeout(1500) });
     const health = await response.json();
-    if (!response.ok || health.service !== 'agentforge-control-plane' || health.instanceId !== instanceId) throw new Error('stale endpoint');
+    if (!response.ok || health.service !== 'baton-control-plane' || health.instanceId !== instanceId) throw new Error('stale endpoint');
     onInstance?.(instanceId);
     return origin;
   } catch {
-    throw new CliError('CLIENT_UNAVAILABLE', '客户端未运行，或连接文件已过期/不安全', '先打开 AgentForge 客户端；CLI 只连接客户端，不会改连其他服务。', 5);
+    throw new CliError('CLIENT_UNAVAILABLE', '客户端未运行，或连接文件已过期/不安全', '先打开 Baton 客户端；CLI 只连接客户端，不会改连其他服务。', 5);
   } finally { await file?.close(); }
 }
 export function createClient({ endpointFile, sessionFile, fetcher = fetch, home = homedir() } = {}) {
   const useDesktop = sessionFile === undefined;
-  sessionFile ||= join(home, '.agentforge', 'cli-session.json');
+  sessionFile ||= join(home, '.baton', 'cli-session.json');
   if (!isAbsolute(sessionFile)) throw usage('--session-file 必须是绝对路径');
   sessionFile = resolve(sessionFile);
   let origin, connection, instanceId;
@@ -112,12 +112,12 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
       const info = await file.stat();
       if (!info.isFile() || !privateStat(info) || info.size > 4096) throw new Error('unsafe');
       const saved = JSON.parse(await readBounded(file.createReadStream({ autoClose: false }), 4096));
-      if (saved.origin !== origin || !/^agentforge_session=[a-f0-9]{64}$/.test(saved.cookie) || (saved.expiresAt !== null && (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now()))) throw new Error('invalid');
+      if (saved.origin !== origin || !/^baton_session=[a-f0-9]{64}$/.test(saved.cookie) || (saved.expiresAt !== null && (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now()))) throw new Error('invalid');
       return saved;
     } catch (error) {
       if (optional && error.code === 'ENOENT') return null;
       if (error instanceof CliError && error.code === 'SESSION_FILE') throw error;
-      throw new CliError('AUTH_REQUIRED', '客户端未登录，且独立 CLI 会话不存在、已过期或文件不可安全读取', '先在客户端登录，CLI 将自动使用授权；也可运行 agentforge auth login --username 你的用户名，隐藏输入密码。', 3);
+      throw new CliError('AUTH_REQUIRED', '客户端未登录，且独立 CLI 会话不存在、已过期或文件不可安全读取', '先在客户端登录，CLI 将自动使用授权；也可运行 baton auth login --username 你的用户名，隐藏输入密码。', 3);
     } finally { await file?.close(); }
   }
   async function desktopSession() {
@@ -131,7 +131,7 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
       const info = await file.stat();
       if (!info.isFile() || !privateStat(info) || info.size > 4096) throw new Error('unsafe');
       const saved = JSON.parse(await readBounded(file.createReadStream({ autoClose: false }), 4096));
-      if (saved.origin !== origin || saved.instanceId !== instanceId || !/^agentforge_session=[a-f0-9]{64}$/.test(saved.cookie) || saved.expiresAt !== null && (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now())) return null;
+      if (saved.origin !== origin || saved.instanceId !== instanceId || !/^baton_session=[a-f0-9]{64}$/.test(saved.cookie) || saved.expiresAt !== null && (!Number.isFinite(saved.expiresAt) || saved.expiresAt <= Date.now())) return null;
       const response = await fetcher(origin + '/api/auth/session', { redirect: 'error', signal: AbortSignal.timeout(5000), headers: { Origin: origin, Cookie: saved.cookie } });
       if (response.status === 401) return null;
       if (!response.ok) throw new Error('validation failed');
@@ -150,7 +150,7 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
       response = await fetcher(origin + path, { method, redirect: 'error', signal: AbortSignal.timeout(timeoutMs), headers: { Origin: origin, 'Content-Type': binary ? 'application/octet-stream' : 'application/json', ...(cookie || session ? { Cookie: cookie || session.cookie } : {}) }, ...(body === undefined ? {} : { body: binary ? body : JSON.stringify(body),...(streamed?{duplex:'half'}:{}) }) });
       value = JSON.parse(await readBounded(response.body, 16 * maxBytes));
     } catch {
-      throw new CliError('CONNECTION_UNCERTAIN', '客户端服务未连接、超时或响应无法确认', method === 'GET' ? '确认 AgentForge 客户端正在运行，再查询；不自动切换实例。' : '写操作可能已经提交：先list/get核验再决定重试；不自动重发。', 5);
+      throw new CliError('CONNECTION_UNCERTAIN', '客户端服务未连接、超时或响应无法确认', method === 'GET' ? '确认 Baton 客户端正在运行，再查询；不自动切换实例。' : '写操作可能已经提交：先list/get核验再决定重试；不自动重发。', 5);
     }
     if (!response.ok) {
       const authFailure = response.status === 401 || response.status === 403;
@@ -175,7 +175,7 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
       let previous;
       try { previous = await readSession(true); } catch (error) { if (error.code !== 'AUTH_REQUIRED') throw error; }
       const { value, response } = await request('/api/auth/login', { method: 'POST', body: { username, password }, authenticated: false, cookie: previous?.cookie });
-      const cookie = response.headers.get('set-cookie')?.match(/(?:^|,\s*)agentforge_session=[a-f0-9]{64}(?=;)/)?.[0]?.replace(/^,\s*/, '');
+      const cookie = response.headers.get('set-cookie')?.match(/(?:^|,\s*)baton_session=[a-f0-9]{64}(?=;)/)?.[0]?.replace(/^,\s*/, '');
       if (!cookie || (value.expiresAt !== null && !Number.isFinite(value.expiresAt))) throw new CliError('AUTH_REQUIRED', '登录响应缺少有效会话', '确认目标实例仍在运行，不使用代理或手工cookie。', 3);
       try { await saveSession({ origin, cookie, expiresAt: value.expiresAt }); }
       catch { await request('/api/auth/logout', { method: 'POST', body: {}, authenticated: false, cookie }).catch(() => {}); throw new CliError('SESSION_FILE', '登录后无法安全保存CLI会话，已尝试撤销新会话', '选择本用户专用0700目录和0600文件，并检查磁盘空间。', 3); }

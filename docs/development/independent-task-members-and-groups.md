@@ -36,15 +36,15 @@
 实际运行：
 
 ```bash
-AGENTFORGE_DIRECT_COMMUNICATION_REAL=1 node scripts/test-communication-direct-real.mjs
-AGENTFORGE_DIRECT_COMMUNICATION_REAL=1 AGENTFORGE_DIRECT_COMMUNICATION_RESUME=.data/direct-communication-real-B4cEVs node scripts/test-communication-direct-real.mjs
+BATON_DIRECT_COMMUNICATION_REAL=1 node scripts/test-communication-direct-real.mjs
+BATON_DIRECT_COMMUNICATION_REAL=1 BATON_DIRECT_COMMUNICATION_RESUME=.data/direct-communication-real-B4cEVs node scripts/test-communication-direct-real.mjs
 ```
 
 Claude Code 2.1.310、Codex CLI 0.164.0、DeepSeek Harness 0.2.1-rc.2 均验证私聊回复、独立群直接答复和员工 A 明确询问 B 后 B 的真实回复。Codex 的 B 调用首次因模型目录请求超时失败；保留原错误，只重试失败投递后完成。只读复核三组已完成投递和随机探针，结果存于 `.data/direct-communication-real-B4cEVs/final-evidence.json`，重试回执在同目录 `resume-evidence.json`。
 
 ### 真实完整任务与删除语义
 
-加载登录 Shell 环境后运行 `scripts/test-prompt-e2e.mjs`，设置 `AGENTFORGE_PROMPT_E2E_REAL=1`、`AGENTFORGE_PROMPT_E2E_TASK_ONLY=1`、`AGENTFORGE_MEMBERSHIP_REAL=1`。
+加载登录 Shell 环境后运行 `scripts/test-prompt-e2e.mjs`，设置 `BATON_PROMPT_E2E_REAL=1`、`BATON_PROMPT_E2E_TASK_ONLY=1`、`BATON_MEMBERSHIP_REAL=1`。
 
 两次真实 Claude Code 工作流均完成：经理向人类澄清 → 在等待阶段删除来源团队和实现员工 → 冻结员工真实开发并执行测试 → 非作者独立测试 → 经理请求验收 → 客户端勾选确认 → 完成后历史工具答疑 → 归档。第二次实现的 Node.js 测试另由验收脚本运行，10 项通过。任务 `task_df86bd74-2d76-40aa-9ea9-1f6a1b4551df`、Run `run_mvzh4rvf_2`；删除员工从当前 Tab 隐藏，但历史交接入口实际打开原控制台。
 
@@ -53,9 +53,9 @@ Claude Code 2.1.310、Codex CLI 0.164.0、DeepSeek Harness 0.2.1-rc.2 均验证�
 ## 本机安装补验（2026-11-03）
 
 - 按人类指令执行 `npm run package:mac -- --config.directories.output=.data/local-install-9f569f8`，DMG、ZIP 和应用包构建成功；应用代码为 `9f569f8`，版本仍为 `0.1.3-beta.3`，没有发布 GitHub Release。
-- `AGENTFORGE_PACKAGED_APP=/Applications/.AgentForge-install-9f569f8.app npm run package:mac:check` 完整通过。覆盖资源与源码哈希、签名完整性、原生插件/MCP、CLI、任务验收、私聊/群聊、隔离重置及重启退出。证据位于 `.data/packaged-electron-e2e-wJrLL6/`；模型调用为受控夹具，不重复声称真实模型验证。
+- `BATON_PACKAGED_APP=/Applications/.Baton-install-9f569f8.app npm run package:mac:check` 完整通过。覆盖资源与源码哈希、签名完整性、原生插件/MCP、CLI、任务验收、私聊/群聊、隔离重置及重启退出。证据位于 `.data/packaged-electron-e2e-wJrLL6/`；模型调用为受控夹具，不重复声称真实模型验证。
 - 原两次打包检查失败如实保留：群聊创建夹具残留 `kind=team`，修正后其 Provider 夹具又缺少 `mentionAgentIds`。现按实际输出 schema 生成回复，第三次完整检查退出码 0；应用代码无须修改。
-- 经界面核对原任务均已结束后，退出旧客户端，将通过校验的应用替换到 `/Applications/AgentForge.app` 并重新打开；签名及安装前后 ASAR SHA-256 一致：`7e20b59f979a7fe7262e692f8e88ddcfa2e6d8352f474e79fa4b7f0936f8946b`。
+- 经界面核对原任务均已结束后，退出旧客户端，将通过校验的应用替换到 `/Applications/Baton.app` 并重新打开；签名及安装前后 ASAR SHA-256 一致：`7e20b59f979a7fe7262e692f8e88ddcfa2e6d8352f474e79fa4b7f0936f8946b`。
 - 实机界面核对原 4 个任务和原沟通列表保留；任务列表没有团队列，新建任务显示独立成员选择，原群聊显示当前员工列表与个人控制台入口。未创建真实测试任务、未重置操作者数据。
 
 ## 沟通工作台交互细化（2026-11-03）
@@ -65,8 +65,8 @@ Claude Code 2.1.310、Codex CLI 0.164.0、DeepSeek Harness 0.2.1-rc.2 均验证�
 - 双击群聊标题区或用键盘 Enter/F2 编辑，Enter 保存、Escape/离开取消；轮询不覆盖草稿，保存失败可原地重试。员工详情为居中只读 dialog，窄屏可关闭返回。
 - 实际检查修复了候选列表收起改变居中弹框高度、导致提交按钮在鼠标按下/抬起之间移动的问题；候选使用不占表单布局的浮层，保留原共享控件关闭策略。原失败 UI 证据保留；同名新群测试按实际 URL/ID 等待，编辑成员测试按已选集合核验。
 - `node --test tests/communication.test.mjs`：42 项通过；`npm test`：616 项通过。契约、影响、规定语法与 diff 检查通过。源码 UI 与打包 UI 在两主题、1500×1000 / 760×700 完整通过，含空选择一次点击报错、单人私聊复用、同成员多次建群、超长默认群名、失败改名/轮询保留、只读居中详情、图标/姓名几何、成员删除和控制台历史分页。证据分别为 `.data/communication-workbench-YnQp0G/evidence.json`、`.data/communication-workbench-axpyPB/evidence.json`。
-- 本机构建：`npm run package:mac -- --dir --config.directories.output=/private/tmp/af-chat-ui-f9fb6f5`；打包 UI：`AGENTFORGE_COMMUNICATION_APP=/private/tmp/af-chat-ui-f9fb6f5/mac-arm64/AgentForge.app node scripts/test-communication-workbench.mjs`。严格签名、5 个关键运行文件与源码哈希、规范化产品元数据一致检查通过。
-- 确认本机任务均已结束且没有 Provider 子进程后，已替换并重新打开 `/Applications/AgentForge.app`。ASAR SHA-256 为 `cea2fbb22bae6bb22873d53c45ad881a38e57a7d541781886ba0214f2958a979`；当前服务 health 正常，原 4 个任务及沟通历史保留。实机确认群聊无顶部控制台、成员 4/头像/固定图标、只展示所选员工控制台；私聊无成员栏、顶部为图标入口。
+- 本机构建：`npm run package:mac -- --dir --config.directories.output=/private/tmp/af-chat-ui-f9fb6f5`；打包 UI：`BATON_COMMUNICATION_APP=/private/tmp/af-chat-ui-f9fb6f5/mac-arm64/Baton.app node scripts/test-communication-workbench.mjs`。严格签名、5 个关键运行文件与源码哈希、规范化产品元数据一致检查通过。
+- 确认本机任务均已结束且没有 Provider 子进程后，已替换并重新打开 `/Applications/Baton.app`。ASAR SHA-256 为 `cea2fbb22bae6bb22873d53c45ad881a38e57a7d541781886ba0214f2958a979`；当前服务 health 正常，原 4 个任务及沟通历史保留。实机确认群聊无顶部控制台、成员 4/头像/固定图标、只展示所选员工控制台；私聊无成员栏、顶部为图标入口。
 - 本轮只调整沟通工作台、默认群名及头像读模型；没有更改任务执行、Runtime 或模型提示词/投递规则，也没有新增 CLI 长期沟通权限。CLI 已覆盖的配置/Task 参数、输出与 schema 不受影响；本轮未重复真实模型业务任务或发布 GitHub Release。
 
 ## 限制与交付边界

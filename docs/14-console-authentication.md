@@ -1,5 +1,7 @@
 # 认证与登录态
 
+Baton当前认证cookie为baton_session，实例定位与CLI委托在~/.baton的私有目录中。更名后使用保留的管理员账号重新登录；不读取旧浏览器cookie、不把旧会话当当前授权，CLI仍经新宿主的正式认证接口发布委托。认证默认拒绝、退出/重启失效规则不变。
+
 二进制写入唯一例外为认证 POST `/api/communications/chat_<ID>/attachments` 的 `application/octet-stream`，仍要求精确 Host、同源 Origin 和管理员会话，单文件最多 20 MiB；其他写路由不接受该类型。下载、控制台、执行正文与提示词仍先校验资源归属，再验证文件完整性，不允许匿名或跨域上传。
 
 ## 实例

@@ -1,6 +1,6 @@
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 // Isolated UI/HTTP/CLI acceptance. Default native executables are protocol
-// fixtures. Opt in to one actual model with AGENTFORGE_PORTABLE_REAL=opencode.
+// fixtures. Opt in to one actual model with BATON_PORTABLE_REAL=opencode.
 import assert from 'node:assert/strict';
 import{execFile}from'node:child_process';import{promisify}from'node:util';
 import {_electron as electron} from 'playwright-core';
@@ -12,13 +12,13 @@ import {RUNTIME_IDS,RUNTIME_PROVIDERS,PORTABLE_RUNTIME_IDS} from '../client/runt
 import {createAuth} from '../server/auth.mjs';
 import {createStore} from '../server/store.mjs';
 import {execute as cli} from '../cli/main.mjs';
-const videoProof=process.env.AGENTFORGE_VIDEO_PROOF==='1';
-const real=process.env.AGENTFORGE_PORTABLE_REAL || '',bundle=process.env.AGENTFORGE_PORTABLE_APP,extensionProof=process.env.AGENTFORGE_PORTABLE_EXTENSIONS==='1',agentProof=process.env.AGENTFORGE_PORTABLE_AGENT_PROOF==='1';
+const videoProof=process.env.BATON_VIDEO_PROOF==='1';
+const real=process.env.BATON_PORTABLE_REAL || '',bundle=process.env.BATON_PORTABLE_APP,extensionProof=process.env.BATON_PORTABLE_EXTENSIONS==='1',agentProof=process.env.BATON_PORTABLE_AGENT_PROOF==='1';
 if(agentProof&&(!extensionProof||!real))throw Error('Agent proof requires real provider and extensions');
 if(real&&!PORTABLE_RUNTIME_IDS.includes(real))throw Error('Unknown real Provider');
-await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-runtimes-')),home=join(root,'home'),bin=join(home,'bin'),data=bundle?join(home,'.agentforge/desktop'):join(root,'client');await mkdir(bin,{recursive:true});
+await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-runtimes-')),home=join(root,'home'),bin=join(home,'bin'),data=bundle?join(home,'.baton/desktop'):join(root,'client');await mkdir(bin,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('portable-qa',password);auth.close();
-const seed=createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});seed.close();
+const seed=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});seed.close();
 const fixtureBody=provider=>`#!/usr/bin/env node
 import{randomUUID,createHash}from'node:crypto';import{appendFile,mkdir,writeFile,readFile,realpath}from'node:fs/promises';import{join}from'node:path';
 if(process.argv[2]==='session'&&process.argv[3]==='export')process.exit(0);
@@ -50,14 +50,14 @@ for(const provider of real==='cursor'?['cursor']:real==='qwen'?['qwen']:[]){
  const native=provider==='cursor'?(process.env.CURSOR_CONFIG_DIR || join(process.env.HOME,'.cursor')):join(process.env.HOME,'.qwen'),isolated=join(home,'.'+provider);await mkdir(isolated,{recursive:true});
  for(const name of provider==='cursor'?['cli-config.json']:['settings.json','oauth_creds.json']){const source=join(native,name);try{await lstat(source);await symlink(source,join(isolated,name));}catch(error){if(error.code!=='ENOENT')throw error;}}
 }
-const env={...process.env,HOME:home,ZDOTDIR:home,PATH:bin+':'+process.env.PATH,AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')};
+const env={...process.env,HOME:home,ZDOTDIR:home,PATH:bin+':'+process.env.PATH,BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')};
 if(real==='cursor')env.CURSOR_CONFIG_DIR=join(home,'.cursor');
 if(real==='gemini')env.GEMINI_CLI_HOME=process.env.GEMINI_CLI_HOME || process.env.HOME;
 if(real==='kimi')env.KIMI_CODE_HOME=process.env.KIMI_CODE_HOME || join(process.env.HOME,'.kimi-code');
 if(real==='pi')env.PI_CODING_AGENT_DIR=process.env.PI_CODING_AGENT_DIR || join(process.env.HOME,'.pi/agent');
 if(real==='opencode'){env.XDG_CONFIG_HOME ||= join(process.env.HOME,'.config');env.XDG_DATA_HOME ||= join(process.env.HOME,'.local/share');env.XDG_STATE_HOME ||= join(process.env.HOME,'.local/state');}
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/AgentForge')}:{}),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser')],env,timeout:120000});const evidence={root,real:real || null,protocolFixtures:!real,providers:[],layouts:[]},errors=[];console.log('EVIDENCE '+root);
+const app=await electron.launch({...(bundle?{executablePath:resolve(bundle,'Contents/MacOS/Baton')}:{}),args:[...(bundle?[]:['apps/electron/main.mjs']),'--user-data-dir='+join(root,'browser')],env,timeout:120000});const evidence={root,real:real || null,protocolFixtures:!real,providers:[],layouts:[]},errors=[];console.log('EVIDENCE '+root);
 try{
  const page=await app.firstWindow({timeout:120000});page.on('pageerror',e=>errors.push(e.message));await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;
  const api=(path,body)=>page.evaluate(async({path,body})=>{const r=await fetch(path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const data=await r.json();if(!r.ok)throw Error(data.error);return data;},{path,body});
@@ -78,14 +78,14 @@ try{
  const wait=async(id,excludeTrace)=>{const start=Date.now();while(Date.now()-start<(real?600000:30000)){const w=await api('/api/runs/'+id+'/workspace?view=compact');if(w.run.status==='failed')throw Error(w.run.failure?.message || 'Run failed');if(w.run.status==='awaiting_acceptance'&&w.traces.some(t=>t.status==='completed'&&t.id!==excludeTrace))return w;await new Promise(r=>setTimeout(r,500));}throw Error('Native run timeout');};
  for(const provider of PORTABLE_RUNTIME_IDS){
   const profile=profiles.items.find(p=>p.provider===provider);assert.ok(profile.installed,provider+' executable');
-  const model=provider===real?(process.env.AGENTFORGE_PORTABLE_MODEL || ''):'qa-native';
-  await cli(['runtimes','update',profile.id,'--file','-',...flags],{stdin:Readable.from([JSON.stringify({model,effort:provider===real?(process.env.AGENTFORGE_PORTABLE_EFFORT || ''):''})])});assert.equal((await cli(['runtimes','get',provider,...flags])).model,model);
+  const model=provider===real?(process.env.BATON_PORTABLE_MODEL || ''):'qa-native';
+  await cli(['runtimes','update',profile.id,'--file','-',...flags],{stdin:Readable.from([JSON.stringify({model,effort:provider===real?(process.env.BATON_PORTABLE_EFFORT || ''):''})])});assert.equal((await cli(['runtimes','get',provider,...flags])).model,model);
   if(real&&provider!==real)continue;
   if(real){
     const catalog=await cli(['runtimes','models',provider,'--refresh',...flags]);assert.ok(catalog.models.length>0);
     await page.goto(origin+'/settings/runtime');const row=page.locator(`[data-runtime-profile="${profile.id}"]`);await row.locator('summary').click();await row.locator('[data-refresh-models]').click();
     await row.locator('[name=model]').fill(model);await page.locator('[data-value="'+model+'"]').click();
-    const effort=process.env.AGENTFORGE_PORTABLE_EFFORT || '';await row.locator('[name=effort]').selectOption(effort);await row.getByRole('button',{name:'保存配置',exact:true}).click();await row.getByText('已保存。可测试此配置。',{exact:true}).waitFor();assert.equal((await cli(['runtimes','get',provider,...flags])).effort,effort);
+    const effort=process.env.BATON_PORTABLE_EFFORT || '';await row.locator('[name=effort]').selectOption(effort);await row.getByRole('button',{name:'保存配置',exact:true}).click();await row.getByText('已保存。可测试此配置。',{exact:true}).waitFor();assert.equal((await cli(['runtimes','get',provider,...flags])).effort,effort);
   }
   const agent=(await cli(['agents','create','--file','-',...flags],{stdin:Readable.from([JSON.stringify({name:provider+' 验收员工',...(extensionRole?{roleIds:[extensionRole.id]}:{}),systemPrompt:'执行 Task 时，你是唯一成员并担任经理，亲自用工具创建 proof.txt，内容为 NATIVE_RUNTIME_VERIFIED，不派工其他人。任务执行完毕后，最终只输出一个有效 JSON 对象，不加解释、反引号或 Markdown：{"summary":"NATIVE_RUNTIME_VERIFIED","managerDecision":{"nextNodeId":null,"nextAgentId":null}}。普通沟通遵循平台当前沟通格式，不使用任务的经理决策格式。',runtime:{profileId:profile.id,extensionSelection:{pluginIds:[],mcpIds:[]}}})])})).agent;
   const launched=await cli(['tasks','create','--file','-','--start',...flags],{stdin:Readable.from([JSON.stringify({title:provider+' '+(real?'真实模型':'协议夹具')+'验收',objective:real?'创建 proof.txt，正文 NATIVE_RUNTIME_VERIFIED；最终只输出 JSON 对象 {"summary":"NATIVE_RUNTIME_VERIFIED","managerDecision":{"nextNodeId":null,"nextAgentId":null}} 提交验收。':'仅验证协议夹具经客户端派工和确认，不宣称模型执行。',memberAgentIds:[agent.id],managerAgentId:agent.id})])});

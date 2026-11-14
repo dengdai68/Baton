@@ -13,7 +13,7 @@ for(const failure of [null,'public','part','manifest'])test(`draft upload recove
  try{
   const files=join(root,'files');await mkdir(files);const manifest=[],assets=[];
   for(const ext of ['dmg','zip']){
-   const name=`AgentForge-0.1.5-beta.1-arm64.${ext}`,data=Buffer.from(`original ${ext} bytes`),part=`upload-part-${name}-000`;
+   const name=`Baton-0.1.5-beta.1-arm64.${ext}`,data=Buffer.from(`original ${ext} bytes`),part=`upload-part-${name}-000`;
    await writeFile(join(files,part),failure==='part'?Buffer.from('tampered'):data);
    manifest.push({name,size:data.length,sha256:digest(data),parts:[{name:part,size:data.length,sha256:digest(data)}]});assets.push({id:assets.length+1,name:part,state:'uploaded'});
   }

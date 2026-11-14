@@ -37,7 +37,7 @@ export function showAppDialog({ BrowserWindow, parent = null, kind = "question",
     resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
     title: String(title), backgroundColor, autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
-      webSecurity: true, webviewTag: false, partition: "agentforge-app-dialog" },
+      webSecurity: true, webviewTag: false, partition: "baton-app-dialog" },
   });
   const contents = dialog.webContents;
   contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

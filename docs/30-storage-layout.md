@@ -4,7 +4,7 @@
 
 ## 决策
 
-只有两个用户可理解的根：配置目录 `~/.agentforge`，工作目录由用户设置，默认 `~/.agentforge/workspace`。源码开发使用独立的 `workspace-dev` 和 `desktop-dev` 配置命名空间，不得与正式实例共用清除范围。配置目录不随工作目录更换而搬迁。
+只有两个用户可理解的根：配置目录 `~/.baton`，工作目录由用户设置，默认 `~/.baton/workspace`。源码开发使用独立的 `workspace-dev` 和 `desktop-dev` 配置命名空间，不得与正式实例共用清除范围。配置目录不随工作目录更换而搬迁。
 
 `storage.json` 只保存工作根 `workspaceRoot` 和协议/冻结扩展地址元数据；不接受 `businessRoot`。所有实例的业务记录根都由 `workspaceRoot/records` 推导，开发实例通过独立工作根隔离。App/CLI 查询中的 `businessRoot` 是只读计算结果，不能作为设置输入，也不写回配置文件。
 
@@ -15,7 +15,7 @@
 废弃的 `businessRoot` 配置明确拒绝，不在启动时兼容或静默修正；旧开发实例需重新初始化定位。真实实例只可在用户授权的停机整理中，先确认其旧记录路径与推导路径完全一致，再移除冗余字段，保留其他元数据和全部业务文件。
 
 ```text
-~/.agentforge/
+~/.baton/
   desktop/                         # 正式实例的私有配置命名空间
     storage.json                   # 工作目录定位，启动唯一来源
     configuration.json             # Runtime 设置、插件/MCP 摘要清单与软删除标记
@@ -29,9 +29,9 @@
   workspace/                       # 未配置时的默认工作目录
 
 <工作目录>/
-  records/                         # 业务记录统一根；不再嵌套 .agentforge/desktop
-    agentforge.sqlite              # 员工、角色、团队、工作流、自动化、任务与沟通
-    agentforge.sqlite.history.sqlite
+  records/                         # 业务记录统一根；不再嵌套 .baton/desktop
+    baton.sqlite              # 员工、角色、团队、工作流、自动化、任务与沟通
+    baton.sqlite.history.sqlite
     runs/<RunID>/                  # 任务 Trace、正文、提示词、快照、附件和产物
     communications/<会话ID>/       # 沟通提示词、执行输出、正文与历史内容引用
   tasks/<TaskID>/<RunID>/           # 普通/自动化任务的员工 cwd、业务工作文件
@@ -59,7 +59,7 @@ App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主�
 
 客户端当前密码及明确文字确认后，删除**整个当前工作目录**，包括其中用户自行放入的文件。保留配置目录、账号/登录、Runtime 设置、插件/MCP 清单与源文件、Git 凭据、偏好和诊断日志；不返回首次管理员设置。重新创建业务数据库和工作目录。员工/角色/团队/工作流/自动化/任务/沟通及其关联均重置。
 
-清除意图写在配置目录，删除中断后启动继续完成；不跟随工作目录符号链接，不允许清除 Home、配置命名空间、仓库或它们的祖先。默认工作目录虽在 `~/.agentforge` 下，但与 `desktop`、`logs` 是独立子目录。历史冻结在当前工作目录之外的旧任务文件不扩展删除范围。真实实例整理不调用清除功能。
+清除意图写在配置目录，删除中断后启动继续完成；不跟随工作目录符号链接，不允许清除 Home、配置命名空间、仓库或它们的祖先。默认工作目录虽在 `~/.baton` 下，但与 `desktop`、`logs` 是独立子目录。历史冻结在当前工作目录之外的旧任务文件不扩展删除范围。真实实例整理不调用清除功能。
 
 ## 员工进程启动目录
 
@@ -74,3 +74,6 @@ App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主�
 ## 配置读取与业务打开
 
 登录、health、`bootstrap?view=connection`、工作目录定位、日志列表、Git 凭据状态及插件/MCP清单读取不要求先打开业务 SQLite。清单使用 `configuration.json` 的只读视图，不扫描扩展文件；检测到 `configuration.pending.json` 时拒绝只读恢复，由业务初始化核对数据库 revision 后处理。涉及员工/角色关联的详情、配置写入与执行仍通过原 Store 事务。运行中的 Store 是配置清单的最新读源，数据库失败不影响独立配置文件读取。
+
+
+Baton当前身份使用~/.baton及records/baton.sqlite。品牌切换只显式搬运本机配置、切换数据库文件名和启动定位，不重写Task/Run/Trace或历史文件路径，不在产品保留旧身份探测/双协议。既有用户选择的工作根可以保留原目录名，不能把目录名当品牌配置推断或自动重置。详见development/baton-identity-cutover.md。

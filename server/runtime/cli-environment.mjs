@@ -24,7 +24,7 @@ export function runtimeInstalled(provider, options = {}) {
 export function cliEnvironment(command, extra = {}, { environment = process.env, platform = process.platform, homeDirectory = homedir() } = {}) {
   const result = { ...environment, ...extra };
   delete result.ELECTRON_RUN_AS_NODE;
-  delete result.AGENTFORGE_BOOTSTRAP_TOKEN;
+  delete result.BATON_BOOTSTRAP_TOKEN;
   // Plugin installations are immutable inputs, not Python cache directories.
   // Inherited by local tools; not a filesystem sandbox or an access restriction.
   result.PYTHONDONTWRITEBYTECODE = '1';

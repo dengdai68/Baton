@@ -8,7 +8,7 @@ const SNAPSHOT_ID = 1;
 
 // Cold rows retain identities/order only; bodies are loaded when a command reads them.
 // A bounded clean-row cache is safe because dirty rows stay pinned until commit.
-export const ROW_SOURCE = Symbol.for('agentforge.rows');
+export const ROW_SOURCE = Symbol.for('baton.rows');
 function lazyRows(loadMetadata, read, readField, cacheLimit = 256) {
   let metadata;
   const target = [], cache = new Map(), live = new Map(), pinned = new Set();

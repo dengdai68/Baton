@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto';
 
 export async function setupCliConfiguration({ root, api, page, username, password, repository }) {
   const origin = new URL(page.url()).origin;
-  if (process.env.AGENTFORGE_DEVELOPMENT_E2E_RESUME) {
+  if (process.env.BATON_DEVELOPMENT_E2E_RESUME) {
     const saved = JSON.parse(await readFile(join(root, 'cli-configuration-evidence.json'), 'utf8'));
     const agents = (await api('/api/agents')).agents, teams = (await api('/api/teams')).teams;
     const flows = (await api('/api/workflow-templates')).workflowTemplates;
@@ -79,7 +79,7 @@ export async function setupCliConfiguration({ root, api, page, username, passwor
   await writeFile(join(root,'current-configuration-rejections.json'),JSON.stringify(rejected,null,2));
   const defaultManager = (await cli(['agents', 'list', '--all'])).items.find(agent => agent.kind === 'manager');
   assert.ok(defaultManager);
-  const publicImport = process.env.AGENTFORGE_CLI_PUBLIC_IMPORT === '1';
+  const publicImport = process.env.BATON_CLI_PUBLIC_IMPORT === '1';
   const fixture=JSON.parse(await readFile(join(root,'plugin-fixture.json'),'utf8'));
   const source=publicImport?{url:'https://github.com/anthropics/skills.git'}:{path:fixture.repo};
   const installed=await write('plugins','import',source),plugin=installed.plugins[0];assert.ok(plugin);

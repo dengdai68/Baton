@@ -11,7 +11,7 @@ import {cliEnvironment} from './cli-environment.mjs';
 
 const textOf=value=>typeof value==='string'?value:Array.isArray(value)?value.filter(x=>x?.type==='text').map(x=>x.text || '').join('\n'):'';
 const exec=promisify(execFile);
-const memberContext=input=>join(input.workspacePath,'.agentforge','runtime-context',createHash('sha256').update(input.executionKey || input.runId || input.traceDirectory).digest('hex').slice(0,24));
+const memberContext=input=>join(input.workspacePath,'.baton','runtime-context',createHash('sha256').update(input.executionKey || input.runId || input.traceDirectory).digest('hex').slice(0,24));
 async function referenceFile(source,target){
   try{await lstat(source);}catch(error){if(error.code==='ENOENT')return;throw error;}
   try{const value=await lstat(target);if(!value.isSymbolicLink())throw new Error('原生配置引用被非链接文件替代');if(await realpath(target)===await realpath(source))return;await rm(target);}catch(error){if(error.code!=='ENOENT')throw error;}
@@ -29,7 +29,7 @@ async function prepareCursorHome(input,environment){
     if(target?.startsWith('/')){const directory=join(home,'Library/Keychains');await mkdir(directory,{recursive:true,mode:0o700});await referenceFile(target,join(directory,target.split('/').at(-1)));}
   }else if(process.platform==='win32'){environment.APPDATA ||= join(host,'AppData/Roaming');}
   else {environment.XDG_CONFIG_HOME ||= join(host,'.config');}
-  environment.AGENTFORGE_HOST_HOME=host;environment.HOME=home;environment.CURSOR_CONFIG_DIR=config;environment.CURSOR_DATA_DIR=config;
+  environment.BATON_HOST_HOME=host;environment.HOME=home;environment.CURSOR_CONFIG_DIR=config;environment.CURSOR_DATA_DIR=config;
   return `本机用户目录：${host}。CLI 的 HOME 仅保存本成员的原生配置和会话，不是文件访问边界。涉及用户目录时使用上述本机用户目录；运行 Git、SSH 等需要用户配置的工具时，为相应命令显式设置 HOME 为该本机用户目录。`;
 }
 // Gemini has no user-owned per-invocation system-settings override: those
@@ -51,7 +51,7 @@ async function prepareGeminiHome(input,environment){
   // OAuth's native cache is member-scoped. A changed original credential file
   // invalidates only this adapter's derived cache; no global credential writes.
   const oauth=join(source,'oauth_creds.json');try{
-    const info=await stat(oauth),stamp=JSON.stringify([oauth,info.size,info.mtimeMs]),marker=join(config,'agentforge-auth-source.json');let previous;try{previous=await readFile(marker,'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
+    const info=await stat(oauth),stamp=JSON.stringify([oauth,info.size,info.mtimeMs]),marker=join(config,'baton-auth-source.json');let previous;try{previous=await readFile(marker,'utf8');}catch(error){if(error.code!=='ENOENT')throw error;}
     if(previous!==stamp){await rm(join(config,'oauth_creds.json'),{force:true});await writeFile(marker,stamp,{mode:0o600});}
     if(!environment.GOOGLE_APPLICATION_CREDENTIALS)environment.GOOGLE_APPLICATION_CREDENTIALS=oauth;
   }catch(error){if(error.code!=='ENOENT')throw new Error('Gemini 原生凭据引用无法确认');}
@@ -218,30 +218,30 @@ export async function runPortableCli(input,api) {
   const extensions=await preparePortableExtensions(input),nativeConfig=await configurePortableExtensions(input,environment,extensions);
   const session=requested || {sessionId:randomUUID(),resume:false};
   if(!nativeSessionId(session.sessionId))throw new Error('会话 ID 无效');
-  const instructions=join(traceDirectory,'agentforge-instructions.md');
+  const instructions=join(traceDirectory,'baton-instructions.md');
   const schema=input.outputSchema?`\n返回符合以下 JSON Schema 的 JSON，不包含代码围栏：\n${JSON.stringify(input.outputSchema)}`:'';
   const applicationInstructions=[hostContext,input.systemPrompt || ''].filter(Boolean).join('\n')+schema;
   await input.onPrompt?.({...input,systemPrompt:applicationInstructions});
   await writeFile(instructions,applicationInstructions,{mode:0o600});
   const prompt=provider==='cursor'?`[应用指令]\n${hostContext}\n${input.systemPrompt || ''}${schema}\n\n[本轮输入]\n${input.prompt}`:input.prompt;
   if(provider==='gemini')environment.GEMINI_SYSTEM_MD=instructions;
-  if(provider==='opencode'){const {agents,...configuration}=nativeConfig;environment.OPENCODE_CONFIG_CONTENT=JSON.stringify({update:'disable',...configuration,agents:{...agents,agentforge:{mode:'primary',system:applicationInstructions}}});}
+  if(provider==='opencode'){const {agents,...configuration}=nativeConfig;environment.OPENCODE_CONFIG_CONTENT=JSON.stringify({update:'disable',...configuration,agents:{...agents,baton:{mode:'primary',system:applicationInstructions}}});}
   let args;
   if(provider==='cursor')args=['--print','--force','--trust','--approve-mcps',...extensions.plugins.flatMap(path=>['--plugin-dir',path]),'--output-format','stream-json',...(session.resume?['--resume',session.sessionId]:[])];
   if(provider==='gemini')args=['--skip-trust','--extensions','none','--output-format','stream-json','--approval-mode','yolo',...(session.resume?['--resume',session.sessionId]:[])];
   if(provider==='qwen')args=['--output-format','stream-json','--approval-mode','yolo','--append-system-prompt',(input.systemPrompt || '')+schema,...(session.resume?['--resume',session.sessionId]:[])];
   if(provider==='kimi'){
-    const key=createHash('sha256').update(input.executionKey || input.runId || traceDirectory).digest('hex').slice(0,24),context=join(input.workspacePath,'.agentforge','runtime-context',key),active=join(context,'instructions.md');
+    const key=createHash('sha256').update(input.executionKey || input.runId || traceDirectory).digest('hex').slice(0,24),context=join(input.workspacePath,'.baton','runtime-context',key),active=join(context,'instructions.md');
     await mkdir(context,{recursive:true,mode:0o700});await writeFile(active,(input.systemPrompt || '')+schema,{mode:0o600});
-    const agent=join(traceDirectory,'agentforge-agent.md');await writeFile(agent,`---\nname: agentforge\ndescription: AgentForge 当前成员\n---\n\${base_prompt}\n\n每次开始处理用户输入之前，必须读取应用维护的系统指令文件 ${active} 并遵循当前内容。这是本会话的应用指令来源，后续轮次该文件会更新。\n`,{mode:0o600});
+    const agent=join(traceDirectory,'baton-agent.md');await writeFile(agent,`---\nname: baton\ndescription: Baton 当前成员\n---\n\${base_prompt}\n\n每次开始处理用户输入之前，必须读取应用维护的系统指令文件 ${active} 并遵循当前内容。这是本会话的应用指令来源，后续轮次该文件会更新。\n`,{mode:0o600});
     const emptySkills=extensions.skillsRoot;
     args=['-p',input.prompt,'--output-format','stream-json',...(extensions.skills.length?[...new Set(extensions.skills.map(skill=>dirname(skill.path)))].flatMap(path=>['--skills-dir',path]):['--skills-dir',emptySkills]),...(session.resume?['--session',session.sessionId]:['--agent-file',agent])];
   }
   if(provider==='pi'){
-    const sessions=join(input.workspacePath,'.agentforge','pi-sessions');await mkdir(sessions,{recursive:true,mode:0o700});
+    const sessions=join(input.workspacePath,'.baton','pi-sessions');await mkdir(sessions,{recursive:true,mode:0o700});
     args=['--mode','json','--no-extensions','--extension','builtin:mcp',...(nativeConfig.piExtension?['--extension',nativeConfig.piExtension]:[]),'--no-skills',...extensions.skills.flatMap(skill=>['--skill',skill.path]),'--no-prompt-templates','--no-approve','--session-dir',sessions,'--append-system-prompt',instructions,...(session.resume?['--session',session.sessionId]:[]),...(runtime.effort?['--thinking',runtime.effort]:[])];
   }
-  if(provider==='opencode')args=['run','--standalone','--format','json','--auto','--agent','agentforge',...(session.resume?['--session',session.sessionId]:[])];
+  if(provider==='opencode')args=['run','--standalone','--format','json','--auto','--agent','baton',...(session.resume?['--session',session.sessionId]:[])];
   if(['gemini','qwen'].includes(provider))args.push(...contextDirectories.flatMap(path=>['--include-directories',path]));
   if(provider==='cursor')args.push(...contextDirectories.flatMap(path=>['--add-dir',path]));
   if(runtime.model)args.push('--model',nativeModelWithEffort(runtime));

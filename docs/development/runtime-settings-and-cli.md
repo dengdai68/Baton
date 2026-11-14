@@ -13,7 +13,7 @@
 
 ## 验证记录
 
-- 全量测试首轮 545 pass / 0 fail，覆盖固定项、部分更新、冻结、启停、HTTP/CLI 废弃输入，以及父会话撤销/委托链拒绝。最终重跑同为 545 pass / 0 fail（/private/tmp/agentforge-beta99-final-tests.log）；check:ai/check:impact、规定语法检查与 diff --check 通过。
+- 全量测试首轮 545 pass / 0 fail，覆盖固定项、部分更新、冻结、启停、HTTP/CLI 废弃输入，以及父会话撤销/委托链拒绝。最终重跑同为 545 pass / 0 fail（/private/tmp/baton-beta99-final-tests.log）；check:ai/check:impact、规定语法检查与 diff --check 通过。
 - `node scripts/test-brand-presentation.mjs`：`.data/brand-presentation-ABT7Xd`，两主题、1320/760px，三目录最终空态样式一致、头像文字对比与键盘/错误态通过。
 - `node scripts/test-runtime-settings.mjs`：`.data/runtime-settings-FaEa0B`，源码 Electron 登录后 CLI 无独立登录查询成功；退出 CLI 不影响客户端；两个固定项、关闭后任务/沟通/测试拒绝、抽屉仅两个字段、宽窄保存回读、旧协议拒绝通过。抽屉模型列表遮挡保存及收起移动按钮的问题在实测中发现并修正后重跑。
 - 真实双 Provider 任务：`.data/runtime-settings-HZEN0l` / `run_mvwdpmvb_7`，Claude Code 经理派工、Codex 成员完成、经理提交人类验收。首轮脚本漏勾确认框导致最终等待超时，不能把该次脚本作为全程 PASS；续接相同运行在正常界面勾选确认框并确认，最终 Store 只读核对 completed 和 confirmedAt；`.data/runtime-settings-HZEN0l/real-completion.json` 留存三次完成 Trace 与双 Provider。续接临时脚本在确认后写证据时漏导入 writeFileSync，随后独立读取已保存状态补证，未重新驱动任务。
@@ -27,12 +27,12 @@
 
 ## 打包验收中的修正
 
-打包首轮 `.data/runtime-settings-J3vvRg` 在 CLI logout 检查发现夹具预建 `.agentforge` 为0755；按实际私有根0700修正夹具，未放宽产品检查。第二轮 `.data/runtime-settings-i98pqg` 发现自动安装仍用 Electron app.getPath(home)，忽略隔离 HOME；因此没有装入夹具目录。生产实现改为与数据目录一致的 Node homedir，旧手动安装验收同时改用隔离 HOME。该轮曾将操作者已有受管 CLI 启动器指向测试包，已立即通过原安装器恢复到 /Applications/AgentForge.app；未改任务、认证或其他命令。此修复后重新打包，Electron/安装器/Shell 44 项回归通过，工程检查再次通过。
+打包首轮 `.data/runtime-settings-J3vvRg` 在 CLI logout 检查发现夹具预建 `.baton` 为0755；按实际私有根0700修正夹具，未放宽产品检查。第二轮 `.data/runtime-settings-i98pqg` 发现自动安装仍用 Electron app.getPath(home)，忽略隔离 HOME；因此没有装入夹具目录。生产实现改为与数据目录一致的 Node homedir，旧手动安装验收同时改用隔离 HOME。该轮曾将操作者已有受管 CLI 启动器指向测试包，已立即通过原安装器恢复到 /Applications/Baton.app；未改任务、认证或其他命令。此修复后重新打包，Electron/安装器/Shell 44 项回归通过，工程检查再次通过。
 
 ## 最终安装与复核
 
 - beta.99 最终 `npm run package:mac` 成功生成 DMG/ZIP；codesign --verify --deep --strict 通过，包内关键生产脚本/样式/图标与源码逐字节一致。
 - 打包 Electron 验收最终通过：`.data/runtime-settings-t8d6BS/evidence.json`。确认启动自动安装、全新 zsh 不带 endpoint/session 参数且不独立登录即可查询账号；两固定项、启停门禁、两字段抽屉宽窄保存、旧输入拒绝、客户端退出撤销 CLI 均通过。
-- 正常刷新真实任务列表确认没有执行中任务后退出并安装到 `/Applications/AgentForge.app`。最终 asar SHA-256：131dde6a4a03db0a241b827b637b3b43c7adae415b214b38b6ad00e6e217bdd1。临时应用暂存及旧包在启动复核后清理。
+- 正常刷新真实任务列表确认没有执行中任务后退出并安装到 `/Applications/Baton.app`。最终 asar SHA-256：131dde6a4a03db0a241b827b637b3b43c7adae415b214b38b6ad00e6e217bdd1。临时应用暂存及旧包在启动复核后清理。
 - 新服务端口58860。正常界面确认15条已有任务状态及7项待人类处理保持，Runtime仍为原ID的Claude Code（12员工）和Codex（2员工），均启用；实际打开Codex抽屉仅模型/思考两字段，未修改操作者配置。核对真实员工高区分度头像、角色空态、MCP/插件无匹配空态；筛选已清空。打开既有production任务确认标题与完整协作记录仍可读，未确认或重新驱动任何真实业务任务。
-- 本机实际 `/bin/zsh -ilc 'agentforge auth status --json'` 无额外登录成功返回 dengdai68，runtimes list 回读两项；受管命令最终指向 /Applications/AgentForge.app。
+- 本机实际 `/bin/zsh -ilc 'baton auth status --json'` 无额外登录成功返回 dengdai68，runtimes list 回读两项；受管命令最终指向 /Applications/Baton.app。

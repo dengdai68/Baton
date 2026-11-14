@@ -12,11 +12,11 @@ import { testEnvironment } from './run-tests.mjs';
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/progressive-loading-')), home = join(root, 'home');
 await mkdir(home);
-const bundle = process.env.AGENTFORGE_PACKAGED_APP;
-const data = bundle ? join(home, '.agentforge/desktop') : join(root, 'client'), work = join(root, 'work');
+const bundle = process.env.BATON_PACKAGED_APP;
+const data = bundle ? join(home, '.baton/desktop') : join(root, 'client'), work = join(root, 'work');
 const password = randomBytes(24).toString('hex'), auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('loading-qa', password); auth.close();
-const store = createCatalogFixtureStore({ databasePath: join(work, 'records/agentforge.sqlite'), configurationDirectory: data, workspaceRoot: work });
+const store = createCatalogFixtureStore({ databasePath: join(work, 'records/baton.sqlite'), configurationDirectory: data, workspaceRoot: work });
 const input = { managerAgentId: 'system_project_manager', objective: '仅隔离加载验证，不执行 Provider', memberAgentIds: ['system_project_manager', 'agent_analyst'], workflowTemplateId: 'software_delivery' };
 const task = store.createTask({ ...input, title: '渐进加载 A' }), run = store.createRun(task.id);
 const trace = store.createTrace(run.id, { agentId: 'agent_analyst', workflowNodeId: 'requirements' });
@@ -33,7 +33,7 @@ const summary = store.getRunSummary(run.id);
 const evidence = { root, packaged: Boolean(bundle), fixture: { tasks: 44, run: run.id, runB: runB.id, automation: automation.id, compactBytes: Buffer.byteLength(JSON.stringify(summary)), artifactCount: summary.run.artifactCount, compactArtifacts: summary.artifacts.length }, cases: [], requests: [], errors: [] };
 store.close();
 await writeStorageLocation(data, { version: 1, workspaceRoot: work, previousRuntimeRoots: [] });
-const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/AgentForge') } : {}), args: bundle ? ['--user-data-dir=' + join(root, 'browser')] : ['apps/electron/main.mjs'], env: { ...testEnvironment(), HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 90000 });
+const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/Baton') } : {}), args: bundle ? ['--user-data-dir=' + join(root, 'browser')] : ['apps/electron/main.mjs'], env: { ...testEnvironment(), HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 90000 });
 let gate = null;
 try {
   const page = await app.firstWindow({ timeout: 90000 }); page.setDefaultTimeout(20000);
@@ -78,6 +78,15 @@ try {
   await page.locator('[data-action="new-task"]').click(); await waitHit(delayed); await closeModal(); release(delayed);
   await page.waitForTimeout(100); assert.equal(await page.locator('#task-form').count(), 0, 'cancelled reference load must not reopen the form');
   check('cancelled form reference load stays closed');
+
+  delayed = hold(url => /\/api\/runs\/[^/]+\/workspace$/.test(url.pathname));
+  await page.goto(origin + '/inbox'); await waitHit(delayed); await page.locator('.inbox-item').first().waitFor();
+  assert.equal(await page.locator('#inbox-preview-content [aria-busy="true"]').count(), 1);
+  assert.match(await page.locator('#inbox-content').innerText(), /渐进加载/);
+  release(delayed);
+  await page.waitForFunction(() => !document.querySelector('#inbox-preview-content [aria-busy="true"]'));
+  check('inbox confirmed directory rows precede compact details and selected preview stays explicitly loading');
+  await page.goto(origin + '/tasks'); await rowCount(20);
 
   const search = page.locator('#task-search-form input[name="name"]');
   delayed = hold(url => url.pathname === '/api/tasks' && url.searchParams.get('search') === '目录加载 01');
@@ -130,6 +139,33 @@ try {
   await page.locator('[data-retry-task-catalog]').click(); await page.locator('#task-form').waitFor();
   assert.equal(await page.locator('#task-title').inputValue(), automation.title); assert.equal(await page.locator('#task-workflow').inputValue(), input.workflowTemplateId); await closeModal();
   check('automation Meta precedes trigger history; edit waits for complete references and preserves fields');
+
+  let releaseCount, countHits = 0;
+  const countGate = new Promise(resolve => releaseCount = resolve), marketStart = evidence.requests.length;
+  const marketRoute = async route => {
+    const url = new URL(route.request().url()), unused = url.searchParams.get('usage') === 'unused';
+    assert.ok([...url.searchParams.keys()].every(key=>['page','search','usage'].includes(key)), 'market query stays within the existing HTTP contract');
+    const pageNumber = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 20);
+    if (unused) { countHits++; await countGate; }
+    const total = unused ? 119 : 120;
+    const plugins = Array.from({length:Math.max(0,Math.min(pageSize,total-(pageNumber-1)*pageSize))},(_,index)=>({id:'perf-plugin-'+((pageNumber-1)*pageSize+index),name:'性能插件 '+((pageNumber-1)*pageSize+index),description:'隔离分页展示夹具',components:{skills:1},providers:['claude-code']}));
+    await route.fulfill({json:{plugins,page:pageNumber,pageSize,total,totalPages:Math.ceil(total/pageSize),hasMore:pageNumber<Math.ceil(total/pageSize)}});
+  };
+  await page.route('**/api/runtime/marketplace?*', marketRoute);
+  try {
+    await page.goto(origin + '/marketplace'); await page.locator('[data-market-list] .agent-card').first().waitFor();
+    assert.equal(await page.locator('[data-market-list] .agent-card').count(), 20);
+    assert.ok(countHits > 0); assert.equal(await page.locator('[data-market-filter="unused"] span').innerText(), '—');
+    assert.equal(evidence.requests.slice(marketStart).filter(item=>/\/api\/runtime\/marketplace\?/.test(item.path)&&item.path.includes('usage=all')).length, 1, 'initial display reads only the requested catalog page');
+    releaseCount(); await page.waitForFunction(()=>document.querySelector('[data-market-filter="unused"] span')?.textContent==='119');
+    await page.locator('[data-pagination="marketplace"] [data-page="2"]').click();
+    await page.getByRole('button',{name:'性能插件 20',exact:true}).waitFor();
+    await page.locator('[data-market-filter="unused"]').click();
+    await page.waitForFunction(()=>document.querySelector('[data-market-filter="unused"]')?.getAttribute('aria-pressed')==='true');
+    assert.equal(await page.locator('[data-market-list] .agent-card').count(),20);
+    assert.equal(await page.locator('[data-market-filter="unused"] span').innerText(),'119');
+    check('market current page precedes auxiliary counts; paging and usage filtering query bounded server pages');
+  } finally { releaseCount(); await page.unroute('**/api/runtime/marketplace?*', marketRoute); }
 
   delayed = hold(url => url.pathname === '/api/catalog-references');
   await page.goto(origin + '/automations/' + automation.id); await waitHit(delayed); await page.locator('[data-auto-tab="config"]').click();

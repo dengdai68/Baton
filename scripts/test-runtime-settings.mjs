@@ -1,6 +1,6 @@
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 // Isolated Electron settings and CLI authorization acceptance. Opt-in real
-// Providers: AGENTFORGE_SETTINGS_REAL=1. Never modifies the installed instance.
+// Providers: BATON_SETTINGS_REAL=1. Never modifies the installed instance.
 import assert from 'node:assert/strict';
 import { _electron as electron } from 'playwright-core';
 import { mkdtemp, mkdir, writeFile, stat, readFile, rm } from 'node:fs/promises';
@@ -14,13 +14,13 @@ import { createAuth } from '../server/auth.mjs';
 
 await mkdir('.data',{recursive:true});
 const root = await mkdtemp(resolve('.data/runtime-settings-')), home = join(root,'home');
-const bundle = process.env.AGENTFORGE_SETTINGS_APP, data = bundle ? join(home,'.agentforge/desktop') : join(root,'client');
-const missing = process.env.AGENTFORGE_SETTINGS_MISSING === '1';
-const real = process.env.AGENTFORGE_SETTINGS_REAL === '1', password = randomBytes(20).toString('hex');
+const bundle = process.env.BATON_SETTINGS_APP, data = bundle ? join(home,'.baton/desktop') : join(root,'client');
+const missing = process.env.BATON_SETTINGS_MISSING === '1';
+const real = process.env.BATON_SETTINGS_REAL === '1', password = randomBytes(20).toString('hex');
 await mkdir(home,{recursive:true,mode:0o700});
-await mkdir(join(home,'.agentforge'),{recursive:true,mode:0o700});
+await mkdir(join(home,'.baton'),{recursive:true,mode:0o700});
 const auth = createAuth({databasePath:join(data,'auth.sqlite')}); await auth.setAdministrator('settings-qa',password); auth.close();
-const store = createStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
+const store = createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
 const profiles = Object.fromEntries(store.listRuntimeProfiles().map(item=>[item.provider,item]));
 const manager = store.createAgent({name:'配置验收经理',kind:'manager',systemPrompt:'仅执行一次最小验收：将 check 节点派给配置验收成员。成员文字交接后直接 request_acceptance；不需要文件，不需要向人类澄清。',runtime:{profileId:profiles['claude-code'].id}});
 const worker = store.createAgent({name:'配置验收成员',systemPrompt:'直接用一句中文回复：固定 Runtime 配置验证成功。无需工具和文件。',runtime:{profileId:profiles.codex.id}});
@@ -48,7 +48,7 @@ if (real) {
   await writeFile(join(home,'.zshrc'),'export PATH='+quote(bin)+':"$PATH"\n');
 }
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({...(bundle ? {executablePath:resolve(bundle,'Contents/MacOS/AgentForge')} : {}),args:bundle ? [] : ['apps/electron/main.mjs'],env:{...process.env,HOME:home,...(missing ? {PATH:'/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:home} : {}),...(real ? {CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')} : {}),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:90000});
+const app = await electron.launch({...(bundle ? {executablePath:resolve(bundle,'Contents/MacOS/Baton')} : {}),args:bundle ? [] : ['apps/electron/main.mjs'],env:{...process.env,HOME:home,...(missing ? {PATH:'/usr/bin:/bin:/usr/sbin:/sbin',ZDOTDIR:home} : {}),...(real ? {CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')} : {}),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:90000});
 const evidence = {root,bundle:bundle||'source',real,cases:[]}, errors = [];
 const poll = async (label,check,timeout=30000) => {const started=Date.now();for(;;){const value=await check();if(value)return value;if(Date.now()-started>timeout)throw Error('Timed out: '+label);await new Promise(resolve=>setTimeout(resolve,500));}};
 try {
@@ -57,7 +57,7 @@ try {
   const api = (path,body,method=body===undefined?'GET':'POST') => page.evaluate(async({path,body,method})=>{const response=await fetch(path,{method,headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:response.status,value:await response.json()};},{path,body,method});
   await page.goto(origin+'/login'); await page.locator('#username').fill('settings-qa'); await page.locator('#password').fill(password); await page.getByRole('button',{name:'登录',exact:true}).click(); await page.locator('#account-name').waitFor();
   const endpoint = join(data,'desktop-endpoint.json');
-  const cli = async (args,success=true) => {try {const result=await promisify(execFile)(bundle ? resolve(bundle,'Contents/Resources/cli/agentforge') : process.execPath,bundle ? [...args,'--endpoint-file',endpoint,'--json'] : [resolve('cli/main.mjs'),...args,'--endpoint-file',endpoint,'--json'],{env:{...process.env,HOME:home},timeout:15000});assert.ok(success);return JSON.parse(result.stdout).data;}catch(error){if(success)throw error;assert.equal(error.code,3);return null;}};
+  const cli = async (args,success=true) => {try {const result=await promisify(execFile)(bundle ? resolve(bundle,'Contents/Resources/cli/baton') : process.execPath,bundle ? [...args,'--endpoint-file',endpoint,'--json'] : [resolve('cli/main.mjs'),...args,'--endpoint-file',endpoint,'--json'],{env:{...process.env,HOME:home},timeout:15000});assert.ok(success);return JSON.parse(result.stdout).data;}catch(error){if(success)throw error;assert.equal(error.code,3);return null;}};
   await poll('host delegation',()=>stat(join(data,'desktop-cli-session.json')).catch(()=>null));
   if (missing) {
     await page.goto(origin+'/settings/runtime');
@@ -107,7 +107,7 @@ try {
   assert.equal((await cli(['runtimes','get','codex'])).id,profiles.codex.id);
   const logout = await cli(['auth','logout']); assert.equal(logout.loggedOut,false); assert.equal((await cli(['auth','status'])).username,'settings-qa');
   console.log('PASS desktop shared login'); evidence.cases.push('CLI uses desktop authorization without separate login; CLI logout leaves desktop signed in');
-  if(bundle){await poll('default installation',()=>stat(join(home,'.local/bin/agentforge')).catch(()=>null));assert.match(await readFile(join(home,'.zshrc'),'utf8'),/AgentForge CLI PATH/);const shellResult=await promisify(execFile)('/bin/zsh',['-ilc','agentforge auth status --json'],{env:{...process.env,HOME:home,ZDOTDIR:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin'},timeout:30000});assert.equal(JSON.parse(shellResult.stdout).data.username,'settings-qa');evidence.cases.push('packaged startup installs CLI automatically; a fresh shell authenticates without flags or login');}
+  if(bundle){await poll('default installation',()=>stat(join(home,'.local/bin/baton')).catch(()=>null));assert.match(await readFile(join(home,'.zshrc'),'utf8'),/Baton CLI PATH/);const shellResult=await promisify(execFile)('/bin/zsh',['-ilc','baton auth status --json'],{env:{...process.env,HOME:home,ZDOTDIR:home,PATH:'/usr/bin:/bin:/usr/sbin:/sbin'},timeout:30000});assert.equal(JSON.parse(shellResult.stdout).data.username,'settings-qa');evidence.cases.push('packaged startup installs CLI automatically; a fresh shell authenticates without flags or login');}
   await page.goto(origin+'/settings/runtime'); await page.locator('.runtime-provider-row').first().waitFor();
   assert.equal(await page.locator('.runtime-provider-row').count(),9); assert.equal(await page.getByText('新增 Runtime',{exact:true}).count(),0);
   const codex = page.locator(`[data-runtime-profile="${profiles.codex.id}"]`);

@@ -1,6 +1,6 @@
 // A Store-owned identity map and undo journal. Proxies never cross its boundary.
 const originals = new WeakMap();
-const ROW_SOURCE = Symbol.for('agentforge.rows');
+const ROW_SOURCE = Symbol.for('baton.rows');
 export function copyState(value) {
   if (value === undefined || value === null || typeof value !== 'object') return value;
   const raw = originals.get(value);

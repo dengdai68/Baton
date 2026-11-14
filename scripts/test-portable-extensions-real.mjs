@@ -12,10 +12,10 @@ import {ListToolsRequestSchema,CallToolRequestSchema} from '@modelcontextprotoco
 import {createMarketplace} from '../server/runtime/marketplace.mjs';
 import {runRuntime,separateRuntimeSession} from '../server/runtime/local-cli.mjs';
 import {PORTABLE_RUNTIME_IDS,RUNTIME_PROVIDERS} from '../client/runtime-providers.mjs';
-if(process.env.AGENTFORGE_PORTABLE_EXTENSIONS_REAL!=='1')throw Error('Requires AGENTFORGE_PORTABLE_EXTENSIONS_REAL=1; invokes real models');
-const agentProof=process.env.AGENTFORGE_PORTABLE_AGENT_PROOF==='1';
-const providers=(process.env.AGENTFORGE_PORTABLE_PROVIDERS || PORTABLE_RUNTIME_IDS.join(',')).split(',');if(providers.some(p=>!PORTABLE_RUNTIME_IDS.includes(p)))throw Error('Unknown provider');
-await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-extensions-real-'));process.env.AGENTFORGE_LOG_DIR=join(root,'logs');
+if(process.env.BATON_PORTABLE_EXTENSIONS_REAL!=='1')throw Error('Requires BATON_PORTABLE_EXTENSIONS_REAL=1; invokes real models');
+const agentProof=process.env.BATON_PORTABLE_AGENT_PROOF==='1';
+const providers=(process.env.BATON_PORTABLE_PROVIDERS || PORTABLE_RUNTIME_IDS.join(',')).split(',');if(providers.some(p=>!PORTABLE_RUNTIME_IDS.includes(p)))throw Error('Unknown provider');
+await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-extensions-real-'));process.env.BATON_LOG_DIR=join(root,'logs');
 const market=createMarketplace(join(root,'market')),cases=[],connections=[],peers=new Map();
 const rpc=(row,kind)=>{const server=new Server({name:'portable-extension-proof',version:'1.0.0'},{capabilities:{tools:{}}});server.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{name:'read_validation_code',description:'Return the verification value for this local validation.',inputSchema:{type:'object',properties:{},additionalProperties:false}}]}));server.setRequestHandler(CallToolRequestSchema,async request=>{assert.equal(request.params.name,'read_validation_code');row.calls.push(kind);return {content:[{type:'text',text:JSON.stringify({verificationCode:row.expected[kind]})}]};});return server;};
 const http=createServer(async(req,res)=>{try{const url=new URL(req.url,'http://127.0.0.1'),[,provider,kind]=url.pathname.split('/'),row=cases.find(r=>r.provider===provider);if(!row||req.headers.authorization!=='Bearer '+row.token){res.writeHead(401);res.end();return;}

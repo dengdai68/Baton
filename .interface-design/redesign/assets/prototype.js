@@ -1,9 +1,9 @@
-/* AgentForge 重设计原型外壳：风格切换、侧栏、命令面板与通用交互。
+/* Baton 重设计原型外壳：风格切换、侧栏、命令面板与通用交互。
    纯展示脚本，不连接后端；所有数据为示例。
    URL 参数：style=graphite|paper|command  mode=light|dark  density=compact|comfortable
              embed=1（嵌入总览时隐藏设计控制条） dialog=<id> drawer=<id> tab=<id> view=<id> */
 (function () {
-  const STORE_KEY = 'agentforge.redesign.v3';   // v3：方向改为 A · 石墨（2026-11-13），旧偏好不再沿用
+  const STORE_KEY = 'baton.redesign.v3';   // v3：方向改为 A · 石墨（2026-11-13），旧偏好不再沿用
   const STYLES = { graphite: 'A · 石墨（已选定）', paper: 'B · 纸张', command: 'C · 夜航' };
   const DEFAULT_MODE = { graphite: 'light', paper: 'light', command: 'dark' };
   const params = new URLSearchParams(location.search);
@@ -70,7 +70,7 @@
       </div>
       <div class="sb-brand">
         <img src="../../../web/icons/application-ui.png" alt="" width="20" height="20">
-        <strong>AgentForge</strong>
+        <strong>Baton</strong>
         <a class="btn btn--ghost btn--icon btn--sm" href="tasks.html?dialog=new-task" data-open="dialog-new-task" aria-label="新建任务" title="新建任务  C">${icon('edit')}</a>
       </div>
       <button class="sb-search" type="button" data-open="palette">${icon('search')}<span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>

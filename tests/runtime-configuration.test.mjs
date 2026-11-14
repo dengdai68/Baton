@@ -97,12 +97,12 @@ test('original errors retain actionable details while retry eligibility is separ
 test("provider CLI environment never inherits Electron bootstrap settings", async () => {
   const root = await mkdtemp(join(tmpdir(), "af-electron-env-"));
   const previous = process.env.ELECTRON_RUN_AS_NODE;
-  const previousBootstrap = process.env.AGENTFORGE_BOOTSTRAP_TOKEN;
+  const previousBootstrap = process.env.BATON_BOOTSTRAP_TOKEN;
   process.env.ELECTRON_RUN_AS_NODE = "1";
-  process.env.AGENTFORGE_BOOTSTRAP_TOKEN = "a".repeat(64);
+  process.env.BATON_BOOTSTRAP_TOKEN = "a".repeat(64);
   try {
     const executable = join(root, "fixture.mjs"), events = [];
-    await writeFile(executable, '#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",result:JSON.stringify({electronRunAsNode:process.env.ELECTRON_RUN_AS_NODE || null,bootstrapToken:process.env.AGENTFORGE_BOOTSTRAP_TOKEN || null})}));\n');
+    await writeFile(executable, '#!/usr/bin/env node\nconsole.log(JSON.stringify({type:"result",result:JSON.stringify({electronRunAsNode:process.env.ELECTRON_RUN_AS_NODE || null,bootstrapToken:process.env.BATON_BOOTSTRAP_TOKEN || null})}));\n');
     await chmod(executable, 0o755);
     const result = JSON.parse((await runClaudeCodeCli({ runtime: { executable }, workspacePath: root, traceDirectory: root, outputSchema: {}, prompt: "test", runId: "electron-env", onEvent: async event => events.push(event) })).finalText);
     assert.equal(result.electronRunAsNode, null);
@@ -111,8 +111,8 @@ test("provider CLI environment never inherits Electron bootstrap settings", asyn
   } finally {
     if (previous === undefined) delete process.env.ELECTRON_RUN_AS_NODE;
     else process.env.ELECTRON_RUN_AS_NODE = previous;
-    if (previousBootstrap === undefined) delete process.env.AGENTFORGE_BOOTSTRAP_TOKEN;
-    else process.env.AGENTFORGE_BOOTSTRAP_TOKEN = previousBootstrap;
+    if (previousBootstrap === undefined) delete process.env.BATON_BOOTSTRAP_TOKEN;
+    else process.env.BATON_BOOTSTRAP_TOKEN = previousBootstrap;
     await rm(root, { recursive: true, force: true });
   }
 });

@@ -8,11 +8,11 @@
 
 ## 验证
 
-- `npm test`：573 pass / 0 fail；`/private/tmp/agentforge-dsh-final-tests.log`。
+- `npm test`：573 pass / 0 fail；`/private/tmp/baton-dsh-final-tests.log`。
 - `npm run check:ai`、`npm run check:impact`、规定四个 `node --check`、`git diff --check` 通过；impact 核对 64 个变更文件（写入本交付记录之前）。
-- 打包回归 `AGENTFORGE_PACKAGED_APP=… npm run package:mac:check` 通过，覆盖认证、CLI、文件边界、三类固定 Runtime、窗口关闭/菜单栏与任务确认等；日志 `/private/tmp/agentforge-dsh-packaged-regression.log`。该回归早于最后的员工选择器修正和原生系统指令审计；最终真实打包验证覆盖这两项改动。
-- 最终真实模型验证：`AGENTFORGE_DSH_REAL=1 AGENTFORGE_DSH_APP=… node scripts/test-dsh-real.mjs`，使用隔离 HOME/数据目录。通过真实模型目录、CLI、两种主题与宽窄布局、员工 UI 选择 DSH/角色/Skill/MCP、沟通、经理澄清与精确回复、原生 Skill/MCP/历史工具、角色冻结、会话续接、可见人类确认和归档。模型返回文件的随机探针内容与实际工具调用独立核对。原生系统指令已传入，最终角色探针遵循。
-- 最终证据：临时验证目录 `.data/dsh-real-uF8iEi/evidence.json`，位于 `/private/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/agentforge-beta102-verification-03cen7_y`；运行日志 `/private/tmp/agentforge-dsh-packaged-real-final.log`。仅保留本地，不提交数据、截图和日志。
+- 打包回归 `BATON_PACKAGED_APP=… npm run package:mac:check` 通过，覆盖认证、CLI、文件边界、三类固定 Runtime、窗口关闭/菜单栏与任务确认等；日志 `/private/tmp/baton-dsh-packaged-regression.log`。该回归早于最后的员工选择器修正和原生系统指令审计；最终真实打包验证覆盖这两项改动。
+- 最终真实模型验证：`BATON_DSH_REAL=1 BATON_DSH_APP=… node scripts/test-dsh-real.mjs`，使用隔离 HOME/数据目录。通过真实模型目录、CLI、两种主题与宽窄布局、员工 UI 选择 DSH/角色/Skill/MCP、沟通、经理澄清与精确回复、原生 Skill/MCP/历史工具、角色冻结、会话续接、可见人类确认和归档。模型返回文件的随机探针内容与实际工具调用独立核对。原生系统指令已传入，最终角色探针遵循。
+- 最终证据：临时验证目录 `.data/dsh-real-uF8iEi/evidence.json`，位于 `/private/var/folders/0v/30ygv3yd2fs9212mqrvq37t40000gn/T/baton-beta102-verification-03cen7_y`；运行日志 `/private/tmp/baton-dsh-packaged-real-final.log`。仅保留本地，不提交数据、截图和日志。
 
 ## 发现与修复
 
@@ -27,9 +27,9 @@
 
 最终候选及安装后的签名验证通过；24 个变更资源与源码逐字节一致。`app.asar` SHA-256：`fbdd84e5bec714adc8a19589f93fa83f644187f3fdcd414a755bd60cbcce3f9d`。
 
-确认真实服务没有执行中任务、没有待投递沟通后，正常退出并替换 `/Applications/AgentForge.app`；原安装保留在本轮安装暂存目录的 `Previous-AgentForge.app`。重新启动后仍为原登录用户、17 个任务，原视频任务 `task_33f8dd86-9bac-4a12-9b99-1d70706c32d5` 仍待人类验收。未重置真实实例或更改原任务状态。
+确认真实服务没有执行中任务、没有待投递沟通后，正常退出并替换 `/Applications/Baton.app`；原安装保留在本轮安装暂存目录的 `Previous-Baton.app`。重新启动后仍为原登录用户、17 个任务，原视频任务 `task_33f8dd86-9bac-4a12-9b99-1d70706c32d5` 仍待人类验收。未重置真实实例或更改原任务状态。
 
-实际客户端已核对三类 Runtime、DSH 折叠展开、模型/思考等级配置及真实模型下拉。安装后的 `agentforge runtimes list` 与 `agentforge runtimes models dsh` 通过默认客户端授权读取成功。最后截图因系统捕捉错误未取得；此前隔离打包版的两主题宽窄截图及本机安装后可访问性界面核验已完成。
+实际客户端已核对三类 Runtime、DSH 折叠展开、模型/思考等级配置及真实模型下拉。安装后的 `baton runtimes list` 与 `baton runtimes models dsh` 通过默认客户端授权读取成功。最后截图因系统捕捉错误未取得；此前隔离打包版的两主题宽窄截图及本机安装后可访问性界面核验已完成。
 
 ## 限制
 
@@ -44,8 +44,8 @@
 
 服务注入与实际执行相同 PATH 的只读安装检查，Store 返回 `installed` 和实际 `enabled`：找不到可执行文件时开关关闭、显示“未安装”并锁定，HTTP/CLI 拒绝修改开关及新调用。模型配置可离线保存；安装判断不读取凭据、不启动 CLI、不改写原有启用偏好或冻结快照。已安装但未登录仍需通过连接测试区分。
 
-最终验证：`npm test` **576 pass / 0 fail**，规定门禁全部通过。源码隔离 UI 验证 `.data/runtime-settings-XnD3cs`、最终打包 UI 验证临时目录 `.data/runtime-settings-EnPMIx`，分别覆盖两主题、1320/760 宽度、完整名称、未安装锁定、API/CLI 拒绝、安装后可操作、移除后重新锁定及不执行探测脚本。最终真实打包模型任务 `.data/dsh-real-PtdT1D` 通过沟通、员工 UI、澄清、Skill/MCP/历史、原生指令传入、冻结快照、人类确认及归档。打包验证目录仍为本记录上文的 `agentforge-beta102-verification-03cen7_y`；新日志 `/private/tmp/agentforge-runtime-missing-packaged.log`、`/private/tmp/agentforge-runtime-name-real-packaged.log`、`/private/tmp/agentforge-runtime-label-install-tests-final.log`。
+最终验证：`npm test` **576 pass / 0 fail**，规定门禁全部通过。源码隔离 UI 验证 `.data/runtime-settings-XnD3cs`、最终打包 UI 验证临时目录 `.data/runtime-settings-EnPMIx`，分别覆盖两主题、1320/760 宽度、完整名称、未安装锁定、API/CLI 拒绝、安装后可操作、移除后重新锁定及不执行探测脚本。最终真实打包模型任务 `.data/dsh-real-PtdT1D` 通过沟通、员工 UI、澄清、Skill/MCP/历史、原生指令传入、冻结快照、人类确认及归档。打包验证目录仍为本记录上文的 `baton-beta102-verification-03cen7_y`；新日志 `/private/tmp/baton-runtime-missing-packaged.log`、`/private/tmp/baton-runtime-name-real-packaged.log`、`/private/tmp/baton-runtime-label-install-tests-final.log`。
 
-最终安装包 25 个变更资源与源码字节一致并通过签名验证，ASAR SHA-256：`85f5113b29ba7fa9d82fe88c717107e4436a6e3baa3c3ef0e546a7f793b3c707`。已正常退出空闲实例并安装到 `/Applications/AgentForge.app`，仍为本地 0.1.1，无推送或 Release 发布；原应用保留在 `/Applications/.AgentForge-runtimeavailability-0a9f718079a34e0fa355e8d5eb699341/Previous-AgentForge.app`。安装前真实实例 17 个任务、无执行中任务及待投递沟通；用户在本轮期间自行验收了视频任务，安装不改变该事实。
+最终安装包 25 个变更资源与源码字节一致并通过签名验证，ASAR SHA-256：`85f5113b29ba7fa9d82fe88c717107e4436a6e3baa3c3ef0e546a7f793b3c707`。已正常退出空闲实例并安装到 `/Applications/Baton.app`，仍为本地 0.1.1，无推送或 Release 发布；原应用保留在 `/Applications/.Baton-runtimeavailability-0a9f718079a34e0fa355e8d5eb699341/Previous-Baton.app`。安装前真实实例 17 个任务、无执行中任务及待投递沟通；用户在本轮期间自行验收了视频任务，安装不改变该事实。
 
-重启后实际客户端 Runtime 页已显示完整 DeepSeek Harness 名称；安装后的 `agentforge runtimes get 'DeepSeek Harness' --json` 回读成功。真实实例仍有 17 个任务，视频任务仍为用户已确认完成状态。当前三类 Runtime 在本机均已安装，因此三个开关可操作；缺失与移除场景由上述隔离安装验证覆盖，没有改动操作者的 Runtime 安装。
+重启后实际客户端 Runtime 页已显示完整 DeepSeek Harness 名称；安装后的 `baton runtimes get 'DeepSeek Harness' --json` 回读成功。真实实例仍有 17 个任务，视频任务仍为用户已确认完成状态。当前三类 Runtime 在本机均已安装，因此三个开关可操作；缺失与移除场景由上述隔离安装验证覆盖，没有改动操作者的 Runtime 安装。

@@ -10,13 +10,13 @@ import {spawn} from 'node:child_process';
 import {createCatalogFixtureStore} from '../tests/fixture-store.mjs';
 import {createAuth} from '../server/auth.mjs';
 import {createMarketplace} from '../server/runtime/marketplace.mjs';
-const real=process.env.AGENTFORGE_ATTACHMENTS_REAL==='1';
+const real=process.env.BATON_ATTACHMENTS_REAL==='1';
 await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/task-attachments-')),home=join(root,'home'),data=join(root,'client');await mkdir(home,{recursive:true});
 const auth=createAuth({databasePath:join(data,'auth.sqlite')}),password=randomBytes(20).toString('hex');await auth.setAdministrator('attachments-qa',password);auth.close();
-const store=createCatalogFixtureStore({databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});store.updateWorkspaceSettings({workspaceRoot:join(root,'work')});store.setPluginUpdateSettings({enabled:false});
+const store=createCatalogFixtureStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});store.updateWorkspaceSettings({workspaceRoot:join(root,'work')});
 store.updateAgent('system_project_manager',{systemPrompt:'你是附件验收经理。先向人类 consultation audience=human 索取一张图片和一个文本文件。得到回复后，必须实际读取消息 attachments 中的绝对路径，回复文本中的验证串以及图片内容描述；不要派工，不要再次询问，使用 managerDecision nextNodeId:null,nextAgentId:null 提交验收。'});
 let roleProof;
-if(real && process.env.AGENTFORGE_ROLE_EXTENSIONS_REAL==='1') {
+if(real && process.env.BATON_ROLE_EXTENSIONS_REAL==='1') {
  const source=join(root,'role-proof');await mkdir(join(source,'.claude-plugin'),{recursive:true});await mkdir(join(source,'skills/proof'),{recursive:true});
  roleProof='ROLE_EXTENSION_'+randomBytes(12).toString('hex');
  await writeFile(join(source,'.claude-plugin/plugin.json'),JSON.stringify({name:'role-proof',description:'隔离角色继承验证'}));
@@ -35,7 +35,7 @@ store.close();
 const imageBytes=await readFile('web/icons/application.png'),marker='ATTACHMENT_'+randomBytes(12).toString('hex'),fileBytes=Buffer.from('文件验证串：'+marker+'\n');
 await writeFile(join(root,'binary.png'),imageBytes);
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')} :{}),AGENTFORGE_DESKTOP_DATA_ROOT:data,AGENTFORGE_LOG_DIR:join(root,'logs')},timeout:180000});
+const app=await electron.launch({args:['apps/electron/main.mjs'],env:{...process.env,HOME:home,...(real?{CLAUDE_CONFIG_DIR:process.env.CLAUDE_CONFIG_DIR||join(homedir(),'.claude')} :{}),BATON_DESKTOP_DATA_ROOT:data,BATON_LOG_DIR:join(root,'logs')},timeout:180000});
 const evidence={root,real,cases:[]};console.log('EVIDENCE '+root);
 try{
  const page=await app.firstWindow({timeout:180000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:90000});const origin=new URL(page.url()).origin;page.on('pageerror',error=>console.log('UI_ERROR',error.message));page.on('response',r=>{if(r.url().includes('/attachments')||r.url().endsWith('/messages'))console.log('HTTP',r.status(),new URL(r.url()).pathname);});

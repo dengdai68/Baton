@@ -1,4 +1,4 @@
-# AgentForge · 石墨设计系统（A · Graphite）
+# Baton · 石墨设计系统（A · Graphite）
 
 > 2026-11-13 用户确认：生产客户端唯一视觉方向改为 **A「石墨」**，替代此前落地的 B「纸张」。B / C 只保留在 `redesign/` 作对比，不进入主题偏好。
 > 基准：`redesign/pages/*.html?style=graphite` 的渲染结果及 `redesign/assets/{tokens,components}.css` 的石墨取值（下文尺寸为 Chrome 实测 CSS px）。产品数据与命令边界见 [docs/06-design-system.md](../docs/06-design-system.md)，贡献规则见 `AGENTS.md`。
@@ -310,3 +310,8 @@ macOS 使用 hiddenInset 一体化标题栏，红绿灯坐标 (16,15)；侧栏�
 8. **键盘**：所有交互元素可 Tab 到达且有可见焦点轮廓；快捷键按第 6 节工作。
 9. **滚动**：只有内容区、记录区、文件 / 控制台、抽屉与弹窗正文滚动；标题栏、工具栏、输入卡片固定。
 10. **证据**：用隔离夹具实际打开每页（`node scripts/test-redesign.mjs`，产物只进 `.data/`），截图逐张人工检查，并用 computed style 核对关键尺寸；不读取或改造操作者真实实例。
+
+
+## Baton表单与身份强调
+
+空成员选择与流程select同为28px；chips超过一行自然换行，新增项保持可见，禁止用水平溢出隐藏已选成员。自动化计划只保留标题与Cron字段的单行结构。协作和沟通通过真实senderId匹配冻结身份，姓名、标题、加粗、链接、行内代码和引用使用头像同色系且保证4.5对比；正文与代码语法高亮保持清晰。插件仅目录右上手动更新全部，无设置项或后台自动调度。

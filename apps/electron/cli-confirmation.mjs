@@ -16,10 +16,10 @@ export function confirmCliInstallation({ BrowserWindow, parent, status, signal, 
   const dialog = new BrowserWindow({
     parent, modal: true, show: false, width: 560, height: 470,
     minWidth: 420, minHeight: 360, resizable: true, minimizable: false,
-    maximizable: false, fullscreenable: false, title: "安装 AgentForge CLI",
+    maximizable: false, fullscreenable: false, title: "安装 Baton CLI",
     backgroundColor, autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
-      webSecurity: true, webviewTag: false, partition: "agentforge-cli-confirmation" },
+      webSecurity: true, webviewTag: false, partition: "baton-cli-confirmation" },
   });
   const contents = dialog.webContents;
   contents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

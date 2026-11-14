@@ -11,25 +11,25 @@ import { spawn, execFileSync } from 'node:child_process';
 import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
 
-if (process.env.AGENTFORGE_DSH_REAL !== '1') throw new Error('Requires AGENTFORGE_DSH_REAL=1; real model calls, never a Provider fixture');
+if (process.env.BATON_DSH_REAL !== '1') throw new Error('Requires BATON_DSH_REAL=1; real model calls, never a Provider fixture');
 await mkdir('.data', { recursive: true });
-const bundle = process.env.AGENTFORGE_DSH_APP;
-const root = await mkdtemp(resolve('.data/dsh-real-')), home = join(root, 'home'), data = bundle ? join(home, '.agentforge', 'desktop') : join(root, 'client');
+const bundle = process.env.BATON_DSH_APP;
+const root = await mkdtemp(resolve('.data/dsh-real-')), home = join(root, 'home'), data = bundle ? join(home, '.baton', 'desktop') : join(root, 'client');
 await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex'), auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('dsh-qa', password); auth.close();
-const seed = createStore({ databasePath:join(root,'work','records','agentforge.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
+const seed = createStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') });
 seed.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') }); seed.close();
 // A private launcher preserves the operator's installed Node/DeepSeek Harness executable;
 // DSH_HOME remains the invocation-owned directory supplied by the adapter.
-const command = process.env.AGENTFORGE_DSH_COMMAND || execFileSync('/usr/bin/which', ['dsh'], { encoding: 'utf8' }).trim();
+const command = process.env.BATON_DSH_COMMAND || execFileSync('/usr/bin/which', ['dsh'], { encoding: 'utf8' }).trim();
 const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
 await writeFile(join(root, 'dsh'), '#!/bin/sh\nHOME=' + quote(homedir()) + ' exec ' + quote(command) + ' "$@"\n', { mode: 0o700 });
 for (const file of ['.zprofile', '.zshrc']) await writeFile(join(home, file), 'export PATH=' + quote(root) + ':"$PATH"\n');
 const secret = prefix => prefix + randomBytes(8).toString('hex');
 const roleSecret = secret('ROLE-'), skillSecret = secret('SKILL-'), mcpSecret = secret('MCP-'), historySecret = secret('HISTORY-'), reviewerSecret=secret('REVIEW-');
 const plugin = join(root, 'plugin');
-const sourceDialect=process.env.AGENTFORGE_DSH_SOURCE_DIALECT || 'claude-code',manifestDirectory=sourceDialect==='codex'?'.codex-plugin':'.claude-plugin';
+const sourceDialect=process.env.BATON_DSH_SOURCE_DIALECT || 'claude-code',manifestDirectory=sourceDialect==='codex'?'.codex-plugin':'.claude-plugin';
 assert.ok(['claude-code','codex'].includes(sourceDialect));
 await mkdir(join(plugin, manifestDirectory), { recursive: true }); await mkdir(join(plugin, 'skills', 'dsh-evidence'), { recursive: true });
 await writeFile(join(plugin, manifestDirectory, 'plugin.json'), JSON.stringify({ name: 'dsh-evidence', version: '1.0.0', description: 'DeepSeek Harness native Skill/Subagent/Hook verification' }));
@@ -41,7 +41,7 @@ await writeFile(join(plugin, 'skills', 'dsh-evidence', 'SKILL.md'), `---\nname: 
 const mcpFile = join(root, 'mcp.mjs');
 await writeFile(mcpFile, `import {Server} from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/sdk/server/index.js'))};\nimport {StdioServerTransport} from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/sdk/server/stdio.js'))};\nimport {ListToolsRequestSchema,CallToolRequestSchema} from ${JSON.stringify(import.meta.resolve('@modelcontextprotocol/sdk/types.js'))};\nconst s=new Server({name:'DeepSeek Harness verification',version:'1.0.0'},{capabilities:{tools:{}}});s.setRequestHandler(ListToolsRequestSchema,async()=>({tools:[{name:'read_probe',description:'Read the random MCP verification value',inputSchema:{type:'object',properties:{},additionalProperties:false}}]}));s.setRequestHandler(CallToolRequestSchema,async()=>({content:[{type:'text',text:${JSON.stringify(mcpSecret)}}]}));await s.connect(new StdioServerTransport());\n`);
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
-const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/AgentForge') } : { args: ['apps/electron/main.mjs'] }), env: { ...process.env, HOME: home, DSH_HOME: process.env.DSH_HOME || join(homedir(), '.dsh'), AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
+const app = await electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/Baton') } : { args: ['apps/electron/main.mjs'] }), env: { ...process.env, HOME: home, DSH_HOME: process.env.DSH_HOME || join(homedir(), '.dsh'), BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 const evidence = { root, provider: 'dsh', realModel: true, cases: [] };
 console.log('EVIDENCE ' + root);
 const wait = async (label, check) => { const start = Date.now(); let logged = 0; for (;;) { const result = await check(); if (result) return result; if (Date.now() - start > 12 * 60000) throw new Error('Timed out: ' + label); if (Date.now() - logged > 30000) { console.log('WAIT ' + label); logged = Date.now(); } await new Promise(done => setTimeout(done, 1500)); } };
@@ -52,7 +52,7 @@ try {
   await page.goto(origin + '/login'); await page.locator('#username').fill('dsh-qa'); await page.locator('#password').fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.locator('#account-name').waitFor();
   const { profiles } = await api('/api/settings/runtime-profiles', null, 'GET'), slot = profiles.find(p => p.provider === 'dsh'); assert.ok(slot); assert.equal(profiles.length, 3);
   const catalog = await api('/api/settings/runtime-profiles/models?provider=dsh', null, 'GET'); assert.ok(catalog.models.length);
-  const model = process.env.AGENTFORGE_DSH_MODEL || catalog.models[0].id;
+  const model = process.env.BATON_DSH_MODEL || catalog.models[0].id;
   await api('/api/settings/runtime-profiles/' + slot.id, { model, effort: 'off' }, 'PUT');
   await page.goto(origin + '/settings/runtime'); await page.getByRole('switch', { name: 'DeepSeek Harness 可用', exact: true }).waitFor();
   await page.getByLabel('DeepSeek Harness 配置', { exact: true }).click();
@@ -125,7 +125,7 @@ try {
   const calls = consolePage.events.filter(event => event.data?.presentation === 'tool').map(event => event.data.toolName);
   assert.ok(calls.includes('skill'), 'DeepSeek Harness activated the selected Skill natively');
   assert.ok(calls.some(name => name?.includes('read_probe')), 'DeepSeek Harness called the selected MCP');
-  assert.ok(calls.some(name => name?.includes('agentforge_history')), 'DeepSeek Harness queried platform history');
+  assert.ok(calls.some(name => name?.includes('baton_history')), 'DeepSeek Harness queried platform history');
   assert.ok(calls.includes('Task') || calls.includes('Agent'),'source subagent was invoked through the real native child adapter');
   assert.ok(consolePage.events.some(event=>event.data?.providerEventType==='dsh.subagent' || event.message==='插件子代理已开始独立执行'),'independent child lifecycle is audited');
   assert.match(await readFile(hookLog,'utf8'),/invoked/,'source command Hook actually ran');

@@ -44,12 +44,12 @@ async function fixture() {
 }
 
 test('diagnostic directories are stable per instance and separate disposable profiles', () => {
-  const first = instanceDiagnosticDirectory('/private/fixture-one/agentforge.sqlite');
-  assert.equal(first, instanceDiagnosticDirectory('/private/fixture-one/agentforge.sqlite'));
-  assert.notEqual(first, instanceDiagnosticDirectory('/private/fixture-two/agentforge.sqlite'));
-  assert.doesNotMatch(first, /fixture-one|agentforge\.sqlite/);
-  assert.ok(first.startsWith(defaultDiagnosticRoot() + '/'), 'default diagnostics live under ~/.agentforge/logs');
-  assert.equal(defaultDiagnosticRoot('/fixture-home'), '/fixture-home/.agentforge/logs');
+  const first = instanceDiagnosticDirectory('/private/fixture-one/baton.sqlite');
+  assert.equal(first, instanceDiagnosticDirectory('/private/fixture-one/baton.sqlite'));
+  assert.notEqual(first, instanceDiagnosticDirectory('/private/fixture-two/baton.sqlite'));
+  assert.doesNotMatch(first, /fixture-one|baton\.sqlite/);
+  assert.ok(first.startsWith(defaultDiagnosticRoot() + '/'), 'default diagnostics live under ~/.baton/logs');
+  assert.equal(defaultDiagnosticRoot('/fixture-home'), '/fixture-home/.baton/logs');
 });
 
 test('diagnostics preserve original error stack, cause, errno and complete long text', async () => {
@@ -107,7 +107,7 @@ test('rotation and new process-like logger preserve old files; invalid target re
 test('fatal process exception is written without swallowing the process failure', async () => {
   const { root } = await fixture(), directory = join(root, 'fatal');
   const moduleUrl = new URL('../server/diagnostics.mjs', import.meta.url).href;
-  await assert.rejects(promisify(execFile)(process.execPath, ['--input-type=module', '-e', `import {installProcessDiagnostics} from ${JSON.stringify(moduleUrl)}; installProcessDiagnostics('probe'); throw new Error('ORIGINAL_FATAL_DIAGNOSTIC');`], { env: { ...process.env, AGENTFORGE_LOG_DIR: directory } }), error => error.code === 1);
+  await assert.rejects(promisify(execFile)(process.execPath, ['--input-type=module', '-e', `import {installProcessDiagnostics} from ${JSON.stringify(moduleUrl)}; installProcessDiagnostics('probe'); throw new Error('ORIGINAL_FATAL_DIAGNOSTIC');`], { env: { ...process.env, BATON_LOG_DIR: directory } }), error => error.code === 1);
   const rows = (await readFile(join(directory, (await readdir(directory))[0]), 'utf8')).trim().split('\n').map(JSON.parse);
   assert.ok(rows.some(row => row.event === 'process.uncaught' && row.error.message === 'ORIGINAL_FATAL_DIAGNOSTIC' && row.error.stack.includes('Error: ORIGINAL_FATAL_DIAGNOSTIC')));
   assert.ok(rows.some(row => row.event === 'process.exit' && row.code === 1));
@@ -139,8 +139,8 @@ test('npm test entry pins diagnostics to a disposable fixture and strips inherit
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   assert.equal(manifest.scripts.test, 'node scripts/run-tests.mjs', 'npm test must go through the isolating runner');
   const runner = await readFile(new URL('../scripts/run-tests.mjs', import.meta.url), 'utf8');
-  assert.match(runner, /AGENTFORGE_LOG_DIR \|\|=/, 'runner pins a disposable log directory');
-  for (const name of ['AGENTFORGE_DB_PATH', 'AGENTFORGE_AUTH_DB_PATH', 'AGENTFORGE_RUN_FILES_ROOT', 'AGENTFORGE_RUNTIME_CONFIG_ROOT', 'AGENTFORGE_WORKSPACE_ROOT', 'AGENTFORGE_DESKTOP_DATA_ROOT', 'AGENTFORGE_BOOTSTRAP_TOKEN', 'AGENTFORGE_DESKTOP_CONTROL_ROOT', 'AGENTFORGE_CREDENTIALS_ROOT', 'AGENTFORGE_RUNTIME_PREVIOUS_ROOTS', 'AGENTFORGE_INSTANCE_KIND']) {
+  assert.match(runner, /BATON_LOG_DIR \|\|=/, 'runner pins a disposable log directory');
+  for (const name of ['BATON_DB_PATH', 'BATON_AUTH_DB_PATH', 'BATON_RUN_FILES_ROOT', 'BATON_RUNTIME_CONFIG_ROOT', 'BATON_WORKSPACE_ROOT', 'BATON_DESKTOP_DATA_ROOT', 'BATON_BOOTSTRAP_TOKEN', 'BATON_DESKTOP_CONTROL_ROOT', 'BATON_CREDENTIALS_ROOT', 'BATON_RUNTIME_PREVIOUS_ROOTS', 'BATON_INSTANCE_KIND']) {
     assert.ok(runner.includes(`"${name}"`), `runner strips inherited ${name}`);
   }
 });
@@ -154,7 +154,7 @@ test('test entry isolates fixture Git commands from a hook caller worktree', asy
   try {
     const caller = join(root, 'caller'), fixture = join(root, 'fixture');
     mkdirSync(caller); mkdirSync(fixture);
-    const env = testEnvironment({ ...process.env, AGENTFORGE_LOG_DIR: join(root, 'logs') });
+    const env = testEnvironment({ ...process.env, BATON_LOG_DIR: join(root, 'logs') });
     for (const repo of [caller, fixture]) execFileSync('git', ['-C', repo, 'init', '--quiet'], { env });
     const hook = { ...env, GIT_DIR: join(caller, '.git'), GIT_WORK_TREE: caller, GIT_INDEX_FILE: join(caller, '.git', 'index') };
     const isolated = testEnvironment(hook);

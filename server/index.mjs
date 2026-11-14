@@ -40,9 +40,9 @@ const elkBundle = join(root, "node_modules", "elkjs", "lib", "elk.bundled.js");
 const markedBundle = join(root, "node_modules", "marked", "lib", "marked.umd.js");
 const domPurifyBundle = join(root, "node_modules", "dompurify", "dist", "purify.min.js");
 const highlightStylesheet = join(root, "node_modules", "highlight.js", "styles", "github.min.css");
-const candidateBootstrapToken = process.env.AGENTFORGE_BOOTSTRAP_TOKEN;
-delete process.env.AGENTFORGE_BOOTSTRAP_TOKEN;
-if (!candidateBootstrapToken || !process.send || process.env.AGENTFORGE_DESKTOP_PORT !== "0") throw new Error("本机服务只能由 AgentForge 客户端启动；请运行 npm start 或打开应用。");
+const candidateBootstrapToken = process.env.BATON_BOOTSTRAP_TOKEN;
+delete process.env.BATON_BOOTSTRAP_TOKEN;
+if (!candidateBootstrapToken || !process.send || process.env.BATON_DESKTOP_PORT !== "0") throw new Error("本机服务只能由 Baton 客户端启动；请运行 npm start 或打开应用。");
 const bootstrapToken = candidateBootstrapToken;
 const port = 0;
 const host = "127.0.0.1";
@@ -53,7 +53,7 @@ installProcessDiagnostics("server", { instancePath: storage.authDatabasePath });
 const runFilesRoot = storage.runFilesRoot;
 const workspaceRoot = storage.workspaceRoot;
 const runtimeConfigRoot = storage.runtimeConfigRoot;
-// The default instance data root is private; explicit AGENTFORGE_* override
+// The default instance data root is private; explicit BATON_* override
 // targets stay exactly as the operator configured them.
 const usesDefaultRoot = [storage.databasePath, storage.authDatabasePath, storage.runFilesRoot, storage.runtimeConfigRoot, storage.workspaceRoot].some(path => path === storage.dataRoot || path.startsWith(storage.dataRoot + sep));
 const authOptions = { databasePath: storage.authDatabasePath, origins: [], bootstrapToken };
@@ -106,7 +106,7 @@ const runExecutionOptions = { runFilesRoot, resolveGitCredential: (url) => runti
 function subscribeDesktopNotifications(current) {
   current.subscribeNotifications(notice=>{
     if(store!==current || resettingData || !process.connected)return;
-    try { process.send({type:'agentforge-notification',notice},error=>{if(error)diagnostic('desktop.notification_send_failed',{error});}); }
+    try { process.send({type:'baton-notification',notice},error=>{if(error)diagnostic('desktop.notification_send_failed',{error});}); }
     catch(error){diagnostic('desktop.notification_send_failed',{error});}
   });
 }
@@ -138,7 +138,7 @@ function ensureBusiness() {
         if (plan.interruptedTraceIds.length || plan.recoveredDispatchIds.length) store.recoverInterruptedRun(runId);
         if (store.getRunRecoveryPlan(runId).shouldExecute) void executeRun(store, runId, runExecutionOptions).catch(error => diagnostic('task.recovery_error', { error, runId }));
       }
-      pluginUpdates.start(); startSchedulers();
+      startSchedulers();
       void communications.poll().catch(error => diagnostic('communication.recovery_error', { error }));
       diagnostic('business.ready', { elapsedMs: performance.now() - started });
       return store;
@@ -308,7 +308,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
       resetCommitted = false;
       sendJson(response, 200, { ok: true, next: "/" });
     } catch (error) {
-      if (resetCommitted) { diagnostic("instance.reset_incomplete", { error }); sendJson(response, 503, { error: "清除尚未完成，请重启 AgentForge 后继续清除；正常使用已暂停。" }); }
+      if (resetCommitted) { diagnostic("instance.reset_incomplete", { error }); sendJson(response, 503, { error: "清除尚未完成，请重启 Baton 后继续清除；正常使用已暂停。" }); }
       else throw error;
     } finally { resettingData = resetCommitted; }
     return true;
@@ -463,9 +463,9 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     if(updateRestartLease||resettingData||writeRequests!==1||runtimeTestActive||taskDeletionLocks.size||pluginUpdates.status().running||communications.isActive()||store.pendingCommunications().length||store.listPatrolRunIds().length||store.listRecoveryRunIds().some(hasActiveExecution)){sendJson(response,409,{error:'仍有执行、排队任务或保存操作，请暂停执行并等待沟通结束后更换数据目录'});return true;}
     updateRestartLease={id:randomUUID(),purpose:'storage',timer:null};
     try{
-      const target=await validateStorageDestination({sourceRoot:storage.dataRoot,workspaceRoot:input.workspaceRoot,instance:process.env.AGENTFORGE_INSTANCE_KIND||'desktop',configurationRoot:storage.controlRoot});
+      const target=await validateStorageDestination({sourceRoot:storage.dataRoot,workspaceRoot:input.workspaceRoot,instance:process.env.BATON_INSTANCE_KIND||'desktop',configurationRoot:storage.controlRoot});
       if(target.unchanged){updateRestartLease=null;sendJson(response,200,{workspaceRoot:target.workspaceRoot,source:'startup',restarting:false,version});return true;}
-      response.once('finish',()=>process.send?.({type:'agentforge-storage-restart',id:updateRestartLease.id,workspaceRoot:target.workspaceRoot}));
+      response.once('finish',()=>process.send?.({type:'baton-storage-restart',id:updateRestartLease.id,workspaceRoot:target.workspaceRoot}));
       sendJson(response,200,{workspaceRoot:target.workspaceRoot,businessRoot:target.businessRoot,restarting:true,version});return true;
     }catch(error){updateRestartLease=null;throw error;}
   }
@@ -534,12 +534,12 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     return true;
   }
   if(pathname==='/api/runtime/marketplace/updates' && ['GET','POST'].includes(request.method)) {
-    if(request.method==='POST'){await readJson(request);void pluginUpdates.check();}
+    if(request.method==='POST'){const input=await readJson(request);if(!input || typeof input!=='object' || Array.isArray(input) || Object.keys(input).length)throw new Error('更新全部不接受配置字段');void pluginUpdates.check();}
     sendJson(response,request.method==='POST'?202:200,pluginUpdates.status());return true;
   }
-  if(pathname==='/api/runtime/marketplace/updates/settings' && request.method==='PUT') {
-    const input=await readJson(request);
-    sendJson(response,200,pluginUpdates.configure(input));return true;
+  if(pathname==='/api/runtime/marketplace/updates/settings') {
+    if(request.method!=='GET')await readJson(request);
+    sendJson(response,410,{error:'插件自动更新设置已移除；请在插件页手动更新全部'});return true;
   }
   if (pathname === "/api/runtime/mcp-marketplace" && ["GET", "POST"].includes(request.method)) {
     response.setHeader("Cache-Control", "no-store");
@@ -939,7 +939,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     return true;
   }
   if (request.method === "GET" && pathname === "/api/health") {
-    sendJson(response, 200, { ok: true, service: "agentforge-control-plane", instanceId, time: new Date().toISOString() });
+    sendJson(response, 200, { ok: true, service: "baton-control-plane", instanceId, time: new Date().toISOString() });
     return true;
   }
   return false;
@@ -949,7 +949,7 @@ async function serveStatic(response, pathname) {
   async function presented(content, extension) {
     if (extension !== ".html") return content;
     const css = (await Promise.all(["web/tokens.css", "apps/electron/compact.css"].map(path => readFile(join(root, path), "utf8")))).join("\n");
-    return content.toString("utf8").replace("</head>", `<style id="agentforge-desktop-style">${css}</style></head>`);
+    return content.toString("utf8").replace("</head>", `<style id="baton-desktop-style">${css}</style></head>`);
   }
   const bundles = { "/vendor/marked.js": markedBundle, "/vendor/dompurify.js": domPurifyBundle, "/vendor/highlight.css": highlightStylesheet, "/vendor/x6.js": x6Bundle, "/vendor/elk.js": elkBundle };
   if (bundles[pathname]) {
@@ -995,7 +995,7 @@ const server = createServer(async (request, response) => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (await auth.guard(request, response, url)) return;
     const connectionRead = request.method === 'GET' && url.pathname === '/api/bootstrap' && url.searchParams.get('view') === 'connection';
-    const configurationRead = request.method === 'GET' && ['/api/settings/workspace','/api/settings/log-files','/api/runtime/git-credentials','/api/runtime/marketplace','/api/runtime/mcp-marketplace'].includes(url.pathname);
+    const configurationRead = request.method === 'GET' && ['/api/settings/workspace','/api/settings/log-files','/api/runtime/git-credentials','/api/runtime/marketplace','/api/runtime/mcp-marketplace','/api/runtime/marketplace/updates'].includes(url.pathname);
     if (url.pathname.startsWith('/api/') && url.pathname !== '/api/health' && !connectionRead && !configurationRead) {
       try { await ensureBusiness(); }
       catch (error) { sendJson(response, 503, { error: `业务数据未就绪：${error.message}` }); return; }
@@ -1018,8 +1018,8 @@ server.listen(port, host, () => {
   const listeningPort = server.address().port;
   authOptions.origins = [`http://127.0.0.1:${listeningPort}`];
   auth = createAuth(authOptions);
-  console.log(`AgentForge is running at http://${host}:${listeningPort}`);
-  process.send({ type: "agentforge-ready", port: listeningPort, instanceId });
+  console.log(`Baton is running at http://${host}:${listeningPort}`);
+  process.send({ type: "baton-ready", port: listeningPort, instanceId });
 });
 
 server.on('close',()=>pluginUpdates.stop());
@@ -1035,20 +1035,20 @@ for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{
 // before acknowledging it, so no new HTTP write or scheduler can slip through.
 process.on('message', async message => {
   if (!message || !/^[a-f0-9-]{36}$/.test(message.id || '')) return;
-  if (message.type === 'agentforge-update-release' && updateRestartLease?.id === message.id) {
+  if (message.type === 'baton-update-release' && updateRestartLease?.id === message.id) {
     clearTimeout(updateRestartLease.timer); updateRestartLease = null;
-    process.send?.({type:'agentforge-update-released',id:message.id}); return;
+    process.send?.({type:'baton-update-released',id:message.id}); return;
   }
-  if (message.type !== 'agentforge-update-prepare') return;
+  if (message.type !== 'baton-update-prepare') return;
   try { await ensureBusiness(); }
-  catch { process.send?.({ type: 'agentforge-update-readiness', id: message.id, ready: false }); return; }
+  catch { process.send?.({ type: 'baton-update-readiness', id: message.id, ready: false }); return; }
   const busy = Boolean(updateRestartLease || resettingData || writeRequests || runtimeTestActive || taskDeletionLocks.size || pluginUpdates.status().running || communications.isActive()
     || store.listPatrolRunIds().length || store.listRecoveryRunIds().some(hasActiveExecution));
   if (!busy) {
     const timer = setTimeout(() => { updateRestartLease = null; }, 30000); timer.unref();
     updateRestartLease = { id: message.id, timer };
   }
-  process.send?.({ type: 'agentforge-update-readiness', id: message.id, ready: !busy });
+  process.send?.({ type: 'baton-update-readiness', id: message.id, ready: !busy });
 });
 const backgroundBootstrap = setInterval(() => {
   if (!businessInitialization && auth?.configured()) void ensureBusiness().catch(() => {});

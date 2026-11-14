@@ -16,27 +16,27 @@ import { createStore } from '../server/store.mjs';
 import { withHistoryTools } from '../server/history/bridge.mjs';
 import { runCodexCli } from '../server/runtime/local-cli.mjs';
 
-const appBundle = resolve(process.env.AGENTFORGE_PACKAGED_APP || "release/mac-arm64/AgentForge.app");
-const executable = join(appBundle, "Contents", "MacOS", "AgentForge");
+const appBundle = resolve(process.env.BATON_PACKAGED_APP || "release/mac-arm64/Baton.app");
+const executable = join(appBundle, "Contents", "MacOS", "Baton");
 await access(executable);
 await mkdir(".data", { recursive: true });
 const evidenceRoot = await mkdtemp(resolve(".data/packaged-electron-e2e-"));
 const profile = join(evidenceRoot, "profile");
 // The packaged instance state lives under an isolated HOME fixture, never the
-// operator's real ~/.agentforge; Chromium-managed files stay in --user-data-dir.
+// operator's real ~/.baton; Chromium-managed files stay in --user-data-dir.
 const home = join(evidenceRoot, "home");
 await mkdir(home, { mode: 0o700 });
-const controlRoot=join(home,".agentforge","desktop");
+const controlRoot=join(home,".baton","desktop");
 const storage = desktopStoragePaths(controlRoot, { home });
 const endpointFile = join(controlRoot, "desktop-endpoint.json");
 const urlFor = (page, path) => new URL(path, page.url()).href;
 const execute = promisify(execFile);
-const cliLauncher = join(appBundle, 'Contents/Resources/cli/agentforge');
+const cliLauncher = join(appBundle, 'Contents/Resources/cli/baton');
 const cliSession = join(evidenceRoot, 'cli-private/session.json');
 async function packagedCli(args, input = '', installed, json = true) {
   const result = await new Promise((done, reject) => {
     const commandArgs = [...args, '--session-file', cliSession, '--endpoint-file', endpointFile, ...(json ? ['--json'] : [])];
-    const child = spawn(installed ? `/bin/${installed.shell}` : cliLauncher, installed ? ['-ilc', 'agentforge "$@"', 'agentforge-e2e', ...commandArgs] : commandArgs, { env: { ...process.env, ...(installed ? { HOME: installed.home, ZDOTDIR: installed.home } : {}), PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(installed ? `/bin/${installed.shell}` : cliLauncher, installed ? ['-ilc', 'baton "$@"', 'baton-e2e', ...commandArgs] : commandArgs, { env: { ...process.env, ...(installed ? { HOME: installed.home, ZDOTDIR: installed.home } : {}), PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout = '', stderr = '';
     child.stdout.on('data', chunk => { stdout += chunk; }); child.stderr.on('data', chunk => { stderr += chunk; });
     child.once('error', reject); child.once('close', code => done({ code, stdout, stderr }));
@@ -82,10 +82,10 @@ expect {
 }
 assert.equal((await packagedCli(['schema', 'agents'])).group, 'agents');
 const terminalHelp = await execute(cliLauncher, ['help'], { env: { ...process.env, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 30000 });
-assert.match(terminalHelp.stdout, /^AgentForge 是一个 AI 团队操作系统/); assert.equal(terminalHelp.stderr, '');
+assert.match(terminalHelp.stdout, /^Baton 是一个 AI 团队操作系统/); assert.equal(terminalHelp.stderr, '');
 assert.ok(!terminalHelp.stdout.startsWith('{')); assert.match(terminalHelp.stdout, /可核验的交付物/);
 assert.doesNotMatch(terminalHelp.stdout, /逐层查看|GROUP|OPERATION/);
-assert.match(terminalHelp.stdout, /查看具体操作参数：在命令后加 --help，例如 agentforge agents get --help。/);
+assert.match(terminalHelp.stdout, /查看具体操作参数：在命令后加 --help，例如 baton agents get --help。/);
 assert.match(await packagedCli(['agents', 'get', '--help'], '', undefined, false), /ID：必填精确资源ID/);
 assert.doesNotMatch(terminalHelp.stdout, /典型交付流程|核心概念|JSON 输入模板|runtime\.extensionSelection/);
 console.log('PASS bundled AI CLI offline schema without a global Node/PATH installation');
@@ -118,7 +118,7 @@ const performanceRuntimeProof=await execute(executable,['-e',`
   finally{await log.close();}
   console.log('PASS packaged sharp native thumbnail and asynchronous diagnostic Worker');
 })().catch(error=>{console.error(error);process.exitCode=1;});
-`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',HOME:home,AGENTFORGE_LOG_DIR:join(evidenceRoot,'logs')},timeout:30000});
+`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',HOME:home,BATON_LOG_DIR:join(evidenceRoot,'logs')},timeout:30000});
 console.log(performanceRuntimeProof.stdout.trim());
 // Exercise the actual ASAR implementation using bundled Electron Node, not the
 // source checkout's parser/FS implementation or a real business plugin Hook.
@@ -143,7 +143,7 @@ const yamlProjectionProof=await execute(executable,['-e',`
   }
   console.log('PASS packaged native YAML projection for all three Runtimes; source hashes preserved');
 })().catch(error=>{console.error(error);process.exitCode=1;});
-`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',HOME:home,AGENTFORGE_LOG_DIR:join(evidenceRoot,'logs')},timeout:60000});
+`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',HOME:home,BATON_LOG_DIR:join(evidenceRoot,'logs')},timeout:60000});
 console.log(yamlProjectionProof.stdout.trim());
 // Validate the actual distribution bundle, not just its inherited Mach-O signature.
 await execute("/usr/bin/codesign", ["--verify", "--deep", "--strict", appBundle]);
@@ -186,8 +186,8 @@ if(args.includes('features')) { console.log('skip_host_skill_discovery stable fa
 if(args.includes('mcp')&&args.includes('list')) { console.log('[]'); process.exit(0); }
 assert.equal(process.env.ELECTRON_RUN_AS_NODE,undefined);
 const config={env:{HOME:${JSON.stringify(home)},PATH:'/usr/bin:/bin'}};
-for(const arg of args) if(arg.startsWith('mcp_servers.agentforge_history.')) {
-  const [key,...value]=arg.slice('mcp_servers.agentforge_history.'.length).split('=');
+for(const arg of args) if(arg.startsWith('mcp_servers.baton_history.')) {
+  const [key,...value]=arg.slice('mcp_servers.baton_history.'.length).split('=');
   if(key.startsWith('env.')) config.env[key.slice(4)]=JSON.parse(value.join('='));
   else config[key]=JSON.parse(value.join('='));
 }
@@ -207,13 +207,13 @@ const historyStore = createStore();
 const historyAgent = historyStore.createAgent({name:'打包历史检索'});
 const historyChat = historyStore.openCommunication({kind:'agent',targetId:historyAgent.id});
 historyStore.sendCommunication(historyChat.id,{content:mcpProof,clientRequestId:randomBytes(16).toString('hex')});
-const previousElectronNode = process.env.AGENTFORGE_ELECTRON_NODE;
-process.env.AGENTFORGE_ELECTRON_NODE = executable;
+const previousElectronNode = process.env.BATON_ELECTRON_NODE;
+process.env.BATON_ELECTRON_NODE = executable;
 try {
   const result = await withHistoryTools(historyStore,historyAgent,{runtime:{executable:historyProvider},workspacePath:home,traceDirectory:evidenceRoot,finalPath:join(evidenceRoot,'history-final.json'),prompt:'read stored history',runId:'packaged-history',onEvent:async()=>{}},runCodexCli);
   assert.equal(JSON.parse(result.finalText).historyVerified,true);
 } finally {
-  if(previousElectronNode===undefined) delete process.env.AGENTFORGE_ELECTRON_NODE; else process.env.AGENTFORGE_ELECTRON_NODE=previousElectronNode;
+  if(previousElectronNode===undefined) delete process.env.BATON_ELECTRON_NODE; else process.env.BATON_ELECTRON_NODE=previousElectronNode;
   historyStore.close();
 }
 console.log('PASS Codex adapter registers packaged history MCP: ten real tools and a stored random record, Node mode only in the MCP child');
@@ -239,19 +239,19 @@ const nativeProbe=await execute(executable,['--input-type=module','-e',`
 import{runCodexAppServer}from ${JSON.stringify(nativeAdapter)};
 const result=await runCodexAppServer({runtime:{executable:${JSON.stringify(nativeProvider)},skillPaths:[${JSON.stringify(nativeSkill)}]},workspacePath:${JSON.stringify(home)},traceDirectory:${JSON.stringify(evidenceRoot)},runId:'packaged-native',prompt:'fixture',onEvent:async()=>{}},{args:['app-server'],normalizeEvent:e=>e,cancelledError:m=>new Error(m),missingSessionError:m=>new Error(m)});
 console.log(result.finalText);
-`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',AGENTFORGE_LOG_DIR:join(evidenceRoot,'native-logs')},timeout:30000});
+`],{env:{...process.env,ELECTRON_RUN_AS_NODE:'1',BATON_LOG_DIR:join(evidenceRoot,'native-logs')},timeout:30000});
 assert.equal(JSON.parse(nativeProbe.stdout.trim()).nativeProtocol,true);
 console.log('PASS bundled native Skill protocol adapter: ASAR imports, selected discovery, thread/turn and process cleanup (controlled fixture)');
-const inheritedDatabase = join(evidenceRoot, "inherited-agentforge.sqlite");
+const inheritedDatabase = join(evidenceRoot, "inherited-baton.sqlite");
 const inheritedAuthDatabase = join(evidenceRoot, "inherited-auth.sqlite");
 const username = "packaged-beta";
 const password = randomBytes(20).toString("hex");
-const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("AGENTFORGE_")));
+const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith("BATON_")));
 const shellRoot = join(evidenceRoot, 'shell-profile'), shellBin = join(shellRoot, 'custom-version/bin');
 const shellProof = randomBytes(16).toString('hex');
 await mkdir(shellBin, { recursive: true });
 await writeFile(join(shellRoot, '.zprofile'), 'export AF_PROFILE_LOADED=yes\n');
-await writeFile(join(shellRoot, '.zshrc'), `print -r -- "$ZSH_EXECUTION_STRING"\nprint -r -- 'startup-noise-${shellProof}'\nexport AF_SHELL_PROOF=${shellProof}\nexport PATH='${shellBin}':/usr/bin:/bin:/usr/sbin:/sbin\nexport AGENTFORGE_DB_PATH='${join(evidenceRoot, 'shell-must-not-be-used.sqlite')}'\n`);
+await writeFile(join(shellRoot, '.zshrc'), `print -r -- "$ZSH_EXECUTION_STRING"\nprint -r -- 'startup-noise-${shellProof}'\nexport AF_SHELL_PROOF=${shellProof}\nexport PATH='${shellBin}':/usr/bin:/bin:/usr/sbin:/sbin\nexport BATON_DB_PATH='${join(evidenceRoot, 'shell-must-not-be-used.sqlite')}'\n`);
 
 async function api(page, path, { method = "GET", body } = {}) {
   const result = await page.evaluate(async ({ path, method, body }) => {
@@ -296,7 +296,7 @@ const criteria = JSON.parse((prompt.split("任务验收标准：")[1] || "[]").s
 const roster = JSON.parse((prompt.split("可咨询角色：")[1] || "[]").split(String.fromCharCode(10))[0]);
 const evidence = [...prompt.matchAll(/"id":"(artifact_[^"]+)"/g)].map((match) => match[1]).slice(0, 1);
 const workspace = (prompt.split("任务工作目录：")[1] || "").split(String.fromCharCode(10))[0].trim();
-if (process.env.ELECTRON_RUN_AS_NODE || process.env.AGENTFORGE_BOOTSTRAP_TOKEN) throw new Error("control-plane bootstrap environment leaked to Provider fixture");
+if (process.env.ELECTRON_RUN_AS_NODE || process.env.BATON_BOOTSTRAP_TOKEN) throw new Error("control-plane bootstrap environment leaked to Provider fixture");
 if (process.env.AF_SHELL_PROOF !== ${JSON.stringify(shellProof)} || process.env.AF_PROFILE_LOADED !== 'yes') throw new Error('shell environment did not reach the Provider');
 let result = { kind: "node_result", summary: "Packaged execution content fixture", artifacts: [], decisions: [], needsHuman: false, consultation: null, inputAssessment: { sufficient: true, sourceNodeIds: [], rationale: "fixture input is sufficient", missingEvidence: [] }, deliveryReview: null, managerDecision: null };
 if (responseSchema?.properties?.reply) result = { reply: "Packaged unread fixture reply", ...(responseSchema?.properties?.mentionAgentIds ? { mentionAgentIds: [] } : {}) };
@@ -308,7 +308,7 @@ else {
   mkdirSync(join(workspace, "docs/packaged"), { recursive: true });
   mkdirSync(join(workspace, "docs/empty"), { recursive: true });
   mkdirSync(join(workspace, "docs/other"), { recursive: true });
-  writeFileSync(join(workspace, "docs/packaged/report.md"), "# Packaged Beta evidence\\n\\nAgentForge captured this local fixture artifact.\\n");
+  writeFileSync(join(workspace, "docs/packaged/report.md"), "# Packaged Beta evidence\\n\\nBaton captured this local fixture artifact.\\n");
   writeFileSync(join(workspace, "docs/other/context.md"), "# Another changed folder\\n");
 }
 for (let index = 0; index < 75; index++) console.log(JSON.stringify({type:"system", subtype:"init"}));
@@ -636,7 +636,7 @@ async function runPackagedTask(page) {
   assert.deepEqual(detail.manager, { id: manager.agent.id, name: manager.agent.name });
   for (const key of ['memberSnapshots', 'managerSnapshot', 'managerRuntime', 'workflowSnapshot', 'repositoryBindings']) assert.equal(Object.hasOwn(detail, key), false, key);
   const textDetail = await packagedCli(['tasks', 'get', started.task.id], '', undefined, false);
-  assert.match(textDetail, new RegExp(`agentforge agents get ${manager.agent.id}`));
+  assert.match(textDetail, new RegExp(`baton agents get ${manager.agent.id}`));
   assert.doesNotMatch(textDetail, /memberSnapshots|systemPrompt|managerRuntime|allowedTools/);
   assert.equal((await packagedCli(['workflows', 'get', detail.workflow.id])).name, workflow.workflowTemplate.name);
   assert.equal((await packagedCli(['agents', 'get', detail.manager.id])).name, manager.agent.name);
@@ -719,7 +719,7 @@ const launchOptions = {
   executablePath: executable,
   args: [`--user-data-dir=${profile}`],
   // The control plane must use the Electron-bundled Node runtime, not a developer's global `node`.
-  env: { ...environment, HOME: home, SHELL: '/bin/zsh', ZDOTDIR: shellRoot, AGENTFORGE_DB_PATH: inheritedDatabase, AGENTFORGE_AUTH_DB_PATH: inheritedAuthDatabase, AGENTFORGE_RUNTIME_CONFIG_ROOT: join(evidenceRoot, "inherited-runtime"), HOST: "0.0.0.0", PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
+  env: { ...environment, HOME: home, SHELL: '/bin/zsh', ZDOTDIR: shellRoot, BATON_DB_PATH: inheritedDatabase, BATON_AUTH_DB_PATH: inheritedAuthDatabase, BATON_RUNTIME_CONFIG_ROOT: join(evidenceRoot, "inherited-runtime"), HOST: "0.0.0.0", PATH: "/usr/bin:/bin:/usr/sbin:/sbin" },
   timeout: 60000
 };
 const desktop = await electron.launch(launchOptions);
@@ -730,7 +730,7 @@ async function verifyTrayFocus(page) {
     await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
     assert.equal(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), false);
     // Invoke the actual native Tray menu callback, not app.activate or a fake DOM event.
-    await desktop.evaluate(() => globalThis.agentforgeTestTrayMenu.items.find(item => item.label === "打开 AgentForge").click());
+    await desktop.evaluate(() => globalThis.batonTestTrayMenu.items.find(item => item.label === "打开 Baton").click());
     await page.waitForFunction(() => document.hasFocus());
   };
   await page.goto(urlFor(page, "/tasks"));
@@ -772,7 +772,7 @@ try {
   assert.notEqual(ownedOrigin, "http://127.0.0.1:4310", "packaged client must not attach to Web");
   await desktop.evaluate(({ Tray }) => {
     const original = Tray.prototype.setContextMenu;
-    Tray.prototype.setContextMenu = function(menu) { globalThis.agentforgeTestTrayMenu = menu; return original.call(this, menu); };
+    Tray.prototype.setContextMenu = function(menu) { globalThis.batonTestTrayMenu = menu; return original.call(this, menu); };
   });
   const pageErrors = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -788,7 +788,7 @@ try {
   });
   await page.locator("#setup-form").waitFor();
   await page.screenshot({ path: join(evidenceRoot, "packaged-first-run-in-app.png"), animations: "disabled" });
-  assert.equal(await page.locator('head #agentforge-desktop-style').count(), 1, 'packaged setup has desktop style before render');
+  assert.equal(await page.locator('head #baton-desktop-style').count(), 1, 'packaged setup has desktop style before render');
   await page.locator("#username").fill(username);
   await page.locator("#password").fill(password);
   await page.locator("#confirmation").fill("different-password");
@@ -853,7 +853,7 @@ try {
   const reuseShell = join(evidenceRoot, 'reuse-shell'), expectedLoad = join(reuseShell, 'shell-loaded');
   await mkdir(reuseShell);
   await writeFile(join(reuseShell, '.zshrc'), `print loaded > '${expectedLoad}'\n`);
-  // A second desktop with its own HOME owns an isolated ~/.agentforge/desktop instance.
+  // A second desktop with its own HOME owns an isolated ~/.baton/desktop instance.
   const reusedHome = join(evidenceRoot, 'reused-home');
   await mkdir(reusedHome, { mode: 0o700 });
   const reused = await electron.launch({ ...launchOptions, args: [`--user-data-dir=${join(evidenceRoot, 'reused-profile')}`], env: { ...launchOptions.env, HOME: reusedHome, ZDOTDIR: reuseShell } });
@@ -892,9 +892,9 @@ try {
   if (process.platform === "darwin") {
     await page.goto(urlFor(page, "/settings/general"));
     await page.getByText("尚未设置；首次关闭窗口时会询问，取消不会保存选择。", { exact: true }).waitFor();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.agentforgeDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode"]);
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.batonDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode"]);
     await page.locator('[data-settings-page="cli"]').click();
-    await assert.rejects(page.evaluate(() => window.agentforgeDesktop.getPreferences()), /仅允许/);
+    await assert.rejects(page.evaluate(() => window.batonDesktop.getPreferences()), /仅允许/);
     const cliHome = join(evidenceRoot, 'installed-cli-home');
     await mkdir(cliHome, { mode: 0o700 });
     const originalHome = await desktop.evaluate(({ app }) => ({ home: process.env.HOME, zdotdir: process.env.ZDOTDIR }));
@@ -915,7 +915,7 @@ try {
       await cancellation.screenshot({ path: join(evidenceRoot, 'packaged-cli-install-confirm.png'), animations: 'disabled' });
       await cancellation.locator('[data-choice="cancel"]').click();
       await page.getByText('已取消，未安装。', { exact: true }).waitFor();
-      await assert.rejects(access(join(cliHome, '.local/bin/agentforge')), /ENOENT/);
+      await assert.rejects(access(join(cliHome, '.local/bin/baton')), /ENOENT/);
       const confirmedWindow = desktop.waitForEvent('window');
       await page.locator('[data-cli-install]').click();
       const confirmation = await confirmedWindow;
@@ -923,16 +923,16 @@ try {
       await confirmation.locator('[data-choice="install"]').click();
       // The installed state is a status pill plus the follow-up instruction.
       await page.locator('[data-cli-status] .status-pill').getByText('已安装', { exact: true }).waitFor();
-      await page.locator('[data-cli-status]').getByText('请新开终端运行 agentforge help；已有终端需重新打开。').waitFor();
-      const installation = await page.evaluate(() => window.agentforgeDesktop.getCliInstallation());
+      await page.locator('[data-cli-status]').getByText('请新开终端运行 baton help；已有终端需重新打开。').waitFor();
+      const installation = await page.evaluate(() => window.batonDesktop.getCliInstallation());
       assert.equal(installation.installed, true);
       assert.ok(['zsh', 'bash'].includes(installation.shell));
-      const result = await execute(`/bin/${installation.shell}`, ['-ilc', 'agentforge schema agents --json'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
+      const result = await execute(`/bin/${installation.shell}`, ['-ilc', 'baton schema agents --json'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
       assert.equal(JSON.parse(result.stdout).data.group, 'agents');
-      const terminal = await execute(`/bin/${installation.shell}`, ['-ilc', 'agentforge help agents'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
+      const terminal = await execute(`/bin/${installation.shell}`, ['-ilc', 'baton help agents'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
       assert.ok(!terminal.stdout.startsWith('{')); assert.match(terminal.stdout, /子命令/);
       assert.doesNotMatch(terminal.stdout, /JSON 输入模板/);
-      const commandHelp = await execute(`/bin/${installation.shell}`, ['-ilc', 'agentforge agents create --help'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
+      const commandHelp = await execute(`/bin/${installation.shell}`, ['-ilc', 'baton agents create --help'], { env: { HOME: cliHome, ZDOTDIR: cliHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', TERM: 'dumb' }, timeout: 30000 });
       assert.match(commandHelp.stdout, /runtime.extensionSelection.pluginIds/); assert.match(commandHelp.stdout, /JSON 输入模板/);
       const shell = { shell: installation.shell, home: cliHome };
       await packagedCli(['auth', 'login', '--username', username, '--password-stdin'], password + '\n', shell);
@@ -950,7 +950,7 @@ try {
       }, originalHome);
     }
     await page.goto(urlFor(page, "/settings/general"));
-    await assert.rejects(page.evaluate(() => window.agentforgeDesktop.getCliInstallation()), /仅允许/);
+    await assert.rejects(page.evaluate(() => window.batonDesktop.getCliInstallation()), /仅允许/);
     // First close asks through the app-styled dialog window; cancel keeps the
     // main window visible and saves no preference.
     const closingEvent = desktop.waitForEvent('window');
@@ -981,15 +981,15 @@ try {
     await waitFor("saved tray preference", async () => JSON.parse(await readFile(join(controlRoot, "desktop-preferences.json"), "utf8")).closeMode === "tray");
     await page.screenshot({ path: join(evidenceRoot, "packaged-general-settings.png"), animations: "disabled" });
     assert.equal(await page.evaluate(async () => {
-      try { await window.agentforgeDesktop.setCloseMode("invalid"); return false; } catch { return true; }
+      try { await window.batonDesktop.setCloseMode("invalid"); return false; } catch { return true; }
     }), true, "invalid mode must be rejected without changing the saved preference");
     assert.equal(JSON.parse(await readFile(join(controlRoot, "desktop-preferences.json"), "utf8")).closeMode, "tray");
     await page.goto(urlFor(page, "/settings/appearance"));
     assert.equal(await page.evaluate(async () => {
-      try { await window.agentforgeDesktop.getPreferences(); return false; } catch { return true; }
+      try { await window.batonDesktop.getPreferences(); return false; } catch { return true; }
     }), true, "main process must reject preference access outside the exact General route");
     assert.equal(await page.evaluate(async () => {
-      try { await window.agentforgeDesktop.installCli(); return false; } catch { return true; }
+      try { await window.batonDesktop.installCli(); return false; } catch { return true; }
     }), true, 'CLI install outside General must be rejected');
     await page.goto(urlFor(page, "/settings/general"));
     await page.locator('input[name="closeMode"][value="tray"]:checked').waitFor();
@@ -1001,17 +1001,17 @@ try {
     await verifyTrayFocus(page);
     console.log("PASS packaged Mac close-to-tray hides/restores the window and preserves owned service");
   }
-  assert.equal(await page.locator('head #agentforge-desktop-style').count(), 1);
+  assert.equal(await page.locator('head #baton-desktop-style').count(), 1);
   assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--desktop-presentation').trim()), 'workbench');
   assert.equal(await page.evaluate(() => typeof window.require), "undefined");
   assert.deepEqual(await page.evaluate(async () => (await fetch("/api/auth/bootstrap-status")).json()), { available: false, configured: true });
 
-  const auth = await stat(storage.AGENTFORGE_AUTH_DB_PATH);
-  const metadata = await stat(storage.AGENTFORGE_DB_PATH);
+  const auth = await stat(storage.BATON_AUTH_DB_PATH);
+  const metadata = await stat(storage.BATON_DB_PATH);
   assert.ok(auth.isFile());
   assert.ok(metadata.isFile());
   assert.ok(storage.dataRoot.startsWith(home + '/'), 'packaged instance state lives under the isolated HOME data home');
-  await assert.rejects(access(join(profile, "agentforge.sqlite")), /ENOENT/, 'Chromium userData must not hold the application database');
+  await assert.rejects(access(join(profile, "baton.sqlite")), /ENOENT/, 'Chromium userData must not hold the application database');
   assert.equal((await stat(storage.dataRoot)).mode & 0o777, 0o700);
   await assert.rejects(access(inheritedDatabase), /ENOENT/);
   await assert.rejects(access(inheritedAuthDatabase), /ENOENT/);
@@ -1078,7 +1078,7 @@ if (process.platform === "darwin") {
   // This pre-navigation instance gets its own HOME so its data root is fresh.
   const slowHome = join(evidenceRoot, 'cancel-home');
   await mkdir(slowHome, { mode: 0o700 });
-  const slowDatabase = join(slowHome, 'agentforge', '.agentforge', 'desktop', 'agentforge.sqlite');
+  const slowDatabase = join(slowHome, 'baton', '.baton', 'desktop', 'baton.sqlite');
   const shellPidFile = join(slowShell, 'shell.pid'), lateFile = join(slowShell, 'late-marker');
   await writeFile(join(slowShell, '.zshenv'), `print -r -- $$ > '${shellPidFile}'\n/bin/sleep 30\nprint late > '${lateFile}'\n`);
   // Playwright's app connection waits for the first navigated page. For this
@@ -1091,7 +1091,7 @@ if (process.platform === "darwin") {
     shellPid = Number((await readFile(shellPidFile, 'utf8')).trim()); assert.ok(Number.isInteger(shellPid) && shellPid > 1);
     process.kill(shellPid, 0);
     await assert.rejects(access(lateFile), /ENOENT/, 'capture must still be pending before quit');
-    await assert.rejects(access(join(slowProfile, 'agentforge.sqlite')), /ENOENT/, 'userData keeps no application database');
+    await assert.rejects(access(join(slowProfile, 'baton.sqlite')), /ENOENT/, 'userData keeps no application database');
     await assert.rejects(access(slowDatabase), /ENOENT/, 'backend must not exist before quit');
     await waitFor('main inspector ready', () => Boolean(inspectorUrl));
     inspector = new WebSocket(inspectorUrl);

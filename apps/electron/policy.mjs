@@ -24,7 +24,7 @@ export async function health(origin, instanceId, fetcher = fetch) {
   try {
     const response = await fetcher(`${origin}/api/health`, { signal: AbortSignal.timeout(1500), redirect: "error" });
     const body = await response.json();
-    return response.ok && body.service === "agentforge-control-plane" && body.instanceId === instanceId;
+    return response.ok && body.service === "baton-control-plane" && body.instanceId === instanceId;
   } catch { return false; }
 }
 

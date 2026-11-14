@@ -6,7 +6,7 @@ DeepSeek Harness 为官方 Runtime，本轮验证版本 0.2.1-rc.2。使用本�
 
 适配入口 server/runtime/dsh.mjs；原生桥 server/runtime/dsh-plugin.mjs 只使用 Node 内置模块与 DeepSeek Harness 提供的 Cordis context，不新增依赖。打包后将桥源码写入 Trace 私有目录，外部 Node 不读取 ASAR。JSON 本身是有效 YAML，调用补丁用 JSON 序列化，避免自行拼接 YAML 或引入解析依赖。
 
-每个原生会话使用 runtime-configs/dsh/会话ID 下的独立 DSH_HOME；只生成当前安装自带 SDK profile，不加载操作者全局/项目插件和默认 Skill 目录。DeepSeek Harness credentials-local 自己读取原 DSH_HOME（默认 ~/.dsh）的 .credentials.yaml，AgentForge 不解析、复制或展示密钥。配置协议只接入 DeepSeek Harness 内置 DeepSeek API Key/账号路由；用户自定义 pi-ai 路由没有自动导入。模型目录和逐模型思考等级由本机 DeepSeek Harness 服务报告；模型 ID 使用 Provider/模型ID，省略前缀为 deepseek-official。
+每个原生会话使用 runtime-configs/dsh/会话ID 下的独立 DSH_HOME；只生成当前安装自带 SDK profile，不加载操作者全局/项目插件和默认 Skill 目录。DeepSeek Harness credentials-local 自己读取原 DSH_HOME（默认 ~/.dsh）的 .credentials.yaml，Baton 不解析、复制或展示密钥。配置协议只接入 DeepSeek Harness 内置 DeepSeek API Key/账号路由；用户自定义 pi-ai 路由没有自动导入。模型目录和逐模型思考等级由本机 DeepSeek Harness 服务报告；模型 ID 使用 Provider/模型ID，省略前缀为 deepseek-official。
 
 ## 指令、扩展与生命周期
 
