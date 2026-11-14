@@ -1,5 +1,7 @@
 # 共享展示投影
 
+`collaborationRecords` 将任务 Message 的可选 `clientRequestId` 原样透出，供 renderer 和 CLI 精确确认逻辑发送；不按正文或时间归并消息，内部请求摘要/回执不进入该展示投影。
+
 workspaceAgents 使用服务端 deletedAgentIds 过滤已删除员工（经理以 sourceAgentId 识别）；仅过滤成员列表，不改写 Run、Trace、协作正文与历史事实。
 
 协作记录只展示员工、经理、人类之间的沟通 Message；系统提示、启动、投递、重试和结算事件不作为记录行。底层不可变事件、Dispatch 和 Trace 继续保留，关联执行元数据供查询。消息保存本轮 `startMessageId`，对应 Trace 的 `inputMessageId`；“本轮控制台”按该 ID 打开、定位本次提示词，不受日志分页影响。成员原生会话贯穿任务且彼此隔离，每次执行拥有独立输入轮次 ID。
@@ -28,7 +30,7 @@ workspaceAgents 使用服务端 deletedAgentIds 过滤已删除员工（经理�
 
 workflowFocus 仅依据执行、等待和经理当前焦点；不接收独立问题列表。所有问题和处理反馈通过协作消息呈现。
 
-自动化直接复用任务工作区与既有协作/控制台投影，不另建执行详情组件。自动化参与者无 human，因此不显示人类输入与筛选；普通任务投影和历史定位不变。
+自动化直接复用任务工作区与既有协作/控制台投影，不另建执行详情组件。自动化参与者无 human，因此不显示人类输入；任务协作统一移除“全部/涉及我”筛选，保留历史分页与最新定位。
 
 workspaceAgents 默认排除已移除成员；历史 Trace 保留冻结身份。任务成员列表复用执行状态与控制台选择。
 
@@ -36,7 +38,7 @@ workspaceAgents 默认排除已移除成员；历史 Trace 保留冻结身份。
 
 共享 STATUS_TEXT 与 TASK_FILTERS 将 backlog 显示为「草稿」，协议仍为 backlog；任务启动及 Run 状态不变。
 
-collaborationRecords 保留 Message.attachments 元数据；任务和沟通共用图片预览/下载展示，CLI 保留对应引用。Trace/Artifact 中 agent 为 id/name 引用，完整成员配置从 Run.participants 读取。
+collaborationRecords 保留 Message.clientRequestId 与 Message.attachments 元数据；请求引用用于准确合并本地发送记录与服务器确认，不按正文或时间猜测；任务和沟通共用图片预览/下载展示，CLI 保留对应引用。Trace/Artifact 中 agent 为 id/name 引用，完整成员配置从 Run.participants 读取。
 
 ByteCache 按 UTF-8 字节及项数实施 LRU，支持并发读取去重和失败移除。控制台正文、提示词及沟通 Markdown 分别配置预算；缓存不拥有领域状态。collaborationRecords 可接收按页补齐的问题/答复、投递和验收文件摘要，与全历史投影保持消息语义和本轮输入定位一致。
 

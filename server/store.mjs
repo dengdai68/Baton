@@ -942,19 +942,42 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
       if (!record) throw new Error('附件不属于当前任务或不存在');
       return clone(record);
     },
-    submitHumanMessage(runId, input) {
+    submitHumanMessage(runId, input, { initialize = false } = {}) {
       return this.transaction(() => {
         const current = getRun(runId), task = getTask(current?.taskId);
+        if (input.content !== undefined && typeof input.content !== "string") throw new Error("消息内容必须为文本");
+        for (const key of ["recipientAgentId", "replyToMessageId"]) if (input[key] != null && typeof input[key] !== "string") throw new Error(`${key} 必须为文本 ID`);
+        const attachmentIds = input.attachmentIds ?? [];
+        if (!Array.isArray(attachmentIds) || attachmentIds.length > 10 || new Set(attachmentIds).size !== attachmentIds.length || attachmentIds.some(value => typeof value !== "string")) throw new Error("每条消息最多 10 个不重复的附件");
+        const clientRequestId = input.clientRequestId;
+        if (clientRequestId !== undefined && (typeof clientRequestId !== "string" || !/^[A-Za-z0-9_-]{8,100}$/.test(clientRequestId))) throw new Error("clientRequestId 必须为 8–100 位字母、数字、下划线或连字符");
+        const fingerprint = clientRequestId === undefined ? null : createHash("sha256").update(JSON.stringify({ content: input.content ?? "", recipientAgentId: input.recipientAgentId ?? null, replyToMessageId: input.replyToMessageId ?? null, attachmentIds: input.attachmentIds ?? [] })).digest("hex");
+        const previous = clientRequestId === undefined ? null : journal.select("messages", "clientRequestId", clientRequestId).find(message => message.runId === runId);
+        if (previous) {
+          if (previous.clientRequest.fingerprint !== fingerprint) throw Object.assign(new Error("clientRequestId 已用于不同的协作内容、接收人、回复或附件"), { code: "CLIENT_REQUEST_CONFLICT" });
+          return { ...clone(previous.clientRequest.receipt), message: clone(previous), replayed: true };
+        }
         if (!current || task.archivedAt) throw new Error("任务已归档，不接受新消息");
         if (task.kind === "automation") throw new Error("自动化不接受人类协作消息");
         if (current.status === "failed") throw new Error("任务因错误中断，请先重试失败员工；当前不能发送消息或 @ 其他成员");
         if (!input.replyToMessageId && this.pendingQuestions(runId).some(question => question.recipient.type === "human")) throw new Error("任务正在等待人类澄清，请先回复待回答问题，不能追加新指令");
+        // Keep first-send initialization in the same atomic command. Replays
+        // return above without creating dispatches or waking execution.
+        if (initialize) this.initializeDispatches(runId);
+        const receipt = result => {
+          if (clientRequestId === undefined) return result;
+          const saved = journal.get("messages", result.message.id);
+          const { message, ...flags } = result;
+          saved.clientRequestId = clientRequestId;
+          saved.clientRequest = { fingerprint, receipt: flags };
+          return { ...result, message: clone(saved), replayed: false };
+        };
         const interactionOnly = ["completed", "cancelled", "paused"].includes(current.status);
         if (current.status === "awaiting_acceptance" && !input.replyToMessageId) {
           current.status = "running"; current.deliveryReview = null; current.acceptanceRequest = null; task.status = "running"; task.updatedAt = now();
           addEvent({ type: "run.acceptance_reopened", runId, actor: humanMember, message: "人类追加消息，重新进入团队协作并等待新的验收结论。", data: {} });
         }
-        if (input.replyToMessageId) return { message: this.answerQuestion(runId, input.replyToMessageId, input.content, { type: "human", id: humanMember.id, name: humanMember.name }, null, input.attachmentIds), resumed: current.status !== "paused", queued: true };
+        if (input.replyToMessageId) return receipt({ message: this.answerQuestion(runId, input.replyToMessageId, input.content, { type: "human", id: humanMember.id, name: humanMember.name }, null, input.attachmentIds), resumed: current.status !== "paused", queued: true });
         const recipientId = input.recipientAgentId ?? current.manager.id;
         const recipient = runAgent(current, recipientId);
         if (!recipient) throw new Error("消息接收者不属于当前 Run");
@@ -968,7 +991,7 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
         } else {
           this.enqueueDispatch(runId, { recipientAgentId: recipientId, workflowNodeId: ownNode || current.currentFocus?.nodeId || task.workflowSnapshot.nodes[0].id, purpose: "instruction", messageIds: [message.id], sourceMessageId: message.id, dedupeKey: "message:" + message.id });
         }
-        this.syncWaiting(runId); return { message, queued: true, resumed: false, interactionOnly };
+        this.syncWaiting(runId); return receipt({ message, queued: true, resumed: false, interactionOnly });
       });
     },
     confirmAutomationCompletion(runId, triggerId) {
@@ -1160,8 +1183,10 @@ export function createStore({ databasePath = process.env.AGENTFORGE_DB_PATH || "
     getExtension(kind, extensionId) { return clone(state.extensionCatalog.find(item=>item.kind===kind && item.id===extensionId && !item.deletedAt) || null); },
     listExtensions(kind) { return clone(state.extensionCatalog.filter(item=>(!kind || item.kind===kind) && !item.deletedAt)); },
     queryExtensions(kind, input = {}) {
-      if (!['plugin','mcp'].includes(kind) || typeof (input.search ?? '') !== 'string' || (input.search || '').length > 200 || !Number.isSafeInteger(input.page ?? 1) || (input.page ?? 1) < 1) throw new Error('目录查询参数无效');
-      return persistence.queryExtensions(kind, {search:input.search || '',page:input.page ?? 1});
+      if (!['all','unused'].includes(input.usage ?? 'all') || !['plugin','mcp'].includes(kind) || typeof (input.search ?? '') !== 'string' || (input.search || '').length > 200 || !Number.isSafeInteger(input.page ?? 1) || (input.page ?? 1) < 1) throw new Error('目录查询参数无效');
+      const key=kind==='plugin'?'pluginIds':'mcpIds';
+      const excludeIds=input.usage==='unused' ? [...new Set([...state.agents.filter(agent=>agent.status!=='deleted').flatMap(agent=>agent.runtime?.extensionSelection?.[key] || []),...state.roles.flatMap(role=>role.extensionSelection?.[key] || [])])] : [];
+      return persistence.queryExtensions(kind, {search:input.search || '',page:input.page ?? 1,excludeIds});
     },
     isExtensionRemoved(kind, extensionId) {
       return state.extensionRemovals.some(item => item.kind === kind && item.id === extensionId);

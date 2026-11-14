@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 const WIDTH = 480, MAX_WIDTH = 720, MIN_HEIGHT = 148, WORK_AREA_MARGIN = 64;
 const MEASURE = "Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)";
 
-export function showAppDialog({ BrowserWindow, parent = null, kind = "question", title, message, detail = "", buttons, defaultIndex = 0, cancelIndex = buttons.length - 1, signal, workAreaHeight }) {
+export function showAppDialog({ BrowserWindow, parent = null, kind = "question", title, message, detail = "", buttons, defaultIndex = 0, cancelIndex = buttons.length - 1, signal, workAreaHeight, backgroundColor = "#ffffff" }) {
   if (!Array.isArray(buttons) || buttons.length === 0 || buttons.some(label => typeof label !== "string" || !label)) throw new Error("对话框按钮无效");
   for (const index of [defaultIndex, cancelIndex]) if (!Number.isInteger(index) || index < 0 || index >= buttons.length) throw new Error("对话框按钮索引无效");
   if (signal?.aborted || parent?.isDestroyed()) return Promise.resolve(cancelIndex);
@@ -35,7 +35,7 @@ export function showAppDialog({ BrowserWindow, parent = null, kind = "question",
     ...(parent ? { parent, modal: true } : {}),
     show: false, width: WIDTH, height: MIN_HEIGHT,
     resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
-    title: String(title), backgroundColor: "#ffffff", autoHideMenuBar: true,
+    title: String(title), backgroundColor, autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
       webSecurity: true, webviewTag: false, partition: "agentforge-app-dialog" },
   });

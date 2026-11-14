@@ -28,7 +28,7 @@ const evidence={root,cases:[]};console.log('EVIDENCE '+root);
 try {
   const page=await app.firstWindow();await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;
   await page.goto(origin+'/login');await page.locator('#username').fill('layout-test');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('#account-name').waitFor();
-  for(const theme of ['minimal','warm'])for(const width of [1320,760]) {
+  for(const theme of ['light','dark'])for(const width of [1320,760]) {
     await app.evaluate(({BrowserWindow},{width,origin})=>BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().startsWith(origin)).setContentSize(width,800),{width,origin});
     await page.goto(origin+'/settings/appearance');await page.locator(`[name=theme][value=${theme}]`).check();
     await page.goto(origin+'/runs/'+run.id);await page.locator('#console-mode').click();

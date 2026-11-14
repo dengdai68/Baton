@@ -295,8 +295,8 @@ export function createSqlitePersistence(databasePath = ":memory:", { onSaveDiagn
       const items=database.prepare(`SELECT id FROM workspace_entities WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...values,pageSize,(page-1)*pageSize).map(row=>row.id);
       return {items,total,page,pageSize,totalPages,hasMore:page<totalPages};
     },
-    queryExtensions(kind, { search = '', page = 1, pageSize = 20 } = {}) {
-      return configuration.query(kind,{search,page,pageSize});
+    queryExtensions(kind, { search = '', page = 1, pageSize = 20, excludeIds = [] } = {}) {
+      return configuration.query(kind,{search,page,pageSize,excludeIds});
     },
     save(state, journal = null) {
       configuration.assertReady();

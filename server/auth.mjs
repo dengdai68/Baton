@@ -177,7 +177,8 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
       if (request.method === "POST" && path === "/api/auth/logout") {
         revoke(request); response.setHeader("Set-Cookie", cookie(sessionCookieName, "", 0, request.headers.origin)); json(response, 200, { ok: true }); return true;
       }
-      if (request.method === "GET" && ["/login", "/login.js", "/login.css", "/api/health"].includes(path)) return false;
+      // Pre-auth pages render brand assets too; icons/vendor are inert presentation files.
+      if (request.method === "GET" && (["/login", "/login.js", "/login.css", "/api/health"].includes(path) || path.startsWith("/icons/") || path.startsWith("/vendor/"))) return false;
       const current = session(request);
       if (!current) {
         if (path.startsWith("/api/")) json(response, 401, { error: "authentication_required" });

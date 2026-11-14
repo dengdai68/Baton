@@ -1,5 +1,6 @@
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import vm from "node:vm";
+import {RUNTIME_IDS,RUNTIME_PROVIDERS} from "../client/runtime-providers.mjs";
 import {editDiff, workingDirectoryIcon} from "../client/console-projections.mjs";
 // Real visible Electron smoke test; uses isolated data, never production credentials.
 import { _electron as electron } from "playwright-core";
@@ -85,6 +86,8 @@ fixtureStore.addEvent({ type: "runtime.event", runId: fixtureRun.id, actor: { ty
 // prompt entry must still appear, bound to the Trace record itself.
 const silentTrace = fixtureStore.createTrace(fixtureRun.id, { agentId: fixtureRun.manager.id, workflowNodeId: "testing", type: "node" });
 fixtureStore.attachTracePrompt(silentTrace.id, await fixtureFiles.writePromptSnapshot(fixtureRun.id, silentTrace.id, promptSnapshot({ systemPrompt: "SYSTEM_PRIVATE_DO_NOT_DISPLAY", prompt: "静默调用快照原文。" })));
+const fixtureChatEmployee=fixtureStore.listAgents().find(agent=>agent.id==='agent_engineer');
+fixtureStore.close();
 await writeStorageLocation(storage.AGENTFORGE_DESKTOP_CONTROL_ROOT,{version:1,workspaceRoot:storage.AGENTFORGE_WORKSPACE_ROOT,previousRuntimeRoots:[]});
 const desktop = await electron.launch({ args: ["apps/electron/main.mjs", `--user-data-dir=${join(directory, "profile")}`], env: {
   ...process.env,
@@ -101,18 +104,21 @@ async function verifyDirectorySearch(page, prefix, view) {
   const cards=root.locator(view==='agents'?'.agent-card':'.installed-extension-card');
   await cards.first().waitFor();
   const count=await cards.count(),name=await cards.first().locator(view==='agents'?'h3':'.extension-name').textContent();
-  const row=await root.locator('.directory-toolbar').evaluate(node=>{
-    const search=node.querySelector('input').getBoundingClientRect(),button=node.querySelector('button').getBoundingClientRect();
-    return {aligned:Math.abs(search.y+search.height/2-button.y-button.height/2)<2,separate:search.right<button.left,fits:button.right<=innerWidth};
-  });
-  assert.deepEqual(row,{aligned:true,separate:true,fits:true},`${prefix} ${view} search and action share a row`);
+  const row=await page.evaluate(view=>{
+    const toolbar=document.querySelector(`#${view}-view .directory-toolbar`),input=toolbar.querySelector('input'),action=document.querySelector(`#${view}-header-actions .primary-button`);
+    const search=input.getBoundingClientRect(),button=action.getBoundingClientRect(),bar=toolbar.getBoundingClientRect();
+    return {headerAction:Boolean(action.closest('.topbar')),separate:button.bottom<=bar.top,searchFits:search.left>=bar.left && search.right<=bar.right,searchWidth:search.width,actionFits:button.right<=innerWidth};
+  },view);
+  assert.ok(row.headerAction && row.separate && row.searchFits && row.actionFits,`${prefix} ${view} primary action stays in the titlebar and search in its toolbar: ${JSON.stringify(row)}`);
+  assert.ok(row.searchWidth<=221 && row.searchWidth>=120,`${prefix} ${view} search retains the Graphite toolbar width`);
   assert.equal(await root.getByText(/搜索已安装/).count(),0);
   await search.fill(name.toLowerCase());await page.waitForFunction(({view,name})=>{
     const root=document.querySelector(`#${view}-view`),cards=[...root.querySelectorAll(view==='agents'?'.agent-card':'.installed-extension-card')];
     return cards.length>0 && cards.every(card=>card.textContent.toLowerCase().includes(name));
   },{view,name:name.toLowerCase()});
-  await search.fill('NOT-FOUND-66');await root.getByText(view==='agents'?'没有匹配的数字员工':'没有匹配项',{exact:true}).waitFor();
-  await search.fill('');assert.equal(await cards.count(),count);
+  await search.fill('NOT-FOUND-66');await root.getByText(view==='agents'?'没有匹配的数字员工':view==='marketplace'?'没有匹配的插件':'没有匹配的MCP',{exact:true}).waitFor();
+  await search.fill('');await page.waitForFunction(({view,count})=>document.querySelectorAll(`#${view}-view ${view==='agents'?'.agent-card':'.installed-extension-card'}`).length===count,{view,count});
+  assert.equal(await cards.count(),count);
   if(view==='agents' && prefix==='electron') {
     const ids=await page.evaluate(async()=>{
       const ids=[];for(let i=0;i<21;i++) {
@@ -129,7 +135,12 @@ async function verifyDirectorySearch(page, prefix, view) {
     assert.equal(await cards.count(),count);
   }
   await page.screenshot({path:`screenshots/${prefix}-${view}-search.png`,animations:'disabled'});
-  console.log(`PASS ${prefix} ${view}: same-row toolbar, case-insensitive search, empty result and clear`);
+  console.log(`PASS ${prefix} ${view}: titlebar action, separate search toolbar, case-insensitive search, empty result and clear`);
+}
+async function clickDirectoryMenuAction(action) {
+  const menu=action.locator('xpath=ancestor::details[contains(@class,"action-menu")][1]');
+  if(!await menu.evaluate(node=>node.open))await menu.locator(':scope > summary').click();
+  await action.click();
 }
 async function verifyCardGeometry(cards,label) {
   const bounds=await cards.evaluateAll(nodes=>nodes.map(n=>({height:n.getBoundingClientRect().height,actions:n.querySelector('.directory-card-actions').getBoundingClientRect().top-n.getBoundingClientRect().top})));
@@ -137,19 +148,21 @@ async function verifyCardGeometry(cards,label) {
   for(const key of ['height','actions']) assert.ok(Math.max(...bounds.map(x=>x[key]))-Math.min(...bounds.map(x=>x[key]))<2,`${label}: stable ${key}`);
 }
 async function verifyPluginScroll(page,label) {
-  const scroller=page.locator('.extension-detail-modal .modal-scroll');
+  const scroller=page.locator('.extension-detail-modal .directory-detail-body');
+  await page.locator('.extension-detail-modal').evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished)));
   const bounds=await scroller.evaluate(n=>({height:n.clientHeight,content:n.scrollHeight,bottom:n.getBoundingClientRect().bottom,viewport:innerHeight}));
   assert.ok(bounds.height>60 && bounds.height<bounds.content,`${label}: component body has a bounded scrolling viewport`);
-  assert.ok(bounds.bottom<bounds.viewport);
+  assert.ok(bounds.bottom<=bounds.viewport+1,`${label}: scrolling body remains inside the viewport`);
   await scroller.hover();await page.mouse.wheel(0,20000);
-  await page.waitForFunction(()=>{const n=document.querySelector('.extension-detail-modal .modal-scroll');return n.scrollHeight-n.scrollTop-n.clientHeight<2;});
+  await page.waitForFunction(()=>{const n=document.querySelector('.extension-detail-modal .directory-detail-body');return n.scrollHeight-n.scrollTop-n.clientHeight<2;});
   const last=await page.locator('.plugin-detail-component').last().boundingBox();
   assert.ok(last.y+last.height<=bounds.bottom+2,`${label}: wheel reaches final Skill`);
-  const footer=await page.locator('.extension-detail-modal .form-actions').boundingBox();assert.ok(footer.y+footer.height<=bounds.viewport);
+  const header=await page.locator('.extension-detail-modal .directory-detail-header').boundingBox();assert.ok(header.y>=0 && header.y+header.height<=bounds.bottom,'drawer header actions stay visible while the component body scrolls');
+  assert.equal(await page.locator('.extension-detail-modal .directory-detail-header [data-close-modal]').isVisible(),true);
   await scroller.evaluate(n=>n.scrollTo({top:0,behavior:'instant'}));
   await page.locator('#plugin-component-panel').focus();
   const initial=await scroller.evaluate(n=>n.scrollTop);await page.keyboard.press('PageDown');
-  await page.waitForFunction(initial=>document.querySelector('.extension-detail-modal .modal-scroll').scrollTop>initial,initial);
+  await page.waitForFunction(initial=>document.querySelector('.extension-detail-modal .directory-detail-body').scrollTop>initial,initial);
   await scroller.evaluate(n=>n.scrollTo({top:0,behavior:'instant'}));
   console.log(`PASS ${label}: wheel reaches final Skill, keyboard scrolls and actions stay visible`);
 }
@@ -161,7 +174,8 @@ async function verifyMarketEmptyState(page,view) {
   assert.equal(bounds.grid,false);assert.ok(bounds.width>bounds.parent*.85,'directory empty state spans the page rather than a card column');
 }
 async function verifyExtensionPickerDismissal(page,prefix) {
-  for(const [kind,query] of [['plugin','ui-proof'],['mcp','desktop_']]){
+  // The deletion checks retire ui-proof; ui-claude-only remains installed and compatible with this employee.
+  for(const [kind,query] of [['plugin','ui-claude-only'],['mcp','desktop_']]){
     const picker=page.locator(`[data-picker=${kind}]`),input=picker.locator('input'),list=picker.locator('[role=listbox]'),chips=picker.locator('.extension-chip'),initial=await chips.count();
     await input.click();await input.fill(query);await list.getByRole('option').first().waitFor();
     await page.locator('.modal h2').hover();await list.waitFor({state:'hidden'});
@@ -174,7 +188,10 @@ async function verifyExtensionPickerDismissal(page,prefix) {
     await page.locator('.modal h2').hover();await list.waitFor({state:'hidden'});assert.equal(await input.evaluate(n=>n===document.activeElement),true,'dismissal does not strand focus in hidden options');
     await input.press('ArrowDown');const id=await list.getByRole('option').first().getAttribute('data-add-extension');await page.keyboard.press('Enter');
     assert.equal(await chips.count(),initial+1);assert.equal(await list.isVisible(),false);
-    await input.click();await list.waitFor({state:'visible'});await input.press('Shift+Tab');await list.waitFor({state:'hidden'});
+    await input.click();await list.waitFor({state:'visible'});
+    // Inline chips add removal buttons before the input to the keyboard order.
+    for(let step=0;step<initial+4&&await picker.evaluate(n=>n.contains(document.activeElement));step++)await page.keyboard.press('Shift+Tab');
+    assert.equal(await picker.evaluate(n=>n.contains(document.activeElement)),false,'Shift+Tab leaves all inline chip controls');await list.waitFor({state:'hidden'});
     // Shift+Tab may legitimately focus/open the other combobox. Dismiss that
     // keyboard-owned popup before testing removal behind it.
     if(await page.locator('[role=combobox][aria-expanded=true]').count())await page.keyboard.press('Escape');
@@ -195,19 +212,26 @@ async function verifyExtensionDeletion(page, kind, input, prefix) {
   const created=await request('/api/agents','POST',{name:`${prefix} 删除引用测试`,status:'inactive',runtime:{extensionSelection:selection}});
   assert.equal(created.status,201);const employee=created.body.agent;
   await page.reload();await page.locator(`[data-extension-detail="${entry.id}"]`).first().click();
-  await page.locator('[data-delete-extension]').click();await page.locator('[data-confirm-dialog-accept]').click();
-  await page.locator('[data-extension-delete-error]').filter({hasText:employee.name}).waitFor();
+  // Current Store deletion detaches live selections. A transport failure must
+  // still preserve the installation and its bindings and remain retryable.
+  const deletionUrl=new URL(`${path}/${entry.id}`,page.url()).href;
+  const failDeletion=route=>route.request().method()==='DELETE'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'隔离删除失败：请重试'})}):route.continue();
+  await page.route(deletionUrl,failDeletion);
+  await clickDirectoryMenuAction(page.locator('[data-delete-extension]'));await page.locator('[data-confirm-dialog-accept]').click();
+  await page.locator('[data-extension-delete-error]').filter({hasText:'隔离删除失败：请重试'}).waitFor();
+  await page.unroute(deletionUrl,failDeletion);
   if(kind==='plugin') await page.getByRole('tab',{name:/Skill/}).waitFor();else await page.locator('.mcp-json-detail').waitFor();
   const errorBounds=await page.locator('[data-extension-delete-error]').evaluate(node=>({top:node.getBoundingClientRect().top,bottom:node.getBoundingClientRect().bottom,height:innerHeight}));
-  assert.ok(errorBounds.top>=0 && errorBounds.bottom<=errorBounds.height,'reference error stays in the visible viewport even with long component details');
+  assert.ok(errorBounds.top>=0 && errorBounds.bottom<=errorBounds.height,'deletion error stays in the visible viewport even with long component details');
   assert.equal((await request(`${path}/${entry.id}`)).status,200,'failed deletion keeps installed entry');
-  await page.screenshot({path:`screenshots/${prefix}-${kind}-delete-blocked.png`,animations:'disabled'});
-  assert.equal((await request(`/api/agents/${employee.id}`,'PUT',{runtime:{extensionSelection:{pluginIds:[],mcpIds:[]}}})).status,200);
-  await page.locator('[data-delete-extension]').click();await page.locator('[data-confirm-dialog-cancel]').click();
-  await page.locator('[data-delete-extension]').waitFor();
+  assert.ok((await request(`/api/agents/${employee.id}`)).body.agent.runtime.extensionSelection[key].includes(entry.id),'failed deletion preserves the current employee binding');
+  await page.screenshot({path:`screenshots/${prefix}-${kind}-delete-failed.png`,animations:'disabled'});
+  await clickDirectoryMenuAction(page.locator('[data-delete-extension]'));await page.locator('[data-confirm-dialog-cancel]').click();
+  await page.locator('.extension-detail-modal .directory-detail-header').waitFor();
   assert.equal((await request(`${path}/${entry.id}`)).status,200,'cancel preserves installed entry');
-  await page.locator('[data-delete-extension]').click();await page.locator('[data-confirm-dialog-accept]').click();
+  await clickDirectoryMenuAction(page.locator('[data-delete-extension]'));await page.locator('[data-confirm-dialog-accept]').click();
   await page.locator(`[data-extension-detail="${entry.id}"]`).first().waitFor({state:'detached'});
+  assert.equal((await request(`/api/agents/${employee.id}`)).body.agent.runtime.extensionSelection[key].includes(entry.id),false,'successful deletion removes current bindings, including inactive employees');
   assert.equal((await request(`${path}/${entry.id}`)).status,404);
   assert.equal((await request(`${path}/${entry.id}`,'DELETE',{})).status,404);
   const rebound=await request(`/api/agents/${employee.id}`,'PUT',{runtime:{extensionSelection:selection}});
@@ -234,7 +258,7 @@ async function verifyExtensionDeletion(page, kind, input, prefix) {
   assert.equal((await cli([group,'delete',freshEntry.id,'--yes'])).historyRetained,true);
   assert.equal((await cli([group,'list','--all'])).items.some(item=>item.id===freshEntry.id),false);
   await cli(['auth','logout']);await page.reload();
-  console.log(`PASS ${prefix} ${kind}: authenticated UI/CLI delete, cancel, employee-reference rejection, retired-ID rejection and 404`);
+  console.log(`PASS ${prefix} ${kind}: authenticated UI/CLI delete, cancel, failure preservation, current-binding removal, retired-ID rejection and 404`);
 }
 async function verifyTaskSearch(page, prefix) {
   const selectConsole = async ({ all = false } = {}) => {
@@ -249,31 +273,31 @@ async function verifyTaskSearch(page, prefix) {
   };
   const form = page.locator("#task-search-form");
   await form.waitFor();
-  assert.equal(await page.locator("#tasks-table th").count(), 4);
-  assert.equal(await page.locator(".topbar").isVisible(), true);
-  const title = await page.locator("#tasks-table .table-title").first().textContent();
-  await form.locator('[name="name"]').fill(title.slice(0, 4));
-  await form.locator('[name="status"]').selectOption("paused");
-  await form.getByRole("button", { name: "搜索", exact: true }).click();
-  assert.equal(await page.locator("#tasks-table tbody tr").count(), 1);
-  await form.locator('[name="status"]').selectOption("awaiting_acceptance");
-  await form.getByRole("button", { name: "搜索", exact: true }).click();
-  await page.getByText("没有匹配的任务", { exact: true }).waitFor();
-  await form.getByRole("button", { name: "重置", exact: true }).click();
-  assert.equal(await page.locator("#tasks-table tbody tr").count(), 1);
-  assert.equal(await form.locator('[name="status"]').inputValue(), "all");
-  assert.equal(await form.locator('[name="teamId"]').count(), 0);
-  await form.locator('[name="name"]').fill("未提交的搜索草稿");
-  await page.locator('[data-view="agents"]').click();
-  await page.locator('[data-view="tasks"]').click();
-  assert.equal(await form.locator('[name="name"]').inputValue(), "未提交的搜索草稿");
-  await form.getByRole("button", { name: "重置", exact: true }).click();
-  await page.getByRole("button", { name: "归档历史", exact: true }).click();
-  await form.locator('[name="name"]').fill("无匹配归档");
-  await form.getByRole("button", { name: "搜索", exact: true }).click();
-  await page.getByText("没有匹配的任务", { exact: true }).waitFor();
-  await page.getByRole("button", { name: "返回任务中心", exact: true }).click();
-  await form.getByRole("button", { name: "重置", exact: true }).click();
+  await page.locator('#tasks-table .task-row').first().waitFor();
+  assert.equal(await page.locator('#tasks-table .task-row').count(),1);
+  assert.equal(await page.locator('.task-list-group[data-task-group=paused]').count(),1);
+  assert.equal(await page.locator('.topbar').isVisible(),true);
+  assert.equal(await page.locator('#breadcrumb-current').textContent(),'任务');
+  await page.waitForFunction(()=>document.querySelector('#topbar-count').textContent==='1');
+  assert.equal(await form.locator('[type=submit],[type=reset]').count(),0,'task filters apply without submit/reset buttons');
+  const title=await page.locator('#tasks-table .task-title-link').first().textContent();
+  const name=form.locator('[name=name]'),status=form.locator('[name=status]');
+  await name.fill(title.slice(0,4));await page.locator('[data-task-filters]').click();
+  await status.selectOption('paused');
+  await page.waitForFunction(()=>document.querySelectorAll('#tasks-table .task-row').length===1);
+  await status.selectOption('awaiting_acceptance');
+  await page.getByText('没有匹配的任务',{exact:true}).waitFor();
+  await status.selectOption('all');await page.locator('[data-task-filters]').click();await name.clear();
+  await page.waitForFunction(()=>document.querySelectorAll('#tasks-table .task-row').length===1);
+  assert.equal(await status.inputValue(),'all');assert.equal(await form.locator('[name=teamId]').count(),0);
+  await name.fill('保留的搜索条件');await page.locator('[data-view=agents]').click();await page.locator('[data-view=tasks]').click();
+  assert.equal(await name.inputValue(),'保留的搜索条件');await name.clear();
+  await page.locator('[data-task-center-page=archive]').click();
+  assert.equal(await page.locator('#breadcrumb-current').textContent(),'归档历史');
+  await name.fill('无匹配归档');await page.getByText('没有匹配的任务',{exact:true}).waitFor();
+  await page.locator('[data-task-center-page=current]').click();await name.clear();
+  await page.waitForFunction(()=>document.querySelectorAll('#tasks-table .task-row').length===1);
+  assert.equal(await page.locator('#breadcrumb-current').textContent(),'任务');
   await page.screenshot({ path: `screenshots/${prefix}-task-search.png`, animations: "disabled" });
   await page.locator("#tasks-table [data-open-task]").first().click();
   await page.locator("#run-workspace .workspace-title h3").waitFor();
@@ -281,20 +305,61 @@ async function verifyTaskSearch(page, prefix) {
   assert.equal(await page.locator(".workspace-back").count(), 1);
   assert.equal(await page.locator("#run-workspace .workspace-title h3").textContent(), title);
   assert.equal(await page.locator('[data-collaboration-filter="dispatch"]').count(), 0);
-  await page.locator('#instruction-text').fill('没有收件人的消息');
-  await page.locator('[data-send-instruction]').click();
-  await page.getByText('新消息必须 @ 一位当前任务成员', { exact: true }).waitFor();
-  assert.equal(await page.locator('#instruction-text').inputValue(), '没有收件人的消息');
+  // Current Task contract: an unmentioned message goes to the frozen manager.
+  // Route only this request through a separate real Store so this visual smoke
+  // verifies queuing/accepted-draft semantics without starting a Provider or
+  // adding invocation records to the three-Trace console fixture below.
+  const routingStore = createStore({ workspaceRoot: join(directory, 'composer-routing-workspaces') });
+  const routingTask = routingStore.createTask({ managerAgentId: 'system_project_manager', title: 'Composer routing fixture', objective: 'No Provider execution', memberAgentIds: routingStore.listTeams()[0].memberAgentIds, workflowTemplateId: 'software_delivery' });
+  const routingRun = routingStore.createRun(routingTask.id);
+  routingStore.pauseRun(routingRun.id, 'Store-only composer acceptance fixture');
+  const messageUrl = `**/api/runs/${fixtureRun.id}/messages`;
+  let accepted;
+  const acceptMessage = async route => {
+    const input = route.request().postDataJSON();
+    assert.equal(input.recipientAgentId, null, 'UI leaves default-manager routing to Store');
+    accepted = routingStore.submitHumanMessage(routingRun.id, input);
+    await route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ ...accepted, replanRequested: false }) });
+  };
+  try {
+    await page.route(messageUrl, acceptMessage);
+    await page.locator('#instruction-text').fill('未 @ 的消息交给经理');
+    await page.locator('[data-send-instruction]').click();
+    await page.waitForFunction(() => document.querySelector('#instruction-text')?.value === '' && !document.querySelector('[data-send-instruction]')?.disabled);
+    assert.equal(accepted.queued, true);
+    assert.equal(accepted.interactionOnly, true, 'a paused Run queues an inquiry without resuming its workflow');
+    assert.equal(accepted.message.recipient.id, routingRun.manager.id);
+    const dispatch = routingStore.listDispatches(routingRun.id).find(item => item.sourceMessageId === accepted.message.id);
+    assert.equal(dispatch.recipientAgentId, routingRun.manager.id);
+    assert.equal(dispatch.purpose, 'inquiry');
+    assert.equal(routingStore.getRun(routingRun.id).status, 'paused');
+  } finally { await page.unroute(messageUrl, acceptMessage); routingStore.close(); }
+  const rejectMessage = route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'Fixture temporarily unavailable' }) });
+  try {
+    await page.route(messageUrl, rejectMessage);
+    await page.locator('#instruction-text').fill('请求失败保留草稿');
+    await page.locator('[data-send-instruction]').click();
+    await page.getByText('Fixture temporarily unavailable', { exact: true }).waitFor();
+    assert.equal(await page.locator('#instruction-text').inputValue(), '请求失败保留草稿');
+  } finally { await page.unroute(messageUrl, rejectMessage); }
+  await page.locator('#instruction-text').fill('');
   await page.screenshot({ path: `screenshots/${prefix}-task-detail-clean.png`, animations: "disabled" });
   await page.waitForFunction(() => { const list = document.querySelector('.human-message-list'); return list && list.scrollHeight - list.scrollTop - list.clientHeight < 10; });
   assert.equal(await page.locator('.client-download').isVisible(), prefix === 'web');
   await page.locator('.human-message-list').evaluate(list => { list.scrollTop = 0; });
-  assert.equal(await page.locator(".workspace-details").isVisible(), false);
+  assert.equal(await page.locator(".workspace-details").isVisible(), await page.evaluate(() => innerWidth > 1180));
+  if (await page.locator('.workspace-details').isVisible()) await page.locator('[data-toggle-task-details]').click();
   assert.equal(await page.locator('.workspace-mode-tabs [role="tab"]').count(), 3);
-  const tabsBox = await page.locator('#console-mode').boundingBox(), detailBox = await page.locator('.workspace-mode-tabs [data-toggle-task-details]').boundingBox();
-  assert.ok(detailBox.x > tabsBox.x + tabsBox.width, 'task details is right of all tabs');
+  const tabsBox = await page.locator('.workspace-mode-tabs').boundingBox(), detailBox = await page.locator('.workspace-summary [data-toggle-task-details]').boundingBox();
+  assert.ok(detailBox.y + detailBox.height <= tabsBox.y + 1, 'task details belongs to the titlebar above the full-width tabs');
   await page.locator('[data-toggle-task-details]').click();
   assert.equal(await page.locator('.human-message-list').evaluate(list => list.scrollTop), 0, 'opening properties preserves deliberate history reading');
+  const focusPanel = page.locator('#workspace-details .workspace-workflow-focus');
+  assert.equal(await focusPanel.evaluate(node => node.open), true);
+  assert.equal(await focusPanel.locator('.workflow-focus-row').count(), fixtureTask.workflowSnapshot.nodes.length);
+  assert.ok(await focusPanel.evaluate(node => Boolean(node.compareDocumentPosition(document.querySelector('.task-member-section')) & Node.DOCUMENT_POSITION_FOLLOWING)));
+  await focusPanel.locator('summary').click();
+  assert.equal(await focusPanel.evaluate(node => node.open), false);
   await page.locator('[data-task-workflow-details]').click();
   await page.getByText('本任务创建时的工作流快照 · 只读').waitFor();
   assert.equal(await page.locator('#modal-content [data-edit-workflow]').count(), 0);
@@ -302,10 +367,13 @@ async function verifyTaskSearch(page, prefix) {
   await page.locator('[data-toggle-task-details]').click();
   await page.locator('[data-ws-tab="console"]').click();
   await selectConsole({ all: true });
-  await page.locator(".console-failure").waitFor();
+  const failureRow = page.locator('.log-message.error').filter({ hasText: 'CLI 不可启动' });
+  await failureRow.waitFor();
+  assert.ok(await failureRow.evaluate((node, id) => node.closest('.console-execution')?.dataset.consoleExecution.startsWith(id + ':'), failureTrace.id), 'failure stays in its real invocation');
+  assert.equal(await page.locator('.console-failure').count(), 0, 'failure is shown once in the log, without a duplicate banner');
   await page.locator(`[data-console-content="${fixtureThinkingEventId}"]`).scrollIntoViewIfNeeded();
   await page.locator('[data-execution-kind="thinking"]').waitFor();
-  assert.equal(await page.locator('[data-execution-kind="thinking"]').evaluate(node => Boolean(node.closest('details'))), false);
+  assert.equal(await page.locator('[data-execution-kind="thinking"]').evaluate(node => Boolean(node.closest('details:not(.console-execution)'))), false, 'thinking is readable inside its invocation without a second disclosure');
   await page.locator('.structured-output').scrollIntoViewIfNeeded();
   await page.locator('.structured-output .execution-json .hljs-attr').first().waitFor();
   assert.match(await page.locator('.structured-output .execution-json').textContent(), /\n  "count": 9007199254740993/);
@@ -315,12 +383,8 @@ async function verifyTaskSearch(page, prefix) {
   await page.locator('.structured-output').scrollIntoViewIfNeeded();
   await page.screenshot({ path: `screenshots/${prefix}-console-json.png` });
   assert.equal(await page.locator('.role-responsibility').count(), 0);
-  assert.match(await page.locator('.role-nav-heading strong').textContent(), /产品交付小队/);
-  assert.match(await page.locator(".console-failure").textContent(), /CLI 不可启动/);
-  await page.getByRole("button", { name: "定位失败记录", exact: true }).click();
-  await page.locator("[data-console-reset]").waitFor();
-  await page.waitForFunction(() => !document.querySelector(".console-history-controls")?.textContent.includes("正在加载"));
-  await page.waitForFunction(() => { const stream = document.querySelector('#trace-stream'); return stream && stream.scrollHeight - stream.scrollTop - stream.clientHeight < 10; });
+  assert.match(await page.locator('.console-members-heading').textContent(), /成员/);
+  assert.equal(await page.locator('.role-nav [data-select-agent]').count(), fixtureRun.participants.filter(member => member.type === 'agent').length);
   await page.locator(`[data-console-key="tool:${fixtureContentEventId}"] > summary`).click();
   assert.equal(await page.locator('.console-tool-call[open]').count(), 1);
   await page.locator('.console-tool-call[open] [data-execution-kind="output"]').waitFor();
@@ -408,11 +472,12 @@ async function verifyTaskSearch(page, prefix) {
   const human = page.locator('.collaboration-row.from-human');
   assert.equal(await human.locator('.collaboration-content header').count(), 0, 'metadata is outside the bubble');
   assert.equal(await human.locator('.member-mention').innerText(), '@' + fixtureRun.manager.name);
-  const layout = await human.evaluate(row => {
+  const layout = await page.evaluate(() => {
+    const row=document.querySelector('.collaboration-row.from-human');
     const bubble = row.querySelector('.collaboration-content'), header = row.querySelector('header'), mention = row.querySelector('.member-mention');
     return { bubblePadding: parseFloat(getComputedStyle(bubble).paddingLeft), metadataRight: Math.abs(header.getBoundingClientRect().right - bubble.getBoundingClientRect().right) < 2, color: getComputedStyle(mention).color, nameColor: getComputedStyle(header.querySelector('strong')).color, weight: Number(getComputedStyle(mention).fontWeight) };
   });
-  assert.equal(layout.bubblePadding, 12); assert.ok(layout.metadataRight); assert.equal(layout.color, layout.nameColor); assert.ok(layout.weight >= 600);
+  assert.ok(layout.bubblePadding >= 12 && layout.bubblePadding <= 16, 'human bubble keeps comfortable compact padding: '+JSON.stringify(layout)); assert.ok(layout.metadataRight); assert.equal(layout.color, layout.nameColor); assert.equal(layout.weight,500,'member mentions use the Graphite medium weight');
   assert.equal(await page.locator('#collaboration-panel .collaboration-review, [data-stop-inquiries]').count(), 0);
   await page.screenshot({ path: `screenshots/${prefix}-human-collaboration.png`, animations: 'disabled' });
   await page.locator('#console-mode').click();
@@ -469,10 +534,10 @@ async function verifyTaskSearch(page, prefix) {
   const lightPreview = await page.locator('#working-directory-panel .artifact-preview').evaluate(node => getComputedStyle(node).backgroundColor);
   await page.locator('[data-view="settings"]').click();
   await page.locator('[data-settings-page="appearance"]').click();
-  assert.equal(await page.locator('input[name="directoryTheme"]').count(), 3);
-  assert.equal(await page.locator('input[name="directoryTheme"]:checked').inputValue(), 'vscode-light');
-  await page.locator('input[name="directoryTheme"][value="vscode-dark"]').check();
-  assert.equal(await page.locator('input[name="directoryTheme"]:checked').inputValue(), 'vscode-dark');
+  assert.equal(await page.locator('select[name="directoryTheme"] option').count(), 3);
+  assert.equal(await page.locator('select[name="directoryTheme"]').inputValue(), 'vscode-light');
+  await page.locator('select[name="directoryTheme"]').selectOption('vscode-dark');
+  assert.equal(await page.locator('select[name="directoryTheme"]').inputValue(), 'vscode-dark');
   await page.locator('[data-view="tasks"]').click();
   await page.locator('#tasks-table [data-open-task]').first().click();
   await page.locator('#directory-mode').click();
@@ -494,7 +559,7 @@ async function verifyTaskSearch(page, prefix) {
   assert.equal(await page.locator('#working-directory-panel').getAttribute('data-directory-theme'), 'vscode-dark', 'directory theme survives reload');
   await page.locator('[data-view="settings"]').click();
   await page.locator('[data-settings-page="appearance"]').click();
-  await page.locator('input[name="directoryTheme"][value="classic"]').check();
+  await page.locator('select[name="directoryTheme"]').selectOption('classic');
   await page.locator('[data-view="tasks"]').click();
   await page.locator('#tasks-table [data-open-task]').first().click();
   await page.locator('#directory-mode').click();
@@ -507,7 +572,7 @@ async function verifyTaskSearch(page, prefix) {
   assert.ok(await page.locator('#working-directory-panel .file-icon').count() >= 1);
   await page.locator('[data-view="settings"]').click();
   await page.locator('[data-settings-page="appearance"]').click();
-  await page.locator('input[name="directoryTheme"][value="vscode-light"]').check();
+  await page.locator('select[name="directoryTheme"]').selectOption('vscode-light');
   const presentationSource = await readFile('web/app.js', 'utf8');
   const presentationContext = vm.createContext({editDiff, workingDirectoryIcon, esc: value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')});
   vm.runInContext(presentationSource.slice(presentationSource.indexOf('function editDiffMarkup'),presentationSource.indexOf('async function hydrateConsoleContent')) + presentationSource.slice(presentationSource.indexOf('function directoryNodeIcon'),presentationSource.indexOf('function renderWorkingDirectory')) + presentationSource.slice(presentationSource.indexOf('function workingChangesTree'),presentationSource.indexOf('function rememberDiffReading')), presentationContext);
@@ -521,12 +586,12 @@ async function verifyTaskSearch(page, prefix) {
   await page.locator('#presentation-regression-probe').evaluate(node => node.remove());
   console.log(`PASS ${prefix} console Markdown/Shell theme, per-Trace prompt entries, collaboration Markdown and scoped directory themes`);
   await page.locator('[data-view="tasks"]').click();
-  console.log(`PASS ${prefix} task search: combined conditions, no match, reset, draft retention and archive`);
+  console.log(`PASS ${prefix} task search: combined conditions, no match, clearing, query retention and archive`);
 }
 try {
   const page = await desktop.firstWindow({ timeout: 120000 });
   await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout: 120000 });
-  const desktopOrigin = new URL(page.url()).origin;
+  let desktopOrigin = new URL(page.url()).origin;
   assert.notEqual(desktopOrigin, "http://127.0.0.1:4310", "desktop must not attach to independent Web");
   await page.locator("#username").waitFor({ timeout: 60000 });
   assert.equal(await page.locator('head #agentforge-desktop-style').count(), 1, 'login receives desktop CSS in HTML');
@@ -556,8 +621,19 @@ try {
     const modalState = await page.locator(".modal").evaluate((modal) => ({ overflowY: getComputedStyle(modal).overflowY, scrollH: modal.scrollHeight, clientH: modal.clientHeight, scrollW: modal.scrollWidth, clientW: modal.clientWidth }));
     assert.ok(!["auto", "scroll"].includes(modalState.overflowY), `modal never scrolls itself (${modalState.overflowY})`);
     assert.ok(modalState.scrollH <= modalState.clientH + 1 && modalState.scrollW <= modalState.clientW + 1, `modal neither scrolls nor clips: ${JSON.stringify(modalState)}`);
-    const scrollGroup = await page.locator(".modal-scroll").evaluate((element) => getComputedStyle(element).overflowY);
-    const responsive = await page.locator(".modal").evaluate(modal => modal.matches(".workflow-detail-modal,.workflow-editor-modal,.team-config-modal,.task-create-modal"));
+    if(await page.locator('.workflow-editor-modal').count()) {
+      const layout=await page.locator('.workflow-editor-modal').evaluate(modal=>{
+        const bounds=node=>{const box=node.getBoundingClientRect();return {top:box.top,bottom:box.bottom,left:box.left,right:box.right};};
+        return {width:innerWidth,height:innerHeight,modal:bounds(modal),header:bounds(modal.querySelector('.workflow-editor-topbar')),save:bounds(modal.querySelector('[type=submit]')),canvas:bounds(modal.querySelector('.workflow-editor-body'))};
+      });
+      assert.ok(Math.abs(layout.modal.left)<1 && Math.abs(layout.modal.top)<1 && Math.abs(layout.modal.right-layout.width)<1 && Math.abs(layout.modal.bottom-layout.height)<1,'workflow editor fills the viewport');
+      assert.ok(layout.save.top>=0 && layout.save.bottom<=layout.header.bottom && layout.save.right<=layout.width,'workflow save remains in the visible titlebar');
+      assert.ok(layout.canvas.top>=layout.header.bottom && layout.canvas.bottom<=layout.height+1,'workflow canvas remains below the fixed titlebar');
+      return;
+    }
+    const employeeEditor=await page.locator('.employee-config-modal').count();
+    const scrollGroup = await page.locator(employeeEditor?'.employee-edit-main':'.modal-scroll').evaluate((element) => getComputedStyle(element).overflowY);
+    const responsive = await page.locator(".modal").evaluate(modal => modal.matches(".workflow-detail-modal,.workflow-editor-modal,.team-config-modal,.task-create-modal,.employee-config-modal"));
     if (responsive) assert.ok(["auto", "scroll"].includes(scrollGroup), "long configuration bodies scroll inside the viewport");
     else assert.ok(!["auto", "scroll"].includes(scrollGroup), "short dialogs keep their plain flow layout");
     await page.locator(".modal-backdrop").evaluate((backdrop) => { backdrop.scrollTop = backdrop.scrollHeight; });
@@ -573,13 +649,13 @@ try {
   await page.locator('[data-settings-page="appearance"]').click();
   assert.equal(await page.locator('[data-nav-visible="manual"]').isChecked(), false);
   await page.locator('[data-nav-visible="manual"]').check();
-  await page.locator('[data-nav-visible="overview"]').check();
+  assert.equal(await page.locator('[data-nav-visible="overview"]').count(),0,'reference overview is reachable by route and has no sidebar preference');
   for (const view of ["overview", "tasks", "communication", "teams", "workflows", "agents", "marketplace", "mcp-marketplace", "manual", "settings"]) {
-    await page.locator(`[data-view="${view}"]`).click();
+    if(view==="overview")await page.goto(desktopOrigin+"/overview");else await page.locator(`[data-view="${view}"]`).click();
     await page.locator(`#${view}-view.active`).waitFor();
     if (view === "tasks") {
       await verifyTaskSearch(page, "electron");
-      await page.getByRole("button", { name: "＋ 新建任务", exact: true }).click();
+      await page.getByRole("button", { name: "新建任务", exact: true }).click();
       assert.equal(await page.locator('[data-task-execution-boundary]').count(), 0);
       const criteria = page.locator('textarea[name="acceptanceCriteria"]');
       assert.equal(await criteria.isVisible(), false);
@@ -597,11 +673,12 @@ try {
       console.log("PASS visible Task acceptance-criteria entry and validation");
     }
     if (view === "communication") {
-      await page.getByRole("button", { name: "新建对话", exact: true }).click();
+      await page.locator("[data-new-chat]").click();
       await page.locator("dialog[open]").waitFor();
-      await page.getByRole("button", { name: "关闭选择", exact: true }).click();
-      await page.getByRole("button", { name: "新建对话", exact: true }).click();
-      await page.locator('dialog [data-kind="agent"]').first().click();
+      await page.locator("[data-close-group]").click();
+      await page.locator("[data-new-chat]").click();
+      const employee=fixtureChatEmployee;
+      await page.locator('#chat-group-members').fill(employee.name);await page.locator(`[data-add-extension="${employee.id}"]`).click();await page.locator('.communication-picker [type=submit]').click();await page.locator('.communication-heading').filter({hasText:employee.name}).waitFor();
       await page.waitForFunction(() => window.marked && window.DOMPurify);
       const safe = await page.evaluate(async () => {
         const { formatCommunicationContent } = await import("/communication.js");
@@ -612,7 +689,11 @@ try {
       assert.deepEqual(safe, { bold: "清晰正文", unsafe: false, javascript: false });
     }
     if (view === "workflows") {
-      await page.locator("[data-workflow-details]").first().click();
+      await page.locator('.workflow-title-button[data-edit-workflow]').first().click();
+      await page.locator('.workflow-editor-modal').waitFor();
+      await verifyModalActions();
+      await page.locator('.workflow-editor-topbar .workflow-back').click();
+      await clickDirectoryMenuAction(page.locator("[data-workflow-details]").first());
       await page.locator("#workflow-node-detail").waitFor();
       await page.locator(".modal .diagram-graph .x6-node").first().waitFor();
       await verifyModalActions();
@@ -621,6 +702,7 @@ try {
     }
     if (["teams", "agents"].includes(view)) {
       if(view === "agents") await verifyDirectorySearch(page,'electron','agents');
+      await page.locator(view === "teams" ? "#teams-grid .action-menu summary" : "#agents-grid .action-menu summary").first().click();
       await page.locator(view === "teams" ? "[data-edit-team]" : "[data-edit-agent]").first().click();
       await page.locator("#modal-content form").waitFor();
       if (view === "agents") {
@@ -640,7 +722,7 @@ try {
         const selected = await page.locator('[name="runtimeProfileId"]').inputValue();
         await page.getByRole('button', { name: '保存修改', exact: true }).click();
         await page.locator('#agent-form').waitFor({ state: 'hidden' });
-        await page.locator('[data-edit-agent]').first().click();
+        await clickDirectoryMenuAction(page.locator('[data-edit-agent]').first());
         await page.locator('[name="runtimeProfileId"]').waitFor();
         assert.equal(await page.locator('[name="runtimeProfileId"]').inputValue(), selected);
       }
@@ -651,45 +733,54 @@ try {
         await page.locator('[data-action="new-agent"]').first().click();
         await page.waitForFunction(()=>document.querySelector('[data-selection-state]')?.textContent.includes('历史任务不变'));
         await page.locator('#agent-form [name=name]').fill('创建即停用验收');
-        await page.locator('#agent-form [name=status][value=inactive]').check();
+        await page.locator('#agent-form [data-enabled-toggle]').uncheck();
+        assert.equal(await page.locator('#agent-form [name=status]').inputValue(),'inactive');
         const pickers=await page.locator('#employee-market-selection .extension-picker').evaluateAll(items=>items.map(item=>({left:item.getBoundingClientRect().left,top:item.getBoundingClientRect().top})));
         assert.ok(pickers[0].left===pickers[1].left && pickers[1].top>pickers[0].top,'plugin and MCP selectors are separate vertical rows');
         await page.getByRole('button',{name:'创建数字员工',exact:true}).click();
         await page.locator('#agent-form').waitFor({state:'detached'});
         const created=page.locator('.agent-card').filter({hasText:'创建即停用验收'});await created.waitFor();
         assert.match(await created.textContent(),/停用/);
-        await created.locator('[data-edit-agent]').click();
-        assert.equal(await page.locator('#agent-form [name=status]:checked').inputValue(),'inactive');
+        await clickDirectoryMenuAction(created.locator('[data-edit-agent]'));
+        assert.equal(await page.locator('#agent-form [data-enabled-toggle]').isChecked(),false);
+        assert.equal(await page.locator('#agent-form [name=status]').inputValue(),'inactive');
         await page.locator('#modal-close').click();
-        await created.locator('[data-delete-agent]').click();await page.locator('[data-confirm-configuration-delete]').click();await created.waitFor({state:'detached'});
-        await page.locator('[data-edit-agent="system_project_manager"]').click();
+        await clickDirectoryMenuAction(created.locator('[data-delete-agent]'));await page.locator('[data-confirm-configuration-delete]').click();await created.waitFor({state:'detached'});
+        await clickDirectoryMenuAction(page.locator('[data-edit-agent="system_project_manager"]'));
         const managerForm = page.locator('#agent-form');
-        await managerForm.locator('[name="kind"]').waitFor();
         await managerForm.locator('#employee-plugin-search').waitFor();
-        assert.equal(await managerForm.locator('[name="kind"]').isDisabled(), false);
-        assert.equal(await managerForm.locator('[name="status"][value="active"]').isDisabled(), false);
-        await managerForm.locator('[name="kind"]').selectOption('business');
+        assert.equal(await managerForm.locator('[name="kind"]').count(),0,'stored kind does not control the task manager and has no employee UI selector');
+        assert.equal(await managerForm.locator('[data-enabled-toggle]').isDisabled(),false);
+        const originalName=await managerForm.locator('[name=name]').inputValue();
+        await managerForm.locator('[name=name]').fill('');
         await managerForm.getByRole('button', { name: '保存修改', exact: true }).click();
-        await page.getByText('不能改变已被团队使用的经理类型', { exact: true }).waitFor();
-        assert.equal(await managerForm.isVisible(), true, 'real team relation rejects incompatible kind changes');
-        await managerForm.locator('[name="kind"]').selectOption('manager');
-        await managerForm.locator('[name="status"][value="inactive"]').check();
+        await page.getByText('请填写名称。', { exact: true }).waitFor();
+        assert.equal(await managerForm.isVisible(),true,'invalid input keeps the employee editor open');
+        await managerForm.locator('[name=name]').fill(originalName);
+        const invalidStatus=await page.evaluate(async()=>{const response=await fetch('/api/agents/system_project_manager',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'unavailable'})});return {status:response.status,body:await response.json()};});
+        assert.equal(invalidStatus.status,400);assert.match(invalidStatus.body.error,/状态无效/);
+        await managerForm.locator('[data-enabled-toggle]').uncheck();
         await managerForm.getByRole('button', { name: '保存修改', exact: true }).click();
         await managerForm.waitFor({ state: 'detached' });
-        await page.locator('[data-edit-agent="system_project_manager"]').click();
-        await managerForm.locator('[name="status"]:checked').waitFor();
+        await clickDirectoryMenuAction(page.locator('[data-edit-agent="system_project_manager"]'));
+        await managerForm.locator('[data-enabled-toggle]').waitFor();
         await managerForm.locator('#employee-plugin-search').waitFor();
-        assert.equal(await managerForm.locator('[name="status"]:checked').inputValue(), 'inactive', 'the former built-in manager may be deactivated');
-        await managerForm.locator('[name="status"][value="active"]').check();
+        assert.equal(await managerForm.locator('[data-enabled-toggle]').isChecked(),false,'the former built-in manager may be deactivated');
+        assert.equal(await managerForm.locator('[name="status"]').inputValue(),'inactive');
+        await managerForm.locator('[data-enabled-toggle]').check();
         await managerForm.getByRole('button', { name: '保存修改', exact: true }).click();
         await managerForm.waitFor({ state: 'detached' });
-        await page.locator('[data-delete-agent="agent_analyst"]').click();
+        const employeeDeleteUrl=new URL('/api/agents/agent_analyst',page.url()).href;
+        const failEmployeeDelete=route=>route.request().method()==='DELETE'?route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'隔离员工删除失败'})}):route.continue();
+        await page.route(employeeDeleteUrl,failEmployeeDelete);
+        await clickDirectoryMenuAction(page.locator('[data-delete-agent="agent_analyst"]'));
         await page.locator('[data-confirm-configuration-delete]').click();
-        await page.locator('[data-delete-error]').filter({ hasText: '仍被团队使用' }).waitFor();
+        await page.locator('[data-delete-error]').filter({ hasText: '隔离员工删除失败' }).waitFor();
+        await page.unroute(employeeDeleteUrl,failEmployeeDelete);
         assert.equal(await page.locator('[data-confirm-configuration-delete]').isEnabled(), true, 'rejected deletion remains retryable');
         await page.locator('[data-close-modal]').click();
         assert.equal(await page.locator('[data-edit-agent="agent_analyst"]').count(), 1);
-        console.log('PASS default manager editable status/type controls; real references reject incompatible changes and deletion');
+        console.log('PASS employee status switch, required-name and invalid-status rejection, recoverable delete failure');
       }
     }
     if (view === "marketplace") {
@@ -698,7 +789,7 @@ try {
       assert.equal((await fetch(`${desktopOrigin}/api/runtime/marketplace`)).status, 401);
       const invalidSelection = await page.evaluate(async () => (await fetch('/api/agents/agent_engineer', {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({runtime:{provider:'claude-code',extensionSelection:{skillIds:['missing'],mcpIds:[]}}})})).status);
       assert.equal(invalidSelection, 400);
-      assert.equal(await page.locator('[data-add-mcp]').count(),0);
+      assert.equal(await page.locator('[data-add-mcp]:visible').count(),0);
       await page.locator('[data-install-plugin]').click();
       await page.locator('#market-source').fill('http://example.com/not-https.git');
       assert.equal(await page.locator('[name=trusted]').count(),0);
@@ -715,20 +806,21 @@ try {
       await page.locator('[name=sourceType][value=local]').check();await page.locator('#market-source').fill(source);
       await page.locator('#market-entry-form [type=submit]').click();await page.locator('#market-entry-form').waitFor({state:'detached'});
       const card=page.locator('.installed-extension-card').filter({hasText:'ui-proof'});await card.waitFor();
-      assert.equal(await card.locator('.extension-avatar').textContent(),'UI');await card.getByRole('button',{name:'详情',exact:true}).click();
+      assert.equal(await card.locator('.extension-avatar').textContent(),'UI');await card.locator('.extension-name').click();
       await page.getByRole('tab',{name:/Skill/}).waitFor();assert.equal(await page.locator('.plugin-detail-component').count(),100);
       await verifyPluginScroll(page,'electron wide');
       await page.getByRole('tab',{name:/Skill/}).focus();await page.keyboard.press('ArrowRight');assert.match(await page.locator('#plugin-component-panel').textContent(),/reviewer/);
       await page.keyboard.press('ArrowRight');assert.match(await page.locator('#plugin-component-panel').textContent(),/SessionStart/);
       await desktop.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(760,560));await page.waitForFunction(()=>innerHeight===560);await page.getByRole('tab',{name:/Skill/}).click();
-      await page.locator('#modal-close').click();await card.getByRole('button',{name:'详情',exact:true}).click();await page.locator('.plugin-detail-component').first().waitFor();
-      const bounds=await page.locator('.extension-detail-modal').evaluate(modal=>{const close=modal.querySelector('.form-actions button').getBoundingClientRect(),heading=modal.querySelector('h2').getBoundingClientRect(),name=modal.querySelector('.extension-detail-overview h3').getBoundingClientRect();return {scroll:modal.scrollHeight>modal.clientHeight,bottom:close.bottom,height:innerHeight,nameVisible:name.top>=heading.bottom};});
+      await page.locator('.extension-detail-modal [data-close-modal]').click();await card.locator('.extension-name').click();await page.locator('.plugin-detail-component').first().waitFor();
+      await page.locator('.extension-detail-modal').evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished)));
+      const bounds=await page.locator('.extension-detail-modal').evaluate(modal=>{const close=modal.querySelector('.directory-detail-header [data-close-modal]').getBoundingClientRect(),heading=modal.querySelector('h2').getBoundingClientRect(),name=modal.querySelector('.extension-detail-overview h3').getBoundingClientRect();return {scroll:modal.scrollHeight>modal.clientHeight,bottom:close.bottom,height:innerHeight,nameVisible:name.top>=heading.bottom};});
       assert.equal(bounds.scroll,false);assert.ok(bounds.bottom<=bounds.height,'long plugin details keep close command visible');
       assert.equal(bounds.nameVisible,true,'opening the detail in a narrow window starts with the complete overview visible');
       await verifyPluginScroll(page,'electron narrow');
       await page.screenshot({path:'screenshots/electron-plugin-detail-760.png',animations:'disabled'});
       await desktop.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(1320,860));
-      await page.locator('#modal-close').click();
+      await page.locator('.extension-detail-modal [data-close-modal]').click();
       await verifyDirectorySearch(page,'electron','marketplace');
       await verifyExtensionDeletion(page,'plugin',{path:source},'electron');
       // Static compatibility is visible in both catalog and employee picker;
@@ -738,9 +830,10 @@ try {
       await writeFile(join(onlyClaude,'.claude-plugin/plugin.json'),JSON.stringify({name:'ui-claude-only',settings:{}}));
       const incompatible=await page.evaluate(async path=>(await(await fetch('/api/runtime/marketplace',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({path})})).json()).plugins[0],onlyClaude);
       await page.reload();const restricted=page.locator('.installed-extension-card').filter({hasText:'ui-claude-only'});
-      await restricted.waitFor();assert.match(await restricted.locator('[data-supported=false]').textContent(),/Codex/);
-      await restricted.getByRole('button',{name:'详情',exact:true}).click();await page.locator('.plugin-runtime-compatibility').waitFor();
-      assert.match(await page.locator('.plugin-runtime-compatibility').textContent(),/Codex.*settings/);await page.locator('#modal-close').click();
+      await restricted.waitFor();await restricted.locator('.extension-name').click();await page.locator('.plugin-runtime-compatibility').waitFor();
+      assert.equal(await page.locator('.plugin-runtime-compatibility [data-supported=false][aria-label="Codex：不兼容"]').count(),1);
+      await page.locator('.compatibility-reasons summary').click();
+      assert.match(await page.locator('.compatibility-reasons').textContent(),/Codex.*settings/);await page.locator('.extension-detail-modal [data-close-modal]').click();
       await page.locator('[data-view=agents]').click();await page.locator('[data-action=new-agent]').first().click();
       await page.waitForFunction(()=>document.querySelector('[data-selection-state]')?.textContent.includes('历史任务不变'));
       const profiles=await page.locator('[name=runtimeProfileId] option').evaluateAll(options=>Object.fromEntries(['Claude Code','Codex'].map(label=>[label,options.find(option=>option.textContent.includes(label)).value])));
@@ -808,18 +901,18 @@ try {
       await verifyDirectorySearch(page,'electron','mcp-marketplace');
       await verifyExtensionDeletion(page,'mcp',{name:'delete-proof',content:JSON.stringify({mcpServers:{proof:{command:'node',args:['--version']}}})},'electron');
       await page.locator('[data-view="agents"]').click();
-      await page.locator('[data-edit-agent="agent_engineer"]').click();
+      await clickDirectoryMenuAction(page.locator('[data-edit-agent="agent_engineer"]'));
       await page.waitForFunction(()=>document.querySelector('[data-selection-state]')?.textContent.includes('历史任务不变'));
       for(const name of ['desktop_one','desktop_two']) {
         await page.locator('#employee-mcp-search').fill(name);
         await page.locator('[data-picker=mcp] [data-add-extension]').first().click();
       }
       await page.getByRole('button',{name:'保存修改',exact:true}).click();await page.locator('#agent-form').waitFor({state:'detached'});
-      await page.locator('[data-edit-agent="agent_engineer"]').click();
+      await clickDirectoryMenuAction(page.locator('[data-edit-agent="agent_engineer"]'));
       await page.waitForFunction(()=>document.querySelectorAll('[data-picker=mcp] [data-remove-extension]').length===2);
       await page.locator('[data-picker=mcp] [data-remove-extension]').first().click();
       await page.getByRole('button',{name:'保存修改',exact:true}).click();await page.locator('#agent-form').waitFor({state:'detached'});
-      await page.locator('[data-edit-agent="agent_engineer"]').click();
+      await clickDirectoryMenuAction(page.locator('[data-edit-agent="agent_engineer"]'));
       await page.waitForFunction(()=>document.querySelectorAll('[data-picker=mcp] [data-remove-extension]').length===1);
       await verifyExtensionPickerDismissal(page,'electron wide');
       await desktop.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setContentSize(760,560));await page.waitForFunction(()=>innerHeight===560);
@@ -861,9 +954,9 @@ try {
         assert.equal((await fetch(`${desktopOrigin}/api/settings/runtime-profiles`)).status, 401);
         assert.equal(await page.getByText('本机执行说明与版本', { exact: true }).count(), 0);
         const rows = page.locator('.runtime-provider-row'); await rows.first().waitFor();
-        assert.equal(await rows.count(),2);
+        assert.equal(await rows.count(),RUNTIME_IDS.length);assert.deepEqual(await rows.locator('h4').evaluateAll(nodes=>nodes.map(n=>n.getAttribute('aria-label')).sort()),RUNTIME_IDS.map(id=>RUNTIME_PROVIDERS[id].label).sort(),'settings renders every registered Runtime');
         await rows.first().locator('summary').click();
-        const form = page.locator('.runtime-inline-editor');
+        const form = page.locator('.runtime-inline-editor');await form.waitFor();
         assert.equal(await form.locator('input,select').count(),2);
         const modelInput = form.locator('[name=model]'); await modelInput.fill('manual-model'); await modelInput.press('Escape');
         assert.equal(await modelInput.inputValue(),'manual-model');
@@ -874,20 +967,24 @@ try {
         await input.waitFor();
         const blocker=join(directory,'workspace-file');await writeFile(blocker,'not a directory');
         await input.fill(join(blocker, "child"));
-        await page.getByRole("button", { name: "保存目录", exact: true }).click();
-        await page.getByText("目录无法创建或服务无法读写，请检查路径和权限", { exact: true }).waitFor();
-        const nextRoot = join(directory, "new-workspaces", "新目录");
-        await input.fill(nextRoot);
-        await page.getByRole("button", { name: "保存目录", exact: true }).click();
-        await page.getByText("已保存，仅新任务使用此目录。", { exact: true }).waitFor();
-        const result = await page.evaluate(async () => (await fetch("/api/settings/workspace")).json());
-        assert.equal(result.workspaceRoot, nextRoot);
-        assert.equal(result.source, "saved");
-        assert.equal((await stat(nextRoot)).isDirectory(),true,'missing nested workspace created by authenticated save');
+        const saveWorkspace=page.getByRole('button',{name:'保存并整理目录',exact:true});
+        const rejected=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/settings/workspace'&&r.request().method()==='PUT');
+        await saveWorkspace.click();assert.equal((await rejected).status(),400);
+        await page.locator('#workspace-settings-form .field-error').filter({hasText:/./}).waitFor();
+        assert.equal(await page.evaluate(async()=>(await(await fetch('/api/settings/workspace')).json()).workspaceRoot),storage.AGENTFORGE_WORKSPACE_ROOT,'invalid destination preserves the current root');
+        const nextRoot=join(directory,'new-workspaces','新目录'),previousOrigin=desktopOrigin;
+        await input.fill(nextRoot);await saveWorkspace.click();
+        await page.waitForURL(url=>url.origin!==previousOrigin&&url.pathname==='/settings/workspace',{timeout:60000});
+        desktopOrigin=new URL(page.url()).origin;await input.waitFor();
+        assert.equal(await input.inputValue(),nextRoot);
+        const result=await page.evaluate(async()=>(await fetch('/api/settings/workspace')).json());
+        assert.equal(result.workspaceRoot,nextRoot);assert.equal(result.source,'startup');
+        assert.equal((await stat(nextRoot)).isDirectory(),true,'authenticated storage change creates the nested root and restarts only its isolated service');
         const sentinel=join(nextRoot,'existing.txt');await writeFile(sentinel,'preserve');
-        await page.getByRole("button", { name: "保存目录", exact: true }).click();
-        await page.getByText("已保存，仅新任务使用此目录。", { exact: true }).waitFor();
-        assert.equal(await readFile(sentinel,'utf8'),'preserve','saving an existing root does not erase files');
+        assert.equal(await saveWorkspace.isDisabled(),true,'unchanged root has no pending save');
+        const unchanged=await page.evaluate(async workspaceRoot=>{const r=await fetch('/api/settings/workspace',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({workspaceRoot})});return {status:r.status,...await r.json()};},nextRoot);
+        assert.equal(unchanged.status,200);assert.equal(unchanged.restarting,false);
+        assert.equal(await readFile(sentinel,'utf8'),'preserve','saving the existing root keeps files');
         const allocated = await page.evaluate(async ({ input, root, existingRunId }) => {
           const response = await fetch("/api/tasks", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
           if (!response.ok) throw new Error(`Task creation rejected: ${await response.text()}`);
@@ -895,7 +992,7 @@ try {
           const existing = await (await fetch(`/api/runs/${existingRunId}/workspace?view=summary`)).json();
           const cleanup = await fetch(`/api/tasks/${task.id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: "{}" });
           if (!cleanup.ok) throw new Error("Disposable Task cleanup rejected");
-          return { matches: task.workspacePath === `${root}/${task.id}`, oldPath: existing.run.task.taskWorkspacePath };
+          return { matches: task.workspacePath === `${root}/tasks/${task.id}`, oldPath: existing.run.task.taskWorkspacePath };
         }, { input: {managerAgentId:'system_project_manager', title: "目录分配验收夹具", objective: "不启动 Provider", memberAgentIds: fixtureTask.memberAgentIds, workflowTemplateId: fixtureTask.workflowTemplateId }, root: nextRoot, existingRunId: fixtureRun.id });
         assert.equal(allocated.matches, true);
         assert.equal(allocated.oldPath, fixtureTask.workspacePath);
@@ -975,7 +1072,7 @@ try {
   await page.locator('[data-view="teams"]').click();
   for (const width of [900, 1366, 1920]) {
     await desktop.evaluate(({ BrowserWindow }, size) => BrowserWindow.getAllWindows()[0].setContentSize(size, 860), width);
-    await page.waitForFunction((size) => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width) === (size <= 1000 ? 64 : 216), width);
+    await page.waitForFunction((size) => Math.round(document.querySelector(".sidebar").getBoundingClientRect().width) === (size <= 1000 ? 60 : 232), width);
     await page.screenshot({ path: `screenshots/electron-compact-${width}.png`, animations: "disabled" });
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `no overflow at ${width}`);
   }

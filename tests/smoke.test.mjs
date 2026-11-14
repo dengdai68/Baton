@@ -1,3 +1,4 @@
+import { communicationDayLabel } from '../web/communication.js';
 import test from "node:test";
 import { workflowConnections } from "../client/workflow-description.mjs";
 import { mkdirSync } from "node:fs";
@@ -14,7 +15,7 @@ import { createRunFiles } from "../server/run-files.mjs";
 import { createSqlitePersistence } from "../server/persistence.mjs";
 import { executeRun, readNodeResult, parseEmployeeResponse, terminateRun } from "../server/orchestrator.mjs";
 import { runClaudeCodeCli, RuntimeSessionMissingError } from "../server/runtime/local-cli.mjs";
-import { collaborationRecords, mentionables, roleExecutionStatus } from "../client/console-projections.mjs";
+import { taskNeedsAttention, collaborationRecords, mentionables, roleExecutionStatus, workflowFocus } from "../client/console-projections.mjs";
 
 async function directory(prefix) { const path = await mkdtemp(join(tmpdir(), prefix)); await mkdir(join(path, "repos", "app", ".git"), { recursive: true }); return path; }
 
@@ -690,8 +691,8 @@ test("composer lists real members once and supports selection, newline and IME-s
   let options = [option];
   const list = { classList: { contains: () => true, remove() {} }, querySelectorAll: () => options };
   const register = source.slice(source.indexOf('document.addEventListener("keydown",'), source.indexOf('window.addEventListener("popstate",'));
-  new Function("document", "$", "state", "Event", "closeModal", "insertComposerLineBreak", register)({ addEventListener: (_, fn) => handler = fn }, () => list, { workspace: { run: { task: {} } } }, class {}, () => {}, () => newlines++);
-  const input = { id: "instruction-text", selectionStart: 0, selectionEnd: 0, setRangeText: () => newlines++, dispatchEvent() {}, form: { requestSubmit: () => submits++ } };
+  new Function("document", "$", "state", "Event", "closeModal", "insertComposerLineBreak", "window", register)({ addEventListener: (_, fn) => handler = fn }, () => list, { workspace: { run: { task: {} } } }, class {}, () => {}, () => newlines++, { matchMedia: () => ({ addEventListener() {} }) });
+  const input = { closest: selector => selector === "#task-form" ? null : true, id: "instruction-text", selectionStart: 0, selectionEnd: 0, setRangeText: () => newlines++, dispatchEvent() {}, form: { requestSubmit: () => submits++ } };
   const press = (key, extra = {}) => handler({ key, target: input, preventDefault() {}, ...extra });
   press("Tab"); press("Enter"); assert.equal(selected, 2); assert.equal(submits, 0);
   options = [];
@@ -749,27 +750,58 @@ test("custom workflow deletion preserves Task template references", async () => 
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
   const start = source.indexOf("function renderWorkflows()"), end = source.indexOf("\n\nfunction workflowDetails", start);
   const host = {};
-  const render = new Function("state", "disposeWorkflowGraphs", "$", "esc", "paginate", "renderListPager", "workflowConnections", `${source.slice(start, end)}; return renderWorkflows;`)({
+  const render = new Function("state", "disposeWorkflowGraphs", "$", "esc", "paginate", "renderListPager", "workflowConnections", "closeFloatingLists", "actionMenu", "exactTime", `const setTitleCount=()=>{}; ${source.slice(start, end)}; return renderWorkflows;`)({
     tasks: [{ workflowTemplateId: "referenced" }], listPages: { workflows: 1 },
     directoryPages:{workflows:{page:1,items:[
-      { id: "referenced", referenceCount:1, name: "受引用", system: false, description: "", nodes: [{ id: "node", dependsOn: [] }] },
-      { id: "available", name: "可删除", system: false, description: "", nodes: [{ id: "node", dependsOn: [] }] }
+      { id: "referenced", referenceCount:1, name: "受引用", system: true, description: "", nodes: [{ id: "node", type:'condition', title:'通过？', dependsOn: [] }] },
+      { id: "available", name: "可删除", system: false, description: "", updatedAt:'2026-11-03T12:00:00Z', nodes: [{ id: "node", title:'需求', dependsOn: [] }, {id:'next',title:'交付',dependsOn:['node']}] }
     ]}}
-  }, () => {}, () => host, (value) => String(value), (items) => ({items, page:1}), () => {}, workflowConnections);
+  }, () => {}, () => host, (value) => String(value), (items) => ({items, page:1}), () => {}, workflowConnections, () => {}, content => `<details class="action-menu">${content}</details>`, value => value);
   render();
-  assert.match(host.innerHTML, /0 条连线/);
-  assert.match(host.innerHTML, /已被 1 个任务引用/);
+  assert.match(host.innerHTML, /2 个节点/);
+  assert.match(host.innerHTML, /被 1 个任务使用/);
+  assert.match(host.innerHTML, /2 个节点 · 未被使用/);
+  assert.equal((host.innerHTML.match(/class="workflow-directory-card"/g) || []).length, 2);
+  assert.equal((host.innerHTML.match(/class="workflow-builtin"/g) || []).length, 1);
+  assert.match(host.innerHTML, /data-type="condition"/);
+  assert.match(host.innerHTML, /data-connected="true"/);
+  assert.match(host.innerHTML, /11月3日更新/);
+  assert.match(host.innerHTML, /data-workflow-details="referenced"/);
+  assert.match(host.innerHTML, /class="action-menu"[\s\S]*data-edit-workflow="referenced"/);
   assert.doesNotMatch(host.innerHTML, /data-delete-workflow="referenced"/);
   assert.match(host.innerHTML, /data-delete-workflow="available"/);
 });
 
+test("team rows retain chat and management actions with bounded avatar stacks and explicit status", async () => {
+  const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
+  const start = source.indexOf('function renderTeams()'), end = source.indexOf('/* ---------- 工作流管理', start);
+  const { extensionAvatarColor } = await import('../web/marketplace.mjs');
+  const host = {}, agents = Array.from({length:7}, (_, index) => ({id:'a'+index, name:'成员'+index, color:'blue'}));
+  const teams = [{id:'active', name:'交付团队', mission:'完整使命', status:'active', members:agents}, {id:'disabled', name:'暂停团队', status:'disabled', members:[]}];
+  const render = new Function('state', '$', 'closeFloatingLists', 'paginate', 'esc', 'roleColor', 'extensionAvatarColor', 'initialsOf', 'actionMenu', 'renderListPager', `const setTitleCount=()=>{}; ${source.slice(start,end)};return renderTeams;`)(
+    {teams, listPages:{}, directoryPages:{teams:{page:1,items:teams}}}, () => host, () => {}, () => ({}), String,
+    agent => 'color-'+agent.color, extensionAvatarColor, agent => agent.name.slice(0,1), content => `<details class="action-menu">${content}</details>`, () => {});
+  render();
+  assert.equal((host.innerHTML.match(/class="team-directory-row"/g) || []).length, 2);
+  assert.equal((host.innerHTML.match(/class="stack-avatar color-blue"/g) || []).length, 5);
+  assert.match(host.innerHTML, /team-member-overflow">\+2/);
+  assert.match(host.innerHTML, new RegExp('agent-card-avatar color-'+extensionAvatarColor('交付团队')));
+  assert.match(host.innerHTML, /成员0, 成员1, 成员2, 成员3, 成员4, 成员5, 成员6/);
+  assert.match(host.innerHTML, /data-status="active">启用/);
+  assert.match(host.innerHTML, /data-status="disabled">停用/);
+  assert.match(host.innerHTML, /team-row-open"[^>]*data-edit-team="active"[^>]*aria-label="编辑团队 交付团队"/);
+  assert.equal((host.innerHTML.match(/data-chat-team="active"/g) || []).length, 1, 'only the explicit chat button opens the team conversation');
+  assert.match(host.innerHTML, /class="team-row-actions"><button[^>]*data-chat-team="active"[\s\S]*class="action-menu"[\s\S]*data-edit-team="active"[\s\S]*data-delete-team="active"/);
+  assert.match(host.innerHTML, /暂无成员/);
+});
+
 test("task center exposes deletion only when the Store says it is safe", async () => {
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
-  const start = source.indexOf("function taskMatchesSearch("), end = source.indexOf("\n\n/* ---------- 团队", start);
-  const hosts = { "#tasks-heading": {}, "#task-filter-bar": {}, "#tasks-table": {}, "#task-search-form .task-directory-actions": { innerHTML: "" }, "#task-search-form select[name=workflow]": { innerHTML: "", value: "all" } };
+  const start = source.indexOf("function taskMatchesChip("), end = source.indexOf("\n\n/* ---------- 团队", start);
+  const hosts = { "#tasks-heading": {}, "#task-filter-bar": {}, "#tasks-table": {}, "#task-header-actions": { innerHTML: "" }, "#task-search-form .task-chips": { innerHTML: "" }, "#task-search-form select[name=workflow]": { innerHTML: "", value: "all" } };
   const state = {
     taskArchiveView: false, taskSearch: { name: "", status: "all", workflow: "all" }, listPages: { tasks: 1, archive: 1 },
-    taskFilter: "all",
+    taskChip: "all",
     tasks: [
       { id: "backlog", title: "未启动", objective: "尚未创建 Run", status: "backlog", deletionBlockedBy: null, updatedAt: "2026-09-29T00:00:00.000Z", team: { name: "团队" }, workflowSnapshot: { name: "流程" } },
       { id: "finished", title: "已结束", objective: "可删除的历史任务", status: "done", deletionBlockedBy: null, updatedAt: "2026-09-29T00:00:00.000Z", team: { name: "团队" }, workflowSnapshot: { name: "流程" } },
@@ -783,11 +815,11 @@ test("task center exposes deletion only when the Store says it is safe", async (
     workflowTemplates: []
   };
   state.directoryPages={tasks:{items:state.tasks,page:1,total:state.tasks.length,totalPages:1}};
-  const render = new Function("state", "$", "TASK_FILTERS", "taskNeedsAttention", "taskMatchesFilter", "runOfTask", "taskActionLabel", "pill", "esc", "exactTime", "timeAgo", "workspaceSummary", "statusText", "paginate", "paginationMarkup", "window", `${source.slice(start, end)}; return renderTasks;`)(
+  const render = new Function("state", "$", "TASK_FILTERS", "taskNeedsAttention", "taskMatchesFilter", "runOfTask", "taskActionLabel", "pill", "esc", "exactTime", "timeAgo", "workspaceSummary", "statusText", "paginate", "paginationMarkup", "window", "$$", "actionMenu", `const closeFloatingLists=()=>{}, setTitleCount=()=>{}, statusTone=s=>s, statusShape=()=>"○", roleColor=()=>"", initialsOf=()=>""; ${source.slice(start, end)}; return renderTasks;`)(
     state,
     (selector) => hosts[selector],
     [{ id: "all", label: "全部" }],
-    () => false,
+    taskNeedsAttention,
     () => true,
     (taskId) => state.runs.find((run) => run.taskId === taskId),
     () => "查看任务",
@@ -797,14 +829,37 @@ test("task center exposes deletion only when the Store says it is safe", async (
     (value) => String(value),
     (task) => task.workspaceKind === "managed" ? "系统受管目录" : "既有工作目录",
     {},
-    (items) => ({ items, page: 1 }), () => "", { addEventListener() {} }
+    (items) => ({ items, page: 1 }), () => "", { addEventListener() {} }, () => [], content => `<details>${content}</details>`
   );
   render();
+  assert.match(hosts["#tasks-table"].innerHTML, /class="task-list"/);
+  assert.doesNotMatch(hosts["#tasks-table"].innerHTML, /<table/);
+  assert.match(hosts["#tasks-table"].innerHTML, /data-edit-task="backlog"/);
+  assert.match(hosts["#tasks-table"].innerHTML, /data-archive-task="finished"/);
+  assert.doesNotMatch(hosts["#task-filter-bar"].innerHTML, /type="(?:submit|reset)"/);
+  assert.match(hosts["#task-filter-bar"].innerHTML, /id="task-filter-panel"[^>]*hidden/);
   assert.match(hosts["#tasks-table"].innerHTML, /data-delete-task="backlog"/);
   assert.match(hosts["#tasks-table"].innerHTML, /data-delete-task="finished"/);
   assert.doesNotMatch(hosts["#tasks-table"].innerHTML, /data-delete-task="active"/);
   assert.doesNotMatch(hosts["#tasks-table"].innerHTML, /data-delete-task="inquiry"/);
   assert.match(hosts["#tasks-table"].innerHTML, /答疑进行中/);
+  const extra = ['awaiting_human','awaiting_acceptance','failed','blocked','paused','completed','review'].map(status => ({id:status, title:status, status, updatedAt:'2026-09-29', deletionBlockedBy:null}));
+  state.tasks.push(...extra);
+  render();
+  const markup = hosts['#tasks-table'].innerHTML;
+  assert.deepEqual([...markup.matchAll(/data-task-group="([^"]+)"/g)].map(match=>match[1]), ['attention','active','paused','backlog','done']);
+  assert.equal([...markup.matchAll(/data-task-id=/g)].length, state.tasks.length, 'each task appears exactly once, including interrupted and paused tasks');
+  assert.match(markup, /data-task-group="attention"[\s\S]*data-task-id="failed"/);
+  assert.match(markup, /data-task-group="paused"[\s\S]*data-task-id="paused"/);
+  assert.match(markup, /等待你的澄清/);
+  assert.match(markup, /待你验收/);
+  assert.match(markup, /错误中断/);
+  state.taskArchiveView = true;
+  state.directoryPages.archive = {items:[state.tasks[1]],page:1,total:1,totalPages:1};
+  render();
+  assert.match(hosts['#tasks-table'].innerHTML, /<table/);
+  assert.match(hosts['#tasks-table'].innerHTML, /data-unarchive-task="finished"/);
+  assert.match(hosts['#tasks-table'].innerHTML, /data-delete-task="finished"/);
   assert.match(source, /function openDeleteTaskModal\(taskId\)/);
   assert.match(source, /task\.deletionBlockedBy === "active_inquiries"/);
   assert.match(source, /task\.deletionBlockedBy = workspace\.run\.task\.deletionBlockedBy/);
@@ -1260,7 +1315,7 @@ test("task properties render safe recorded facts independently of the active tab
   const start = source.indexOf("function workspaceDirectoryDetails("), end = source.indexOf("\nfunction renderWorkspace()", start);
   assert.ok(start >= 0 && end > start);
   const esc = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
-  const details = new Function("esc", "workflowDiagramCanvas", "roleColor", "initialsOf", "roleExecutionStatus", "state", `${source.slice(start, end)}; return workspaceDetailsMarkup;`)(esc, () => '<div class="workflow-diagram">职责图</div>', () => "blue", () => "A", roleExecutionStatus, {});
+  const details = new Function("esc", "workflowDiagramCanvas", "roleColor", "initialsOf", "roleExecutionStatus", "workflowFocus", "state", "pill", "exactTime", `${source.slice(start, end)}; return workspaceDetailsMarkup;`)(esc, () => '<div class="workflow-diagram">职责图</div>', () => "blue", () => "A", roleExecutionStatus, workflowFocus, {}, status => `<span class="status-pill">${esc(status)}</span>`, String);
   const workspace = { run: { id: "run_test", manager:{id:"manager_test"}, task: { objective: '<script>bad()</script>', workspacePath: '/tmp/" onclick="bad()', team: { name: "A&B" }, workflowSnapshot: { name: "审批流程" } } } };
   for (const tab of ["collaboration", "artifacts", "directory", "console"]) {
     const markup = details(workspace, { agents: [{ id: "a" }], currentFocusNode: { title: "核验交付" }, view: { tab, disclosures: { brief: true } }, artifactCount: 2 });
@@ -1268,7 +1323,9 @@ test("task properties render safe recorded facts independently of the active tab
     assert.doesNotMatch(markup, /A&amp;B|<dt>团队<\/dt>/);
     assert.match(markup, /当前执行/);
     assert.match(markup, /暂无执行成员/);
-    assert.match(markup, /<dd>2 项<\/dd>/);
+    assert.match(markup, /2 项交付快照/);
+    assert.match(markup, /data-ws-tab="directory"/);
+    assert.match(markup, /<dt>经理<\/dt>/);
     assert.doesNotMatch(markup, /quality-risk|Defect/);
     assert.match(markup, /任务描述/);
     assert.doesNotMatch(markup, /目录说明|任务说明|data-toggle-task-description/);
@@ -1276,12 +1333,38 @@ test("task properties render safe recorded facts independently of the active tab
     assert.match(markup, /aria-label="任务详情" hidden/);
     assert.match(details(workspace, { agents: [], view: { detailsOpen: true, disclosures: {} }, artifactCount: 0 }), /aria-label="任务详情" >/);
   }
+  const nodes = ["done", "focus", "active", "failed", "untouched", "manager-only", "consultation-only", "retry", "waiting"].map(id => ({ id, title: `<${id}>` }));
+  const recorded = { run: { ...workspace.run, currentFocus: { nodeId: "focus" }, waitingNodeId: "waiting", status: "awaiting_human", task: { ...workspace.run.task, workflowSnapshot: { name: "事实", nodes } } }, traces: [
+    ...["done", "focus", "active", "failed", "retry", "waiting"].map((id, index) => ({ workflowNodeId: id, agentId: "a", type: "node", status: id === "active" ? "running" : id === "failed" || id === "retry" ? "failed" : "completed", startedAt: `2026-11-12T00:00:0${index}Z` })),
+    { workflowNodeId: "manager-only", agentId: "manager_test", type: "manager", status: "completed" },
+    { workflowNodeId: "consultation-only", agentId: "a", type: "consultation", status: "completed" },
+    // A successful retry supersedes the older failure, even with unordered input.
+    { workflowNodeId: "retry", agentId: "a", type: "node", status: "completed", startedAt: "2026-11-12T00:01:00Z" },
+    { workflowNodeId: "retry", agentId: "a", type: "node", status: "failed", startedAt: "2026-11-12T00:00:00Z" },
+  ] };
+  const focusMarkup = details(recorded, { agents: [{ id: "a", name: "Noah <A>" }], view: { disclosures: {} }, artifactCount: 0 });
+  assert.match(focusMarkup, /data-workspace-disclosure="workflow-focus" open/);
+  assert.ok(focusMarkup.indexOf("协作焦点") < focusMarkup.indexOf('class="task-member-section"'));
+  assert.equal((focusMarkup.match(/class="workflow-focus-row"/g) || []).length, nodes.length);
+  const rows = focusMarkup.match(/<li class="workflow-focus-row"[^]*?<\/li>/g) || [];
+  const row = title => rows.find(markup => markup.includes(`&lt;${title}&gt;`));
+  for (const [title, status, label] of [["done", "done", "已交接"], ["focus", "current", "当前焦点"], ["active", "running", "执行中"], ["failed", "failed", "交付失败"], ["retry", "done", "已交接"], ["waiting", "waiting", "等待澄清"]]) {
+    assert.match(row(title), new RegExp(`data-focus-state="${status}"`));
+    assert.ok(row(title).includes(`Noah &lt;A&gt; · ${label}`));
+  }
+  assert.match(row("focus"), /aria-current="step"/);
+  for (const title of ["untouched", "manager-only", "consultation-only"]) {
+    assert.match(row(title), /data-focus-state="pending"/);
+    assert.match(row(title), /<small>—<\/small>/);
+  }
+  assert.match(focusMarkup, /依据交接记录与经理当前焦点呈现，不代表平台判定完成度。/);
+  assert.doesNotMatch(details(recorded, { agents: [], view: { disclosures: { "workflow-focus": false } }, artifactCount: 0 }), /data-workspace-disclosure="workflow-focus" open/);
   const longTask = { ...workspace.run.task, objective: "字".repeat(100) + "尾部😀", taskWorkspacePath: "/tmp/task_one", workspacePath: "/tmp/task_one/run_one" };
   const longWorkspace = { run: { id: "run_one", task: longTask } };
   const collapsed = details(longWorkspace, { agents: [], view: {}, artifactCount: 0 });
   assert.match(collapsed, /字…/);
   assert.doesNotMatch(collapsed, /尾部😀/);
-  assert.match(collapsed, /<span>task_one\/run_one<\/span>/);
+  assert.match(collapsed, /<span title="\/tmp\/task_one\/run_one">…\/run_one<\/span>/);
   assert.match(collapsed, /data-copy="\/tmp\/task_one\/run_one"/);
   assert.match(collapsed, /aria-expanded="false" aria-controls="task-description-content">展开/);
   const expanded = details(longWorkspace, { agents: [], view: { descriptionExpanded: true }, artifactCount: 0 });
@@ -1290,7 +1373,7 @@ test("task properties render safe recorded facts independently of the active tab
   const legacy = details({ run: { id: "legacy", task: { objective: "旧任务", workspacePath: "/tmp/legacy", workflowSnapshot: {} } } }, { agents: [], view: { disclosures: {} }, artifactCount: 0 });
   assert.doesNotMatch(legacy, /当前团队|<dt>团队<\/dt>/);
   assert.match(legacy, /暂无执行成员/);
-  assert.match(legacy, /<dd>0 项<\/dd>/);
+  assert.match(legacy, /0 项交付快照/);
   assert.doesNotMatch(legacy, /data-workspace-disclosure="brief" open|undefined/);
 });
 test("a business Provider handoff without a captured Artifact is recorded", async () => {
@@ -1785,14 +1868,14 @@ test("collaboration is chronological without pinned acceptance duplicates and un
   assert.match(source, /acceptance\?\.verified \? `<button[^`]*data-open-completion-confirm/);
   assert.doesNotMatch(source, /acceptancePanel|collaboration-review|data-stop-inquiries|停止答疑/);
   assert.match(source, /confirm-completion.*disabled/);
-  const renderSource = source.slice(source.indexOf("function renderCollaboration("), source.indexOf("/* ---------- 任务空间数据与动作"));
+  const renderSource = "const outgoingMessageFeedback=()=>'',outgoingAttachmentMarkup=()=>'';" + source.slice(source.indexOf("function confirmTaskOutgoing("), source.indexOf("/* ---------- 任务空间数据与动作"));
   const view = { draft: "", collaborationFilter: "all" };
   const elements = new Map();
   const select = (id) => {
-    if (!elements.has(id)) elements.set(id, { innerHTML: "", addEventListener() {}, querySelector(){return null;} });
+    if (!elements.has(id)) elements.set(id, { innerHTML: "", addEventListener() {}, querySelector(){return null;}, querySelectorAll(){return [];} });
     return elements.get(id);
   };
-  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback());
+  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", "roleColor", "initialsOf", "communicationDayLabel", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback(), () => 'color-system', agent => agent.name?.slice(0,1) || '?', communicationDayLabel);
   workspace.run.task.archivedAt = null;
   workspace.messages = [
     { id: 'manager-final', kind: 'manager_decision', sender: { type: 'agent', name: '经理' }, recipient: { type: 'team', name: '团队' }, content: '最终交接结论', createdAt: '2026-10-19T00:00:00Z' },
@@ -1813,11 +1896,11 @@ test("collaboration is chronological without pinned acceptance duplicates and un
     assert.ok(html.indexOf("等待人类确认") < html.indexOf("新的提问"));
     assert.doesNotMatch(html, /data-open-completion-confirm|workspace-acceptance/);
   }
-  view.collaborationFilter = "human";
-  view.collaborationItems=collaborationRecords(workspace).filter(record=>record.human);
+  view.collaborationItems=collaborationRecords(workspace);
   render(workspace, []);
   assert.match(select("#collaboration-panel").innerHTML, /新的提问/);
-  assert.doesNotMatch(select("#collaboration-panel").innerHTML, /最终交接结论/);
+  assert.match(select("#collaboration-panel").innerHTML, /最终交接结论/);
+  assert.doesNotMatch(select("#collaboration-panel").innerHTML, /data-collaboration-filter|collaboration-filters/);
   workspace.run.task.archivedAt = '2026-10-20';
   render(workspace, []);
   assert.equal(select('#instruction-text').disabled, true);
@@ -1829,35 +1912,55 @@ test("collaboration is chronological without pinned acceptance duplicates and un
 
 test("clarification submission preserves another Run or a newly edited draft, including API failure", async () => {
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
-  const submitSource = source.slice(source.indexOf("async function sendInstruction("), source.indexOf("function openTerminateModal("));
-  for (const scenario of ["switch-run", "edit-draft", "failure", "success"]) {
-    const state = { selectedRunId: "run-a", workspace: null };
-    const views = { "run-a": { draft: "原草稿" }, "run-b": { draft: "另一个任务的草稿" } };
+  const submitSource = source.slice(source.indexOf('function confirmTaskOutgoing('),source.indexOf('function renderCollaboration(')) + source.slice(source.indexOf("async function sendInstruction("), source.indexOf("function openTerminateModal("));
+  for (const scenario of ["switch-run", "edit-draft", "edit-same-draft", "failure", "failure-scroll", "success"]) {
+    const state = { currentView:'workspace', selectedRunId: "run-a", workspace: {run:{id:'run-a',manager:{name:'经理'},task:{}},pendingQuestions:[]} };
+    const views = { "run-a": { draft: "原草稿", collaborationScroll:{top:120,following:false} }, "run-b": { draft: "另一个任务的草稿" } };
     const refreshed = [], requests = [], notices = [];
     let resolveRequest, rejectRequest;
     const pending = new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
-    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", `${submitSource}; return sendInstruction;`)(
+    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
       state, (id = state.selectedRunId) => views[id], class { get(key) { return key === "replyToMessageId" ? "question-1" : "原草稿"; } },
       (url) => { requests.push(url); return pending; }, (message) => notices.push(message),
-      async (id) => refreshed.push(id), () => [], () => {},
+      async (id) => refreshed.push(id), () => [], () => {}, async()=>{},
     );
     const sending = submit({ preventDefault() {}, currentTarget: {} });
+    assert.equal([...views['run-a'].outbox.values()][0].status,'sending','outgoing feedback exists before HTTP completes');
     if (scenario === "switch-run") state.selectedRunId = "run-b";
     if (scenario === "edit-draft") views["run-a"].draft = "继续输入的新草稿";
-    if (scenario === "failure") rejectRequest(new Error("服务暂不可用"));
-    else resolveRequest({});
+    if (scenario === "edit-same-draft") views["run-a"].draftRevision = 1;
+    if (scenario === "failure-scroll") views["run-a"].collaborationReadingRevision=1;
+    if (scenario.startsWith("failure")) rejectRequest(new Error("服务暂不可用"));
+    else resolveRequest({message:{id:'saved-message',clientRequestId:[...views['run-a'].outbox.keys()][0]}});
     await sending;
     assert.deepEqual(requests, ["/api/runs/run-a/messages"]);
     assert.equal(views["run-b"].draft, "另一个任务的草稿");
-    assert.equal(views["run-a"].draft, scenario === "failure" ? "原草稿" : scenario === "edit-draft" ? "继续输入的新草稿" : "");
-    assert.deepEqual(refreshed, ["success", "edit-draft"].includes(scenario) ? ["run-a"] : []);
-    if (scenario === "failure") assert.deepEqual(notices, ["服务暂不可用"]);
+    assert.equal(views["run-a"].draft, ['failure','failure-scroll','edit-same-draft'].includes(scenario) ? "原草稿" : scenario === "edit-draft" ? "继续输入的新草稿" : "");
+    assert.deepEqual(refreshed, ["success", "edit-draft", "edit-same-draft"].includes(scenario) ? ["run-a"] : []);
+    assert.equal([...views['run-a'].outbox.values()][0].status,scenario.startsWith('failure')?'unconfirmed':'confirmed');
+    if (scenario.startsWith("failure")) assert.deepEqual(notices, ["服务暂不可用"]);
+    assert.deepEqual(views["run-a"].collaborationRestore,scenario==='failure'?{top:120,following:false}:undefined);
+  }
+});
+
+test('late task receipt owns an explicitly restored draft, but cannot clear a later edit',async()=>{
+  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
+  const confirm=new Function(source.slice(source.indexOf('function confirmTaskOutgoing('),source.indexOf('function renderCollaboration('))+';return confirmTaskOutgoing;')();
+  const recovery=source.slice(source.indexOf("  dock.querySelectorAll('[data-recover-task-message]')"),source.indexOf('  refreshCollaborationBodies(dock);',source.indexOf("  dock.querySelectorAll('[data-recover-task-message]')")));
+  for(const edited of [false,true]){
+    const attachment={file:{name:'saved.txt'},uploaded:{id:'file-id'}},entry={id:'request-id',content:'Original message',draft:'Original message',draftRevision:1,attachments:[attachment],signature:'signature',status:'unconfirmed'};
+    const view={draft:'',draftRevision:2,attachments:[attachment],outbox:new Map([[entry.id,entry]])},button={dataset:{recoverTaskMessage:entry.id}};
+    new Function('dock','view','workspace','agents','renderCollaboration','$','imageAttachment','toast',recovery)({querySelectorAll:()=>[button]},view,{},[],()=>{},()=>({focus(){}}),()=>false,()=>{throw Error('unexpected refusal');});button.onclick();
+    assert.equal(view.draft,'Original message');assert.equal(view.sendRequest.id,entry.id);
+    if(edited){view.draft='New draft';view.draftRevision++;view.sendRequest=null;}
+    confirm(view,entry,{record:{id:'saved',clientRequestId:entry.id}});
+    assert.equal(view.draft,edited?'New draft':'');assert.equal(view.sendRequest,null);assert.deepEqual(view.attachments,[]);assert.equal(entry.status,'confirmed');
   }
 });
 
 test("task composer sends unmentioned messages to the manager, preserves explicit recipients and exact replies", async () => {
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
-  const submitSource = source.slice(source.indexOf("async function sendInstruction("), source.indexOf("function openTerminateModal("));
+  const submitSource = source.slice(source.indexOf('function confirmTaskOutgoing('),source.indexOf('function renderCollaboration(')) + source.slice(source.indexOf("async function sendInstruction("), source.indexOf("function openTerminateModal("));
   for (const [content, replyToMessageId, recipientAgentId, notice] of [
     ["请处理", "", null, null],
     ["@经理 @研发 请处理", "", null, "一条消息只能 @ 一位当前任务成员"],
@@ -1867,14 +1970,14 @@ test("task composer sends unmentioned messages to the manager, preserves explici
     const calls = [], notices = [];
     const state = { selectedRunId: "run-1", workspace: { run: { task: { archivedAt: null } } }, agents: [] };
     const view = { draft: content };
-    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", `${submitSource}; return sendInstruction;`)(
+    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
       state, () => view, class { get(key) { return key === "content" ? content : replyToMessageId; } },
-      async (_path, options) => { calls.push(JSON.parse(options.body)); return {}; },
-      (message) => notices.push(message), async () => {}, () => [{ id: "manager", name: "经理" }, { id: "developer", name: "研发" }], () => {},
+      async (_path, options) => { const payload=JSON.parse(options.body);calls.push(payload);return {message:{id:'saved',clientRequestId:payload.clientRequestId}}; },
+      (message) => notices.push(message), async () => {}, () => [{ id: "manager", name: "经理" }, { id: "developer", name: "研发" }], () => {}, async()=>{},
     );
     await submit({ preventDefault() {}, currentTarget: {} });
     if (notice) { assert.deepEqual(calls, []); assert.deepEqual(notices, [notice]); }
-    else { assert.equal(calls.length, 1); assert.equal(calls[0].recipientAgentId, recipientAgentId); assert.equal(calls[0].replyToMessageId, replyToMessageId || null); }
+    else { assert.equal(calls.length, 1); assert.equal(calls[0].recipientAgentId, recipientAgentId); assert.equal(calls[0].replyToMessageId, replyToMessageId || null);assert.match(calls[0].clientRequestId,/^[a-f0-9-]{36}$/); }
   }
 });
 
@@ -2164,4 +2267,59 @@ test("retired issue-ledger inputs reject without creating side effects; issues u
     assert.equal(store.getRunWorkspace(run.id).messages.at(-1).id,message.id);
     assert.equal('defects' in store.getRunWorkspace(run.id),false);assert.equal('openDefectCount' in store.listRuns()[0],false);
   }finally{store.close();}
+});
+
+
+test('task composite chips filter all HTTP pages before client pagination and preserve advanced queries', async () => {
+  const source = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
+  const {paginate} = await import('../web/pagination.mjs');
+  const directoryCode = source.slice(source.indexOf('const directoryResources='), source.indexOf('async function loadCatalogReferences'));
+  const chipCode = source.slice(source.indexOf('function taskMatchesChip('), source.indexOf('function taskRowStatus('));
+  const rows = Array.from({length:43}, (_,i)=>({id:String(i),status:i<20?'backlog':['planning','running','review'][i%3],runs:[]}));
+  const requests = [];
+  let failPage = 0;
+  const state = {currentView:'tasks',taskArchiveView:false,taskChip:'active',taskSearch:{name:'后续页',status:'all',workflow:'frozen-flow'},listPages:{tasks:2}};
+  const api = async path => {
+    const query = new URL(path,'http://localhost').searchParams;
+    requests.push(Object.fromEntries(query));
+    if (Number(query.get('page')) === failPage) throw new Error('directory offline');
+    const filtered = rows.filter(task => query.get('status') === 'all' || task.status === query.get('status'));
+    const page=paginate(filtered,Number(query.get('page')));
+    return {...page,tasks:page.items};
+  };
+  const refresh = new Function('state','api','paginate','taskNeedsAttention', `${chipCode}
+${directoryCode}
+return refreshDirectory;`)(state,api,paginate,taskNeedsAttention);
+  await refresh();
+  assert.equal(state.taskCandidates.length,43);
+  assert.equal(state.directoryPages.tasks.total,23);
+  assert.equal(state.directoryPages.tasks.page,2);
+  assert.deepEqual(state.tasks.map(task=>task.id),['40','41','42']);
+  assert.deepEqual(requests.map(query=>query.page),['1','2','3']);
+  for (const query of requests) assert.deepEqual([query.search,query.status,query.workflow,query.archived],['后续页','all','frozen-flow','false']);
+  state.taskChip='attention';state.listPages.tasks=1;
+  rows[30].status='paused';rows[31].status='failed';rows[32].status='blocked';rows[33].status='awaiting_human';
+  await refresh();
+  assert.deepEqual(state.tasks.map(task=>task.id),['31','32','33','30']);
+  state.taskChip='done';rows[34].status='done';rows[35].status='completed';
+  await refresh();
+  assert.deepEqual(state.tasks.map(task=>task.id),['34','35']);
+  state.taskChip='backlog';await refresh();
+  assert.equal(state.directoryPages.tasks.total,20);
+  state.taskChip='all';state.taskSearch.status='backlog';await refresh();
+  assert.equal(requests.at(-1).status,'backlog','advanced status keeps the existing HTTP parameter');
+  // An archive query remains server paginated, without composite filtering.
+  requests.length=0;state.taskArchiveView=true;state.listPages.archive=2;
+  await refresh();
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].page,'2');
+  assert.equal(requests[0].archived,'true');
+  state.taskArchiveView=false;state.taskSearch.status='all';state.taskChip='all';state.listPages.tasks=1;
+  await refresh();
+  assert.deepEqual(state.tasks.slice(0,3).map(task=>task.id),['31','32','33'], 'attention tasks precede newer drafts across pagination');
+  const previousPage=state.directoryPages.tasks, previousCandidates=state.taskCandidates;
+  failPage=2;
+  await assert.rejects(refresh(),/directory offline/);
+  assert.equal(state.directoryPages.tasks,previousPage,'failed later page keeps the last complete result');
+  assert.equal(state.taskCandidates,previousCandidates,'failure cannot publish partial counts');
 });

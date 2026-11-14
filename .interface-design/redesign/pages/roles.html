@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>角色 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .role-row { grid-template-columns: 28px minmax(160px, 240px) minmax(0, 1fr) 120px 96px 40px; }
+  @media (max-width: 1100px) { .role-row { grid-template-columns: 28px minmax(140px, 200px) minmax(0, 1fr) 40px; } .role-row .c-bound, .role-row .c-time { display: none; } }
+</style>
+</head>
+<body data-page="roles">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="idcard"></i>角色<span class="tb-count">3</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><button class="btn btn--primary" type="button" data-open="drawer-role"><i data-icon="plus"></i>新建角色</button></div>
+    </header>
+    <div class="page-hero"><h1>角色</h1><p>角色是可共用的系统提示词。员工可以绑定多个角色，沟通和任务执行都会并入。</p></div>
+    <div class="toolbar"><label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索角色名称或内容" aria-label="搜索角色"></label><span class="spacer"></span></div>
+    <div class="scroll">
+      <div class="row role-row" data-open="drawer-role"><span class="av av--24 av--sq av-system"><i data-icon="idcard" class="icon--sm"></i></span><span class="row__title">代码评审规范</span><span class="row__sub">评审时先确认需求与测试证据，再给出按严重程度排序的问题清单。</span><span class="c-bound av-stack"><span class="av av--20 blue">K</span><span class="av av--20 green">S</span></span><span class="row__meta c-time">2 天前</span><span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-role" aria-label="更多操作"><i data-icon="more"></i></span></span></div>
+      <div class="row role-row" data-open="drawer-role"><span class="av av--24 av--sq av-system"><i data-icon="idcard" class="icon--sm"></i></span><span class="row__title">中文写作风格</span><span class="row__sub">使用简洁、具体的中文，避免空泛形容词；结论先行。</span><span class="c-bound av-stack"><span class="av av--20 cyan">N</span><span class="av av--20 violet">M</span></span><span class="row__meta c-time">5 天前</span><span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-role" aria-label="更多操作"><i data-icon="more"></i></span></span></div>
+      <div class="row role-row" data-open="drawer-role"><span class="av av--24 av--sq av-system"><i data-icon="idcard" class="icon--sm"></i></span><span class="row__title">安全基线</span><span class="row__sub">不输出凭据；涉及外部调用时说明数据流向。</span><span class="c-bound av-stack"><span class="av av--20 blue">K</span></span><span class="row__meta c-time">上周</span><span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-role" aria-label="更多操作"><i data-icon="more"></i></span></span></div>
+    </div>
+  </main>
+</div>
+<div class="menu" id="menu-role" role="menu">
+  <button class="menu__item" type="button" data-open="drawer-role"><i data-icon="edit"></i>编辑</button>
+  <button class="menu__item" type="button"><i data-icon="copy"></i>复制</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除角色…</button>
+</div>
+<aside class="drawer" id="drawer-role" aria-label="编辑角色" style="width:min(560px,calc(100vw - 16px))">
+  <div class="drawer__head"><strong style="flex:1">编辑角色</strong><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+  <div class="drawer__body">
+    <div class="field"><span class="field__label">名称<span class="req">*</span></span><input class="input" value="代码评审规范"></div>
+    <div class="field"><span class="field__label">系统提示词<span class="req">*</span><span class="spacer"></span><span class="opt tnum">58 字</span></span><textarea class="textarea mono" style="min-height:260px;font-size:13px;line-height:21px">评审时先确认需求与测试证据，再给出按严重程度排序的问题清单。
+- 每个问题包含：位置、现象、影响、建议；
+- 不确定的判断标注为“待确认”。</textarea></div>
+    <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">已被 2 位员工使用</div><div class="callout__text">保存后，之后开始的任务与沟通回复使用新内容；已开始的任务继续使用开始时冻结的提示词。</div><div class="callout__actions"><span class="token"><span class="av av--16 blue">K</span>Kai · 研发工程师</span><span class="token"><span class="av av--16 green">S</span>Sora · 测试工程师</span></div></div></div>
+  </div>
+  <div class="drawer__foot"><button class="btn btn--ghost" type="button" style="color:var(--st-failed)"><i data-icon="trash" class="icon--sm"></i>删除</button><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--primary" type="button">保存</button></div>
+</aside>
+</body>
+</html>

@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>组件与状态 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<link rel="stylesheet" href="../assets/doc.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+</head>
+<body style="overflow:auto">
+<div class="doc-shell">
+  <nav class="doc-toc" aria-label="目录">
+    <div class="doc-toc__brand"><img src="../../../web/icons/application-ui.png" alt=""><span>组件与状态<small>AgentForge 设计系统</small></span></div>
+    <a href="../index.html"><i data-icon="arrow-left" class="icon--sm"></i>返回设计总览</a>
+    <p>基础</p>
+    <a href="#color">颜色</a><a href="#type">字体</a><a href="#space">间距 · 圆角 · 层级</a><a href="#icons">图标</a>
+    <p>组件</p>
+    <a href="#buttons">按钮</a><a href="#inputs">输入</a><a href="#choices">选择控件</a><a href="#status">状态体系</a><a href="#identity">头像 · 标签 · 计数</a><a href="#feedback">反馈</a><a href="#empty">空状态</a><a href="#rows">列表行</a><a href="#messages">会话消息</a><a href="#overlays">浮层</a>
+    <p>平台</p>
+    <a href="#keys">快捷键</a><a href="#window">窗口尺寸</a>
+  </nav>
+  <main class="doc-main">
+    <div class="doc-inner">
+      <section class="doc-section" id="intro">
+        <span class="doc-eyebrow"><i data-icon="grid" class="icon--sm"></i>设计系统</span>
+        <h1 class="doc-h1">组件与状态</h1>
+        <p class="doc-lead">所有组件只引用语义 Token；左下角「设计稿」可切换风格、浅深色与密度，本页随之实时更新。灰色标注的 <code>.class</code> 是组件名，推广时替换现有的同类样式。</p>
+      </section>
+
+      <!-- 颜色 -->
+      <section class="doc-section" id="color">
+        <h2 class="doc-h2">颜色</h2>
+        <p class="doc-p">组件只能使用语义 Token。原始色板只在 <code>tokens.css</code> 内部出现；状态色只表达状态，身份色只用于头像。下表为当前风格与模式的实际取值。</p>
+        <table class="doc-table swatch-table" id="swatches"><thead><tr><th>Token</th><th>取值</th><th>用途</th></tr></thead><tbody></tbody></table>
+      </section>
+
+      <!-- 字体 -->
+      <section class="doc-section" id="type">
+        <h2 class="doc-h2">字体</h2>
+        <p class="doc-p">系统字体（苹方 / SF Pro），只有 7 级字阶，禁止 8–10px 正文。等宽字体只用于代码、路径、ID、Cron 与数字列，不用于时间与人名。</p>
+        <div style="margin-top:16px">
+          <div class="type-row"><code>display 28/36 · 700</code><span style="font-size:28px;line-height:36px;font-weight:700">设置本机工作区</span><small>登录、首次引导</small></div>
+          <div class="type-row"><code>title 20/28 · 600</code><span style="font-size:20px;line-height:28px;font-weight:600">Kai 想确认第三方登录的范围</span><small>页面标题、详情标题</small></div>
+          <div class="type-row"><code>title-sm 15/22 · 600</code><span style="font-size:15px;line-height:22px;font-weight:600">新建任务</span><small>弹窗、区块、标题栏</small></div>
+          <div class="type-row"><code>read 14/22 · 400</code><span style="font-size:14px;line-height:22px">验收标准已交付，覆盖窄窗口、错误提示与找回入口。</span><small>消息、Markdown 阅读</small></div>
+          <div class="type-row"><code>body 13/20 · 400</code><span style="font-size:13px;line-height:20px">重构登录页并补齐单元测试</span><small>界面默认、列表、表单</small></div>
+          <div class="type-row"><code>small 12/18 · 400</code><span style="font-size:12px;line-height:18px;color:var(--text-secondary)">工作目录自动创建在 ~/AgentForge/tasks</span><small>说明、按钮（小）、标签</small></div>
+          <div class="type-row"><code>caption 11/16 · 500</code><span style="font-size:11px;line-height:16px;font-weight:500;color:var(--text-tertiary)">表头 · 计数 · 分组标题</span><small>只用于辅助信息</small></div>
+          <div class="type-row"><code>mono 12.5/20</code><span class="mono" style="font-size:12.5px">npm test -- login · 0 9 * * 1-5</span><small>代码、路径、ID、Cron</small></div>
+        </div>
+      </section>
+
+      <!-- 间距 -->
+      <section class="doc-section" id="space">
+        <h2 class="doc-h2">间距 · 圆角 · 层级</h2>
+        <h3 class="doc-h3">间距：4px 网格</h3>
+        <div class="space-row">
+          <div><i style="width:4px;height:4px"></i>4</div><div><i style="width:6px;height:6px"></i>6</div><div><i style="width:8px;height:8px"></i>8</div><div><i style="width:12px;height:12px"></i>12</div><div><i style="width:16px;height:16px"></i>16</div><div><i style="width:20px;height:20px"></i>20</div><div><i style="width:24px;height:24px"></i>24</div><div><i style="width:32px;height:32px"></i>32</div><div><i style="width:40px;height:40px"></i>40</div><div><i style="width:48px;height:48px"></i>48</div>
+        </div>
+        <p class="doc-note">控件内边距 8/12；组件间距 8/12/16；区块间距 24/32；页面边距 <code>--pad-page</code>（石墨 24、纸张 44、夜航 20，窄窗口 16）。</p>
+        <h3 class="doc-h3">圆角：5 级</h3>
+        <div class="space-row radius-row">
+          <div><i style="border-radius:var(--r-xs)"></i>xs · 标签</div><div><i style="border-radius:var(--r-sm)"></i>sm · 控件</div><div><i style="border-radius:var(--r-md)"></i>md · 卡片</div><div><i style="border-radius:var(--r-lg)"></i>lg · 弹窗</div><div><i style="border-radius:var(--r-full)"></i>full · 头像</div>
+        </div>
+        <h3 class="doc-h3">层级：页面内容不用阴影</h3>
+        <div class="space-row elev-row">
+          <div><i style="box-shadow:inset 0 0 0 1px var(--border)"></i>0 · 边线（卡片、表格）</div>
+          <div><i style="box-shadow:var(--shadow-xs), inset 0 0 0 1px var(--border)"></i>xs · 次按钮</div>
+          <div><i style="box-shadow:var(--shadow-pop)"></i>pop · 菜单、浮层</div>
+          <div><i style="box-shadow:var(--shadow-dialog)"></i>dialog · 弹窗、抽屉</div>
+        </div>
+        <p class="doc-note">z-index：sticky 10 · 下拉 40 · 抽屉 60 · 弹窗 80 · 命令面板 90 · Toast 100（Toast 始终在弹窗之上，沿用现有规则）。动效 120 / 180 / 240ms，减少动画偏好下全部关闭。</p>
+      </section>
+
+      <!-- 图标 -->
+      <section class="doc-section" id="icons">
+        <h2 class="doc-h2">图标</h2>
+        <p class="doc-p">24 网格、1.6px 线宽、圆角端点；默认 16px，按钮内 14px，空态 20px。替代现有的 ◈ ✓ ☏ ⌘ ⌁ ✦ ◇ ⚙ ♢ 等字符图标和按钮里的 Ⅱ ■ ▶ ↓ ↗ ＋ 字形。状态图标用形状区分，不只靠颜色。</p>
+        <div class="icon-grid" id="icon-grid"></div>
+      </section>
+
+      <!-- 按钮 -->
+      <section class="doc-section" id="buttons">
+        <h2 class="doc-h2">按钮 <code style="font-size:13px;font-weight:400">.btn</code></h2>
+        <p class="doc-p">一个区域只有一个主按钮。筛选、切换不用主按钮，改用分段控件。危险操作默认是红字次按钮，只有确认弹窗里才是实心红色。替代 <code>.primary-button</code> <code>.ghost-button</code> <code>.danger-button</code> <code>.small-button(.primary/.amber)</code> <code>.text-action</code> 共 7 种写法。</p>
+        <div class="demo" style="margin-top:16px">
+          <div class="matrix" style="grid-template-columns:96px repeat(6, auto);justify-content:start">
+            <span class="h"></span><span class="h">默认</span><span class="h">悬停</span><span class="h">按下</span><span class="h">键盘焦点</span><span class="h">禁用</span><span class="h">加载中</span>
+            <span class="h">主要</span><button class="btn btn--primary">保存并开始</button><button class="btn btn--primary is-hover">保存并开始</button><button class="btn btn--primary is-pressed">保存并开始</button><button class="btn btn--primary is-focus">保存并开始</button><button class="btn btn--primary" disabled>保存并开始</button><button class="btn btn--primary is-loading"><i data-icon="loader" class="spin icon--sm"></i>启动中…</button>
+            <span class="h">次要</span><button class="btn">保存草稿</button><button class="btn is-hover">保存草稿</button><button class="btn is-pressed">保存草稿</button><button class="btn is-focus">保存草稿</button><button class="btn" disabled>保存草稿</button><button class="btn is-loading"><i data-icon="loader" class="spin icon--sm"></i>保存中…</button>
+            <span class="h">幽灵</span><button class="btn btn--ghost">取消</button><button class="btn btn--ghost is-hover">取消</button><button class="btn btn--ghost is-pressed">取消</button><button class="btn btn--ghost is-focus">取消</button><button class="btn btn--ghost" disabled>取消</button><span></span>
+            <span class="h">危险</span><button class="btn btn--danger">删除…</button><button class="btn btn--danger is-hover">删除…</button><button class="btn btn--danger is-pressed">删除…</button><button class="btn btn--danger is-focus">删除…</button><button class="btn btn--danger" disabled>删除…</button><span></span>
+            <span class="h">需要你</span><button class="btn btn--attention btn--sm"><i data-icon="reply" class="icon--sm"></i>去澄清</button><span class="faint" style="grid-column:span 5;font-size:12px">只用于列表行上「需要你行动」的下一步，不在其他场景出现。</span>
+          </div>
+        </div>
+        <div class="demo">
+          <div class="demo-row"><span class="demo-label">尺寸</span><button class="btn btn--sm">小 24</button><button class="btn">默认 28</button><button class="btn btn--lg">大 32</button><span class="faint" style="font-size:12px">（舒适密度下 26 / 32 / 36）</span></div>
+          <div class="demo-row"><span class="demo-label">图标按钮</span><button class="btn btn--ghost btn--icon" aria-label="更多"><i data-icon="more"></i></button><button class="btn btn--icon" aria-label="刷新"><i data-icon="refresh"></i></button><button class="btn btn--ghost btn--icon btn--sm" aria-label="关闭"><i data-icon="x"></i></button><span class="faint" style="font-size:12px">必须有 aria-label 与 title；悬停显示快捷键提示</span></div>
+          <div class="demo-row"><span class="demo-label">带快捷键</span><button class="btn btn--primary"><i data-icon="plus"></i>新建任务<kbd class="kbd">C</kbd></button><button class="btn">打开<kbd class="kbd">↵</kbd></button><span class="tooltip">新建任务 <kbd class="kbd">C</kbd></span></div>
+          <div class="demo-row"><span class="demo-label">按钮组</span><div class="btn-group"><button class="btn btn--sm">行内</button><button class="btn btn--sm">左右</button></div><a class="link-btn" href="#">本轮控制台<i data-icon="external" class="icon--sm"></i></a></div>
+        </div>
+      </section>
+
+      <!-- 输入 -->
+      <section class="doc-section" id="inputs">
+        <h2 class="doc-h2">输入 <code style="font-size:13px;font-weight:400">.input .select .textarea .picker</code></h2>
+        <div class="demo" style="margin-top:16px">
+          <div class="doc-grid-3">
+            <div class="field"><span class="field__label">默认</span><input class="input" placeholder="任务标题"></div>
+            <div class="field"><span class="field__label">悬停</span><input class="input is-hover" value="重构登录页"></div>
+            <div class="field"><span class="field__label">聚焦</span><input class="input is-focus" value="重构登录页并补齐"></div>
+            <div class="field"><span class="field__label">错误<span class="req">*</span></span><input class="input is-invalid" aria-invalid="true"><span class="field__error"><i data-icon="alert" class="icon--sm"></i>请填写任务标题</span></div>
+            <div class="field"><span class="field__label">禁用</span><input class="input" disabled value="运行中不可更换"></div>
+            <div class="field"><span class="field__label">带说明<span class="opt">（选填）</span></span><input class="input mono" value="opus"><span class="field__hint">留空使用 CLI 默认模型</span></div>
+            <div class="field"><span class="field__label">搜索</span><label class="search" style="width:100%"><i data-icon="search"></i><input class="input" placeholder="筛选任务名称"><kbd class="kbd">/</kbd></label></div>
+            <div class="field"><span class="field__label">下拉</span><select class="select"><option>软件交付 · 6 个节点</option></select></div>
+            <div class="field"><span class="field__label">数字</span><div class="hstack"><input class="input tnum" style="width:72px;text-align:right" value="2"><span class="muted">分钟</span></div></div>
+          </div>
+          <div class="field"><span class="field__label">多选（成员）：已选标签与搜索在同一边框；点击姓名设为经理</span><div class="picker is-focus"><span class="token is-manager"><span class="av av--16 violet">项</span>★ 项目经理<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 cyan">N</span>Noah<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 blue">K</span>Kai<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="添加团队或员工…"></div></div>
+          <div class="field" style="margin:0"><span class="field__label">长文本</span><textarea class="textarea textarea--read" rows="3">登录页在窄窗口下错位、错误提示不可读；请重构布局并为表单校验补齐单元测试。</textarea></div>
+        </div>
+      </section>
+
+      <!-- 选择控件 -->
+      <section class="doc-section" id="choices">
+        <h2 class="doc-h2">选择控件</h2>
+        <p class="doc-p">页签、视图标签和分段控件的选中状态统一为<strong>填充底色</strong>（与任务列表筛选一致），未选中只显示文字；不再使用下划线页签，也不用主按钮表示选中。</p>
+        <div class="demo" style="margin-top:16px">
+          <div class="demo-row"><span class="demo-label">开关</span><span class="switch is-on" role="switch" aria-checked="true" aria-label="开"></span><span class="switch" role="switch" aria-checked="false" aria-label="关"></span><span class="switch is-on" role="switch" aria-checked="true" disabled aria-label="禁用开"></span><span class="switch" disabled role="switch" aria-checked="false" aria-label="禁用关"></span><span class="faint" style="font-size:12px">即时生效的布尔设置；需要提交的表单用复选框</span></div>
+          <div class="demo-row"><span class="demo-label">复选 / 单选</span><span class="check is-on"><i></i>启用自动更新</span><span class="check"><i></i>归档后通知我</span><span class="radio is-on"><i></i>保留在菜单栏</span><span class="radio"><i></i>退出程序</span></div>
+          <div class="demo-row"><span class="demo-label">分段</span><div class="seg"><button class="seg__item is-active">全部</button><button class="seg__item">涉及我</button></div><div class="seg seg--icon"><button class="seg__item is-active" aria-label="列表"><i data-icon="list"></i></button><button class="seg__item" aria-label="看板"><i data-icon="board"></i></button></div><span class="faint" style="font-size:12px">面板内切换</span></div>
+          <div class="demo-row"><span class="demo-label">页签</span><div class="tabs"><button class="tab is-active">协作<span class="count-badge count-badge--attention">1</span></button><button class="tab">文件<span class="count">3</span></button><button class="tab">控制台</button></div><span class="faint" style="font-size:12px">页面级视图切换</span></div>
+          <div class="demo-row"><span class="demo-label">视图标签</span><div class="vtabs"><button class="vtab is-active">全部 <span class="count">7</span></button><button class="vtab">待我处理 <span class="count count--attention">3</span></button><button class="vtab">进行中 <span class="count">1</span></button></div><span class="faint" style="font-size:12px">列表的预设筛选</span></div>
+        </div>
+      </section>
+
+      <!-- 状态体系 -->
+      <section class="doc-section" id="status">
+        <h2 class="doc-h2">状态体系</h2>
+        <p class="doc-p">形状 + 颜色 + 文字三重表达。显示文案沿用现有 <code>STATUS_TEXT</code>，行内主操作沿用现有 <code>taskActionLabel()</code>。颜色只表达「谁需要行动」，不代表业务结果已通过。</p>
+        <table class="doc-table">
+          <thead><tr><th>状态值</th><th>显示</th><th>语义</th><th>列表分组</th><th>行内主操作</th></tr></thead>
+          <tbody>
+            <tr><td><code>backlog</code></td><td><span class="status st-neutral"><i data-icon="st-draft"></i>草稿</span></td><td>中性</td><td>草稿</td><td>启动 · 编辑</td></tr>
+            <tr><td><code>planning</code></td><td><span class="status st-running"><i data-icon="st-planning"></i>进行中</span></td><td>进行中（蓝）</td><td>进行中</td><td>—</td></tr>
+            <tr><td><code>running</code> <code>review</code></td><td><span class="status st-running"><i data-icon="st-running"></i>进行中</span></td><td>进行中（蓝）</td><td>进行中</td><td>—</td></tr>
+            <tr><td><code>awaiting_human</code></td><td><span class="status status--text st-attention"><i data-icon="st-attention"></i>等待你的澄清</span></td><td>需要你（琥珀）</td><td>待我处理</td><td>去澄清</td></tr>
+            <tr><td><code>awaiting_acceptance</code></td><td><span class="status status--text st-attention"><i data-icon="st-review"></i>待你验收</span></td><td>需要你（琥珀）<br><span class="faint" style="font-size:12px">现为灰色，与草稿无法区分</span></td><td>待我处理</td><td>去验收</td></tr>
+            <tr><td><code>failed</code> <code>blocked</code></td><td><span class="status status--text st-failed"><i data-icon="st-failed"></i>错误中断</span></td><td>失败（红）</td><td>待我处理</td><td>查看恢复选项</td></tr>
+            <tr><td><code>paused</code></td><td><span class="status st-neutral"><i data-icon="st-paused"></i>已暂停</span></td><td>中性</td><td>已暂停</td><td>继续</td></tr>
+            <tr><td><code>done</code> <code>completed</code></td><td><span class="status status--text st-done"><i data-icon="st-done"></i>已完成</span></td><td>完成（绿）</td><td>已完成</td><td>归档</td></tr>
+            <tr><td><code>cancelled</code></td><td><span class="status st-neutral"><i data-icon="st-cancelled"></i>已终止</span></td><td>中性</td><td>已终止</td><td>查看记录</td></tr>
+          </tbody>
+        </table>
+        <div class="demo" style="margin-top:16px">
+          <div class="demo-row"><span class="demo-label">胶囊</span><span class="status status--pill st-running"><i data-icon="st-running"></i>进行中</span><span class="status status--pill st-attention"><i data-icon="st-attention"></i>等待你的澄清</span><span class="status status--pill st-failed"><i data-icon="st-failed"></i>错误中断</span><span class="status status--pill st-done"><i data-icon="st-done"></i>已完成</span><span class="faint" style="font-size:12px">只用于标题栏、详情头部；列表中用纯文字状态</span></div>
+          <div class="demo-row"><span class="demo-label">员工 / 运行时</span><span class="faint" style="font-size:12px">可用（不显示）</span><span class="status status--text st-live"><span class="dot dot--pulse"></span>执行中</span><span class="tag">已停用</span><span class="tag tag--outline">未安装</span><span class="faint" style="font-size:12px">成员执行中用绿点（沿用现有「运行绿点」），与任务「进行中」的蓝色区分</span></div>
+        </div>
+      </section>
+
+      <!-- 头像 -->
+      <section class="doc-section" id="identity">
+        <h2 class="doc-h2">头像 · 标签 · 计数 <code style="font-size:13px;font-weight:400">.av .tag .count-badge</code></h2>
+        <p class="doc-p">一个 <code>.av</code> 组件替代现有 9 种头像写法（<code>agent-card-avatar</code>、<code>extension-avatar</code>、<code>communication-avatar</code>、<code>member-avatar</code>、<code>stack-avatar</code>、<code>activity-avatar</code>、<code>role-avatar</code>、<code>user-avatar</code>、<code>workspace-avatar</code>）。统一为大圆角方形（圆角 = 边长 × 0.3），人物与扩展同形；20px 以下只放 1 个字符。</p>
+        <div class="demo" style="margin-top:16px">
+          <div class="demo-row"><span class="demo-label">身份色</span><span class="av av--32 violet">项</span><span class="av av--32 cyan">N</span><span class="av av--32 blue">K</span><span class="av av--32 orange">L</span><span class="av av--32 green">S</span><span class="av av--32 av-system">管</span><span class="faint" style="font-size:12px">按稳定 ID 分配，不表达状态</span></div>
+          <div class="demo-row"><span class="demo-label">尺寸</span><span class="av av--16 blue">K</span><span class="av av--20 blue">K</span><span class="av av--24 blue">K</span><span class="av av--28 blue">K</span><span class="av av--32 blue">K</span><span class="av av--40 blue">K</span><span class="av av--48 blue">K</span></div>
+          <div class="demo-row"><span class="demo-label">标记</span><span class="av av--32 violet">项<span class="av__badge"><i data-icon="star"></i></span></span><span class="faint" style="font-size:12px">经理</span><span class="av av--32 blue">K<span class="av__presence is-live"></span></span><span class="faint" style="font-size:12px">执行中（绿点）</span><span class="av av--32 cyan is-muted">T</span><span class="faint" style="font-size:12px">已停用</span><span class="av-stack"><span class="av av--24 violet">项</span><span class="av av--24 cyan">N</span><span class="av av--24 blue">K</span><span class="av av--24 av-more">+2</span></span><span class="av av--32 av--sq green">CR</span><span class="faint" style="font-size:12px">扩展</span></div>
+          <div class="demo-row"><span class="demo-label">标签</span><span class="tag">软件交付</span><span class="tag tag--outline">手动</span><span class="tag tag--accent">有更新</span><span class="tag tag--violet">经理</span><span class="tag tag--mono">v1.2.0</span><span class="tag"><i data-icon="branch"></i>Git</span></div>
+          <div class="demo-row"><span class="demo-label">计数</span><span class="count-badge">12</span><span class="count-badge count-badge--attention">3</span><span class="nav-badge nav-badge--accent">2</span><span class="faint" style="font-size:12px">琥珀=待处理数，蓝=未读数，灰=总数</span></div>
+        </div>
+      </section>
+
+      <!-- 反馈 -->
+      <section class="doc-section" id="feedback">
+        <h2 class="doc-h2">反馈</h2>
+        <div class="doc-grid-2" style="margin-top:16px">
+          <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">提示</div><div class="callout__text">修改只影响之后开始的任务与沟通。</div></div></div>
+          <div class="callout st-done"><i data-icon="check-circle"></i><div class="callout__body"><div class="callout__title">已完成</div><div class="callout__text">CLI 已安装，新开终端后可用。</div></div></div>
+          <div class="callout st-attention"><i data-icon="alert"></i><div class="callout__body"><div class="callout__title">1 个组件未能加载</div><div class="callout__text">Hook 缺少 command 字段，已跳过。</div></div></div>
+          <div class="callout st-failed"><i data-icon="x-circle"></i><div class="callout__body"><div class="callout__title">执行已中断</div><div class="callout__text">进程退出（code 127）：未找到可执行文件。</div><div class="callout__actions"><button class="btn btn--sm btn--primary">重试</button><button class="btn btn--sm btn--ghost">查看日志</button></div></div></div>
+        </div>
+        <p class="doc-note">说明文字默认是普通段落；只有需要用户注意的事才用 callout，避免现在设置页「每段说明都是灰底框」的情况。</p>
+        <div class="demo demo--subtle" style="margin-top:16px">
+          <div class="demo-row">
+            <div class="toast st-done"><i data-icon="check-circle"></i><div class="toast__text">任务已保存为草稿<small>可在任务列表的「草稿」中启动</small></div></div>
+            <div class="toast st-failed"><i data-icon="x-circle"></i><div class="toast__text">发送失败<small>草稿与附件已保留，请稍后重试</small></div></div>
+          </div>
+          <div class="demo-row"><span class="tooltip">任务详情 <kbd class="kbd">⌘</kbd><kbd class="kbd">I</kbd></span><div style="width:240px"><div class="progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="下载进度"><i style="width:62%"></i></div></div><span class="tnum muted" style="font-size:12px">62%</span><button class="btn btn--sm is-loading"><i data-icon="loader" class="spin icon--sm"></i>读取中</button></div>
+          <div class="demo-row" style="flex-direction:column;align-items:stretch;gap:10px;max-width:520px"><span class="faint" style="font-size:12px">加载骨架（首次读取超过 300ms 时出现，不显示「正在读取…」文字）</span><span class="skeleton" style="width:60%"></span><span class="skeleton" style="width:88%"></span><span class="skeleton" style="width:42%"></span></div>
+        </div>
+      </section>
+
+      <!-- 空状态 -->
+      <section class="doc-section" id="empty">
+        <h2 class="doc-h2">空状态 <code style="font-size:13px;font-weight:400">.empty</code></h2>
+        <p class="doc-p">替代 <code>.directory-empty</code> <code>.empty-state</code> <code>.human-empty</code> <code>.chat-empty</code> 等 5 种写法。沿用现有规则：空态不重复「创建」按钮（入口在工具栏）；加载、读取失败、真实无数据必须区分。</p>
+        <div class="doc-grid-2" style="margin-top:16px">
+          <div class="demo" style="padding:0"><div class="empty"><span class="empty__icon"><i data-icon="tasks"></i></span><h3>还没有任务</h3><p>描述一个目标，选择成员和工作流，员工会协作完成并交付文件。按 <kbd class="kbd">C</kbd> 新建。</p></div></div>
+          <div class="demo" style="padding:0"><div class="empty"><span class="empty__icon"><i data-icon="search"></i></span><h3>没有匹配的任务</h3><p>没有名称包含「登陆」的任务。</p><div class="actions"><button class="btn btn--sm">清除筛选</button></div></div></div>
+          <div class="demo" style="padding:0"><div class="empty"><span class="empty__icon" style="background:var(--st-failed-bg);color:var(--st-failed)"><i data-icon="alert"></i></span><h3>无法读取工作目录</h3><p>目录可能已被移动或删除。原有文件选择会保留。</p><div class="actions"><button class="btn btn--sm"><i data-icon="refresh" class="icon--sm"></i>重试</button></div></div></div>
+          <div class="demo" style="padding:0"><div class="empty"><span class="empty__icon"><i data-icon="diff"></i></span><h3>没有变更</h3><p>本任务的员工还没有修改工作目录中的文件。</p></div></div>
+        </div>
+      </section>
+
+      <!-- 列表行 -->
+      <section class="doc-section" id="rows">
+        <h2 class="doc-h2">列表行与卡片 <code style="font-size:13px;font-weight:400">.row .entity-card</code></h2>
+        <p class="doc-p">所有目录统一行高（紧凑 36 / 默认 38 / 舒适 44）。每行最多露出一个「下一步」操作，其余在悬停或键盘聚焦时出现，全部收进 ⋯ 菜单也必须可达。</p>
+        <div class="demo" style="padding:0;overflow:hidden;margin-top:16px">
+          <div class="row" style="grid-template-columns:16px minmax(0,1fr) 120px 140px"><i data-icon="st-running" class="st st-running"></i><span class="row__title">默认</span><span class="row__meta">刚刚</span><span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover"><i data-icon="more"></i></span></span></div>
+          <div class="row is-hover" style="grid-template-columns:16px minmax(0,1fr) 120px 140px"><i data-icon="st-running" class="st st-running"></i><span class="row__title">悬停：显露次要操作</span><span class="row__meta">刚刚</span><span class="row__actions"><span class="btn btn--sm">继续</span><span class="btn btn--ghost btn--icon btn--sm"><i data-icon="more"></i></span></span></div>
+          <div class="row is-selected" style="grid-template-columns:16px minmax(0,1fr) 120px 140px"><i data-icon="st-attention" class="st st-attention"></i><span class="row__title">选中（J / K 移动，↵ 打开）</span><span class="row__meta">12 分钟前</span><span class="row__actions"><span class="btn btn--sm btn--attention">去澄清</span></span></div>
+          <div class="row is-focus" style="grid-template-columns:16px minmax(0,1fr) 120px 140px;outline-offset:-2px"><i data-icon="st-done" class="st st-done"></i><span class="row__title">键盘焦点</span><span class="row__meta">昨天</span><span class="row__actions"></span></div>
+        </div>
+        <div class="grid" style="margin-top:16px">
+          <article class="card card--interactive entity-card" tabindex="0"><div class="entity-card__head"><span class="av av--36 blue">K<span class="av__presence is-live"></span></span><div style="min-width:0"><div class="entity-card__title"><span>Kai · 研发工程师</span></div><div class="entity-card__sub">角色：代码评审规范</div></div><span class="status status--text st-live"><span class="dot dot--pulse"></span>执行中</span></div><p class="entity-card__desc">负责前端与 Node 服务实现，提交前运行单元测试并附上测试输出。</p><div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code · sonnet</span><span><i data-icon="plug"></i>2</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" aria-label="更多操作"><i data-icon="more"></i></button></div></div></article>
+          <article class="card card--interactive entity-card" tabindex="0"><div class="entity-card__head"><span class="av av--36 green">CR</span><div style="min-width:0"><div class="entity-card__title"><span>code-review-kit</span><span class="tag tag--mono">1.2.0</span></div><div class="entity-card__sub">Git · acme/code-review-kit</div></div><span></span></div><p class="entity-card__desc">代码评审清单与提交前检查，按严重程度输出问题。</p><div class="entity-card__foot"><div class="entity-card__meta"><span>2 Skill · 1 Subagent</span><span><i data-icon="bot"></i>2 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" aria-label="更多操作"><i data-icon="more"></i></button></div></div></article>
+        </div>
+        <p class="doc-note">员工、插件、MCP 共用同一张卡片：点击卡片在右侧抽屉看详情；「对话」「⋯」常驻底部，不在悬停时覆盖内容。</p>
+      </section>
+
+      <!-- 会话消息 -->
+      <section class="doc-section" id="messages">
+        <h2 class="doc-h2">会话消息 <code style="font-size:13px;font-weight:400">.msg .bubble .ask</code></h2>
+        <p class="doc-p">任务协作与沟通共用同一组件（现在是 <code>.collaboration-row</code> 与 <code>.communication-message</code> 两套）。人类靠右气泡，员工靠左；记录之间用很轻的分隔线；记录区不设最大宽度，左右留白随窗口变化（<code>--pad-record</code>）。类型用图标 + 文字，时间用相对时间、悬停看精确时间。</p>
+        <div class="demo" style="margin-top:16px">
+          <div>
+            <article class="msg"><span class="av av--28 violet">项<span class="av__badge"><i data-icon="star"></i></span></span><div><div class="msg__head"><span class="msg__name">项目经理</span><span class="tag tag--violet">经理</span><span class="msg__type"><i data-icon="flag"></i>派工给 Noah</span><span class="msg__time">09:58</span></div><div class="msg__body">先由 Noah 明确验收标准，完成后交给 Kai。</div></div></article>
+            <article class="msg"><span class="av av--28 cyan">N</span><div><div class="msg__head"><span class="msg__name">Noah · 需求分析师</span><span class="msg__type"><i data-icon="handoff"></i>交接给 项目经理</span><span class="msg__time">10:18</span></div><div class="msg__body">验收标准已交付，<strong>未覆盖</strong>第三方登录按钮。</div><div class="msg__foot"><a class="file-chip" href="#"><span class="ft ft--md">MD</span>login-acceptance.md<small>docs/requirements</small></a></div></div></article>
+            <article class="msg msg--human"><div class="msg__head"><span class="msg__type">追加指令</span><span class="msg__time">10:21</span><span class="msg__name">你</span></div><div class="bubble">登录按钮保持品牌蓝。<span class="mention">@Kai · 研发工程师</span> 请覆盖中文输入法回车。</div></article>
+            <article class="msg"><span class="av av--28 blue">K</span><div><div class="msg__head"><span class="msg__name">Kai · 研发工程师</span><span class="msg__type"><i data-icon="question"></i>向你提问</span><span class="msg__time">10:24</span></div><div class="ask"><div class="ask__head"><i data-icon="st-attention" class="icon--sm"></i>需要你回答 · 已等待 12 分钟</div><div class="msg__body">第三方登录按钮是否也要按新布局调整？</div><div class="ask__actions"><button class="btn btn--sm btn--primary"><i data-icon="reply" class="icon--sm"></i>回复</button></div></div></div></article>
+            <article class="msg"><span class="av av--28 green">S</span><div><div class="msg__head"><span class="msg__name">Sora · 测试工程师</span><span class="msg__type"><i data-icon="handoff"></i>交接</span><span class="msg__time">11:02</span></div><div class="msg__body collapsed-body"><p>回归报告（长消息超过 10 行时收起，展开不重建内容）：</p><ul><li>760px：通过</li><li>1320px：通过</li><li>中文输入法回车：通过</li><li>错误提示读屏：通过</li><li>连续失败 3 次：通过</li><li>找回入口文案：待确认</li></ul></div><div class="msg__foot"><button class="link-btn" style="font-size:12px">展开全文</button></div></div></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- 浮层 -->
+      <section class="doc-section" id="overlays">
+        <h2 class="doc-h2">浮层</h2>
+        <p class="doc-p">表单弹窗只能显式关闭（保护草稿，沿用现有规则）；确认弹窗 Esc 即取消；只读详情用右侧抽屉，不打断当前列表。菜单与候选列表复用原生 Popover 顶层定位。</p>
+        <div class="doc-grid-2" style="margin-top:16px;align-items:start">
+          <div class="demo demo--subtle" style="display:grid;place-items:center">
+            <div class="menu menu--static" style="width:240px"><a class="menu__item" href="#"><i data-icon="external"></i>打开任务<span class="meta"><kbd class="kbd">↵</kbd></span></a><button class="menu__item is-active"><i data-icon="edit"></i>编辑成员</button><button class="menu__item"><i data-icon="archive"></i>归档</button><div class="menu__sep"></div><button class="menu__item menu__item--danger"><i data-icon="trash"></i>删除任务…</button></div>
+          </div>
+          <div class="demo demo--subtle" style="display:grid;place-items:center">
+            <div class="dialog dialog--sm" role="alertdialog" aria-label="删除确认示例" style="animation:none"><div class="dialog__head"><h2>删除任务「设计系统 Token 梳理」？</h2></div><div class="dialog__body" style="padding-top:8px"><p class="muted">任务描述、草稿成员与交付文件将被永久删除，无法撤销。</p></div><div class="dialog__foot"><span class="spacer"></span><button class="btn btn--ghost">取消</button><button class="btn btn--danger-solid">删除任务</button></div></div>
+          </div>
+        </div>
+        <div class="demo demo--subtle" style="display:grid;place-items:center;margin-top:16px">
+          <div class="palette" style="animation:none" role="dialog" aria-label="命令面板示例">
+            <label class="palette__input"><i data-icon="search" class="icon--lg"></i><input value="登录" aria-label="搜索"><kbd class="kbd">esc</kbd></label>
+            <div class="palette__list"><p class="palette__group">任务</p><a class="palette__item is-active" href="#"><i data-icon="st-attention" class="st st-attention"></i><span>重构<b>登录</b>页并补齐单元测试</span><span class="palette__meta">等待你的澄清</span><span class="palette__hint"><kbd class="kbd">↵</kbd></span></a><p class="palette__group">沟通</p><a class="palette__item" href="#"><i data-icon="message"></i><span><b>登录</b>页改版讨论</span><span class="palette__meta">群聊 · 3 人</span></a><p class="palette__group">操作</p><a class="palette__item" href="#"><i data-icon="plus"></i><span>新建任务「登录…」</span><span class="palette__hint"><kbd class="kbd">⌘</kbd><kbd class="kbd">↵</kbd></span></a></div>
+            <div class="palette__foot"><span><kbd class="kbd">↑</kbd><kbd class="kbd">↓</kbd> 选择</span><span><kbd class="kbd">↵</kbd> 打开</span><span><kbd class="kbd">esc</kbd> 关闭</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 快捷键 -->
+      <section class="doc-section" id="keys">
+        <h2 class="doc-h2">快捷键</h2>
+        <p class="doc-p">⌘0、⌘R、⌘[、⌘]、⌘, 、⌘Q 已在现有菜单栏中，保持不变；其余为新增，全部可在命令面板中搜索到。输入框聚焦时单字母快捷键失效。</p>
+        <table class="doc-table">
+          <thead><tr><th>范围</th><th>快捷键</th><th>操作</th><th>状态</th></tr></thead>
+          <tbody>
+            <tr><td>全局</td><td><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></td><td>命令面板：搜索任务、员工、会话，执行命令</td><td>新增</td></tr>
+            <tr><td>全局</td><td><kbd class="kbd">C</kbd></td><td>新建任务</td><td>新增</td></tr>
+            <tr><td>全局</td><td><kbd class="kbd">G</kbd> 然后 <kbd class="kbd">I</kbd> / <kbd class="kbd">T</kbd> / <kbd class="kbd">E</kbd></td><td>跳转 待我处理 / 任务 / 数字员工</td><td>新增</td></tr>
+            <tr><td>全局</td><td><kbd class="kbd">⌘</kbd><kbd class="kbd">\</kbd></td><td>收起 / 展开侧栏</td><td>新增</td></tr>
+            <tr><td>全局</td><td><kbd class="kbd">⌘</kbd><kbd class="kbd">,</kbd> · <kbd class="kbd">⌘</kbd><kbd class="kbd">[</kbd> <kbd class="kbd">⌘</kbd><kbd class="kbd">]</kbd> · <kbd class="kbd">⌘</kbd><kbd class="kbd">0</kbd></td><td>设置 · 后退 / 前进 · 首页 / 重新连接</td><td>已有</td></tr>
+            <tr><td>列表</td><td><kbd class="kbd">/</kbd> · <kbd class="kbd">J</kbd> <kbd class="kbd">K</kbd> · <kbd class="kbd">↵</kbd></td><td>聚焦筛选 · 上下移动 · 打开</td><td>新增</td></tr>
+            <tr><td>任务</td><td><kbd class="kbd">⌘</kbd><kbd class="kbd">I</kbd> · <kbd class="kbd">1</kbd> <kbd class="kbd">2</kbd> <kbd class="kbd">3</kbd></td><td>任务详情 · 切换协作 / 文件 / 控制台</td><td>新增</td></tr>
+            <tr><td>输入</td><td><kbd class="kbd">↵</kbd> · <kbd class="kbd">⇧</kbd><kbd class="kbd">↵</kbd> · <kbd class="kbd">@</kbd></td><td>发送 · 换行 · 提及成员</td><td>已有</td></tr>
+            <tr><td>新建任务</td><td><kbd class="kbd">↵</kbd> · <kbd class="kbd">⌘</kbd><kbd class="kbd">↵</kbd></td><td>保存草稿（默认，避免隐式开始）· 保存并开始</td><td>Enter 已有，⌘↵ 新增</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 窗口尺寸 -->
+      <section class="doc-section" id="window">
+        <h2 class="doc-h2">窗口尺寸</h2>
+        <p class="doc-p">以 1440 宽设计，最小窗口 760 × 560（与现有 Electron 配置一致）。只有 4 个断点，每个断点只做一类变化。</p>
+        <div class="timeline-rule">
+          <div><b>≥ 1180</b>侧栏 232 + 内容 + 详情栏 320 三栏</div>
+          <div><b>1000 – 1179</b>详情栏改为右侧浮层，⌘I 打开</div>
+          <div><b>860 – 999</b>侧栏收为 60px 图标栏，徽标变圆点</div>
+          <div><b>760 – 859</b>分栏改为上下堆叠，次要列隐藏，页面边距 16</div>
+          <div><b>高度 ≤ 620</b>弹窗贴近顶部，正文滚动，底部操作常驻</div>
+        </div>
+        <p class="doc-note">只有内容区滚动，标题栏、工具栏与输入框固定；滚动条悬停时才显示。标题栏空白处可拖动窗口，双击缩放。</p>
+      </section>
+    </div>
+  </main>
+</div>
+<script>
+/* 当前风格的语义 Token 取值表与图标墙（随风格 / 模式切换实时生成） */
+document.addEventListener('DOMContentLoaded', () => {
+  const tokens = [
+    ['--bg-window', '窗口底色'], ['--bg-canvas', '主内容区'], ['--bg-sidebar', '侧栏'], ['--bg-subtle', '次级区域、代码底'], ['--bg-raised', '卡片、浮层'],
+    ['--bg-hover', '悬停'], ['--bg-active', '按下、当前导航'], ['--bg-selected', '选中行'],
+    ['--border-subtle', '分隔线'], ['--border', '控件、卡片边线'], ['--border-strong', '悬停边线'],
+    ['--text', '正文'], ['--text-secondary', '次要文字'], ['--text-tertiary', '辅助、时间'], ['--text-disabled', '禁用'], ['--text-link', '链接'],
+    ['--accent', '主操作、焦点'], ['--accent-hover', '主操作悬停'], ['--accent-soft', '品牌浅底'], ['--accent-text', '品牌文字'],
+    ['--st-running', '进行中'], ['--st-attention', '需要你'], ['--st-done', '完成'], ['--st-failed', '失败'], ['--st-planning', '经理 / 条件'], ['--st-neutral', '中性'],
+    ['--av-violet', '身份色'], ['--av-cyan', '身份色'], ['--av-blue', '身份色'], ['--av-orange', '身份色'], ['--av-green', '身份色'],
+  ];
+  const style = getComputedStyle(document.documentElement);
+  document.querySelector('#swatches tbody').innerHTML = tokens.map(([name, use]) => {
+    const value = style.getPropertyValue(name).trim();
+    return `<tr><td><code>${name}</code></td><td><span class="chip"><i style="background:var(${name})"></i>${value}</span></td><td class="muted">${use}</td></tr>`;
+  }).join('');
+  document.getElementById('icon-grid').innerHTML = Object.keys(window.AF_ICONS).map((name) => `<div class="icon-cell" title="${name}">${icon(name, name.startsWith('st-') ? 'st st-' + ({ 'st-draft': 'neutral', 'st-planning': 'running', 'st-running': 'running', 'st-attention': 'attention', 'st-review': 'attention', 'st-done': 'done', 'st-failed': 'failed', 'st-paused': 'neutral', 'st-cancelled': 'neutral' })[name] : '')}<span>${name}</span></div>`).join('');
+});
+</script>
+</body>
+</html>

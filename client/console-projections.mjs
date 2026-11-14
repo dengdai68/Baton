@@ -495,7 +495,7 @@ export function collaborationRecords(workspace = {}) {
     const answer = messages.find(entry => entry.replyToMessageId === item.id), question = byMessage.get(item.replyToMessageId);
     const statusCode = answer ? "answered" : waiting ? "waiting" : "recorded";
     return {
-      id: item.id, timestamp: item.createdAt, category: "message", senderType: item.sender?.type,
+      id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type,
       from: item.sender?.name || "AgentForge", to: item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
       title: kinds[item.kind] || (item.replyToMessageId ? "答复" : "协作消息"), content: collaborationContent(item), attachments: asArray(item.attachments),
       status: answer ? "当前：已回答" : waiting ? "当前：等待答复" : "", statusCode,

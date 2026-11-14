@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="zh-CN" data-style="paper" data-mode="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AgentForge 客户端界面重设计 · 设计总览</title>
+<link rel="stylesheet" href="assets/tokens.css">
+<link rel="stylesheet" href="assets/components.css">
+<link rel="stylesheet" href="assets/doc.css">
+<script src="assets/icons.js"></script>
+</head>
+<body style="overflow:auto">
+<div class="doc-shell">
+  <nav class="doc-toc" aria-label="目录">
+    <div class="doc-toc__brand"><img src="../../web/icons/application-ui.png" alt=""><span>界面重设计<small>设计总览 · 2026-11-11</small></span></div>
+    <a href="#summary">结论摘要</a>
+    <a href="#revision">第二轮修订</a>
+    <p>第一阶段 · 审查</p>
+    <a href="#audit">方法与量化指标</a>
+    <a href="#p0" class="sub">P0 阻碍核心流程</a>
+    <a href="#p1" class="sub">P1 一致性与专业感</a>
+    <a href="#p2" class="sub">P2 桌面体验</a>
+    <a href="#p3" class="sub">P3 细节瑕疵</a>
+    <p>第二阶段 · 规范</p>
+    <a href="#styles">三种风格方向</a>
+    <a href="#principles">设计原则</a>
+    <a href="#tokens">Token 架构与取值</a>
+    <a href="#components">组件统一方案</a>
+    <a href="#ia">信息架构</a>
+    <a href="#platform">桌面平台规范</a>
+    <a href="#copy">术语与文案</a>
+    <p>第三阶段 · 对比</p>
+    <a href="#compare">改造前后</a>
+    <a href="#gallery">全部设计页</a>
+    <p>第四阶段 · 推广</p>
+    <a href="#decisions">决定记录</a>
+    <a href="#rollout">推广计划</a>
+    <a href="pages/states.html"><i data-icon="grid" class="icon--sm"></i>组件与状态 ↗</a>
+  </nav>
+
+  <main class="doc-main">
+    <div class="doc-inner">
+
+      <!-- ===================== 摘要 ===================== -->
+      <section class="doc-section" id="summary">
+        <span class="doc-eyebrow"><i data-icon="sparkle" class="icon--sm"></i>设计提案 · 第二轮 · 方向已定</span>
+        <h1 class="doc-h1">AgentForge 客户端界面重设计</h1>
+        <p class="doc-lead">基于隔离客户端实测的 98 张截图（两套主题、1440 与 760 两种宽度）和样式源码分析，给出问题清单、可复用的设计系统、三种风格方向，以及覆盖全部核心页面的可交互 HTML 设计稿。业务逻辑、HTTP / CLI 契约与执行规则均不变。</p>
+        <div class="doc-stats">
+          <div class="stat"><b>22</b><span>个问题 · 4 个 P0</span></div>
+          <div class="stat"><b>16</b><span>个设计页 · 另含错误、空态等状态</span></div>
+          <div class="stat"><b>3 × 2</b><span>种风格 × 浅色 / 深色</span></div>
+          <div class="stat"><b>521 → 0</b><span>组件中的颜色字面量</span></div>
+        </div>
+        <div class="doc-grid-3" style="margin-top:24px">
+          <div class="doc-card"><h4><i data-icon="alert" class="icon--sm" style="color:var(--st-failed)"></i>最大的三个问题</h4><ol><li>「需要我处理」没有一等入口，澄清、验收、中断混在列表里靠小标签区分。</li><li>视觉权重倒置：每行最醒目的是红色「删除任务」，真正的下一步反而没有入口。</li><li>样式没有收敛成系统：521 个颜色值、27 种字号、两层 CSS 互相覆盖。</li></ol></div>
+          <div class="doc-card"><h4><i data-icon="check-circle" class="icon--sm" style="color:var(--st-done)"></i>三项核心改动</h4><ol><li>以「待我处理」为中心重组信息架构，任务按「需要谁行动」分组，每行只有一个下一步。</li><li>三层 Token + 统一组件 + 状态体系，组件中不再出现字面量。</li><li>桌面化外壳：一体化标题栏、⌘K 命令面板、深色模式和明确的窗口缩放规则。</li></ol></div>
+          <div class="doc-card doc-card--accent"><h4><i data-icon="check-circle" class="icon--sm" style="color:var(--accent-text)"></i>已选定方向</h4><p><strong>A · 石墨</strong>（2026-11-13 改选，替代 B · 纸张），提供浅色、深色与跟随系统；规范见 <code>.interface-design/system.md</code>。其余待定事项按方案执行；「可用」状态按你的反馈改为不显示，绿点只表示执行中。</p><p style="margin-top:10px"><a href="#revision">查看第二轮修订 →</a></p></div>
+        </div>
+        <div class="callout" style="margin-top:24px"><i data-icon="keyboard"></i><div class="callout__body"><div class="callout__title">如何查看</div><div class="callout__text">每个设计页左下角都有「设计稿」按钮（快捷键 <kbd class="kbd">D</kbd>），可切换风格、浅深色、密度与页面；<kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd> 打开命令面板；列表、页签、菜单、弹窗和抽屉均可点击。设计稿数据为示例，不连接后端。</div></div></div>
+      </section>
+
+      <!-- ===================== 第二轮修订 ===================== -->
+      <section class="doc-section" id="revision">
+        <span class="doc-eyebrow"><i data-icon="refresh" class="icon--sm"></i>第二轮 · 根据你的反馈</span>
+        <h2 class="doc-h2">第二轮修订</h2>
+        <p class="doc-p">方向已改为 <strong>A · 石墨</strong>（2026-11-13，替代 B · 纸张），提供浅色、深色与跟随系统；其余待定事项（D2–D8）按方案执行。下表逐条对应你的 8 条反馈，再用第一轮与第二轮对比主要页面。</p>
+        <table class="doc-table">
+          <thead><tr><th style="width:36px">#</th><th style="width:28%">你的反馈</th><th>处理</th><th style="width:132px">查看</th></tr></thead>
+          <tbody>
+            <tr><td class="num">1</td><td>页签选中只有下划线，一眼看不出选中的是什么</td><td>合理，已采纳。页签、视图标签和分段控件统一为「选中 = 填充底色」，与任务列表筛选一致，未选中只显示文字；层级靠位置区分（页面级在标题栏下方，面板内在内容区）。</td><td><a href="pages/task.html">任务工作区 ↗</a></td></tr>
+            <tr><td class="num">2</td><td>协作与沟通的记录之间加分隔线</td><td>记录之间加很轻的实线，比卡片边线更淡，日期分隔保留；协作与沟通共用同一条规则，如想改成虚线只需改一处。</td><td><a href="pages/chat.html">沟通 ↗</a></td></tr>
+            <tr><td class="num">3</td><td>成员恢复控制台按钮和运行中绿点；群聊控制台不要用成员页签</td><td>任务详情、控制台成员列表与沟通成员栏统一为「每位成员一个控制台按钮，绿点 = 正在执行」，沿用现有规则；控制台只显示所选成员，切换在成员栏完成，成员再多也不会换行。打开控制台时收起会话列表让出宽度；私聊入口仍在标题栏。</td><td><a href="pages/chat.html?console=kai">群聊控制台 ↗</a></td></tr>
+            <tr><td class="num">4</td><td>员工卡片悬停出现的「对话」遮挡内容</td><td>操作改为常驻卡片底部（对话 + ⋯），不再悬停覆盖；「可用」作为默认状态不显示，只有「执行中」显示绿点、「已停用」显示灰色标签。</td><td><a href="pages/agents.html">数字员工 ↗</a></td></tr>
+            <tr><td class="num">5</td><td>插件、MCP 以后会很多，用卡片，点击后右侧弹出</td><td>改为与员工相同的卡片网格（同一个卡片组件），点击卡片从右侧抽屉查看兼容性、组件、连接配置与工具；增加「有更新 / 读取失败 / 未被使用」筛选。</td><td><a href="pages/plugins.html">插件 ↗</a> <a href="pages/mcp.html">MCP ↗</a></td></tr>
+            <tr><td class="num">6</td><td>头像改为大圆角方形</td><td>人物、团队、扩展的头像统一为大圆角方形（圆角 = 边长 × 0.3）；经理星标移到右上角，执行中绿点在右下角。</td><td><a href="pages/states.html#identity">头像 ↗</a></td></tr>
+            <tr><td class="num">7</td><td>整体风格参考 Notion</td><td>默认风格改为 B · 纸张，并按 Notion 调整：暖灰正文 #37352F、#F7F7F5 侧栏、更明显的选中底色、Notion 式绿 / 红状态色；品牌蓝保留为主操作色。</td><td><a href="pages/tasks.html">任务 ↗</a></td></tr>
+            <tr><td class="num">8</td><td>记录区宽度固定，大窗口两侧大量空白</td><td>协作与沟通记录区取消 760px 上限，宽度随窗口自适应，左右留白 16–40px 随窗口缩放；人类气泡最宽为记录区的 72%。</td><td><a href="pages/task.html">任务工作区 ↗</a></td></tr>
+          </tbody>
+        </table>
+        <h3 class="doc-h3">任务工作区：填充式页签、记录分隔线、自适应宽度、成员控制台</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">第一轮</span></figcaption><button class="thumb" data-full-src="task-paper-1440"><img loading="lazy" alt="第一轮任务工作区" data-round1="task-paper-1440"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">第二轮</span><a href="pages/task.html">打开 ↗</a></figcaption><div class="frame" data-fixed><iframe data-src="pages/task.html?style=paper" title="第二轮任务工作区" loading="lazy"></iframe></div></figure>
+        </div>
+        <h3 class="doc-h3">沟通：成员栏控制台按钮 + 执行中绿点，控制台不再用页签</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">第一轮</span></figcaption><button class="thumb" data-full-src="chat-paper-1440"><img loading="lazy" alt="第一轮沟通" data-round1="chat-paper-1440"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">第二轮</span><a href="pages/chat.html">打开 ↗</a></figcaption><div class="frame" data-fixed><iframe data-src="pages/chat.html?style=paper&console=kai" title="第二轮沟通" loading="lazy"></iframe></div></figure>
+        </div>
+        <h3 class="doc-h3">数字员工：操作常驻底部、大圆角方形头像、状态安静</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">第一轮</span></figcaption><button class="thumb" data-full-src="agents-paper-1440"><img loading="lazy" alt="第一轮数字员工" data-round1="agents-paper-1440"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">第二轮</span><a href="pages/agents.html">打开 ↗</a></figcaption><div class="frame" data-fixed><iframe data-src="pages/agents.html?style=paper" title="第二轮数字员工" loading="lazy"></iframe></div></figure>
+        </div>
+        <h3 class="doc-h3">插件：卡片网格 + 右侧抽屉</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">第一轮</span></figcaption><button class="thumb" data-full-src="plugins-paper-1440"><img loading="lazy" alt="第一轮插件" data-round1="plugins-paper-1440"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">第二轮</span><a href="pages/plugins.html">打开 ↗</a></figcaption><div class="frame" data-fixed><iframe data-src="pages/plugins.html?style=paper" title="第二轮插件" loading="lazy"></iframe></div></figure>
+        </div>
+      </section>
+
+      <!-- ===================== 第一阶段：审查 ===================== -->
+      <section class="doc-section" id="audit">
+        <span class="doc-eyebrow">第一阶段</span>
+        <h2 class="doc-h2">审查：方法与量化指标</h2>
+        <p class="doc-p">在源码客户端（v0.1.9）的隔离实例中采集：独立 HOME、数据库和工作目录，Runtime 命令被替换为立即失败的假命令，不调用任何模型，不接触你正在使用的实例。98 张截图全部成功，页面没有报错。截图保存在已忽略的 <code>.data/ui-redesign-audit/before/</code>，采集脚本为 <code>.data/ui-redesign-audit/capture.mjs</code>。</p>
+        <table class="doc-table">
+          <thead><tr><th>维度</th><th>现状（实测）</th><th>目标</th></tr></thead>
+          <tbody>
+            <tr><td>颜色</td><td class="bad">styles.css 中 521 个不同的十六进制颜色、30 个 rgba</td><td>组件中 0 个；原始色板只在 tokens.css</td></tr>
+            <tr><td>字号</td><td class="bad">27 种，其中 8 / 9 / 10px 共出现 87 处</td><td>7 级字阶，最小 11px</td></tr>
+            <tr><td>圆角 · 间距</td><td class="bad">25 种圆角；192 种 padding 写法</td><td>5 级圆角；4px 网格</td></tr>
+            <tr><td>阴影</td><td class="bad">约 30 种写法，仍有旧绿色主题的 rgba(198,243,106) 焦点光晕</td><td>4 级：边线 / xs / 浮层 / 弹窗</td></tr>
+            <tr><td>断点</td><td class="bad">17 个不同宽度断点（560–2000px），分散在两份 CSS</td><td>4 个：1180 / 1000 / 860 / 760</td></tr>
+            <tr><td>样式分层</td><td class="bad">共享 styles.css（2,344 行）+ 桌面注入 compact.css 用 <code>html:root</code> 抬高优先级覆盖；极简主题用嵌套 CSS；10 处 !important</td><td>一套 Token + 一层组件；密度由变量切换</td></tr>
+            <tr><td>重复组件</td><td class="bad">头像 9 种写法、按钮 7 种、空态 5 种、会话 2 套</td><td>各 1 个组件</td></tr>
+            <tr><td>字体与图标</td><td class="bad">首行加载 Google Fonts（Space Grotesk / DM Mono），桌面又被系统字体覆盖；HTML 用 ◈ ✓ ☏ ⌘ 等字符图标，桌面再用 CSS mask 替换</td><td>系统字体；一套 SVG 图标</td></tr>
+            <tr><td>主题</td><td class="bad">暖白 / 极简两套浅色，实测几乎无法分辨；没有深色模式</td><td>浅色 / 深色 / 跟随系统</td></tr>
+          </tbody>
+        </table>
+
+        <!-- P0 -->
+        <div class="sev-group" id="p0"><span class="sev sev--p0">P0</span><h3>阻碍核心流程</h3><span class="faint">用户找不到该做的事，或容易做错事</span></div>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">01</span>「需要我处理」没有一等入口</div>
+            <dl><dt>现象</dt><dd>侧栏「任务中心 4 待你处理」只是计数，点进去是全量列表；等待澄清、待验收、错误中断与草稿、已完成混排，只靠 11px 状态标签区分。总览页对新用户默认隐藏。</dd>
+            <dt>影响</dt><dd>人类决策是 AgentForge 的关键闭环（澄清→继续，验收→完成），现在要逐行扫读才能找到。</dd>
+            <dt>建议</dt><dd>新增「待我处理」视图（现有数据的客户端聚合）；任务列表按「需要谁行动」分组。<a href="pages/inbox.html">待我处理 ↗</a> <a href="pages/tasks.html">任务 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="02-tasks-warm-wide"><img loading="lazy" alt="任务中心现状" data-shot="02-tasks-warm-wide"><span>任务中心 · 1440</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">02</span>行操作与状态脱节，危险操作最显眼</div>
+            <dl><dt>现象</dt><dd>红色「删除任务」在多行重复，是列表里最醒目的元素；而「去澄清 / 去验收 / 查看恢复选项」在列表里没有入口——源码 <code>taskActionLabel()</code> 已有这些文案却没有用上。按钮数量随状态增减，操作列参差不齐；760px 时换成两行，行高翻倍。</dd>
+            <dt>影响</dt><dd>误删风险高；最常用的操作需要先进入任务再找。</dd>
+            <dt>建议</dt><dd>每行只露出一个「下一步」，其余收进 ⋯ 菜单，删除二次确认。此项与既有「操作列直接展示、不使用更多菜单」的决定不同，见 <a href="#decisions">D3</a>。</dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="02-tasks-warm-narrow"><img loading="lazy" alt="窄窗口任务列表" data-shot="02-tasks-warm-narrow"><span>任务中心 · 760</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">03</span>任务工作区里，待回答的问题被稀释</div>
+            <dl><dt>现象</dt><dd>同一个问题同时出现在顶部横幅、消息卡片和「消息用途」下拉（整句截断成两行）三处；输入区约占屏高 30%；「全部」筛选用主色实心按钮，和真正的主操作争夺注意力；协作页签上「1 待你回复」是深琥珀实心块，与其他徽标风格不一致。</dd>
+            <dt>影响</dt><dd>用户需要在三处之间确认「我在回答哪个问题」；视觉焦点分散。</dd>
+            <dt>建议</dt><dd>问题卡片内直接「回复」，输入框顶部显示可移除的回复上下文；筛选改为分段控件。<a href="pages/task.html">任务工作区 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="03-workspace-collab-warm-wide"><img loading="lazy" alt="任务工作区现状" data-shot="03-workspace-collab-warm-wide"><span>任务工作区 · 协作</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">04</span>状态颜色语义冲突</div>
+            <dl><dt>现象</dt><dd>品牌蓝同时表示主按钮、选中、员工「可用」、运行时「支持」和任务「进行中」；需要人类行动的「待你验收」却是灰色，与「草稿」「已暂停」同色；状态只有颜色和文字，没有形状区分。</dd>
+            <dt>影响</dt><dd>无法一眼区分「正常」「进行中」「需要我」；色弱用户只能读文字。</dd>
+            <dt>建议</dt><dd>5 类语义（进行中 / 需要你 / 完成 / 失败 / 中性）+ 形状图标 + 文字三重编码；「可用」作为默认状态保持安静。<a href="pages/states.html#status">状态体系 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="20-agents-warm-wide"><img loading="lazy" alt="数字员工现状" data-shot="20-agents-warm-wide"><span>数字员工 · 每张卡片都是蓝色「可用」</span></button></div>
+        </article>
+
+        <!-- P1 -->
+        <div class="sev-group" id="p1"><span class="sev sev--p1">P1</span><h3>一致性与专业感</h3><span class="faint">看起来像多个产品拼在一起</span></div>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">05</span>样式没有收敛成系统</div>
+            <dl><dt>现象</dt><dd>见上方量化表。旧绿色主题的变量名 <code>--lime</code> 现在其实是蓝色；<code>login.css</code> 仍是绿色主题（#a8d94e），靠桌面注入的 compact.css 把它覆盖成蓝色才显示正常；<code>index.html</code> 的 theme-color 仍是旧值。</dd>
+            <dt>影响</dt><dd>每次修改要追 2–3 处覆盖；新页面只能复制旧值，视觉逐步漂移；现有 system.md 只能记录「已有习惯」，无法约束新设计。</dd>
+            <dt>建议</dt><dd>三层 Token（原始色板 → 语义 → 组件），组件中禁止字面量。<a href="#tokens">Token 架构 →</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="01-login-wide"><img loading="lazy" alt="登录页" data-shot="01-login-wide"><span>登录页：源码为绿色主题，被桌面覆盖</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">06</span>两套会话视觉语言</div>
+            <dl><dt>现象</dt><dd>任务协作：人类气泡、彩色类型标签、等宽时间戳；沟通：竖线姓名、下划线分隔、无气泡、外层再套卡片容器。同一产品的两个对话面板读起来像两个应用。</dd>
+            <dt>建议</dt><dd>共用一个消息组件（<code>.msg</code> / <code>.bubble</code> / <code>.ask</code>）和输入框。<a href="pages/chat.html">沟通 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="13-chat-direct-warm-wide"><img loading="lazy" alt="私聊现状" data-shot="13-chat-direct-warm-wide"><span>私聊：与任务协作样式不同</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">07</span>字体使用混乱，没有页面级标题</div>
+            <dl><dt>现象</dt><dd>等宽字体被用于时间戳（2026/11/11 00:56:10）和团队成员姓名标签；页面只有顶栏 13px 页名，与正文同级；弹窗标题 18px / 700、设置标题 15px，层级跳跃。</dd>
+            <dt>建议</dt><dd>7 级字阶；等宽只用于代码、路径、ID、Cron；时间用相对时间，悬停看精确时间。</dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="16-teams-warm-wide"><img loading="lazy" alt="团队现状" data-shot="16-teams-warm-wide"><span>团队：等宽姓名标签、裸露的 active</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">08</span>目录页结构各不相同</div>
+            <dl><dt>现象</dt><dd>员工是高卡片（约 285px，大段留白，「对话 / 编辑 / 删除」重复 8 次）；角色卡片的按钮随描述行数上下错位；团队列表裸露英文状态 <code>active</code>；工作流列表按钮数量不同导致不对齐；插件 / MCP 只有一张卡片和大片空白。</dd>
+            <dt>建议</dt><dd>只保留两种目录模板：列表行与卡片网格；员工、插件、MCP 共用一张卡片，点击在右侧抽屉看详情，操作常驻卡片底部。<a href="pages/agents.html">员工 ↗</a> <a href="pages/plugins.html">插件 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="22-roles-warm-wide"><img loading="lazy" alt="角色现状" data-shot="22-roles-warm-wide"><span>角色：操作按钮上下错位</span></button><button class="thumb" data-full="18-workflows-warm-wide"><img loading="lazy" alt="工作流现状" data-shot="18-workflows-warm-wide"><span>工作流：操作列不对齐</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">09</span>图标与术语混用</div>
+            <dl><dt>现象</dt><dd>按钮里用字形充当图标（Ⅱ 暂停、■ 终止 Run、↓ 最新、＋ 创建、↗）；「终止 Run」「CHANGE」「1 条 Trace」等内部英文术语直接出现在界面上；删除确认列出 Task、Run、Trace、Artifact、Decision、Event。</dd>
+            <dt>建议</dt><dd>一套 SVG 图标；面向用户的术语表，确认文案只讲后果。<a href="#copy">术语表 →</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="29-confirm-warm-wide"><img loading="lazy" alt="删除确认现状" data-shot="29-confirm-warm-wide"><span>删除确认：内部术语</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">10</span>表单弹窗缺少结构</div>
+            <dl><dt>现象</dt><dd>创建员工是一条 9 个字段的长滚动表单，最重要的「系统提示词」夹在中间；新建任务把完整的工作目录绝对路径以小字显示；三个底部按钮视觉权重接近。</dd>
+            <dt>建议</dt><dd>员工编辑分为「基本信息 / 职责与提示词 / 运行配置 / 工具」并加左侧锚点；路径缩写；按钮按幽灵 / 次要 / 主要分级。<a href="pages/agents.html?dialog=agent">员工编辑 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="21-agent-modal-warm-wide"><img loading="lazy" alt="创建员工现状" data-shot="21-agent-modal-warm-wide"><span>创建数字员工</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">11</span>设置页信息过载，保存方式不一</div>
+            <dl><dt>现象</dt><dd>几乎每段说明都做成灰底框；运行时 9 行重复「CLI 默认模型 · 默认思考等级 · N 位员工」；外观即时保存，而常规和插件更新要点「保存」，禁用态是浅蓝色，看起来像可点击。</dd>
+            <dt>建议</dt><dd>分组卡片 + 行布局；只显示非默认值；即时生效并给出「已保存」反馈。<a href="pages/settings.html?tab=runtime">设置 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="26-settings-runtime-warm-wide"><img loading="lazy" alt="运行时设置现状" data-shot="26-settings-runtime-warm-wide"><span>设置 · Runtime</span></button><button class="thumb" data-full="26-settings-workspace-warm-wide"><img loading="lazy" alt="工作目录设置现状" data-shot="26-settings-workspace-warm-wide"><span>设置 · 工作目录</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">12</span>两套主题差异过小</div>
+            <dl><dt>现象</dt><dd>暖白与极简在同一页面的截图中几乎无法分辨（侧栏底色 #f3f2fa 与 #f0f4fd），却需要维护两套覆盖。</dd>
+            <dt>建议</dt><dd>合并为一套浅色，新增深色与跟随系统，见 <a href="#decisions">D5</a>。</dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="02-tasks-minimal-wide"><img loading="lazy" alt="极简主题" data-shot="02-tasks-minimal-wide"><span>极简主题（对比上方暖白）</span></button></div>
+        </article>
+
+        <!-- P2 -->
+        <div class="sev-group" id="p2"><span class="sev sev--p2">P2</span><h3>桌面体验</h3><span class="faint">不像一个原生 Mac 生产力应用</span></div>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">13</span>双层标题栏，垂直空间浪费</div>
+            <dl><dt>现象</dt><dd>系统标题栏下方又有一个 44px 应用顶栏，只显示当前页名（与侧栏选中项重复）；没有使用一体化标题栏。</dd>
+            <dt>建议</dt><dd>hiddenInset 一体化标题栏：红绿灯在侧栏顶部，页面标题、视图切换与主操作合并在 48px 内，空白处可拖动窗口。</dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="11-automations-warm-wide"><img loading="lazy" alt="自动化列表现状" data-shot="11-automations-warm-wide"><span>自动化：顶栏只有页名；名称为灰色</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">14</span>窄窗口布局断裂</div>
+            <dl><dt>现象</dt><dd>760px 时：任务表操作换行；群聊的会话列表叠在聊天上方，输入框被推出首屏；任务工作区的标题、状态和按钮分成两行，问题下拉占两行。</dd>
+            <dt>建议</dt><dd>4 个断点、每档只做一类变化：详情栏变浮层 → 侧栏变图标 → 分栏上下堆叠 → 次要列隐藏。<a href="pages/states.html#window">窗口规则 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="14-chat-group-warm-narrow"><img loading="lazy" alt="窄窗口群聊" data-shot="14-chat-group-warm-narrow"><span>群聊 · 760：输入框被推出首屏</span></button><button class="thumb" data-full="03-workspace-collab-warm-narrow"><img loading="lazy" alt="窄窗口任务工作区" data-shot="03-workspace-collab-warm-narrow"><span>任务工作区 · 760</span></button></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">15</span>缺少键盘效率</div>
+            <dl><dt>现象</dt><dd>没有命令面板和全局搜索，没有 / 聚焦筛选、列表 J/K 导航、C 新建；只有菜单栏里的少量快捷键。</dd>
+            <dt>建议</dt><dd>⌘K 命令面板 + 快捷键表，单字母快捷键在输入时失效。<a href="pages/tasks.html?palette=1">命令面板 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">16</span>没有深色模式</div>
+            <dl><dt>现象</dt><dd>长时间阅读控制台和协作记录时没有深色选项；窗口背景色固定为 #f7f9ff，与暖白主题底色不同，切换时有闪烁风险。</dd>
+            <dt>建议</dt><dd>浅色 / 深色 / 跟随系统；窗口背景色随主题设置。三种风格都已提供深色取值。</dd></dl>
+          </div>
+          <div class="issue__shots"></div>
+        </article>
+        <article class="issue">
+          <div>
+            <div class="issue__title"><span class="id">17</span>空态与加载态不完整</div>
+            <dl><dt>现象</dt><dd>CHANGE 文件树为空时没有任何提示；失败任务的协作区只有一行小字悬在大片空白中；控制台每条记录都重复「此记录当时未保存正文…」（由展示夹具触发，但说明逐行重复的问题存在）。</dd>
+            <dt>建议</dt><dd>统一空态（图标 + 标题 + 说明 + 可选次操作）、骨架屏、错误就地重试。<a href="pages/states.html#empty">空状态 ↗</a></dd></dl>
+          </div>
+          <div class="issue__shots"><button class="thumb" data-full="06-workspace-change-warm-wide"><img loading="lazy" alt="CHANGE 空白" data-shot="06-workspace-change-warm-wide"><span>CHANGE：左侧空白无提示</span></button></div>
+        </article>
+
+        <!-- P3 -->
+        <div class="sev-group" id="p3"><span class="sev sev--p3">P3</span><h3>细节瑕疵</h3><span class="faint">单个修复成本低，累积起来影响质感</span></div>
+        <table class="doc-table">
+          <thead><tr><th style="width:44px">#</th><th>问题</th><th>证据</th></tr></thead>
+          <tbody>
+            <tr><td class="num">18</td><td><code>index.html</code> 仍有 Acme Studio、LOCAL、AI TEAM OS、WORKSPACE、「通知（即将支持）」等占位；桌面端大多被隐藏，但仍在 DOM 中，Web 回退时可见。</td><td>源码</td></tr>
+            <tr><td class="num">19</td><td>文案：「手动安装MCP」缺空格；分组标题 OPERATIONS / BUILD / REFERENCE 为英文；插件兼容原因里 Cursor、Gemini、Qwen 等 6 个运行时都写成「DeepSeek Harness 适配器不支持 settings」，需核实是文案错误还是共用适配器。</td><td><button class="link-btn" data-full="24-plugin-detail-warm-wide">插件详情</button> · <button class="link-btn" data-full="25-mcp-warm-wide">MCP</button></td></tr>
+            <tr><td class="num">20</td><td>自动化列表的名称用灰色次要色，比状态还弱；停用后「下次执行 —」没有说明原因。</td><td><button class="link-btn" data-full="11-automations-warm-wide">自动化</button></td></tr>
+            <tr><td class="num">21</td><td>头像里放两个汉字（「项目」「群聊」），20px 头像中约 8px，难以辨认。</td><td><button class="link-btn" data-full="16-teams-warm-wide">团队</button> · <button class="link-btn" data-full="04-workspace-details-warm-wide">任务详情</button></td></tr>
+            <tr><td class="num">22</td><td>任务详情的工作目录以完整 UUID 路径折行显示；设置里多处绝对路径以等宽灰底框重复展示。</td><td><button class="link-btn" data-full="04-workspace-details-warm-wide">任务详情</button> · <button class="link-btn" data-full="26-settings-workspace-warm-wide">工作目录设置</button></td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- ===================== 第二阶段：规范 ===================== -->
+      <section class="doc-section" id="styles">
+        <span class="doc-eyebrow">第二阶段</span>
+        <h2 class="doc-h2">三种风格方向</h2>
+        <p class="doc-p">你已改选 <strong>A · 石墨</strong>（2026-11-13，替代此前的 B · 纸张）；B、C 保留作对比，不进入实现。三种风格共用同一套组件和信息架构，只有 Token 与少量外壳结构不同，所以选择任意一种都不会产生第二套组件。下方是同一个「任务」页的实时渲染；每种都提供浅色和深色。</p>
+        <div class="doc-grid-3" style="margin-top:20px">
+          <div class="style-option">
+            <div class="style-option__head"><h4>B · 纸张（参考 Notion）</h4><span class="tag">原选定 · 已替换</span></div>
+            <div class="frame" data-fixed><iframe data-src="pages/tasks.html?style=paper" title="纸张风格预览" loading="lazy"></iframe></div>
+            <div class="hstack"><a class="btn btn--sm" href="pages/tasks.html?style=paper&amp;mode=light">浅色 ↗</a><a class="btn btn--sm" href="pages/tasks.html?style=paper&amp;mode=dark">深色 ↗</a></div>
+            <p class="muted" style="font-size:13px">参考 Notion：暖白纸面、28px 页面大标题与说明、宽边距、14px 正文，阅读优先。</p>
+            <dl class="specs"><dt>正文</dt><dd>14 / 22 · 行高 42</dd><dt>圆角</dt><dd>5 · 6 · 10</dd><dt>侧栏</dt><dd>244 · 暖米色</dd><dt>适合</dt><dd>长时间阅读协作记录、内容型任务</dd><dt>风险</dt><dd>首屏信息量少约 25%，任务多时需要更多滚动</dd></dl>
+          </div>
+          <div class="style-option">
+            <div class="style-option__head"><h4>A · 石墨</h4><span class="recommend"><i data-icon="check" class="icon--sm"></i>已选定</span></div>
+            <div class="frame" data-fixed><iframe data-src="pages/tasks.html?style=graphite" title="石墨风格预览" loading="lazy"></iframe></div>
+            <div class="hstack"><a class="btn btn--sm" href="pages/tasks.html?style=graphite&amp;mode=light">浅色 ↗</a><a class="btn btn--sm" href="pages/tasks.html?style=graphite&amp;mode=dark">深色 ↗</a></div>
+            <p class="muted" style="font-size:13px">参考 Linear、Multica：冷静中性灰、高密度、细分隔线、分组标题带浅底。</p>
+            <dl class="specs"><dt>正文</dt><dd>13 / 20 · 行高 38</dd><dt>圆角</dt><dd>6 · 8 · 12</dd><dt>侧栏</dt><dd>232 · 中性浅灰</dd><dt>适合</dt><dd>大量任务、频繁切换的日常工作台</dd><dt>风险</dt><dd>最「工具化」，品牌感依赖图标与强调色</dd></dl>
+          </div>
+          <div class="style-option">
+            <div class="style-option__head"><h4>C · 夜航</h4><span class="tag">备选</span></div>
+            <div class="frame" data-fixed><iframe data-src="pages/tasks.html?style=command" title="夜航风格预览" loading="lazy"></iframe></div>
+            <div class="hstack"><a class="btn btn--sm" href="pages/tasks.html?style=command&amp;mode=dark">深色 ↗</a><a class="btn btn--sm" href="pages/tasks.html?style=command&amp;mode=light">浅色 ↗</a></div>
+            <p class="muted" style="font-size:13px">参考 Raycast：深色优先，侧栏融入窗口，主内容是浮动面板，标题栏居中常驻命令框与快捷键提示。</p>
+            <dl class="specs"><dt>正文</dt><dd>13 / 20 · 行高 38</dd><dt>圆角</dt><dd>8 · 10 · 14</dd><dt>侧栏</dt><dd>224 · 与窗口同色</dd><dt>适合</dt><dd>键盘重度用户、夜间与长时间监控执行</dd><dt>风险</dt><dd>浮动面板占用 8px 外边距；深色截图用于 README 时需另配浅色</dd></dl>
+          </div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="principles">
+        <h2 class="doc-h2">设计原则</h2>
+        <div class="doc-grid-2" style="margin-top:16px">
+          <div class="doc-card"><h4>1 · 内容优先，界面退后</h4><p>用边线和留白组织信息；页面内容不用阴影、渐变和装饰色块，只有浮层有阴影。</p></div>
+          <div class="doc-card"><h4>2 · 默认安静，异常发声</h4><p>只有需要人行动的状态（澄清、验收、中断）才用强调色；「可用」「空闲」这类常态不着色。</p></div>
+          <div class="doc-card"><h4>3 · 一个区域一个主操作</h4><p>主按钮只表示「下一步」；筛选与切换用分段控件；危险操作放进菜单并二次确认。</p></div>
+          <div class="doc-card"><h4>4 · 键盘与鼠标等价</h4><p>所有操作都能用键盘完成；⌘K 是全局入口；焦点始终可见，弹窗关闭后焦点回到触发处。</p></div>
+          <div class="doc-card"><h4>5 · 像原生 Mac 应用</h4><p>一体化标题栏、系统字体、可拖动区域、只有内容区滚动，尊重深色模式与减少动画偏好。</p></div>
+          <div class="doc-card"><h4>6 · 呈现事实，不替用户判断</h4><p>沿用产品边界：协作焦点、状态颜色只呈现已记录的协调事实，不暗示业务结果已通过，最终完成由人确认。</p></div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="tokens">
+        <h2 class="doc-h2">Token 架构与取值</h2>
+        <p class="doc-p">三层结构：<strong>原始色板</strong>只在 <code>tokens.css</code> 内部使用 → <strong>语义 Token</strong>（<code>--bg-*</code> <code>--text-*</code> <code>--border-*</code> <code>--accent-*</code> <code>--st-*</code>）是组件唯一的颜色来源 → <strong>组件 Token</strong>（<code>--control-h</code> <code>--row-h</code> <code>--r-*</code> <code>--pad-page</code>）控制尺寸与密度。风格用 <code>data-style</code> 切换，浅深色用 <code>data-mode</code> 切换，密度用 <code>data-density</code> 覆盖。</p>
+        <table class="doc-table swatch-table" id="token-matrix">
+          <thead><tr><th>语义 Token</th><th>B 浅色</th><th>B 深色</th><th>A 浅色</th><th>A 深色</th><th>C 深色</th><th>C 浅色</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="doc-grid-3" style="margin-top:20px">
+          <div class="doc-card"><h4>字阶 · 7 级</h4><p>11 辅助 · 12 说明 · 13 界面 · 14 阅读 · 15 区块标题 · 20 页面标题 · 28 引导。最小 11px，等宽只用于代码、路径、ID、Cron。</p></div>
+          <div class="doc-card"><h4>尺寸 · 3 档</h4><p>控件 24 / 28 / 32；列表行 36 / 38 / 44（紧凑 / 默认 / 舒适）；标题栏 48，工具栏 44，详情栏 320，阅读宽度 760。</p></div>
+          <div class="doc-card"><h4>间距 · 圆角 · 层级</h4><p>4px 网格；圆角 4 / 6 / 8 / 12 / 全圆；层级：边线 → xs → 浮层 → 弹窗；动效 120 / 180 / 240ms。</p></div>
+        </div>
+        <p class="doc-note">完整的组件、交互状态（默认 / 悬停 / 按下 / 焦点 / 禁用 / 加载 / 错误 / 空）与图标集见 <a href="pages/states.html">组件与状态</a>。</p>
+      </section>
+
+      <section class="doc-section" id="components">
+        <h2 class="doc-h2">组件统一方案</h2>
+        <p class="doc-p">推广时按「组件族」一次替换全部调用点并删除旧 class，不保留两套并存。左列的 class 均已在现有 <code>web/styles.css</code> / <code>compact.css</code> 中核实存在。</p>
+        <table class="doc-table">
+          <thead><tr><th>组件族</th><th>现有写法</th><th>统一为</th></tr></thead>
+          <tbody>
+            <tr><td>按钮</td><td><code>.primary-button</code> <code>.ghost-button</code> <code>.danger-button</code> <code>.small-button</code> <code>.small-button.primary</code> <code>.small-button.amber</code> <code>.text-action</code>（高度 26–37px）</td><td><code>.btn</code> + <code>--primary / --ghost / --danger / --attention</code> × <code>--sm / 默认 / --lg / --icon</code></td></tr>
+            <tr><td>状态与徽标</td><td><code>.status-pill</code> <code>.agent-status</code> <code>.runtime-support</code> <code>.collaboration-status</code> <code>.collaboration-unread</code> <code>.nav-hint</code></td><td><code>.status</code>（文字 / 胶囊）+ <code>.tag</code> + <code>.count-badge</code></td></tr>
+            <tr><td>头像</td><td><code>.agent-card-avatar</code> <code>.extension-avatar</code> <code>.communication-avatar</code> <code>.member-avatar</code> <code>.stack-avatar</code> <code>.activity-avatar</code> <code>.role-avatar</code> <code>.user-avatar</code> <code>.workspace-avatar</code></td><td><code>.av</code>（大圆角方形）+ 尺寸 + <code>.av-stack</code> / 经理星标与执行中绿点</td></tr>
+            <tr><td>空态与加载</td><td><code>.directory-empty</code> <code>.empty-state</code> <code>.human-empty</code> <code>.chat-empty</code> <code>.directory-loading</code></td><td><code>.empty</code> + <code>.skeleton</code> + <code>.callout</code></td></tr>
+            <tr><td>会话</td><td><code>.collaboration-row</code> <code>.await-banner</code>（任务）· <code>.communication-message</code>（沟通）</td><td><code>.msg</code> / <code>.bubble</code> / <code>.ask</code> + <code>.composer</code></td></tr>
+            <tr><td>切换</td><td><code>.ws-tab</code> <code>.plugin-detail-tabs</code> <code>.file-source-switch</code> <code>.settings-nav</code> 协作筛选按钮</td><td><code>.tabs</code>（页面级）· <code>.seg</code>（面板内）· <code>.vtabs</code>（列表视图），选中统一为填充底色</td></tr>
+            <tr><td>目录</td><td><code>.agent-card</code> <code>.team-card</code> <code>.workflow-card</code> <code>.market-row</code> 表格</td><td><code>.row</code> 列表行 · <code>.entity-card</code> 卡片（员工 / 插件 / MCP）· <code>.drawer</code> 右侧详情</td></tr>
+            <tr><td>多选</td><td><code>.extension-picker-control</code> <code>.extension-chip</code>（任务成员为特例）</td><td><code>.picker</code> + <code>.token</code>（行为与例外规则不变）</td></tr>
+            <tr><td>浮层</td><td><code>.modal-backdrop</code> 下的 <code>.form-modal-open</code> <code>.extension-detail-modal</code> <code>.workflow-editor-modal</code> 等</td><td><code>.dialog</code>（sm / 默认 / lg / xl）· <code>.drawer</code>（只读详情）· <code>.menu</code> · 命令面板</td></tr>
+            <tr><td>图标</td><td>HTML 字符图标 + 桌面 CSS mask + 按钮字形</td><td><code>icon(name)</code> SVG 集（97 个，含 9 个状态图标）</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="doc-section" id="ia">
+        <h2 class="doc-h2">信息架构</h2>
+        <div class="doc-grid-2" style="margin-top:16px">
+          <div class="doc-card"><h4>侧栏</h4>
+            <table class="doc-table" style="margin-top:12px"><thead><tr><th>现在</th><th>提案</th></tr></thead><tbody>
+              <tr><td>OPERATIONS：总览（默认隐藏）、任务中心、自动化、沟通、团队、工作流</td><td><strong>工作</strong>：待我处理（新）、任务、自动化、沟通</td></tr>
+              <tr><td>BUILD：数字员工、角色、MCP 市场、插件市场</td><td><strong>组织</strong>：团队、工作流、数字员工、角色</td></tr>
+              <tr><td>REFERENCE：开发手册（默认隐藏）</td><td><strong>扩展</strong>：插件、MCP；开发手册保留为可选入口</td></tr>
+            </tbody></table>
+            <p>「团队 / 工作流」是配置而不是日常工作，移入组织；「市场」在线浏览尚未开放，入口命名为「插件 / MCP」。侧栏展示偏好（隐藏入口、分组、提醒角标）全部保留。</p>
+          </div>
+          <div class="doc-card"><h4>页面模板（只有 4 种）</h4><ul>
+            <li><strong>列表页</strong>：标题栏（名称 · 计数 · 视图 · 主操作）→ 工具栏（视图标签 · 筛选）→ 分组列表。任务、自动化、团队、角色。</li>
+            <li><strong>网格页</strong>：同上，内容为卡片网格，点击卡片在右侧抽屉看详情。数字员工、插件、MCP、工作流。</li>
+            <li><strong>主从页</strong>：左列表 + 右详情。待我处理、沟通。</li>
+            <li><strong>工作区</strong>：面包屑标题栏 + 页签 + 内容 + 可收起详情栏。任务、自动化详情、设置。</li></ul>
+            <p>弹窗只用于创建与编辑；只读详情用右侧抽屉；破坏性操作统一确认弹窗。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="platform">
+        <h2 class="doc-h2">桌面平台规范</h2>
+        <div class="doc-grid-3" style="margin-top:16px">
+          <div class="doc-card"><h4><i data-icon="monitor" class="icon--sm"></i>窗口</h4><ul><li>一体化标题栏（hiddenInset），红绿灯位于侧栏顶部</li><li>标题栏空白处可拖动，双击缩放；可交互元素排除在拖动区外</li><li>最小 760 × 560（与现有一致）；背景色随浅深色设置，避免启动闪烁</li></ul></div>
+          <div class="doc-card"><h4><i data-icon="sidebar" class="icon--sm"></i>布局与滚动</h4><ul><li>只有内容区滚动；标题栏、工具栏、输入框固定</li><li>滚动条悬停才显示；长列表保留分页与「加载更早」</li><li>4 个断点：详情栏浮层 → 图标侧栏 → 分栏堆叠 → 次要列隐藏</li></ul></div>
+          <div class="doc-card"><h4><i data-icon="keyboard" class="icon--sm"></i>交互</h4><ul><li>⌘K 命令面板；/ 聚焦筛选；J/K 移动；C 新建；⌘I 详情栏</li><li>表单弹窗只能显式关闭（保护草稿）；确认弹窗 Esc 取消</li><li>Toast 始终位于弹窗与浮层之上；系统通知不显示消息正文（均沿用现有规则）</li></ul></div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="copy">
+        <h2 class="doc-h2">术语与文案</h2>
+        <p class="doc-p">界面只使用用户的语言；内部模型名保留在 CLI、日志和开发文档中。状态文案沿用现有 <code>STATUS_TEXT</code>，不改词。</p>
+        <table class="doc-table">
+          <thead><tr><th>现在界面上</th><th>改为</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr><td>终止 Run · 继续 Run</td><td>终止运行 · 继续</td><td>Run 是一次执行，不需要用户理解</td></tr>
+            <tr><td>1 条 Trace · TRACE</td><td>1 次执行</td><td>控制台按执行分组</td></tr>
+            <tr><td>CHANGE</td><td>变更</td><td>与「当前文件」并列</td></tr>
+            <tr><td>交付快照 · Artifact</td><td>交付文件</td><td>详情栏与确认文案</td></tr>
+            <tr><td>Runtime</td><td>运行时（产品名 Claude Code、Codex 等保留英文）</td><td>设置与员工配置</td></tr>
+            <tr><td>OPERATIONS / BUILD / REFERENCE</td><td>工作 / 组织 / 扩展</td><td>侧栏分组</td></tr>
+            <tr><td>Task、Run、Trace、Artifact、Decision 和 Event 都会被移除</td><td>任务描述、协作记录与交付文件将被永久删除，无法撤销</td><td>确认文案只讲后果</td></tr>
+          </tbody>
+        </table>
+        <p class="doc-note">写作规则：结论先行；按钮用动词（「去验收」而不是「验收页面」）；错误说明「发生了什么 + 现在能做什么」；时间默认相对时间，悬停显示精确时间。</p>
+      </section>
+
+      <!-- ===================== 第三阶段：对比 ===================== -->
+      <section class="doc-section" id="compare">
+        <span class="doc-eyebrow">第三阶段</span>
+        <h2 class="doc-h2">改造前后对比</h2>
+        <p class="doc-p">左侧为现状截图（点击放大），右侧为设计稿实时渲染（可直接操作）。右侧风格可用下方工具条切换。</p>
+        <div class="preview-bar" role="group" aria-label="预览风格">
+          <span class="label">预览风格</span>
+          <div class="seg" data-preview="style"><button class="seg__item" type="button" data-value="paper">B · 纸张</button><button class="seg__item is-active" type="button" data-value="graphite">A · 石墨</button><button class="seg__item" type="button" data-value="command">C · 夜航</button></div>
+          <div class="seg" data-preview="mode"><button class="seg__item is-active" type="button" data-value="">风格默认</button><button class="seg__item" type="button" data-value="light">浅色</button><button class="seg__item" type="button" data-value="dark">深色</button></div>
+        </div>
+
+        <h3 class="doc-h3">1 · 任务中心（基准页）</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="02-tasks-warm-wide"><img loading="lazy" alt="任务中心现状" data-shot="02-tasks-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/tasks.html">打开 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/tasks.html" title="任务中心设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>按「需要谁行动」分组</strong>：待我处理（澄清、验收、中断）置顶，其后进行中、暂停、草稿、完成；原先 6 种状态平铺，只能逐行读小标签。</li>
+          <li><strong>每行一个下一步</strong>：「去澄清 / 去验收 / 查看恢复选项」直接使用现有 <code>taskActionLabel</code> 文案；删除、归档、编辑收进 ⋯ 菜单（D3）。</li>
+          <li><strong>状态三重编码</strong>：形状图标 + 颜色 + 文字；「待你验收」从灰色改为琥珀，与草稿可区分。</li>
+          <li><strong>筛选改为视图标签</strong>：全部 / 待我处理 / 进行中 / 草稿 / 已完成 / 归档，替代两个下拉加「搜索 / 重置」按钮，筛选即时生效。</li>
+          <li><strong>补充进度与成员</strong>：当前步骤与执行人（来自已有的协作焦点）、成员头像叠放；不新增后端字段。</li>
+          <li><strong>标题栏一体化</strong>：名称、计数、视图切换与主操作在 48px 内，去掉重复页名的 44px 顶栏。</li>
+          <li><strong>列表 / 看板</strong>：看板只是同一数据的另一种排列，不提供拖拽改状态——状态仍由协调与人类确认推进。</li>
+          <li><strong>键盘</strong>：/ 聚焦筛选、J/K 移动、↵ 打开、C 新建；⌘K 全局搜索任务。</li>
+        </ol>
+
+        <h3 class="doc-h3">2 · 任务工作区 · 协作</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="03-workspace-collab-warm-wide"><img loading="lazy" alt="任务工作区现状" data-shot="03-workspace-collab-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/task.html">打开 ↗</a> · <a href="pages/task.html?state=failed">错误中断状态 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/task.html" title="任务工作区设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>标题栏集中</strong>：面包屑 + 状态胶囊 + 暂停；「Ⅱ 暂停」「■ 终止 Run」字形按钮改为图标按钮，终止运行收进 ⋯。</li>
+          <li><strong>问题就地回答</strong>：横幅、问题卡片、「消息用途」下拉三处合一，输入框顶部显示可移除的回复上下文。</li>
+          <li><strong>记录区自适应宽度</strong>：不设最大宽度，左右留白随窗口变化；记录之间很轻的分隔线；人类靠右气泡、员工靠左（沿用既有规则），去掉等宽时间戳。</li>
+          <li><strong>消息工具悬停出现</strong>：「本轮控制台」、复制在悬停时浮现，不在每条消息下常驻。</li>
+          <li><strong>详情栏重组</strong>：概要 → 协作焦点 → 成员 → 描述 → 工作目录；协作焦点注明「依据交接记录呈现，不代表平台判定」。</li>
+          <li><strong>沿用详情栏规则</strong>：协作默认展开，文件与控制台默认收起，各页签记住手动选择；≤1180px 变浮层，⌘I 切换。成员行保留控制台按钮，绿点表示执行中。</li>
+          <li><strong>控制台按执行分组</strong>：每次执行一张卡片（耗时、状态），读取 / 命令 / 写入 / 思考用图标区分，失败行就地标红。</li>
+          <li><strong>文件页</strong>：当前文件 / 变更用分段控件；文件头显示路径、写入者与下载；行内 / 左右、仅差异 / 完整文件切换保留。</li>
+        </ol>
+
+        <h3 class="doc-h3">3 · 沟通 · 群聊</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="14-chat-group-warm-wide"><img loading="lazy" alt="群聊现状" data-shot="14-chat-group-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/chat.html">打开 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/chat.html" title="沟通设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>与任务协作共用消息组件</strong>：同一产品只有一套对话语言与输入框。</li>
+          <li><strong>去掉外层卡片容器</strong>：三栏贴边，减少嵌套边框，与其他页面的外壳一致。</li>
+          <li><strong>会话列表</strong>：群聊用叠放头像，未读用蓝色计数，可搜索会话。</li>
+          <li><strong>控制台入口在成员栏</strong>：每位成员一个控制台按钮，绿点表示正在执行；控制台只显示所选成员，不用页签切换；私聊入口仍在标题栏（沿用现有规则）。窄窗口成员栏改为浮层，输入框始终在首屏。</li>
+        </ol>
+
+        <h3 class="doc-h3">4 · 数字员工</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="20-agents-warm-wide"><img loading="lazy" alt="数字员工现状" data-shot="20-agents-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/agents.html">打开 ↗</a> · <a href="pages/agents.html?dialog=agent">编辑弹窗 ↗</a> · <a href="pages/agents.html?drawer=agent">详情抽屉 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/agents.html" title="数字员工设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>卡片高度约 285 → 170px</strong>：简介固定 2 行，去掉空白描述区。</li>
+          <li><strong>操作常驻底部</strong>：「对话」+ ⋯ 固定在卡片底部，不在悬停时覆盖内容；删除进菜单。</li>
+          <li><strong>状态安静化</strong>：「可用」不显示，执行中显示绿点，已停用显示灰色标签（D4 按反馈调整）。</li>
+          <li><strong>编辑分区</strong>：基本信息 / 职责与提示词 / 运行配置 / 工具，左侧锚点；点击卡片打开只读抽屉，不离开列表。</li>
+        </ol>
+
+        <h3 class="doc-h3">5 · 设置 · 运行时</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="26-settings-runtime-warm-wide"><img loading="lazy" alt="运行时设置现状" data-shot="26-settings-runtime-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/settings.html?tab=runtime">打开 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/settings.html?tab=runtime" title="设置设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>分组卡片 + 行布局</strong>：标签与说明在左、控件在右；说明不再做成灰底框。</li>
+          <li><strong>只显示非默认值</strong>：「opus · 思考 High」；未安装的运行时锁定并说明原因。</li>
+          <li><strong>即时生效</strong>：开关与选项直接保存并显示「已保存」（D7）；需要提交的表单才保留按钮。</li>
+          <li><strong>危险操作独立区域</strong>：「清除所有数据」放入红色边框区，仍需密码与输入确认。</li>
+        </ol>
+
+        <h3 class="doc-h3">6 · 新建任务</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>暖白 · 1440</figcaption><button class="thumb" data-full="10-new-task-warm-wide"><img loading="lazy" alt="新建任务现状" data-shot="10-new-task-warm-wide"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span><a href="pages/tasks.html?dialog=new-task">打开 ↗</a></figcaption><div class="frame live"><iframe data-src="pages/tasks.html?dialog=new-task" title="新建任务设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>文档式输入</strong>：标题与描述去掉边框，内容优先（沿用既有方向）。</li>
+          <li><strong>成员与工作流同排</strong>：沿用框内多选与 ★ 经理指派。</li>
+          <li><strong>路径缩写</strong>：工作目录显示为 <code>~/AgentForge/tasks</code>。</li>
+          <li><strong>按钮分级</strong>：取消（幽灵）/ 保存草稿（次）/ 保存并开始（主，⌘↵）；Enter 仍为保存草稿。</li>
+        </ol>
+
+        <h3 class="doc-h3">7 · 窄窗口 760px</h3>
+        <div class="compare">
+          <figure><figcaption><span class="tag">现状</span>任务工作区 · 760</figcaption><button class="thumb" data-full="03-workspace-collab-warm-narrow"><img loading="lazy" alt="窄窗口现状" data-shot="03-workspace-collab-warm-narrow"></button></figure>
+          <figure><figcaption><span class="tag tag--accent">设计稿</span>760 × 640</figcaption><div class="frame live"><iframe data-src="pages/task.html" data-w="760" data-h="640" title="窄窗口设计稿" loading="lazy"></iframe></div></figure>
+        </div>
+        <ol class="changes">
+          <li><strong>图标侧栏</strong>：徽标变为圆点；标题栏保持单行，面包屑截断、状态胶囊保留。</li>
+          <li><strong>首屏可回复</strong>：详情栏变为浮层（⌘I），回复上下文与输入框始终在首屏。</li>
+        </ol>
+      </section>
+
+      <section class="doc-section" id="gallery">
+        <h2 class="doc-h2">全部设计页</h2>
+        <p class="doc-p">16 个页面另加「错误中断」状态，覆盖登录、待我处理、任务（含错误中断）、自动化、沟通、团队、工作流（含画布编辑器）、员工、角色、插件、MCP、设置与组件状态。缩略图跟随上方「预览风格」。</p>
+        <div class="gallery" id="gallery-grid"></div>
+      </section>
+
+      <!-- ===================== 第四阶段：推广 ===================== -->
+      <section class="doc-section" id="decisions">
+        <span class="doc-eyebrow">第四阶段 · 已确认</span>
+        <h2 class="doc-h2">决定记录</h2>
+        <p class="doc-p">2026-11-11 已确认。没有列出的部分都沿用现有规则（表单只能显式关闭、人类消息靠右、详情栏默认展开规则、Toast 层级、多选控件例外等）。</p>
+        <div style="margin-top:12px">
+          <div class="decision"><span class="decision__id">D1</span><div><h4>风格：A · 石墨，提供浅色 / 深色 / 跟随系统 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>2026-11-13 用户改选 A · 石墨，替代此前确定的 B · 纸张；B、C 保留在设计稿中作对比，不进入实现。规范见 <code>.interface-design/system.md</code>。</p></div></div>
+          <div class="decision"><span class="decision__id">D2</span><div><h4>新增「待我处理」为第一个导航入口，替代默认隐藏的「总览」 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>只聚合现有数据（等待澄清、待验收、错误中断），不改变协议；CLI 已有 <code>tasks list --status</code> 单状态查询，实现时按 App / CLI 对齐规则评估是否需要合并查询。</p></div></div>
+          <div class="decision"><span class="decision__id">D3</span><div><h4>任务行只露出「下一步」，删除、归档等收进 ⋯ 菜单 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>替代既有决定「操作列直接展示、不使用更多菜单」；菜单项全部可用键盘访问，删除仍需确认。</p></div></div>
+          <div class="decision"><span class="decision__id">D4</span><div><h4>员工「可用」不再显示；绿点只表示成员正在执行（按反馈调整） <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>原方案「可用改为绿点」与第 3 条反馈「绿点 = 运行中」冲突，改为「可用」默认不显示、「已停用」显示灰色标签。实现时同步调整 <code>test-brand-presentation.mjs</code> 中「员工可用与运行时支持同色」的断言。</p></div></div>
+          <div class="decision"><span class="decision__id">D5</span><div><h4>合并「暖白 / 极简」为一套浅色，新增深色与跟随系统 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>偏好值从 warm / minimal 改为 light / dark / system；开发阶段按约定不做旧值迁移。</p></div></div>
+          <div class="decision"><span class="decision__id">D6</span><div><h4>采用新的导航命名与术语表 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>「插件市场 / MCP 市场」→「插件 / MCP」，分组改为中文，Run / Trace / CHANGE 改为用户语言；CLI 命令名不变，只改界面文案与文档。</p></div></div>
+          <div class="decision"><span class="decision__id">D7</span><div><h4>常规与插件更新设置改为即时生效 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>与外观设置一致；检查周期等数值在失焦时校验并保存，错误就地提示。</p></div></div>
+          <div class="decision"><span class="decision__id">D8</span><div><h4>窗口改为一体化标题栏 <span class="status status--text st-done" style="margin-left:6px"><i data-icon="st-done"></i>已确定</span></h4><p>调整 <code>apps/electron/main.mjs</code> 的窗口参数（titleBarStyle、红绿灯位置、背景色随主题），在宽窄窗口重新验证拖动区域。</p></div></div>
+        </div>
+      </section>
+
+      <section class="doc-section" id="rollout">
+        <h2 class="doc-h2">推广计划</h2>
+        <p class="doc-p">方向已确认，可以从第 1 步开始。每一步都是边界清晰的一次提交，完成验证并安装到本机后再进行下一步。业务逻辑、HTTP / CLI 契约与执行规则不变。</p>
+        <ol class="steps-plan">
+          <li><h4>冻结规范</h4><p>按 D1–D8 的结论定稿 Token 与组件清单，用新规范替换 <code>.interface-design/system.md</code>，同步 <code>docs/06-design-system.md</code>。</p></li>
+          <li><h4>Token 层</h4><p>在 <code>web/styles.css</code> 建立语义 Token，旧变量一次性映射后删除（<code>--paper→--bg-canvas</code>、<code>--line→--border</code>、<code>--muted→--text-secondary</code>、<code>--surface-soft→--bg-subtle</code>、<code>--selection-bg→--bg-selected</code>，删除 <code>--lime</code>）；<code>apps/electron/compact.css</code> 只保留密度变量；移除 Google Fonts；<code>login.css</code> 改用同一套 Token。</p></li>
+          <li><h4>外壳</h4><p>侧栏与一体化标题栏（<code>web/index.html</code>、<code>apps/electron/main.mjs</code>）；主题偏好改为浅色 / 深色 / 跟随系统（<code>web/preferences.mjs</code>）；⌘K 命令面板作为客户端组件，复用 <code>floating-list</code> 定位与现有路由。</p></li>
+          <li><h4>基础组件</h4><p>按钮 → 状态 → 头像 → 空态与反馈 → 弹窗与抽屉 → 列表行，每个组件族一次替换全部调用点并删除旧 class。</p></li>
+          <li><h4>页面迁移</h4><p>任务 → 任务工作区（协作 / 文件 / 控制台）→ 待我处理 → 沟通 → 员工 / 角色 / 团队 / 工作流 → 插件 / MCP → 自动化 → 设置 → 登录与首次设置。</p></li>
+          <li><h4>每步验证</h4><ul><li><code>npm test</code>、<code>npm run check:ai</code>、<code>npm run check:impact</code>、<code>node --check</code>、<code>git diff --check</code></li><li>相关隔离 UI 脚本：test-directory-headers、test-task-creation、test-collaboration-flow、test-communication-workbench、test-runtime-settings、test-roles-ui、test-workflow-editor、test-automations、test-console-layout、test-brand-presentation</li><li>浅色 / 深色 × 1440 / 760 截图与本审查基线对比；构建并安装到 /Applications，启动核验</li></ul></li>
+          <li><h4>同步文档</h4><p>web/README、CHANGELOG 与模块注册表；如有界面文案变化，同步 CLI 帮助中的对应说明。</p></li>
+        </ol>
+        <div class="callout" style="margin-top:8px"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">范围与边界</div><div class="callout__text">设计稿是静态原型，数据为示例，交互只演示界面状态，不代表新增后端能力；审查截图来自隔离实例的展示夹具，不是真实 Provider 执行；当前只有 macOS 安装包，未在其他平台验证。</div></div></div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="截图预览"><img alt=""></div>
+
+<script>
+/* 设计总览页脚本：图标、现状截图、实时预览缩放、风格切换、画廊、Token 矩阵、目录高亮 */
+(function () {
+  const SHOT_DIR = '../../.data/ui-redesign-audit/before/';
+  const PAGES = [
+    ['login.html', '登录 / 首次设置', '4 种状态'], ['inbox.html', '待我处理', '新增'], ['tasks.html', '任务', '列表 / 看板'], ['task.html', '任务工作区', '协作 / 文件 / 控制台'],
+    ['task.html?state=failed', '任务 · 错误中断', '失败状态'], ['automations.html', '自动化', '列表 / 新建'], ['automation.html', '自动化详情', '触发记录 / 配置'], ['chat.html', '沟通', '群聊 / 控制台'],
+    ['teams.html', '团队', '列表 / 编辑'], ['workflows.html', '工作流', '卡片'], ['workflow-editor.html', '工作流编辑器', '画布'], ['agents.html', '数字员工', '卡片 / 抽屉 / 编辑'],
+    ['roles.html', '角色', '列表 / 抽屉'], ['plugins.html', '插件', '主从布局'], ['mcp.html', 'MCP', '主从 / 错误'], ['settings.html', '设置', '8 个分区'], ['states.html', '组件与状态', '设计系统'],
+  ];
+  const preview = { style: 'paper', mode: '' };
+
+  /** 占位 <i data-icon> 替换为 SVG。 */
+  function hydrateIcons(scope = document) {
+    scope.querySelectorAll('i[data-icon]').forEach((node) => { const holder = document.createElement('span'); holder.innerHTML = icon(node.dataset.icon, node.className); node.replaceWith(holder.firstElementChild || holder); });
+  }
+
+  /** 现状截图：加载失败时说明截图位于被忽略的 .data 目录。 */
+  const ROUND1_DIR = '../../.data/ui-redesign-audit/round1/';
+  function loadShots() {
+    document.querySelectorAll('img[data-round1]').forEach((img) => {
+      img.onerror = () => { const box = document.createElement('div'); box.className = 'thumb-missing'; box.textContent = '第一轮截图位于已忽略的 .data/ui-redesign-audit/round1/'; img.replaceWith(box); };
+      img.src = ROUND1_DIR + img.dataset.round1 + '.png';
+    });
+    document.querySelectorAll('img[data-shot]').forEach((img) => {
+      img.onerror = () => { const box = document.createElement('div'); box.className = 'thumb-missing'; box.textContent = '截图位于已忽略的 .data/ui-redesign-audit/before/，可运行 capture.mjs 重新生成'; img.replaceWith(box); };
+      img.src = SHOT_DIR + img.dataset.shot + '.jpg';
+    });
+  }
+
+  /** 给 iframe 拼接风格参数；固定预览不受工具条影响。 */
+  const DEFAULT_MODE = { graphite: 'light', paper: 'light', command: 'dark' };
+  function withStyle(src, fixed) {
+    const url = new URL(src, location.href);
+    url.searchParams.set('embed', '1');
+    if (!fixed) url.searchParams.set('style', preview.style);
+    const style = url.searchParams.get('style') || 'graphite';
+    // 始终显式传入模式，避免预览读取到页面里手动切换过的偏好
+    url.searchParams.set('mode', (!fixed && preview.mode) || url.searchParams.get('mode') || DEFAULT_MODE[style]);
+    return url.href;
+  }
+  function loadFrames() {
+    document.querySelectorAll('.frame iframe[data-src]').forEach((iframe) => {
+      const fixed = iframe.closest('.frame').hasAttribute('data-fixed');
+      const next = withStyle(iframe.dataset.src, fixed);
+      if (iframe.src !== next) iframe.src = next;
+    });
+  }
+  /** 按容器宽度等比缩放 iframe。 */
+  function fit(frame) {
+    const iframe = frame.querySelector('iframe');
+    if (!iframe) return;
+    const width = Number(iframe.dataset.w) || 1440, height = Number(iframe.dataset.h) || 900;
+    const scale = frame.clientWidth / width;
+    Object.assign(iframe.style, { width: width + 'px', height: height + 'px', transform: `scale(${scale})` });
+    frame.style.height = Math.round(height * scale) + 'px';
+  }
+  const resizer = new ResizeObserver((entries) => entries.forEach((entry) => fit(entry.target)));
+
+  function renderGallery() {
+    document.getElementById('gallery-grid').innerHTML = PAGES.map(([href, label, note]) => `<a class="gallery__item" href="pages/${href}"><div class="frame live"><iframe data-src="pages/${href}" title="${label}" loading="lazy" tabindex="-1" style="pointer-events:none"></iframe></div><div class="gallery__label">${label}<small>${note}</small></div></a>`).join('');
+  }
+
+  /** Token 矩阵：在隐藏探针上读取 6 种风格 / 模式组合的实际取值。 */
+  function renderTokenMatrix() {
+    const combos = [['paper', 'light'], ['paper', 'dark'], ['graphite', 'light'], ['graphite', 'dark'], ['command', 'dark'], ['command', 'light']];
+    const names = ['--bg-canvas', '--bg-sidebar', '--bg-subtle', '--bg-hover', '--bg-selected', '--border', '--text', '--text-secondary', '--text-tertiary', '--accent', '--accent-soft', '--st-running', '--st-attention', '--st-done', '--st-failed', '--st-planning'];
+    const probes = combos.map(([style, mode]) => { const node = document.createElement('div'); node.dataset.style = style; node.dataset.mode = mode; node.hidden = true; document.body.append(node); return node; });
+    document.querySelector('#token-matrix tbody').innerHTML = names.map((name) => `<tr><td><code>${name}</code></td>${probes.map((probe) => { const value = getComputedStyle(probe).getPropertyValue(name).trim(); return `<td><span class="chip"><i style="background:${value}"></i>${value.replace(/^rgba\((.*)\)$/, 'rgba($1)')}</span></td>`; }).join('')}</tr>`).join('');
+    probes.forEach((probe) => probe.remove());
+  }
+
+  function bind() {
+    document.addEventListener('click', (event) => {
+      const thumb = event.target.closest('[data-full], [data-full-src]');
+      if (thumb) { const box = document.getElementById('lightbox'); box.querySelector('img').src = thumb.dataset.fullSrc ? ROUND1_DIR + thumb.dataset.fullSrc + '.png' : SHOT_DIR + thumb.dataset.full + '.jpg'; box.classList.add('is-open'); return; }
+      if (event.target.closest('#lightbox')) { document.getElementById('lightbox').classList.remove('is-open'); return; }
+      const seg = event.target.closest('[data-preview] .seg__item');
+      if (seg) {
+        const group = seg.parentElement;
+        group.querySelectorAll('.seg__item').forEach((item) => item.classList.toggle('is-active', item === seg));
+        preview[group.dataset.preview] = seg.dataset.value;
+        loadFrames();
+      }
+    });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') document.getElementById('lightbox').classList.remove('is-open'); });
+    const links = [...document.querySelectorAll('.doc-toc a[href^="#"]')];
+    const spy = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => { if (entry.isIntersecting) links.forEach((link) => link.classList.toggle('is-active', link.getAttribute('href') === '#' + entry.target.id)); });
+    }, { rootMargin: '0px 0px -75% 0px' });
+    document.querySelectorAll('.doc-section[id], .sev-group[id]').forEach((section) => spy.observe(section));
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    renderGallery();
+    hydrateIcons();
+    loadShots();
+    renderTokenMatrix();
+    loadFrames();
+    document.querySelectorAll('.frame').forEach((frame) => { fit(frame); resizer.observe(frame); });
+    bind();
+  });
+})();
+</script>
+</body>
+</html>

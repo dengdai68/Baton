@@ -35,9 +35,9 @@ try {
   const origin = new URL(page.url()).origin;
   const api = (path, body, method = 'POST') => page.evaluate(async ({ path, body, method }) => { const r = await fetch(path, body ? { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : body === null ? { method } : {}); const result = await r.json().catch(() => ({})); return { status: r.status, ...result }; }, { path, body, method });
 
-  const assertPromptRows = async selector => {
+  const assertPromptRows = async (selector,rows=8) => {
     const size=await page.locator(selector).evaluate(node=>{const style=getComputedStyle(node);return {rows:node.rows,content:node.clientHeight-parseFloat(style.paddingTop)-parseFloat(style.paddingBottom),line:parseFloat(style.lineHeight)};});
-    assert.equal(size.rows,8);assert.ok(size.content>=8*size.line-1,'prompt shows at least eight text lines');
+    assert.equal(size.rows,rows);assert.ok(size.content>=rows*size.line-1,`prompt shows at least ${rows} text lines`);
   };
 
   // The roles API is authenticated like every other configuration resource.
@@ -51,9 +51,9 @@ try {
   await page.locator('#account-name').waitFor();
 
   // Roles participates in the same persisted visibility choices as every
-  // optional sidebar entry, including empty BUILD groups and default restore.
+  // optional sidebar entry, including empty 组织 groups and default restore.
   await page.goto(origin + '/settings/appearance');
-  const roleVisibility = page.getByRole('checkbox', { name: '显示角色', exact: true });
+  const roleVisibility = page.getByRole('switch', { name: '显示角色', exact: true });
   await roleVisibility.waitFor();
   assert.ok(await roleVisibility.isChecked());
   await roleVisibility.uncheck();
@@ -62,13 +62,14 @@ try {
   await roleVisibility.waitFor();
   assert.equal(await roleVisibility.isChecked(), false, 'role visibility survives reload');
   assert.ok(await page.locator('.nav-item[data-view="roles"]').isHidden());
-  for (const id of ['agents', 'mcp-marketplace', 'marketplace']) await page.locator(`[data-nav-visible="${id}"]`).uncheck();
-  assert.ok(await page.locator('[data-navigation-group="build"]').isHidden(), 'empty BUILD group is hidden');
+  for (const id of ['teams', 'workflows', 'agents']) await page.locator(`[data-nav-visible="${id}"]`).uncheck();
+  assert.ok(await page.locator('[data-navigation-group="org"]').isHidden(), 'empty 组织 group is hidden');
+  assert.ok(await page.locator('[data-navigation-group=ext]').isVisible(),'extension navigation stays visible independently');
   await page.locator('[data-reset-navigation]').click();
   assert.ok(await roleVisibility.isChecked());
   assert.ok(await page.locator('.nav-item[data-view="roles"]').isVisible());
 
-  // Standalone BUILD-group navigation entry next to 数字员工.
+  // Standalone 组织-group navigation entry next to 数字员工.
   await page.locator('.nav-item[data-view="roles"]').click();
   await page.waitForURL(/\/roles$/);
   assert.equal(await page.locator('#breadcrumb-current').textContent(), '角色');
@@ -79,46 +80,47 @@ try {
   assert.match(roleMask, /data:image\/svg\+xml/, 'desktop role icon has an SVG mask rather than an unmasked solid square');
 
   // Create through the modal; only name + plain-text prompt are requested.
-  await page.locator('#roles-view .directory-toolbar [data-action="new-role"]').click();
-  await assertPromptRows('#role-form [name=prompt]');
+  await page.locator('#roles-header-actions [data-action="new-role"]').click();
+  await assertPromptRows('#role-form [name=prompt]',12);
   await page.locator('#role-form [name=name]').fill('界面验收角色');
   await page.locator('#role-form [name=prompt]').fill('UI_ROLE_MARK 第一行只写证据编号。');
   await page.locator('#role-form [type=submit]').click();
   await page.locator('#role-form').waitFor({ state: 'detached' });
-  await page.locator('#roles-grid .agent-card h3', { hasText: '界面验收角色' }).waitFor();
+  await page.locator('#roles-grid .role-directory-row strong', { hasText: '界面验收角色' }).waitFor();
   let roles = (await api('/api/roles', null, 'GET')).roles;
   assert.equal(roles.length, 1);
   const role = roles[0];
   assert.deepEqual(Object.keys(role).sort(), ['createdAt', 'id', 'name', 'prompt', 'extensionSelection'].sort(), 'role exposes configuration without internal resolved paths');
-  for (const theme of ['minimal', 'warm']) {
+  for (const theme of ['light', 'dark']) {
     await page.goto(origin + '/settings/appearance');
     await page.locator(`[name="theme"][value="${theme}"]`).check();
     await page.goto(origin + '/roles');
-    await page.locator(`[data-edit-role="${role.id}"]`).waitFor();
+    await page.locator(`.role-row-open[data-edit-role="${role.id}"]`).waitFor();
     assert.ok(await roleIcon.isVisible(), `role icon is visible in ${theme} theme`);
     await page.screenshot({ path: join(root, `roles-${theme}-wide.png`) });
   }
 
   // Edit the prompt in place.
-  await page.locator(`[data-edit-role="${role.id}"]`).click();
-  await assertPromptRows('#role-form [name=prompt]');
+  await page.locator(`.role-row-open[data-edit-role="${role.id}"]`).click();
+  await assertPromptRows('#role-form [name=prompt]',12);
   await page.locator('#role-form [name=prompt]').fill('UI_ROLE_MARK_V2 更新后的角色提示词。');
   await page.locator('#role-form [type=submit]').click();
   await page.locator('#role-form').waitFor({ state: 'detached' });
-  await page.locator('#roles-grid .agent-card', { hasText: 'UI_ROLE_MARK_V2' }).waitFor();
+  await page.locator('#roles-grid .role-directory-row', { hasText: 'UI_ROLE_MARK_V2' }).waitFor();
 
-  // Cards carry a full-width title plus the role ID; duplicate names stay
-  // distinguishable in the employee selector by that ID.
-  const card = page.locator('#roles-grid .agent-card', { hasText: 'UI_ROLE_MARK_V2' });
-  assert.ok(!(await card.textContent()).includes(role.id), 'role card omits internal ID');
+  // Rows preserve a readable title and one-line prompt; duplicate names stay
+  // distinguishable in the employee selector by ID.
+  const card = page.locator('#roles-grid .role-directory-row', { hasText: 'UI_ROLE_MARK_V2' });
+  assert.ok(!(await card.textContent()).includes(role.id), 'role row omits internal ID');
   const geometry = await card.evaluate(node => {
     const identity = node.querySelector('.agent-card-identity').getBoundingClientRect();
-    const title = node.querySelector('h3').getBoundingClientRect();
+    const title = node.querySelector('strong').getBoundingClientRect();
     return { cardWidth: node.getBoundingClientRect().width, identityWidth: identity.width, titleHeight: title.height };
   });
-  assert.ok(geometry.identityWidth > 100 && geometry.titleHeight < 40, 'title uses the card width instead of a narrow column: ' + JSON.stringify(geometry));
+  assert.ok(geometry.identityWidth > 100 && geometry.titleHeight < 40, 'role title stays readable in the row: ' + JSON.stringify(geometry));
   const duplicate = (await api('/api/roles', { name: '界面验收角色', prompt: 'DUPLICATE_PROMPT_TEXT' })).role;
   await page.locator('.nav-item[data-view="agents"]').click();
+  await page.locator(`[data-edit-agent="${employee.id}"]`).locator("xpath=ancestor::details").locator("summary").click();
   await page.locator(`[data-edit-agent="${employee.id}"]`).click();
   await page.locator('#employee-role').waitFor();
   await page.locator('#employee-role').click();
@@ -127,26 +129,26 @@ try {
   await page.locator('#agent-form [data-close-modal]').click();
   await api(`/api/roles/${duplicate.id}`, {}, 'DELETE');
   await page.locator('.nav-item[data-view="roles"]').click();
-  await page.locator('#roles-grid .agent-card').first().waitFor();
+  await page.locator('#roles-grid .role-directory-row').first().waitFor();
 
   // Search filters by name/prompt and restores on clear.
   await page.locator('#roles-search').fill('不存在的关键词');
   await page.getByText('没有匹配的角色', { exact: true }).waitFor();
   await page.locator('#roles-search').fill('UI_ROLE_MARK_V2');
-  await page.waitForFunction(()=>document.querySelectorAll('#roles-grid .agent-card').length===1);
-  assert.equal(await page.locator('#roles-grid .agent-card').count(), 1);
+  await page.waitForFunction(()=>document.querySelectorAll('#roles-grid .role-directory-row').length===1);
+  assert.equal(await page.locator('#roles-grid .role-directory-row').count(), 1);
   await page.locator('#roles-search').fill('');
-  await page.waitForFunction(()=>document.querySelectorAll('#roles-grid .agent-card').length===1);
-  assert.equal(await page.locator('#roles-grid .agent-card').count(), 1);
+  await page.waitForFunction(()=>document.querySelectorAll('#roles-grid .role-directory-row').length===1);
+  assert.equal(await page.locator('#roles-grid .role-directory-row').count(), 1);
 
   // Twenty-per-page pagination follows the shared directory rule.
   for (let index = 0; index < 21; index++) await api('/api/roles', { name: `分页角色-${String(index).padStart(2, '0')}`, prompt: `分页提示词 ${index}` });
   await page.goto(origin + '/roles');
-  await page.locator('#roles-grid .agent-card').first().waitFor();
-  assert.equal(await page.locator('#roles-grid .agent-card').count(), 20);
-  await page.getByText('共 22 条 · 每页 20 条 · 第 1/2 页').waitFor();
+  await page.locator('#roles-grid .role-directory-row').first().waitFor();
+  assert.equal(await page.locator('#roles-grid .role-directory-row').count(), 20);
+  await page.locator('[data-pagination=roles]').filter({hasText:'共 22 条 · 每页 20 条'}).waitFor();await page.locator('[data-pagination=roles] .list-pagination-page').filter({hasText:/1\s*\/\s*2/}).waitFor();
   await page.locator('[data-pagination="roles"] [data-page="2"]').click();
-  assert.equal(await page.locator('#roles-grid .agent-card').count(), 2);
+  await page.waitForFunction(()=>document.querySelectorAll('#roles-grid .role-directory-row').length===2); assert.equal(await page.locator('#roles-grid .role-directory-row').count(), 2);
 
   const pickerPlugins=[],pickerMcps=[];
   for(let index=0;index<2;index++){
@@ -158,7 +160,7 @@ try {
   }
   const inherited={pluginIds:[pickerPlugins[0].id],mcpIds:[pickerMcps[0].id]};
   assert.equal((await api('/api/roles/'+role.id,{extensionSelection:inherited},'PUT')).status,200);
-  await page.goto(origin+'/roles');await page.locator('[data-edit-role="'+role.id+'"]').click();
+  await page.goto(origin+'/roles');await page.locator('.role-row-open[data-edit-role="'+role.id+'"]').click();
   await page.locator('#role-market-selection [data-selection-state]').filter({hasText:'绑定此角色'}).waitFor();
   assert.equal(await page.locator('#role-market-selection .extension-chip').count(),2);
   await page.locator('#role-form [type=submit]').click();await page.locator('#role-form').waitFor({state:'detached'});
@@ -168,6 +170,7 @@ try {
   await page.goto(origin+'/agents');
   // All three fields share one inline token/search control, without role priority UI.
   await page.locator('.nav-item[data-view="agents"]').click();
+  await page.locator(`[data-edit-agent="${employee.id}"]`).locator("xpath=ancestor::details").locator("summary").click();
   await page.locator(`[data-edit-agent="${employee.id}"]`).click();
   await page.locator('#employee-role').waitFor();
   await page.locator('#employee-role').fill(role.name);
@@ -177,6 +180,7 @@ try {
   await page.locator('#agents-grid .agent-card', { hasText: '界面验收角色' }).waitFor();
   assert.deepEqual((await api('/api/agents', null, 'GET')).agents.find(item => item.id === employee.id).roleIds,[role.id]);
   // Persisted selection is shown when the form reopens.
+  await page.locator(`[data-edit-agent="${employee.id}"]`).locator("xpath=ancestor::details").locator("summary").click();
   await page.locator(`[data-edit-agent="${employee.id}"]`).click();
   assert.ok((await page.locator('#employee-role-selection .extension-picked').textContent()).includes(role.name));
   const another=roles.find(item=>item.id!==role.id) || (await api('/api/roles',null,'GET')).roles.find(item=>item.id!==role.id);
@@ -187,7 +191,7 @@ try {
   assert.doesNotMatch(await page.locator('#employee-role-selection .extension-picked').textContent(),/^[12]\./);
   for(const [kind,items] of [['plugin',pickerPlugins],['mcp',pickerMcps]])for(const item of items){await page.locator(`#employee-${kind}-search`).click();await page.locator(`#employee-${kind}-search`).fill(item.name);await page.locator(`[data-picker="${kind}"] [data-add-extension="${item.id}"]`).click();}
   await page.getByRole('heading',{name:'编辑数字员工',exact:true}).click();
-  for(const theme of ['minimal','warm'])for(const width of [1320,760]){
+  for(const theme of ['light','dark'])for(const width of [1320,760]){
     // Match the two existing theme tokens without closing the current draft.
     await page.evaluate(theme=>{document.documentElement.dataset.theme=theme;},theme);
     await app.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,850),{origin,width});
@@ -197,7 +201,7 @@ try {
       const control=picker.querySelector('.extension-picker-control'),r=control.getBoundingClientRect(),style=getComputedStyle(control),inner=getComputedStyle(picker.querySelector('input')),chips=[...picker.querySelectorAll('.extension-chip')];
       return {height:r.height,innerBorder:inner.borderWidth,innerShadow:inner.boxShadow,count:chips.length,inside:chips.every(chip=>{const c=chip.getBoundingClientRect();return c.top>=r.top && c.bottom<=r.bottom+1;}),border:style.border,background:style.backgroundColor,radius:style.borderRadius,outside:picker.querySelectorAll(':scope > .extension-picked').length};
     }));
-    assert.equal(geometry.length,3);for(const result of geometry){assert.equal(result.innerBorder,'0px');assert.equal(result.innerShadow,'none');assert.equal(result.count,2);assert.equal(result.inside,true);assert.equal(result.height,38);assert.equal(result.outside,0);assert.equal(result.border,geometry[0].border);assert.equal(result.background,geometry[0].background);assert.equal(result.radius,geometry[0].radius);}
+    assert.equal(geometry.length,3);for(const result of geometry){assert.equal(result.innerBorder,'0px');assert.equal(result.innerShadow,'none');assert.equal(result.count,2);assert.equal(result.inside,true);assert.equal(result.height,32);assert.equal(result.outside,0);assert.equal(result.border,geometry[0].border);assert.equal(result.background,geometry[0].background);assert.equal(result.radius,geometry[0].radius);}
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     await page.screenshot({path:join(root,`inline-select-${theme}-${width}.png`),animations:'disabled'});
   }
@@ -206,6 +210,7 @@ try {
   const saved=(await api('/api/agents',null,'GET')).agents.find(item=>item.id===employee.id);
   assert.deepEqual(saved.roleIds,[role.id,another.id]);
   assert.deepEqual(saved.runtime.extensionSelection,{pluginIds:pickerPlugins.map(item=>item.id),mcpIds:pickerMcps.map(item=>item.id)});
+  await page.locator(`[data-edit-agent="${employee.id}"]`).locator("xpath=ancestor::details").locator("summary").click();
   await page.locator(`[data-edit-agent="${employee.id}"]`).click();
   await page.locator('#employee-role-selection .extension-chip').first().waitFor();
   assert.equal(await page.locator('#employee-role-selection .extension-chip').count(),2);
@@ -218,24 +223,26 @@ try {
   // A bound role cannot be deleted; the referencing employee is listed in place.
   await page.locator('.nav-item[data-view="roles"]').click();
   await page.locator('#roles-search').fill('界面验收角色');
+  await page.locator(`[data-delete-role="${role.id}"]`).locator('xpath=ancestor::details').locator('summary').click();
   await page.locator(`[data-delete-role="${role.id}"]`).click();
   await page.locator('[data-confirm-configuration-delete]').click();
   await page.locator('[data-delete-error]', { hasText: employee.name }).waitFor();
-  await page.locator('#modal-close').click();
+  await page.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();
 
   // Narrow window keeps the toolbar usable.
   await app.evaluate(({ BrowserWindow }) => { const window = BrowserWindow.getAllWindows().find(item => item.isVisible()); window.setSize(760, 800); });
   await page.waitForFunction(() => innerWidth <= 760);
   assert.ok(await roleIcon.isVisible(), 'role SVG remains visible in narrow icon-only navigation');
   const toolbar = await page.locator('#roles-view .directory-toolbar').evaluate(node => {
-    const search = node.querySelector('input').getBoundingClientRect(), button = node.querySelector('button').getBoundingClientRect();
-    return { separate: search.right <= button.left, fits: button.right <= innerWidth };
+    const search = node.querySelector('input').getBoundingClientRect(), button = document.querySelector('#roles-header-actions [data-action=new-role]').getBoundingClientRect(),bar=node.getBoundingClientRect();
+    return { separate:button.bottom<=bar.top, fits:button.right<=innerWidth&&search.left>=bar.left&&search.right<=bar.right };
   });
-  assert.deepEqual(toolbar, { separate: true, fits: true }, 'narrow layout keeps search and create on one usable row');
+  assert.deepEqual(toolbar, { separate: true, fits: true }, 'narrow layout keeps create in the titlebar and search in its own toolbar');
   await page.screenshot({ path: join(root, 'roles-narrow.png') });
 
   // Unbind, then deletion succeeds.
   await page.locator('.nav-item[data-view="agents"]').click();
+  await page.locator(`[data-edit-agent="${employee.id}"]`).locator("xpath=ancestor::details").locator("summary").click();
   await page.locator(`[data-edit-agent="${employee.id}"]`).click();
   await page.locator('#employee-role-selection [data-remove-extension]').first().waitFor();
   await page.screenshot({path:join(root,'employee-multiple-roles-narrow.png')});
@@ -245,6 +252,7 @@ try {
   assert.deepEqual((await api('/api/agents', null, 'GET')).agents.find(item => item.id === employee.id).roleIds, []);
   await page.locator('.nav-item[data-view="roles"]').click();
   await page.locator('#roles-search').fill('界面验收角色');
+  await page.locator(`[data-delete-role="${role.id}"]`).locator('xpath=ancestor::details').locator('summary').click();
   await page.locator(`[data-delete-role="${role.id}"]`).click();
   await page.locator('[data-confirm-configuration-delete]').click();
   await page.locator('#modal-backdrop[aria-hidden="true"]').waitFor({ state: 'attached' });
@@ -268,12 +276,12 @@ try {
   await page.waitForTimeout(250);
   await page.screenshot({path:join(root,'partial-install-warning-narrow.png'),animations:'disabled'});
   await page.getByRole('button',{name:'知道了',exact:true}).click();
-  await page.locator('[data-market-list] .agent-card').filter({hasText:'partial-ui'}).getByRole('button',{name:'详情',exact:true}).click();
+  await page.locator('[data-market-list] .agent-card').filter({hasText:'partial-ui'}).locator('.extension-name').click();
   await page.locator('[data-extension-detail-body] [role=alert]').waitFor();
   assert.equal(await page.locator('[data-extension-detail-body] [role=alert] li').count(),3);
   await page.waitForTimeout(250);
   await page.screenshot({path:join(root,'partial-install-detail.png'),animations:'disabled'});
-  await page.locator('#modal-close').click();
+  await page.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();
   // Current HTTP and actual CLI agree on role arrays and reject the retired field.
   for(const body of [{kind:'developer'},{repository:{url:'https://example.invalid/app.git'}}]){const status=await page.evaluate(async({id,body})=>{const r=await fetch('/api/agents/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return r.status;},{id:employee.id,body});assert.equal(status,400);}
 
@@ -281,7 +289,7 @@ try {
 
   await page.goto(origin+'/agents');await page.locator('[data-action="new-agent"]').click();
   await assertPromptRows('#agent-form [name=systemPrompt]');
-  assert.deepEqual(await page.locator('#agent-form [name=kind] option').evaluateAll(options=>options.map(option=>option.value)),['business','manager']);
+  assert.equal(await page.locator('#agent-form [name=kind]').count(),0,'manager is selected per task, not an employee type field');
   assert.equal(await page.locator('#agent-form [name=repositoryUrl],#employee-repository-fields').count(),0);
   await page.locator('#agent-form [name=name]').fill('框内多选新建员工');
   const roleCandidate=(await api('/api/roles',null,'GET')).roles[0];

@@ -10,7 +10,7 @@ import { createRunFiles } from "../server/run-files.mjs";
 import { createCommunicationService } from "../server/communication.mjs";
 import { RuntimeSessionMissingError, runClaudeCodeCli } from "../server/runtime/local-cli.mjs";
 import { registerExecution } from "../server/runtime/registry.mjs";
-import { activeMention, communicationSenderTone, createCommunicationUI, downloadAttachment, formatCommunicationContent, latestConversationId, messageAttachments } from "../web/communication.js";
+import { activeMention, communicationDayLabel, communicationSenderTone, createCommunicationUI, downloadAttachment, formatCommunicationContent, latestConversationId, messageAttachments } from "../web/communication.js";
 import { createMarketplace } from "../server/runtime/marketplace.mjs";
 import { executionBudget, closeExecutionBudget } from '../server/execution-budget.mjs';
 
@@ -19,10 +19,11 @@ test('attachment HEAD failures keep the HTTP status without parsing an empty bod
   await assert.rejects(downloadAttachment({href:'http://fixture/attachment'}),/附件下载失败（HTTP 404）/);
 });
 
-test('BMP keeps its browser preview while decoded image formats request a thumbnail',()=>{
-  assert.match(messageAttachments([{id:'image',name:'photo.png'}],'chat'),/thumbnail=1/);
-  const bmp=messageAttachments([{id:'image',name:'photo.BMP'}],'chat');
-  assert.match(bmp,/data-chat-image/);assert.doesNotMatch(bmp,/thumbnail=1/);
+test('images read as compact chips like documents, and clicking opens the preview',()=>{
+  assert.match(messageAttachments([{id:'image',name:'photo.png',bytes:2048}],'chat'),/data-attachment-image/);
+  assert.match(messageAttachments([{id:'image',name:'photo.png',bytes:2048}],'chat'),/communication-attachment/);
+  const bmp=messageAttachments([{id:'image',name:'photo.BMP',bytes:2048}],'chat');
+  assert.match(bmp,/data-attachment-image/);
 });
 
 test('shutdown while waiting for execution resources preserves a recoverable communication delivery',async()=>{
@@ -54,6 +55,38 @@ test("communication sender accents are stable, bounded and do not claim executio
   f.take("/a").resolve(result); await f.flush();
   assert.match(f.query(".communication-messages").innerHTML, /data-tone="info"/);
   assert.match(f.query(".communication-messages").innerHTML, /&lt;b&gt;name&lt;\/b&gt;/);
+});
+
+test('communication dates use local calendar days across month and year boundaries', () => {
+  const today = new Date(2026, 0, 1, 0, 15);
+  assert.equal(communicationDayLabel(new Date(2026, 0, 1, 0, 1), today), '今天');
+  assert.equal(communicationDayLabel(new Date(2025, 11, 31, 23, 59), today), '昨天');
+  assert.equal(communicationDayLabel(new Date(2025, 11, 30, 23, 59), today), '12月30日');
+  assert.equal(communicationDayLabel(new Date(2026, 2, 8, 12), new Date(2026, 2, 9, 0, 5)), '昨天');
+});
+
+test('communication groups days once and resolves member avatars without adding human avatars', async t => {
+  const avatars = [];
+  const f = communicationReaderFixture(t, { renderAvatar(member, className) {
+    if (className === 'communication-message-avatar') avatars.push(member);
+    return `<span class="agent-card-avatar color-${member.color || 'system'} ${className}" aria-hidden="true">K</span>`;
+  }});
+  f.mount(); f.take('').resolve({ conversations: [] });
+  const result = f.result(['01', '02', '03', '04']);
+  result.conversation.members = [{ id: 'kai', name: 'Kai', color: 'blue' }];
+  for (const [index, message] of result.messages.entries()) {
+    message.createdAt = new Date(2026, 0, index < 2 ? 1 : 2, 10, index).toISOString();
+    message.sender = index === 1 ? { type: 'human', name: '你' } : { type: 'agent', id: 'kai', name: 'Kai' };
+  }
+  f.take('/a').resolve(result); await f.flush();
+  const html = f.query('.communication-messages').innerHTML;
+  assert.equal((html.match(/class="communication-day-divider"/g) || []).length, 2);
+  assert.equal((html.match(/communication-message-avatar/g) || []).length, 3);
+  assert.equal(avatars.length, 3);
+  assert.ok(avatars.every(member => member.color === 'blue'));
+  const human = html.match(/<article class="communication-message from-human"[\s\S]*?<\/article>/)[0];
+  assert.doesNotMatch(human, /avatar/);
+  assert.match(human, /<time title=.*datetime=/);
 });
 
 test('communication list marks only incoming unread replies, never pending outgoing work', async t => {
@@ -88,17 +121,17 @@ test('attachment upload failure retains the draft and references without sending
   await retry; assert.equal(input.value, '');
 });
 
-function communicationReaderFixture(t) {
+function communicationReaderFixture(t, options = {}) {
   const pending = [], intervals = new Set();
   t.mock.method(globalThis, "setInterval", (callback) => { intervals.add(callback); return callback; });
   t.mock.method(globalThis, "clearInterval", (callback) => intervals.delete(callback));
-  const node = () => ({ innerHTML: "", textContent: "", hidden: false, disabled: false, value: "", dataset: {}, classList: { toggle() {} }, setAttribute() {}, addEventListener() {}, scrollTop: 0, scrollHeight: 100, clientHeight: 100, selectionStart: 0, querySelectorAll: () => [] });
+  const node = () => ({ innerHTML: "", textContent: "", hidden: false, disabled: false, value: "", dataset: {}, classList: { toggle() {}, remove() {} }, setAttribute() {}, addEventListener() {}, focus() {}, scrollTop: 0, scrollHeight: 100, clientHeight: 100, selectionStart: 0, querySelectorAll: () => [] });
   const nodes = new Map();
   const query = (selector) => { if (!nodes.has(selector)) nodes.set(selector, node()); return nodes.get(selector); };
   Object.defineProperty(query(".communication-messages"), "scrollHeight", { get() { return (this.innerHTML.match(/<article /g) || []).length * 100; } });
   query("form").querySelector = () => query('form [type="submit"]');
-  const host = { isConnected: true, innerHTML: "", querySelector: query, querySelectorAll: () => [] };
-  const ui = createCommunicationUI({ api: (url) => new Promise((resolve, reject) => pending.push({ url, resolve, reject })), navigate() {}, notify() {} });
+  const host = { isConnected: true, innerHTML: "", querySelector: query, querySelectorAll: selector => selector === '[data-recover-chat-message]' ? [...query('.communication-messages').innerHTML.matchAll(/data-recover-chat-message="([^"]+)"/g)].map(([,id])=>{const button=query(`[data-recover-chat-message="${id}"]`);button.dataset.recoverChatMessage=id;return button;}) : [] };
+  const ui = createCommunicationUI({ api: (url, options) => new Promise((resolve, reject) => pending.push({ url, options, resolve, reject })), navigate() {}, notify() {}, ...options });
   const mount = (key = "a") => ui.mount(host, { agents: [], teams: [] }, key);
   const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
   const take = (suffix) => { const index = pending.findIndex((item) => item.url === `/api/communications${suffix || "?page=1"}`); assert.notEqual(index, -1, `request ${suffix}`); const request=pending.splice(index,1)[0];return {...request,resolve:value=>request.resolve(suffix?value:{page:1,pageSize:20,total:value.conversations?.length||0,totalPages:1,hasMore:false,...value})}; };
@@ -281,6 +314,53 @@ test("communication reanchor retains a persisted send acknowledged after the his
   assert.match(f.query(".communication-messages").innerHTML, /message-20/);
   assert.match(f.query(".communication-messages").innerHTML, /new persisted message/);
   assert.doesNotMatch(f.query(".communication-messages").innerHTML, /message-10/);
+});
+
+test('outgoing chat appears immediately and a GET receipt before POST replaces it by request ID without clearing new input',async t=>{
+  const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
+  const input=f.query('textarea');input.value='pending message';input.oninput();
+  const sending=f.query('form').onsubmit({preventDefault(){}}),post=f.take('/a/messages'),payload=JSON.parse(post.options.body);
+  assert.match(f.query('.communication-messages').innerHTML,/data-outgoing-state="sending"/);
+  input.value='new draft while pending';input.oninput();
+  const message={id:'confirmed-message',clientRequestId:payload.clientRequestId,content:payload.content,createdAt:'2026-01-01T00:01:00.000Z',sender:{type:'human',name:'你'}};
+  f.tick();f.take('').resolve({conversations:[]});const result=f.result([]);result.messages=[message];f.take('/a').resolve(result);await f.flush();
+  assert.equal((f.query('.communication-messages').innerHTML.match(/pending message/g)||[]).length,1);
+  assert.doesNotMatch(f.query('.communication-messages').innerHTML,/data-outgoing-state/);
+  assert.equal(input.value,'new draft while pending');
+  post.resolve({message});await sending;assert.equal(input.value,'new draft while pending');
+  assert.equal((f.query('.communication-messages').innerHTML.match(/pending message/g)||[]).length,1);
+});
+
+test('lost chat response stays unconfirmed until exact request ID is read, then clears only the sent draft and attachments',async t=>{
+  const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
+  const files=f.query('[data-chat-file]');files.files=[{name:'proof.txt',size:3}];files.onchange({currentTarget:files});
+  const input=f.query('textarea');input.value='saved but response lost';input.oninput();const sending=f.query('form').onsubmit({preventDefault(){}});
+  f.take('/a/attachments?name=proof.txt').resolve({attachment:{id:'attachment-proof'}});await f.flush();
+  const post=f.take('/a/messages'),payload=JSON.parse(post.options.body);post.reject(new Error('connection closed'));await sending;
+  assert.match(f.query('.communication-messages').innerHTML,/发送未确认/);assert.equal(input.value,payload.content);
+  assert.match(f.query('[data-chat-attachments]').innerHTML,/proof.txt/);assert.equal(f.pending.filter(row=>row.url.endsWith('/messages')).length,0,'failure never resends automatically');
+  const result=f.result([]);result.messages=[{id:'saved-message',clientRequestId:payload.clientRequestId,content:payload.content,attachments:[{id:'attachment-proof',name:'proof.txt',bytes:3}],createdAt:'2026-01-01T00:01:00.000Z',sender:{type:'human',name:'你'}}];
+  f.tick();f.take('').resolve({conversations:[]});f.take('/a').resolve(result);await f.flush();
+  assert.equal(input.value,'');assert.equal(f.query('[data-chat-attachments]').innerHTML,'');
+  assert.doesNotMatch(f.query('.communication-messages').innerHTML,/发送未确认|data-outgoing-state/);
+  assert.equal((f.query('.communication-messages').innerHTML.match(/saved but response lost/g)||[]).length,1);
+});
+
+for(const editedAfterRestore of [false,true])test(`a late chat receipt clears the explicitly restored draft, but preserves a subsequent edit (${editedAfterRestore})`,async t=>{
+  const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
+  const input=f.query('textarea');input.value='Original message';input.oninput();const sending=f.query('form').onsubmit({preventDefault(){}});const post=f.take('/a/messages');const key=JSON.parse(post.options.body).clientRequestId;post.reject(new Error('response lost'));await sending;
+  input.value='';input.oninput();f.query(`[data-recover-chat-message="${key}"]`).onclick();assert.equal(input.value,'Original message');
+  if(editedAfterRestore){input.value='New draft';input.oninput();}
+  f.tick();f.take('').resolve({conversations:[]});const result=f.result([]);result.messages=[{id:'saved',clientRequestId:key,createdAt:'2026-01-01T01:00:00.000Z',sender:{type:'human',name:'你'},content:'Original message'}];f.take('/a').resolve(result);await f.flush();
+  assert.equal(input.value,editedAfterRestore?'New draft':'');assert.doesNotMatch(f.query('.communication-messages').innerHTML,/data-outgoing-state/);assert.equal((f.query('.communication-messages').innerHTML.match(/Original message/g)||[]).length,1);
+});
+
+test('retrying unchanged chat reuses its ID while editing content creates a new request',async t=>{
+  const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
+  const input=f.query('textarea');input.value='retry this';input.oninput();
+  const attempt=async()=>{const send=f.query('form').onsubmit({preventDefault(){}}),post=f.take('/a/messages');const payload=JSON.parse(post.options.body);post.reject(new Error('fixture 503'));await send;return payload.clientRequestId;};
+  const first=await attempt(),retry=await attempt();assert.equal(first,retry);assert.equal((f.query('.communication-messages').innerHTML.match(/data-outgoing-state="unconfirmed"/g)||[]).length,1);
+  input.value='a revised message';input.oninput();assert.notEqual(await attempt(),first);
 });
 
 test("communication POST acknowledgement cannot bridge unread history or hide its older cursor", async (t) => {
@@ -519,7 +599,7 @@ test("retired routing outputs reject without waking anyone; retry finishes the o
   }finally{store.close();await rm(root,{recursive:true,force:true});}
 });
 
-test("communication UI uses searchable dialog and hides runtime chrome and private quotes", async () => {
+test("communication UI keeps searchable selection, private message boundaries and catalog chat actions", async () => {
   const ui = await readFile(new URL("../web/communication.js", import.meta.url), "utf8");
   assert.ok(ui.includes('dialog.showModal()'));
   assert.ok(ui.includes('createEmployeeMultiSelect'));
@@ -533,8 +613,8 @@ test("communication UI uses searchable dialog and hides runtime chrome and priva
   assert.ok(!ui.includes('await loadMessages(); const list'));
   assert.ok(!ui.includes('renderList(); await loadMessages()'));
   const app = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
-  assert.match(app, /team-card-header.*directory-card-actions.*data-chat-team=.*data-edit-team=/);
-  assert.match(app, /agent-card-top[\s\S]*?directory-card-actions.*data-chat-agent=.*data-edit-agent=[\s\S]*?<p>/);
+  assert.match(app, /team-directory-row[\s\S]*?team-row-actions[^\n]+data-chat-team=.*actionMenu\(`<button[^\n]+data-edit-team=.*data-delete-team=/);
+  assert.match(app, /employee-card-footer[\s\S]*?directory-card-actions.*data-chat-agent=.*actionMenu\(`<button[^\n]+data-edit-agent=/);
 });
 
 test('group names default to the complete selected employee names and preserve directory avatars', () => {

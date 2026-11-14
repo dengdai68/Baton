@@ -167,7 +167,7 @@ async function pluginInfo(plugin,provider,{tolerant=false}={}) {
   }
   const reasons=[];
   if(provider!=='claude-code' && provider!=='codex') {
-    for(const key of ['lspServers','settings','outputStyles']) if(manifest[key]) reasons.push(`DeepSeek Harness 适配器不支持 ${key}`);
+    for(const key of ['lspServers','settings','outputStyles']) if(manifest[key]) reasons.push(`${runtimeLabel(provider)} 适配器不支持 ${key}`);
   }
   if(provider==='codex') for(const key of ['lspServers','settings','outputStyles']) if(manifest[key]) reasons.push(`Codex 适配器不支持 ${key}`);
   for(const item of hooks) {

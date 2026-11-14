@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 / 首次设置 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  body { background: var(--bg-window); }
+  .auth { position: relative; display: flex; flex-direction: column; height: 100vh; }
+  .auth__bar { height: var(--header-h); flex: none; display: flex; align-items: center; padding: 0 var(--sp-6); -webkit-app-region: drag; }
+  .auth__bar > * { -webkit-app-region: no-drag; }
+  .auth__demo { margin-left: auto; }
+  .auth__body { flex: 1; display: grid; place-items: center; padding: var(--sp-8) var(--sp-6) var(--sp-11); overflow: auto; }
+  .auth__col { width: min(360px, 100%); }
+  .auth__icon { width: 52px; height: 52px; border-radius: 12px; display: block; margin-bottom: var(--sp-7); }
+  .auth__col h1 { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); }
+  .auth__col .sub { margin: var(--sp-2) 0 var(--sp-8); color: var(--text-secondary); }
+  .auth__col .field { margin-bottom: var(--sp-6); }
+  .pw { position: relative; }
+  .pw .input { padding-right: 56px; }
+  .pw .btn { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); }
+  .auth__foot { margin-top: var(--sp-8); display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-small); color: var(--text-tertiary); }
+</style>
+</head>
+<body>
+<div class="auth" data-view-scope>
+  <div class="auth__bar">
+    <span class="traffic" aria-hidden="true"><i></i><i></i><i></i></span>
+    <div class="seg auth__demo" role="group" aria-label="演示状态（非产品界面）">
+      <button class="seg__item is-active" type="button" data-view="login">登录</button>
+      <button class="seg__item" type="button" data-view="setup">首次设置</button>
+      <button class="seg__item" type="button" data-view="error">登录失败</button>
+      <button class="seg__item" type="button" data-view="guide">未设置管理员</button>
+    </div>
+  </div>
+  <div class="auth__body">
+    <!-- 登录 -->
+    <form class="auth__col" data-view-panel="login" onsubmit="return false">
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <h1>登录 AgentForge</h1>
+      <p class="sub">本机工作区 · 单管理员</p>
+      <div class="field"><label class="field__label" for="u1">用户名</label><input class="input input--lg" id="u1" autocomplete="username" value="design-audit"></div>
+      <div class="field"><label class="field__label" for="p1">密码</label><div class="pw"><input class="input input--lg" id="p1" type="password" autocomplete="current-password" value="••••••••••••"><button class="btn btn--ghost btn--sm" type="button" aria-pressed="false">显示</button></div></div>
+      <button class="btn btn--primary btn--lg btn--block" type="submit">登录</button>
+      <div class="auth__foot"><i data-icon="lock" class="icon--sm"></i>会话仅在本机有效，数据不离开这台电脑。</div>
+    </form>
+
+    <!-- 首次设置 -->
+    <form class="auth__col" data-view-panel="setup" hidden onsubmit="return false">
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <h1>设置本机工作区</h1>
+      <p class="sub">创建这台电脑上的管理员。该入口只由桌面客户端打开，不会创建公开注册。</p>
+      <div class="field"><label class="field__label" for="u2">管理员用户名</label><input class="input input--lg" id="u2" autocomplete="username" placeholder="例如：zhou"><span class="field__hint">1–64 位字母、数字、点、下划线或连字符</span></div>
+      <div class="field"><label class="field__label" for="p2">密码</label><div class="pw"><input class="input input--lg" id="p2" type="password" autocomplete="new-password"><button class="btn btn--ghost btn--sm" type="button" aria-pressed="false">显示</button></div><span class="field__hint">10–128 个字符</span></div>
+      <div class="field"><label class="field__label" for="p3">确认密码</label><input class="input input--lg" id="p3" type="password" autocomplete="new-password"></div>
+      <button class="btn btn--primary btn--lg btn--block" type="submit">创建管理员并进入工作区</button>
+      <div class="auth__foot"><i data-icon="shield" class="icon--sm"></i>本机单管理员 · 安全会话</div>
+    </form>
+
+    <!-- 登录失败：错误就地显示，保留已输入的用户名 -->
+    <form class="auth__col" data-view-panel="error" hidden onsubmit="return false">
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <h1>登录 AgentForge</h1>
+      <p class="sub">本机工作区 · 单管理员</p>
+      <div class="field"><label class="field__label" for="u4">用户名</label><input class="input input--lg" id="u4" value="design-audit"></div>
+      <div class="field"><label class="field__label" for="p4">密码</label><div class="pw"><input class="input input--lg is-invalid" id="p4" type="password" value="••••••" aria-invalid="true" aria-describedby="p4-err"><button class="btn btn--ghost btn--sm" type="button">显示</button></div><span class="field__error" id="p4-err" role="alert"><i data-icon="alert" class="icon--sm"></i>用户名或密码不正确，请重试。</span></div>
+      <button class="btn btn--primary btn--lg btn--block" type="submit">登录</button>
+    </form>
+
+    <!-- 尚未设置管理员 -->
+    <div class="auth__col" data-view-panel="guide" hidden>
+      <img class="auth__icon" src="../../../web/icons/application-ui.png" alt="AgentForge">
+      <h1>还没有管理员</h1>
+      <p class="sub">此服务尚未完成首次设置。</p>
+      <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__text">在菜单栏选择「导航 → 首页 / 重新连接」（<kbd class="kbd">⌘</kbd><kbd class="kbd">0</kbd>），在应用内创建管理员。无需终端命令；仍无法打开时，请退出并重新启动客户端。</div></div></div>
+      <button class="btn btn--block btn--lg" type="button" style="margin-top:20px"><i data-icon="refresh" class="icon--sm"></i>设置完成后重新检查</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,5 +1,7 @@
 # Electron
 
+纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，表单仍仅显式关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。
@@ -14,7 +16,7 @@
 
 团队/工作流使用共享目录工具栏，不再在创建操作区下添加列表顶边框；保留条目间分隔，不修改域命令或宿主接口。
 
-角色入口沿用 compact.css 的 SVG 蒙版图标机制，人物名牌轮廓通过 currentColor 着色，避免缺少 --desktop-nav-icon 时背景成为实心方块。侧栏隐藏/恢复仍由共享 preferences.mjs 管理；宽窄窗口和暖白/极简主题在隔离角色 UI 验收中覆盖，不新增宿主接口。
+角色入口沿用 compact.css 的 SVG 蒙版图标机制，人物名牌轮廓通过 currentColor 着色，避免缺少 --desktop-nav-icon 时背景成为实心方块。侧栏隐藏/恢复仍由共享 preferences.mjs 管理；宽窄窗口和浅色/深色主题在隔离角色 UI 验收中覆盖，不新增宿主接口。
 
 沟通附件、未读与右侧半屏控制台复用认证 HTTP 和共享 renderer，compact.css 仅调整紧凑间距；不新增通用宿主桥。测试使用隔离 HOME、实例与下载目录；真实模型专项只在源码隔离客户端调用已授权 Claude Code，安装包使用受控 CLI。
 
@@ -28,10 +30,12 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.age
 | `policy.mjs`、`preload.cjs` | 精确来源校验与封闭宿主方法 |
 | `runtime-paths.mjs` | 独立实例路径和后台环境 |
 | `login-shell-env.mjs` | 一次性登录 shell 环境捕获 |
-| `preferences.mjs` | 关闭行为偏好 |
+| `preferences.mjs` | 关闭行为与外观偏好 |
 | `app-dialog.*`、`cli-confirmation.*` | 宿主确认窗口 |
 | `cli-installation.mjs` | 用户级命令安装 |
-| `compact.css` | 桌面样式与响应式配置弹窗 |
+| `compact.css` | 纸张设计 Token 与桌面组件层（服务端注入每个 HTML；唯一颜色来源） |
+
+外观：设置 → 外观 选择浅色/深色/跟随系统（默认浅色），偏好经 `setAppearance` 宿主桥同步：`nativeTheme.themeSource` 切换原生窗口背景并写入 `desktop-preferences.json`；原生确认窗（app-dialog / cli-confirmation）加载 `compact.css` 独自跟随同一外观。旧 warm/minimal 取值被拒绝并回落浅色。
 
 运行与边界见 [Electron 文档](../../docs/18-electron-client.md)。共享业务 UI 在 `web/`，此目录不拥有 Store 或 Provider 状态。
 
@@ -45,13 +49,13 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.age
 
 提示词随普通时间线分页；运行中成员、协作类型和沟通发送者复用共享语义色，桌面保留紧凑中性正文。打包 E2E 检查活动/终态颜色、超过 50 条的分页及沟通颜色。
 
-品牌样式使用 docs/06 的蓝/青/紫共享 tokens；员工可用与 Runtime 支持标签统一品牌蓝，全部目录空态明确共用背景、虚线边框、圆角与间距。侧栏、Dock/ICNS 使用用户原图派生的干净彩色资源，菜单栏使用独立无底板单色模板，随系统明暗变色。仅视觉变化，无 HTTP/CLI 或任务状态变更。
+品牌样式使用 docs/06 的蓝/青/紫共享 tokens；员工可用不显示徽章，Runtime 支持标签使用品牌蓝，全部目录空态明确共用背景、虚线边框、圆角与间距。侧栏、Dock/ICNS 使用用户原图派生的干净彩色资源，菜单栏使用独立无底板单色模板，随系统明暗变色。仅视觉变化，无 HTTP/CLI 或任务状态变更。
 
 持久 Mac 安装版启动默认调用用户级 CLI 安装器，保留非受管命令/链接冲突；手动修复仍沿现有确认窗口。宿主用 Electron Cookie API 的当前会话经正式认证接口换取独立 CLI 委托，序列化发布私有实例凭证，退出登录后失效；不向 renderer 暴露凭证，详见 docs/14、18。
 
 设置页复用 renderer 的默认折叠 Runtime 编辑，宿主样式统一 h3=15px、h4=13px，仓库访问与 Runtime 使用相同层级；设置布局不改变配置协议。实际六行模型下拉与鼠标跨边界由 test-runtime-settings 的安装包模式验证。
 
-设置中的 Runtime 与仓库访问使用紧凑二级分组与分隔行；主/子标题保持递减。任务中心和归档列表直接显示可用操作，不再折叠进“更多”；保留原确认、禁用条件及 HTTP/CLI 协议。桌面密度只由 compact.css 覆盖。
+设置中的 Runtime 与仓库访问使用紧凑二级分组与分隔行；主/子标题保持递减。任务中心和归档列表显示一个下一步，编辑/归档/删除放入更多菜单；保留原确认、禁用条件及 HTTP/CLI 协议。桌面密度只由 compact.css 覆盖。
 
 新建任务为内容优先的 task-create-modal：正文随窗口在六至十二行之间调整，最高十二行，超出文字在输入框内滚动；验收标准默认折叠可空，团队/流程底部同排，目录仅小字。不再展示执行说明或经理/节点详情；底部操作固定、短窗口正文滚动，现有创建/启动与 CLI 字段不变。
 

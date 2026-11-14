@@ -186,12 +186,13 @@ async function validateInheritedExtensions(employee,roles=null) {
 }
 
 function extensionPage(kind, searchParams) {
-  if ([...searchParams.keys()].some(key=>!['page','search'].includes(key)) || ['page','search'].some(key=>searchParams.getAll(key).length>1)) throw new Error('目录查询只接受 page 与 search');
+  if ([...searchParams.keys()].some(key=>!['page','search','usage'].includes(key)) || ['page','search','usage'].some(key=>searchParams.getAll(key).length>1)) throw new Error('目录查询只接受 page、search 与 usage');
   const rawPage = searchParams.get('page') ?? '1';
   if (!/^[1-9][0-9]*$/.test(rawPage)) throw new Error('page 必须为正整数');
-  const input = {page:Number(rawPage),search:searchParams.get('search') || ''};
-  if (!Number.isSafeInteger(input.page) || input.search.length > 200) throw new Error('目录查询参数无效');
+  const input = {page:Number(rawPage),search:searchParams.get('search') || '',usage:searchParams.get('usage') || 'all'};
+  if (!['all','unused'].includes(input.usage) || !Number.isSafeInteger(input.page) || input.search.length > 200) throw new Error('目录查询参数无效');
   const businessAvailable = store && !businessFailure;
+  if (!businessAvailable && input.usage==='unused') throw new Error('业务资料不可用，无法确认扩展使用情况');
   if (!businessAvailable) configurationPreview ||= createConfigurationStore({directory:storage.controlRoot,databasePath,readOnly:true});
   const {items,...pagination} = businessAvailable ? store.queryExtensions(kind,input) : configurationPreview.query(kind,input);
   return {...pagination,[kind==='plugin'?'plugins':'entries']:items};
@@ -867,10 +868,9 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
   const messageMatch = pathname.match(/^\/api\/runs\/([^/]+)\/messages$/);
   if (request.method === "POST" && messageMatch) {
     const runId = messageMatch[1]; const input = await readJson(request);
-    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key=>!['content','recipientAgentId','replyToMessageId','attachmentIds'].includes(key))) throw new Error('协作消息字段无效');
-    store.initializeDispatches(runId);
-    const result = store.submitHumanMessage(runId, { content: input.content, recipientAgentId: input.recipientAgentId, replyToMessageId: input.replyToMessageId, attachmentIds: input.attachmentIds });
-    executeRun(store, runId, runExecutionOptions).catch((error) => console.error(`Run ${runId} dispatch failed: ${error.message}`));
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key=>!['content','recipientAgentId','replyToMessageId','attachmentIds','clientRequestId'].includes(key))) throw new Error('协作消息字段无效');
+    const result = store.submitHumanMessage(runId, input, { initialize: true });
+    if (!result.replayed) executeRun(store, runId, runExecutionOptions).catch((error) => console.error(`Run ${runId} dispatch failed: ${error.message}`));
     sendJson(response, 201, { ...result, replanRequested: false });
     return true;
   }
@@ -948,7 +948,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
 async function serveStatic(response, pathname) {
   async function presented(content, extension) {
     if (extension !== ".html") return content;
-    const css = await readFile(join(root, "apps/electron/compact.css"), "utf8");
+    const css = (await Promise.all(["web/tokens.css", "apps/electron/compact.css"].map(path => readFile(join(root, path), "utf8")))).join("\n");
     return content.toString("utf8").replace("</head>", `<style id="agentforge-desktop-style">${css}</style></head>`);
   }
   const bundles = { "/vendor/marked.js": markedBundle, "/vendor/dompurify.js": domPurifyBundle, "/vendor/highlight.css": highlightStylesheet, "/vendor/x6.js": x6Bundle, "/vendor/elk.js": elkBundle };
@@ -1010,7 +1010,7 @@ const server = createServer(async (request, response) => {
     await serveStatic(response, url.pathname);
   } catch (error) {
     diagnostic("http.request_failed", { method: request.method, pathname: (request.url || "").split("?")[0], error });
-    sendJson(response, error.committed ? 503 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: error.message || "请求处理失败" });
+    sendJson(response, error.committed ? 503 : error.code === "CLIENT_REQUEST_CONFLICT" ? 409 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: error.message || "请求处理失败" });
   } finally { if (write) --writeRequests; }
 });
 

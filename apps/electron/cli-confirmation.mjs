@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 
 // This window belongs to main, not to the authenticated Console renderer. The
 // only result is one fixed choice from its exact trusted local main frame.
-export function confirmCliInstallation({ BrowserWindow, parent, status, signal }) {
+export function confirmCliInstallation({ BrowserWindow, parent, status, signal, backgroundColor = "#ffffff" }) {
   if (signal?.aborted || parent.isDestroyed()) return Promise.resolve(false);
   const page = new URL("./cli-confirmation.html", import.meta.url);
   page.searchParams.set("commandPath", status.commandPath);
@@ -17,7 +17,7 @@ export function confirmCliInstallation({ BrowserWindow, parent, status, signal }
     parent, modal: true, show: false, width: 560, height: 470,
     minWidth: 420, minHeight: 360, resizable: true, minimizable: false,
     maximizable: false, fullscreenable: false, title: "安装 AgentForge CLI",
-    backgroundColor: "#ffffff", autoHideMenuBar: true,
+    backgroundColor, autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
       webSecurity: true, webviewTag: false, partition: "agentforge-cli-confirmation" },
   });

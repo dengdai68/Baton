@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { isConsoleURL, isExternalURL, isPreferencesSender, isCliSender, health, initialRoute } from "../apps/electron/policy.mjs";
 import { desktopBrowserPaths, desktopControlPlaneEnvironment, desktopStoragePaths, legacyDesktopDataRoot, resolveDesktopDataRoot } from "../apps/electron/runtime-paths.mjs";
-import { normalizeCloseMode, readCloseMode, saveCloseMode } from "../apps/electron/preferences.mjs";
+import { normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode, saveAppearance, saveCloseMode } from "../apps/electron/preferences.mjs";
 import { confirmCliInstallation } from "../apps/electron/cli-confirmation.mjs";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
@@ -84,10 +84,38 @@ test("Mac close preference is explicit, persistent and fails without changing sa
   await assert.rejects(saveCloseMode(join(root, "blocked", "preferences.json"), "tray"));
 });
 
-test("desktop new-conversation button owns zero padding and centered icon layout", async () => {
-  const css = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
-  assert.match(css, /\.communication-sidebar-heading button \{ display:flex; align-items:center; justify-content:center; padding:0; width:28px; height:28px;/);
-  assert.match(css, /#run-workspace \.collaboration-row \{ padding-block:12px; \}/);
+test("host appearance mirrors only light/dark/system and never drops the close preference", async t => {
+  const root = await mkdtemp(join((await import("node:os")).tmpdir(), "af-appearance-preference-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = join(root, "desktop-preferences.json");
+  assert.equal(await readAppearance(path), null, "no saved choice means the host default");
+  for (const invalid of ["warm", "minimal", "", null, {}, ["dark"], new String("dark")]) {
+    assert.equal(normalizeAppearance(invalid), null, String(invalid));
+    await assert.rejects(saveAppearance(path, invalid), /外观无效/);
+  }
+  await saveCloseMode(path, "tray");
+  // Concurrent saves of different keys are serialized, so both survive.
+  await Promise.all([saveAppearance(path, "dark"), saveCloseMode(path, "quit")]);
+  console.log("saved desktop preferences:", await readFile(path, "utf8"));
+  assert.equal(await readAppearance(path), "dark");
+  assert.equal(await readCloseMode(path), "quit");
+  await saveAppearance(path, "system");
+  assert.equal(await readAppearance(path), "system");
+  assert.equal(await readCloseMode(path), "quit", "appearance writes keep the close choice");
+  await writeFile(path, JSON.stringify({ closeMode: "tray", appearance: "warm" }));
+  assert.equal(await readAppearance(path), null, "retired theme ids are rejected, not migrated");
+  assert.equal(await readCloseMode(path), "tray");
+  const main = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
+  assert.match(main, /ipcMain\.handle\("desktop:appearance:set", \(event, value\) => \{\n    if \(event\.sender !== contents \|\| event\.senderFrame !== contents\.mainFrame \|\| !isConsoleURL/);
+  assert.match(main, /nativeTheme\.themeSource = appearance;/);
+  assert.match(main, /backgroundColor: appearanceBackground\(\),/);
+});
+
+test("desktop new-conversation action uses the Graphite secondary titlebar button", async () => {
+  const source = await readFile(new URL("../web/communication.js", import.meta.url), "utf8");
+  const css = await readPresentation();
+  assert.match(source, /class="secondary-button" data-new-chat>[\s\S]*?发起沟通/);
+  assert.match(css, /\.communication-page-header \{[^}]*height:var\(--header-h\)/);
 });
 
 test("tray restore suppresses only navigation focus until the next interaction", async () => {
@@ -102,7 +130,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
     return document;
   };
   const document = fixture();
-  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setCloseMode"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode"]);
   const attributes = new Map(), navigation = { matches: selector => selector === ".nav-item", setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), blur: () => assert.fail("must not move focus") };
   const restore = handlers.get("desktop:tray-restore"), marked = () => attributes.has("data-desktop-restored-focus");
   document.activeElement = navigation;
@@ -118,8 +146,8 @@ test("tray restore suppresses only navigation focus until the next interaction",
   document.activeElement = null; restore();
   fixture(false); assert.equal(handlers.size, 0); assert.equal(dom.size, 0);
   fixture(true, "https://example.com"); assert.equal(handlers.size, 0); assert.equal(dom.size, 0);
-  const css = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
-  assert.match(css, /:focus-visible \{ outline:2px solid var\(--desktop-focus\)/);
+  const css = await readPresentation();
+  assert.match(css, /:focus-visible \{ outline:2px solid var\(--focus\)/);
   assert.match(css, /\.nav-item\[data-desktop-restored-focus\]:focus-visible \{ outline:none; \}/);
   const main = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(main, /label: "打开 AgentForge", click: showWindowFromTray/);
@@ -194,18 +222,18 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(source, /nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true/);
   assert.doesNotMatch(source, /createStore/);
-  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 8);
+  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 9);
   assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 2);
   assert.equal((source.match(/isCliSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   const preload = await readFile(new URL("../apps/electron/preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /process.isMainFrame && \/\^http:/);
   assert.match(preload, /getPreferences: \(\) => ipcRenderer.invoke\("desktop:preferences:get"\)/);
   assert.match(preload, /setCloseMode: \(mode\) => ipcRenderer.invoke\("desktop:preferences:set", mode\)/);
-  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 10);
+  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 11);
   assert.match(preload, /getCliInstallation: \(\) => ipcRenderer.invoke\("desktop:cli:status"\)/);
   assert.match(preload, /installCli: \(\) => ipcRenderer.invoke\("desktop:cli:install"\)/);
   assert.match(source, /args.length \|\| !isCliSender/);
-  assert.match(source, /await confirmCliInstallation\(\{ BrowserWindow, parent: window, status, signal: shellEnvironmentAbort.signal \}\)/);
+  assert.match(source, /await confirmCliInstallation\(\{ BrowserWindow, parent: window, status, signal: shellEnvironmentAbort.signal, backgroundColor: appearanceBackground\(\) \}\)/);
   assert.doesNotMatch(preload, /node:|send:|invoke:|require\("(?:fs|child_process)"/);
   assert.doesNotMatch(source, /\bdialog\.(?:showMessageBox|showErrorBox|showOpenDialog|showSaveDialog)/, "no system dialogs remain in the desktop host");
   assert.match(source, /buttons: \["退出程序", "保留在菜单栏", "取消"\], defaultIndex: 2, cancelIndex: 2/);
@@ -227,7 +255,7 @@ test('CLI host bridge requires isolated host consent, rejects arguments/navigati
   const handlers = new Map(); let writes = 0, allowed = true, accepted = false, answer;
   const status = { canInstall: true, installed: false, commandPath: '/fixture/bin/agentforge', profilePaths: ['/fixture/.zshrc'] };
   const context = { ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, isCliSender: () => allowed,
-    contents: {}, controlOrigin: "http://127.0.0.1:51983", quitting: false, installingCli: false, window: {}, BrowserWindow() {}, shellEnvironmentAbort: new AbortController(), diagnostic() {}, cliUnavailable() {},
+    contents: {}, controlOrigin: "http://127.0.0.1:51983", quitting: false, installingCli: false, window: {}, BrowserWindow() {}, shellEnvironmentAbort: new AbortController(), diagnostic() {}, cliUnavailable() {}, appearanceBackground: () => "#ffffff",
     cliInstallation: () => ({ status: async () => status, install: async paths => { assert.equal(JSON.stringify(paths), JSON.stringify(status.profilePaths)); writes++; return { ...status, installed: true }; } }),
     confirmCliInstallation: async () => answer ? new Promise(resolve => { answer.resolve = resolve; }) : accepted };
   vm.runInNewContext(code, context);
@@ -399,32 +427,43 @@ test('Web confirmation flows use the in-app dialog, never native dialogs', async
   assert.match(settings, /await confirmDialog\(\{ title: "移除拉取 Token"/);
   const shared = await readFile(new URL('../web/styles.css', import.meta.url), 'utf8');
   assert.match(shared, /\.modal\.confirm-dialog \{[^}]*overflow:hidden/);
-  const desktop = await readFile(new URL('../apps/electron/compact.css', import.meta.url), 'utf8');
+  const desktop = await readPresentation();
   assert.match(desktop, /\.modal\.confirm-dialog/);
 });
 
 test("Electron workbench stays host-only and preserves the narrow fallback", async () => {
-  const css = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
+  const css = await readPresentation();
   assert.match(css, /--desktop-density:compact/);
   assert.match(css, /--desktop-presentation:workbench/);
-  assert.match(css, /\.table th \{[^}]*background:var\(--bg\)/);
+  assert.match(css, /\.table th \{[^}]*background:var\(--bg-canvas\)/);
   assert.match(css, /#run-workspace \.workspace-grid \{ grid-template-columns:220px/);
-  assert.match(css, /@media \(max-width:1000px\) \{[\s\S]*\.sidebar \{ width:64px/);
-  assert.doesNotMatch(css, /web\/styles\.css/);
+  assert.match(css, /@media \(max-width:1000px\) \{[\s\S]*\.sidebar \{ width:60px/);
+  assert.match(css, /Shared by every renderer/);
 });
+test("directory cards and chat identities share Graphite tokens and bounded responsive layouts", async () => {
+  const css = await readPresentation();
+  assert.match(css, /#workflows-grid \{ display:grid; grid-template-columns:repeat\(auto-fill,minmax\(min\(360px,100%\),1fr\)\)/);
+  assert.match(css, /\.workflow-directory-card:hover \{ border-color:var\(--border-strong\)/);
+  assert.match(css, /\.flow-mini-node\[data-type="condition"\] \{[^}]*background:var\(--st-planning-bg\)/);
+  assert.match(css, /\.team-directory-row:hover \{ background:var\(--bg-hover\)/);
+  assert.match(css, /\.team-row-status\[data-status="active"\]::before \{ background:var\(--st-done\)/);
+  assert.match(css, /\.communication-message-avatar \{[^}]*width:28px; height:28px/);
+  assert.match(css, /\.communication-day-divider::before,\.communication-day-divider::after \{[^}]*background:var\(--border-subtle\)/);
+});
+
 test("Electron reduces chrome spacing without shrinking reading text or scaling pages", async () => {
-  const css = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
-  assert.match(css, /--desktop-sidebar-width:216px/);
+  const css = await readPresentation();
+  assert.match(css, /--desktop-sidebar-width:232px/);
   assert.match(css, /\.main-content \{[^}]*width:calc\(100% - var\(--desktop-sidebar-width\)\);[^}]*padding:0/);
-  assert.match(css, /\.topbar \{ height:44px/);
-  assert.match(css, /\.main-content:has\(#workspace-view\.active\) > \.topbar \{ height:44px; min-height:44px/);
+  assert.match(css, /\.topbar \{[^}]*height:var\(--header-h\); min-height:var\(--header-h\)/);
+  assert.match(css, /#run-workspace \.workspace-summary \{[^}]*height:var\(--header-h\); min-height:var\(--header-h\)/);
   assert.match(css, /\.table td \{ padding:8px 10px;[^}]*font-size:13px/);
   assert.match(css, /\.table \{ min-width:820px/);
   assert.match(css, /\.table \.col-actions \{ width:14%/);
   assert.match(css, /\.table-actions \{ flex-wrap:wrap; gap:4px/);
-  assert.match(css, /\.team-card,\.agent-card \{ min-height:0; padding:10px 12px/);
-  assert.match(css, /body \{[^}]*font:13px\/1.5/);
-  assert.match(css, /\.communication-body \{[^}]*font-size:13px/);
+  assert.match(css, /\.team-directory-row \{[^}]*padding:8px 16px 8px var\(--pad-page\)/);
+  assert.match(css, /body \{[^}]*font:var\(--fs-body\)\/var\(--lh-body\)/);
+  assert.match(css, /\.communication-body \{[^}]*font-size:14px; line-height:22px/, "reading text grows to the 14/22 reading size");
   assert.doesNotMatch(css, /(?:zoom|font-size-adjust)\s*:|transform\s*:\s*scale|\.markdown-preview[^}]*font-size/);
   assert.match(css, /@media \(max-width:760px\) \{\s*\.communication-layout \{ grid-template-columns:minmax\(0,1fr\); height:auto; min-height:0/);
   assert.match(css, /@media \(max-width:760px\), \(max-height:620px\) \{\s*\.collaboration-row \{ grid-template-columns:minmax\(0,1fr\); gap:4px/);
@@ -459,25 +498,59 @@ test('application branding preserves the master and separates UI, inset Dock and
   }
 });
 
-test('team and workflow actions share directory toolbar spacing without a desktop list divider', async () => {
+test('team and workflow actions live in the titlebar above separate filter rows', async () => {
   const html = await readFile(new URL('../web/index.html', import.meta.url), 'utf8');
-  const css = await readFile(new URL('../apps/electron/compact.css', import.meta.url), 'utf8');
+  const css = await readPresentation();
   for (const [view, action] of [['teams', 'new-team'], ['workflows', 'new-workflow']]) {
     const section = html.match(new RegExp(`<section class="view" id="${view}-view">([\\s\\S]*?)<\\/section>`))[1];
     assert.match(section, /class="page-heading">[\s\S]*?<h2>/, 'semantic heading remains available');
-    assert.match(section, new RegExp(`<div class="directory-toolbar"><input id="${view}-search"[^>]*type="search"[^>]*><button[^>]*data-action="${action}"`));
-    assert.equal((section.match(new RegExp(`data-action="${action}"`, 'g')) || []).length, 1);
+    assert.match(section, new RegExp(`<div class="directory-toolbar"><input id="${view}-search"[^>]*type="search"`));
+    assert.doesNotMatch(section, new RegExp(`data-action="${action}"`));
+    const header = html.match(new RegExp(`<div id="${view}-header-actions"[^>]*data-header-view="${view}"[^>]*>([\\s\\S]*?)<\\/div>`))[1];
+    assert.equal((header.match(new RegExp(`data-action="${action}"`, 'g')) || []).length, 1);
   }
   assert.match(css, /\.team-cards \{[^}]*border-top:0/);
   assert.doesNotMatch(css.match(/#workflows-grid \{[^}]+\}/)[0], /border-top:1px/);
 });
+test("Graphite tokens drive light, dark and system appearance from one sheet", async () => {
+  const css = await readPresentation();
+  const tokens = await readFile(new URL("../web/tokens.css",import.meta.url),"utf8");
+  // One declaration per semantic token serves both appearances.
+  for (const name of ["bg-canvas", "bg-sidebar", "bg-hover", "bg-active", "border", "text", "text-secondary", "accent", "st-running", "st-attention", "st-done", "st-failed", "live"]) {
+    assert.match(tokens, new RegExp(`--${name}:light-dark\\(`), name);
+  }
+  assert.match(tokens, /html:root, html:root\[data-theme\] \{\n  color-scheme:light dark;/, "unset or system follows the host appearance");
+  assert.match(tokens, /html:root\[data-theme="light"\] \{ color-scheme:light; \}/);
+  assert.match(tokens, /html:root\[data-theme="dark"\] \{ color-scheme:dark; \}/);
+  assert.doesNotMatch(css, /data-theme="(?:warm|minimal)"/, "retired themes have no rules");
+  // Retired palette aliases must not return as another source of truth.
+  for(const name of ['paper','ink','muted','line','selection-bg','lime']) assert.doesNotMatch(tokens,new RegExp(`--${name}:`));
+  const components = css.slice(css.indexOf("/* The html anchor beats"));
+  const literals = (components.match(/#[0-9a-f]{3,8}\b/gi) || []).filter(color => !/^#(?:fff|ffffff)$/i.test(color));
+  console.log("component-layer hex literals outside tokens:", literals.length);
+  assert.ok(literals.length <= 2, `component rules use tokens, found ${literals.join(", ")}`);
+  for (const [name,value] of Object.entries({"header-h":48,"toolbar-h":44,"control-h":28,"control-h-sm":24,"row-h":38,"nav-h":28,"pad-page":24,"r-xs":4,"r-sm":6,"r-md":8,"r-lg":12})) assert.match(tokens,new RegExp(`--${name}:${value}px`),name);
+  // Selection is a filled row everywhere; avatars are rounded squares.
+  assert.match(css, /#run-workspace \.ws-tab\.active,#automations-root \.ws-tab\.active \{ background:var\(--bg-active\);/);
+  assert.match(css, /\.settings-nav button\.active,\.settings-nav button\.active:hover \{ color:var\(--text\); background:var\(--bg-active\)/);
+  assert.match(css, /\.collaboration-filters \.small-button\[aria-pressed="true"\]/);
+  assert.match(css, /:is\(\.agent-card-avatar,[^)]*\.role-avatar[^)]*\) \{ border-radius:30%;/);
+  // Records span the pane: fluid side padding, light dividers, no fixed reading cap.
+  assert.match(css, /--pad-record:clamp\(16px,3vw,40px\)/);
+  assert.match(css, /\.communication-messages \{ padding:8px var\(--pad-record\) 16px; \}/);
+  assert.match(css, /\.communication-message \{ max-width:none; margin:0; padding:14px 0; border-bottom:1px solid var\(--border-subtle\); \}/);
+  assert.match(css, /#run-workspace \.collaboration-panel \{ padding:0 var\(--pad-record\) 14px; \}/);
+  // The green dot means "executing now"; an available employee carries no badge.
+  assert.match(css, /\.member-running-dot \{ width:7px; height:7px; background:var\(--live\); \}/);
+  assert.match(css, /\.agent-status\[data-status="active"\] \{ display:none; \}/);
+});
 test("Electron applies one component language to forms, reference and short windows", async () => {
-  const css = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
+  const css = await readPresentation();
   assert.match(css, /\.modal-scroll \{ display:block; padding:2px; \}/);
   assert.match(css, /\.modal \.form-actions \{ margin:0; padding:10px 0 0/);
   assert.match(css, /\.modal\.workflow-detail-modal,\.modal\.workflow-editor-modal,\.modal\.team-config-modal \{ max-height:/, "long configuration dialogs are bounded by the viewport");
-  assert.match(css, /\.check-option\.checked \{ border-color:var\(--ink\); background:var\(--selection-bg\)/);
-  assert.match(css, /\.manual-tab\.active \{ background:transparent; color:var\(--ink\)/);
+  assert.match(css, /\.check-option:has\(input:checked\) \{ border-color:var\(--border-strong\); background:var\(--bg-active\)/);
+  assert.match(css, /\.manual-tab\.active,\.manual-tab\.active:hover \{ background:var\(--bg-active\); color:var\(--text\)/);
   assert.match(css, /\.login-card \.submit \{[^}]*background:var\(--desktop-action\)/);
   assert.match(css, /\.user-card \{ flex-direction:column; align-items:center/);
   assert.match(css, /#run-workspace \.artifact-layout \{ flex:none; height:440px; min-height:440px/);
@@ -708,3 +781,5 @@ test("all Chromium persistent and diagnostic paths stay in the instance data roo
   const source=await readFile(new URL('../apps/electron/main.mjs',import.meta.url),'utf8');
   assert.ok(source.indexOf('app.setPath(name,path)')<source.indexOf('app.whenReady'));
 });
+
+async function readPresentation() { const [tokens,shared,density]=await Promise.all(["../web/tokens.css","../web/styles.css","../apps/electron/compact.css"].map(path=>readFile(new URL(path,import.meta.url),"utf8")));return tokens+shared.slice(shared.indexOf("/* The html anchor"))+density; }

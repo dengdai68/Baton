@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自动化详情 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .facts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; margin: var(--sp-7) var(--pad-page) 0; border: 1px solid var(--border); border-radius: var(--r-md); }
+  .fact { padding: var(--sp-5) var(--sp-6); min-width: 0; }
+  .fact + .fact { border-left: 1px solid var(--border-subtle); }
+  .fact dt { font-size: var(--fs-small); color: var(--text-tertiary); }
+  .fact dd { margin: var(--sp-2) 0 0; display: flex; align-items: center; gap: var(--sp-3); font-weight: var(--fw-medium); min-width: 0; }
+  .fact dd small { font-family: var(--font-mono); font-weight: var(--fw-regular); color: var(--text-tertiary); font-size: var(--fs-caption); }
+  .config { max-width: 760px; padding: var(--sp-7) var(--pad-page); }
+  .config .kv { grid-template-columns: 96px minmax(0, 1fr); row-gap: var(--sp-6); }
+  .objective { padding: var(--sp-5) var(--sp-6); border-radius: var(--r-md); background: var(--bg-subtle); font-size: var(--fs-read); line-height: var(--lh-read); }
+  @media (max-width: 1000px) { .facts { grid-template-columns: repeat(2, minmax(0, 1fr)); } .fact:nth-child(3) { border-left: 0; } .fact:nth-child(n+3) { border-top: 1px solid var(--border-subtle); } }
+</style>
+</head>
+<body data-page="automations">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main" data-tab-scope>
+    <header class="titlebar">
+      <a class="btn btn--ghost btn--icon btn--sm" href="automations.html" aria-label="返回自动化列表"><i data-icon="chevron-left"></i></a>
+      <nav class="crumbs"><a href="automations.html">自动化</a><span class="sep">/</span><strong>每日竞品动态简报</strong></nav>
+      <label class="hstack" style="gap:6px;font-size:12px;color:var(--text-secondary)"><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用"></span>已启用</label>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions">
+        <button class="btn btn--sm" type="button"><i data-icon="edit" class="icon--sm"></i>编辑</button>
+        <button class="btn btn--primary btn--sm" type="button"><i data-icon="zap" class="icon--sm"></i>立即执行</button>
+        <button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-auto-detail" aria-label="更多操作"><i data-icon="more"></i></button>
+      </div>
+    </header>
+    <div class="scroll">
+      <dl class="facts">
+        <div class="fact"><dt>执行规则</dt><dd>工作日 09:00 <small>0 9 * * 1-5</small></dd></div>
+        <div class="fact"><dt>下次执行</dt><dd class="tnum">明天 09:00<small>Asia/Shanghai</small></dd></div>
+        <div class="fact"><dt>完成方式</dt><dd>按下一轮规则自动确认</dd></div>
+        <div class="fact"><dt>成员</dt><dd><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span></span>项目经理、Noah</dd></div>
+      </dl>
+      <div class="subtabs" style="margin-top:20px;border-top:0" data-tab-group="auto" role="tablist">
+        <button class="tab is-active" type="button" role="tab" data-tab="runs">触发记录 <span class="count">18</span></button>
+        <button class="tab" type="button" role="tab" data-tab="config">配置</button>
+      </div>
+      <div data-tab-panel="runs" data-group="auto">
+        <table class="table">
+          <thead><tr><th>运行</th><th>触发方式</th><th>状态</th><th>完成方式</th><th>耗时</th><th style="text-align:right">操作</th></tr></thead>
+          <tbody>
+            <tr><td><strong style="font-weight:500">#18</strong> <span class="muted tnum">11月11日 09:00</span></td><td><span class="tag">定时</span></td><td><span class="status st-attention"><i data-icon="st-review"></i>待验收</span></td><td class="muted">—</td><td class="tnum muted">3 分 12 秒</td><td style="text-align:right"><a class="btn btn--sm btn--ghost" href="task.html">查看<i data-icon="chevron-right" class="icon--sm"></i></a></td></tr>
+            <tr><td><strong style="font-weight:500">#17</strong> <span class="muted tnum">11月10日 14:26</span></td><td><span class="tag tag--outline">手动</span></td><td><span class="status st-done"><i data-icon="st-done"></i>已完成</span></td><td class="muted">你已确认</td><td class="tnum muted">2 分 48 秒</td><td style="text-align:right"><a class="btn btn--sm btn--ghost" href="task.html">查看<i data-icon="chevron-right" class="icon--sm"></i></a></td></tr>
+            <tr><td><strong style="font-weight:500">#16</strong> <span class="muted tnum">11月10日 09:00</span></td><td><span class="tag">定时</span></td><td><span class="status st-done"><i data-icon="st-done"></i>已完成</span></td><td class="muted">下一轮自动确认</td><td class="tnum muted">3 分 05 秒</td><td style="text-align:right"><a class="btn btn--sm btn--ghost" href="task.html">查看<i data-icon="chevron-right" class="icon--sm"></i></a></td></tr>
+            <tr><td><strong style="font-weight:500">#15</strong> <span class="muted tnum">11月7日 09:00</span></td><td><span class="tag">定时</span></td><td><span class="status st-failed"><i data-icon="st-failed"></i>错误中断</span></td><td class="muted">—</td><td class="tnum muted">12 秒</td><td style="text-align:right"><a class="btn btn--sm btn--ghost" href="task.html?state=failed">查看<i data-icon="chevron-right" class="icon--sm"></i></a></td></tr>
+            <tr><td><strong style="font-weight:500">#14</strong> <span class="muted tnum">11月6日 09:00</span></td><td><span class="tag">定时</span></td><td><span class="status st-done"><i data-icon="st-done"></i>已完成</span></td><td class="muted">下一轮自动确认</td><td class="tnum muted">2 分 51 秒</td><td style="text-align:right"><a class="btn btn--sm btn--ghost" href="task.html">查看<i data-icon="chevron-right" class="icon--sm"></i></a></td></tr>
+          </tbody>
+        </table>
+        <div class="hstack" style="padding:12px 24px;font-size:12px;color:var(--text-tertiary)"><span>共 18 轮</span><span class="spacer"></span><button class="btn btn--sm btn--ghost" type="button" disabled>上一页</button><span class="tnum">1 / 4</span><button class="btn btn--sm btn--ghost" type="button">下一页</button></div>
+      </div>
+      <div class="config" data-tab-panel="config" data-group="auto" hidden>
+        <dl class="kv">
+          <dt>内容描述</dt><dd><div class="objective">每个工作日 9:00 汇总竞品官网、博客与更新日志的变化，输出 300 字以内简报。</div></dd>
+          <dt>成员</dt><dd><span class="av av--20 violet">项</span>项目经理（经理）<span class="faint">·</span><span class="av av--20 cyan">N</span>Noah · 需求分析师</dd>
+          <dt>工作流</dt><dd><a href="workflows.html">内容交付</a><span class="faint">内容简报 → 创作编辑 → 独立审校</span></dd>
+          <dt>完成方式</dt><dd>下一轮触发时，自动确认上一轮</dd>
+        </dl>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="menu" id="menu-auto-detail" role="menu">
+  <button class="menu__item" type="button"><i data-icon="copy"></i>复制为新自动化</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除自动化…</button>
+</div>
+</body>
+</html>

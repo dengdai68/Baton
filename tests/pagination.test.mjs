@@ -9,6 +9,6 @@ test("directory pagination shows 20 records and clamps after filtering or deleti
   assert.deepEqual(paginate(records, 3).items, records.slice(40));
   assert.equal(paginate(records.slice(0, 8), 3).page, 1);
   assert.equal(paginate([], 5).page, 1);
-  assert.match(paginationMarkup(paginate(records, 2), "tasks"), /第 2\/3 页/);
+  assert.match(paginationMarkup(paginate(records, 2), "tasks"), /2 \/ 3/);
   assert.equal(paginationMarkup(paginate(records.slice(0, 20)), "tasks"), "");
 });

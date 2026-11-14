@@ -1003,3 +1003,69 @@ console.log(JSON.stringify({type:'result',is_error:false,result:JSON.stringify(r
     assert.equal(store.getRunMessage(run.id, input.message.id).content, '两路视频分别用了多久？');
   });
 }
+
+test('human message request IDs replay atomically across state changes and persistent restart', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'af-message-idempotency-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, 'state.sqlite');
+  let store = createFixtureStore({ databasePath });
+  t.after(() => store.close());
+  const run = store.createRun(store.listTasks()[0].id);
+  const command = { content: '稳定逻辑发送', clientRequestId: 'request-original-001' };
+  const first = store.submitHumanMessage(run.id, command, { initialize: true });
+  assert.equal(first.replayed, false);
+  assert.equal(first.message.clientRequestId, command.clientRequestId);
+  assert.equal(store.listDispatches(run.id).length, 2, 'first send keeps initial manager and message dispatches');
+  const before = store.snapshot();
+  assert.deepEqual(store.submitHumanMessage(run.id, command, { initialize: true }), { ...first, replayed: true });
+  assert.deepEqual(store.snapshot(), before, 'replay has no events, messages, state or dispatch mutations');
+  for (const patch of [{content:'修改正文'}, {recipientAgentId:'agent_analyst'}, {replyToMessageId:'other_question'}, {attachmentIds:['other_attachment']}]) {
+    assert.throws(() => store.submitHumanMessage(run.id, {...command, ...patch}, {initialize:true}), error => error.code === 'CLIENT_REQUEST_CONFLICT');
+    assert.deepEqual(store.snapshot(), before);
+  }
+  for (const clientRequestId of [null, '', 'short', 'a'.repeat(101), 'request/invalid', 123]) assert.throws(() => store.submitHumanMessage(run.id, {...command,clientRequestId}), /clientRequestId/);
+  const rollback = {content:'回滚后可以重新发送',clientRequestId:'request-rollback-001'};
+  assert.throws(() => store.transaction(() => {store.submitHumanMessage(run.id,rollback,{initialize:true});throw Error('rollback');}), /rollback/);
+  assert.deepEqual(store.snapshot(), before);
+  assert.equal(store.submitHumanMessage(run.id, rollback).replayed, false);
+  const projected = collaborationRecords(store.getRunWorkspace(run.id)).find(item => item.id === first.message.id);
+  assert.equal(projected.clientRequestId,command.clientRequestId);
+  assert.equal('clientRequest' in projected,false);
+  store.updateRun(run.id,{status:'failed'});
+  assert.equal(store.submitHumanMessage(run.id,command,{initialize:true}).message.id,first.message.id);
+  assert.throws(()=>store.submitHumanMessage(run.id,{content:'新消息',clientRequestId:'new-request-failed'}),/错误中断/);
+  store.updateRun(run.id,{status:'running'});
+  for (let dispatch; (dispatch = store.claimDispatch(run.id));) store.completeDispatch(dispatch.id);
+  store.requestHumanAcceptance(run.id);store.confirmRunCompletion(run.id);store.archiveTask(run.taskId);
+  store.close();store=createFixtureStore({databasePath});
+  const archived=store.snapshot();
+  assert.deepEqual(store.submitHumanMessage(run.id,command,{initialize:true}),{...first,replayed:true});
+  assert.deepEqual(store.snapshot(),archived);
+  assert.throws(()=>store.submitHumanMessage(run.id,{content:'归档新消息',clientRequestId:'new-request-archived'}),/归档/);
+});
+
+test('keyed exact answers retain attachment scope, pending questions and first-send rollback', () => {
+  const store=createFixtureStore();
+  try {
+    const task=store.listTasks()[0],run=store.createRun(task.id);
+    const input={content:'原命令',clientRequestId:'request-shared-run'};
+    const other=store.createTask({managerAgentId:'system_project_manager',title:'隔离 Run',objective:'范围',memberAgentIds:task.memberAgentIds,workflowTemplateId:task.workflowTemplateId,workspacePath:task.workspacePath});
+    const otherRun=store.createRun(other.id);
+    const foreign=store.registerRunAttachment(otherRun.id,{id:'attachment_11111111-2222-4333-8444-555555555555',name:'a.txt',path:'attachments/attachment_11111111-2222-4333-8444-555555555555/a.txt',bytes:1,sha256:'a'.repeat(64)});
+    const before=store.snapshot();
+    assert.throws(()=>store.submitHumanMessage(run.id,{...input,attachmentIds:[foreign.id]},{initialize:true}),/附件不属于/);
+    assert.deepEqual(store.snapshot(),before,'initial dispatches roll back when message validation fails');
+    const first=store.submitHumanMessage(run.id,input),second=store.submitHumanMessage(otherRun.id,input);
+    assert.notEqual(first.message.id,second.message.id,'same key is scoped by Run');
+    store.claimDispatch(run.id);
+    const question=store.askQuestion(store.listDispatches(run.id)[0].id,{audience:'human',question:'精确回复此问题'});
+    const attachment=store.registerRunAttachment(run.id,{...foreign,id:'attachment_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',path:'attachments/attachment_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/a.txt'});
+    const answer={content:'',attachmentIds:[attachment.id],replyToMessageId:question.id,clientRequestId:'request-exact-answer'};
+    const receipt=store.submitHumanMessage(run.id,answer,{initialize:true});
+    for (const patch of [{content:null},{content:{}},{recipientAgentId:42},{replyToMessageId:[]},{attachmentIds:'invalid'}]) assert.throws(()=>store.submitHumanMessage(run.id,{...answer,...patch}),/文本|附件/);
+    assert.equal(receipt.message.replyToMessageId,question.id);assert.equal(receipt.message.recipient.id,question.sender.id);
+    const after=store.snapshot();assert.deepEqual(store.submitHumanMessage(run.id,answer,{initialize:true}),{...receipt,replayed:true});assert.deepEqual(store.snapshot(),after);
+    assert.throws(()=>store.submitHumanMessage(run.id,{...answer,clientRequestId:'request-new-answer'}),/待回答问题/);
+    assert.throws(()=>store.submitHumanMessage(run.id,{...answer,attachmentIds:[]}),error=>error.code==='CLIENT_REQUEST_CONFLICT');
+  } finally { store.close(); }
+});

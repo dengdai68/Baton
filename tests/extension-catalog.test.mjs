@@ -16,7 +16,8 @@ test('JSON extension catalog persists summary-only pages, searches before paging
  const page=store.queryExtensions('plugin',{search:'match',page:2});assert.equal(page.total,32);assert.equal(page.items.length,12);assert.equal(page.hasMore,false);
  assert.equal(store.queryExtensions('plugin',{search:'%',page:1}).total,0);
  assert.equal(store.queryExtensions('plugin',{page:99}).page,4);
- for(const input of [{page:0},{page:1.1},{search:12},{search:'x'.repeat(201)}])assert.throws(()=>store.queryExtensions('plugin',input));
+ for(const input of [{page:0},{page:1.1},{search:12},{search:'x'.repeat(201)},{usage:'missing'}])assert.throws(()=>store.queryExtensions('plugin',input));
+ assert.equal(store.queryExtensions('plugin',{usage:'unused'}).total,65);
  const target=entries[0];
  assert.throws(()=>store.transaction(()=>{store.removeExtension(target);throw Error('rollback');}),/rollback/);
  assert.ok(store.getExtension('plugin',target.id));assert.equal(store.queryExtensions('plugin').total,65);
@@ -38,7 +39,9 @@ test('role extensions merge with direct selections, freeze task/chat snapshots a
  const extension={id:randomUUID(),kind:'mcp',name:'role-service',createdAt:new Date().toISOString(),providers:['claude-code','codex','dsh']};store.registerExtensions([extension]);
  const selection={pluginIds:[],mcpIds:[extension.id]},path=join(root,'mcp.json');
  const binding={extensionSelection:selection,extensionManifest:[{...extension,path,sha256:'a'.repeat(64)}],skillPaths:[],pluginPaths:[],mcpConfigPaths:[path],pluginSources:[]};
+ assert.equal(store.queryExtensions('mcp',{usage:'unused'}).items.some(item=>item.id===extension.id),true);
  const role=store.createRole({name:'研究',prompt:'ROLE',extensionSelection:selection,extensionBindings:{'claude-code':binding,codex:binding,dsh:binding}});
+ assert.equal(store.queryExtensions('mcp',{usage:'unused'}).items.some(item=>item.id===extension.id),false,'role bindings count as use even before an employee inherits them');
  const employee=store.createAgent({name:'继承员工',roleIds:[role.id]});
  assert.deepEqual(store.listAgents().find(item=>item.id===employee.id).inheritedExtensionSelection,selection);
  assert.equal(Object.hasOwn(role,'extensionBindings'),false);

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>插件 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+</head>
+<body data-page="plugins">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="plug"></i>插件<span class="tb-count">9</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><button class="btn btn--primary" type="button" data-open="dialog-install"><i data-icon="plus"></i>安装插件</button></div>
+    </header>
+    <div class="page-hero"><h1>插件</h1><p>插件为员工提供 Skill、Subagent 与 Hook。目前通过 Git 仓库或本地目录安装，在线市场即将开放。</p></div>
+    <div class="toolbar">
+      <div class="vtabs" role="tablist" aria-label="筛选插件">
+        <button class="vtab is-active" type="button" role="tab" aria-selected="true">全部 <span class="count">9</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">有更新 <span class="count">1</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">未被使用 <span class="count">3</span></button>
+      </div>
+      <span class="spacer"></span>
+      <label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索已安装插件" aria-label="搜索已安装插件"></label>
+    </div>
+    <div class="scroll">
+      <div class="page">
+        <div class="grid">
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 green">CR</span><div style="min-width:0"><div class="entity-card__title"><span>code-review-kit</span><span class="tag tag--mono">1.2.0</span></div><div class="entity-card__sub">Git · acme/code-review-kit</div></div><span></span></div>
+            <p class="entity-card__desc">代码评审清单与提交前检查，按严重程度输出问题，每项包含位置、影响与建议。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>2 Skill · 1 Subagent</span><span><i data-icon="bot"></i>2 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin-warn" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 violet">DL</span><div style="min-width:0"><div class="entity-card__title"><span>design-tokens-lint</span><span class="tag tag--mono">0.4.1</span></div><div class="entity-card__sub">本地目录 · ~/plugins</div></div><span class="status status--text st-attention" title="1 个组件未能加载"><i data-icon="alert"></i>警告</span></div>
+            <p class="entity-card__desc">检查 CSS 中的硬编码颜色与字号，输出 Token 替换建议。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>1 Skill · 1 Hook</span><span>未被使用</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 orange">RN</span><div style="min-width:0"><div class="entity-card__title"><span>release-notes</span><span class="tag tag--accent">有更新</span></div><div class="entity-card__sub">Git · acme/release-notes · 2.0.0 → 2.1.0</div></div><span></span></div>
+            <p class="entity-card__desc">根据提交记录生成中文发布说明，区分新功能、修复与已知问题。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>1 Skill</span><span><i data-icon="bot"></i>1 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>更新</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 blue">DW</span><div style="min-width:0"><div class="entity-card__title"><span>doc-writer</span><span class="tag tag--mono">1.0.3</span></div><div class="entity-card__sub">Git · acme/doc-writer</div></div><span></span></div>
+            <p class="entity-card__desc">按团队模板撰写技术文档与 README，自动补齐目录与示例。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>3 Skill</span><span><i data-icon="bot"></i>3 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 cyan">SQ</span><div style="min-width:0"><div class="entity-card__title"><span>sql-helper</span><span class="tag tag--mono">0.9.0</span></div><div class="entity-card__sub">Git · data/sql-helper</div></div><span></span></div>
+            <p class="entity-card__desc">编写与审查 SQL，解释执行计划并给出索引建议。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>2 Skill</span><span><i data-icon="bot"></i>1 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 green">I1</span><div style="min-width:0"><div class="entity-card__title"><span>i18n-checker</span><span class="tag tag--mono">0.2.1</span></div><div class="entity-card__sub">本地目录 · ~/plugins</div></div><span></span></div>
+            <p class="entity-card__desc">检查缺失翻译与硬编码文案，生成待翻译清单。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>1 Skill · 1 Hook</span><span>未被使用</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 violet">TR</span><div style="min-width:0"><div class="entity-card__title"><span>test-runner</span><span class="tag tag--mono">1.4.0</span></div><div class="entity-card__sub">Git · acme/test-runner</div></div><span></span></div>
+            <p class="entity-card__desc">运行测试并汇总失败原因，附上复现命令与关键日志。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>1 Skill · 1 Subagent</span><span><i data-icon="bot"></i>2 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 orange">FH</span><div style="min-width:0"><div class="entity-card__title"><span>figma-handoff</span><span class="tag tag--mono">0.6.0</span></div><div class="entity-card__sub">Git · design/figma-handoff</div></div><span></span></div>
+            <p class="entity-card__desc">把 Figma 标注整理为实现说明，列出间距、颜色与字号。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>2 Skill</span><span><i data-icon="bot"></i>1 位员工</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-plugin" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 blue">SA</span><div style="min-width:0"><div class="entity-card__title"><span>security-audit</span><span class="tag tag--mono">1.1.0</span></div><div class="entity-card__sub">Git · sec/security-audit</div></div><span></span></div>
+            <p class="entity-card__desc">检查依赖漏洞与密钥泄露，只读运行，输出按风险排序的报告。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span>1 Subagent · 1 Hook</span><span>未被使用</span></div><div class="card__actions"><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="menu" id="menu-plugin" role="menu">
+  <button class="menu__item" type="button"><i data-icon="refresh"></i>检查兼容性</button>
+  <button class="menu__item" type="button"><i data-icon="download"></i>立即检查更新</button>
+  <button class="menu__item" type="button"><i data-icon="copy"></i>复制来源地址</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除插件…</button>
+</div>
+
+<!-- 插件详情：右侧抽屉，不离开卡片列表 -->
+<aside class="drawer" id="drawer-plugin" aria-label="插件详情" style="width:min(560px,calc(100vw - 16px))" data-tab-scope>
+  <div class="drawer__head"><strong style="flex:1">插件详情</strong><button class="btn btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>检查兼容性</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+  <div class="drawer__body">
+    <div class="detail-head">
+      <span class="av av--40 green">CR</span>
+      <div style="min-width:0">
+        <h2>code-review-kit</h2>
+        <p>代码评审清单与提交前检查，按严重程度输出问题。</p>
+        <div class="meta"><span class="tag tag--mono">v1.2.0</span><span class="hstack" style="gap:4px"><i data-icon="branch" class="icon--sm"></i><span class="mono">github.com/acme/code-review-kit</span></span><span>3 天前安装</span></div>
+      </div>
+    </div>
+    <section class="detail-section">
+      <p class="section-title">运行时兼容<span class="count">3 / 9 支持</span></p>
+      <div class="compat">
+        <span class="compat__item is-ok"><i data-icon="check-circle"></i>Claude Code</span>
+        <span class="compat__item is-ok"><i data-icon="check-circle"></i>Codex</span>
+        <span class="compat__item is-ok"><i data-icon="check-circle"></i>OpenCode</span>
+        <span class="compat__item"><i data-icon="minus"></i>DeepSeek Harness</span>
+        <span class="compat__item"><i data-icon="minus"></i>Cursor</span>
+        <span class="compat__item"><i data-icon="minus"></i>Gemini CLI</span>
+        <span class="compat__item"><i data-icon="minus"></i>Qwen Code</span>
+        <span class="compat__item"><i data-icon="minus"></i>Kimi Code</span>
+        <span class="compat__item"><i data-icon="minus"></i>Pi</span>
+      </div>
+      <details style="margin-top:12px">
+        <summary class="link-btn" style="font-size:12px;color:var(--text-secondary)"><i data-icon="chevron-right" class="icon--sm"></i>查看 6 项不兼容原因</summary>
+        <div class="sbox" style="margin-top:8px"><div class="srow" style="min-height:0"><div class="srow__text"><div class="srow__label" style="font-weight:500">适配器不支持插件 settings 字段</div><div class="srow__desc">DeepSeek Harness、Cursor、Gemini CLI、Qwen Code、Kimi Code、Pi</div></div></div></div>
+      </details>
+      <p class="faint" style="font-size:12px;margin-top:10px">「支持」只表示组件格式可被该运行时加载，不代表本机 CLI、依赖或账号已通过实际执行验证。</p>
+    </section>
+    <section class="detail-section">
+      <div class="hstack" style="margin-bottom:4px">
+        <p class="section-title" style="margin:0">组件</p><span class="spacer"></span>
+        <div class="seg" role="tablist" aria-label="组件类型" data-tab-group="comp"><button class="seg__item is-active" type="button" role="tab" data-tab="skill">Skill 2</button><button class="seg__item" type="button" role="tab" data-tab="agent">Subagent 1</button><button class="seg__item" type="button" role="tab" data-tab="hook">Hook 0</button></div>
+      </div>
+      <div data-tab-panel="skill" data-group="comp">
+        <div class="comp"><i data-icon="sparkle"></i><div><strong>review</strong><p>按严重程度输出代码评审问题清单，每项包含位置、现象、影响与建议。</p></div><code>skills/review/SKILL.md</code></div>
+        <div class="comp"><i data-icon="sparkle"></i><div><strong>pre-commit</strong><p>提交前检查格式、测试结果与敏感信息。</p></div><code>skills/pre-commit/SKILL.md</code></div>
+      </div>
+      <div data-tab-panel="agent" data-group="comp" hidden>
+        <div class="comp"><i data-icon="bot"></i><div><strong>security-reviewer</strong><p>独立审查依赖与密钥使用，只读运行。</p></div><code>agents/security-reviewer.md</code></div>
+      </div>
+      <div data-tab-panel="hook" data-group="comp" hidden><div class="empty" style="padding:28px"><p>该插件没有 Hook。</p></div></div>
+    </section>
+    <section class="detail-section">
+      <p class="section-title">选择此插件的员工<span class="count">2</span></p>
+      <div class="hstack" style="flex-wrap:wrap"><a class="token" href="agents.html"><span class="av av--16 blue">K</span>Kai · 研发工程师</a><a class="token" href="agents.html"><span class="av av--16 green">S</span>Sora · 测试工程师</a></div>
+    </section>
+  </div>
+</aside>
+
+<aside class="drawer" id="drawer-plugin-warn" aria-label="插件详情" style="width:min(560px,calc(100vw - 16px))">
+  <div class="drawer__head"><strong style="flex:1">插件详情</strong><button class="btn btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>检查兼容性</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-plugin" aria-label="更多操作"><i data-icon="more"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+  <div class="drawer__body">
+    <div class="detail-head">
+      <span class="av av--40 violet">DL</span>
+      <div style="min-width:0"><h2>design-tokens-lint</h2><p>检查 CSS 中的硬编码颜色与字号，输出 Token 替换建议。</p>
+      <div class="meta"><span class="tag tag--mono">v0.4.1</span><span class="hstack" style="gap:4px"><i data-icon="folder" class="icon--sm"></i><span class="mono">~/plugins/design-tokens-lint</span></span><span>本地目录不随远端更新</span></div></div>
+    </div>
+    <section class="detail-section">
+      <div class="callout st-attention"><i data-icon="alert"></i><div class="callout__body"><div class="callout__title">1 个组件未能加载</div><div class="callout__text">Hook <code>hooks/format.json</code> 缺少 command 字段，已跳过；其余组件可正常使用。</div></div></div>
+    </section>
+    <section class="detail-section"><p class="section-title">选择此插件的员工</p><p class="muted">还没有员工选择此插件。在员工编辑页的「工具」中添加。</p></section>
+  </div>
+</aside>
+
+<div class="overlay" id="dialog-install" data-explicit-close>
+  <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="install-title" onsubmit="return false">
+    <div class="dialog__head"><h2 id="install-title">安装插件</h2><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+    <p class="dialog__desc">安装来源中的全部插件。同一来源与名称再次导入会覆盖并更新当前员工的选择，历史任务不变。</p>
+    <div class="dialog__body">
+      <div class="field"><span class="field__label">来源</span><div class="seg"><button class="seg__item is-active" type="button"><i data-icon="branch" class="icon--sm"></i>Git 仓库</button><button class="seg__item" type="button"><i data-icon="folder" class="icon--sm"></i>本地目录</button></div></div>
+      <div class="field"><span class="field__label">仓库地址<span class="req">*</span></span><input class="input mono" placeholder="https://github.com/owner/plugins.git" data-autofocus><span class="field__hint">支持插件清单与裸 Skill 仓库；Skill 会自动包装为同名插件。不执行安装脚本、不安装依赖。</span></div>
+    </div>
+    <div class="dialog__foot"><span class="hint">插件自带的 MCP 会单独出现在 MCP 列表</span><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--primary" type="submit">安装全部插件</button></div>
+  </form>
+</div>
+</body>
+</html>

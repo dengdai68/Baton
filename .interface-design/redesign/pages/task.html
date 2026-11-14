@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务工作区 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<script>if (new URLSearchParams(location.search).get('state') === 'failed') document.documentElement.classList.add('state-failed');</script>
+<style>
+  .only-failed { display: none !important; }
+  .state-failed .only-failed { display: revert !important; }
+  .state-failed .only-normal { display: none !important; }
+  .panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+  .panel[hidden] { display: none; }
+  .thread-head { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-5) var(--pad-record) 0; }
+  .console-member { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: var(--sp-4); align-items: center; padding: var(--sp-4) var(--sp-5); margin: 2px var(--sp-3); border-radius: var(--r-sm); }
+  .console-member:hover { background: var(--bg-hover); }
+  .console-member.is-selected { background: var(--bg-active); }
+  .console-member strong { display: block; font-size: var(--fs-body); font-weight: var(--fw-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .console-member small { display: flex; align-items: center; gap: var(--sp-2); font-size: var(--fs-small); color: var(--text-tertiary); }
+  .md-preview { max-width: 720px; padding: var(--sp-7) var(--sp-9); font-size: var(--fs-read); line-height: var(--lh-read); }
+  .md-preview h1 { font-size: var(--fs-title); line-height: var(--lh-title); margin-bottom: var(--sp-5); }
+  .md-preview ul { padding-left: 22px; margin: var(--sp-3) 0; }
+  .change-list .row { grid-template-columns: 16px minmax(0, 1fr) auto; padding-left: var(--sp-6); min-height: 32px; font-size: var(--fs-body); }
+</style>
+</head>
+<body data-page="tasks">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+
+  <main class="main" data-tab-scope>
+    <header class="titlebar">
+      <a class="btn btn--ghost btn--icon btn--sm" href="tasks.html" aria-label="返回任务列表" title="返回任务列表  ⌘["><i data-icon="chevron-left"></i></a>
+      <nav class="crumbs" aria-label="位置"><a href="tasks.html">任务</a><span class="sep">/</span><strong>重构登录页并补齐单元测试</strong></nav>
+      <span class="status status--pill st-attention only-normal"><i data-icon="st-attention"></i>等待你的澄清</span>
+      <span class="status status--pill st-failed only-failed"><i data-icon="st-failed"></i>错误中断</span>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions">
+        <button class="btn btn--primary btn--sm only-failed" type="button"><i data-icon="refresh" class="icon--sm"></i>重试失败步骤</button>
+        <button class="btn btn--ghost btn--sm only-normal" type="button" title="暂停运行：保留会话与记录"><i data-icon="pause" class="icon--sm"></i>暂停</button>
+        <button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-run" aria-label="更多操作"><i data-icon="more"></i></button>
+        <span class="vdivider"></span>
+        <button class="btn btn--ghost btn--icon btn--sm" id="inspector-toggle" type="button" aria-pressed="true" aria-controls="task-inspector" aria-label="任务详情" title="任务详情  ⌘I"><i data-icon="panel-right"></i></button>
+      </div>
+    </header>
+
+    <div class="subtabs" role="tablist" aria-label="任务工作区" data-tab-group="ws">
+      <button class="tab is-active" type="button" role="tab" aria-selected="true" data-tab="collab">协作<span class="count-badge count-badge--attention only-normal">1</span></button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="files">文件<span class="count">3</span></button>
+      <button class="tab" type="button" role="tab" aria-selected="false" data-tab="console">控制台</button>
+    </div>
+
+    <div class="ws" id="ws">
+      <div class="ws__main">
+        <!-- 协作：只呈现成员、经理与人类之间的消息；执行细节在控制台 -->
+        <section class="panel" data-tab-panel="collab" data-group="ws">
+          <div class="scroll">
+            <div class="thread-head">
+              <div class="seg" role="group" aria-label="筛选协作记录"><button class="seg__item is-active" type="button">全部</button><button class="seg__item" type="button">涉及我</button></div>
+              <span class="spacer"></span>
+              <button class="btn btn--ghost btn--sm" type="button"><i data-icon="arrow-down" class="icon--sm"></i>最新</button>
+            </div>
+            <div class="thread">
+              <div class="callout st-failed only-failed" role="alert" style="margin-bottom:12px">
+                <i data-icon="x-circle"></i>
+                <div class="callout__body">
+                  <div class="callout__title">Kai · 研发工程师 的执行已中断</div>
+                  <div class="callout__text">Claude Code 进程退出（code 127）：未找到可执行文件。修复后可由原员工继续，原会话、历史记录与产物都会保留。</div>
+                  <div class="callout__actions"><button class="btn btn--sm btn--primary" type="button">重试</button><a class="btn btn--sm" href="settings.html?tab=runtime">打开运行时设置</a><button class="btn btn--sm btn--ghost" type="button" data-tab="console">查看控制台日志</button></div>
+                </div>
+              </div>
+
+              <div class="day">今天</div>
+              <article class="msg">
+                <span class="av av--28 violet">项<span class="av__badge" title="项目经理"><i data-icon="star"></i></span></span>
+                <div>
+                  <div class="msg__head"><span class="msg__name">项目经理</span><span class="tag tag--violet">经理</span><span class="msg__type"><i data-icon="flag"></i>派工给 Noah · 需求分析师</span><span class="msg__time">09:58</span></div>
+                  <div class="msg__body">
+                    <p>已拆分为三步：</p>
+                    <ol><li><strong>Noah</strong> 明确窄窗口与错误提示的验收标准；</li><li><strong>Kai</strong> 重构布局并补齐表单校验单测；</li><li><strong>Sora</strong> 在 760px 与 1320px 下回归并出具报告。</li></ol>
+                    <p>先由 Noah 开始。</p>
+                  </div>
+                </div>
+                <div class="msg__tools"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="terminal" class="icon--sm"></i>本轮控制台</button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制"><i data-icon="copy" class="icon--sm"></i></button></div>
+              </article>
+
+              <article class="msg">
+                <span class="av av--28 cyan">N</span>
+                <div>
+                  <div class="msg__head"><span class="msg__name">Noah · 需求分析师</span><span class="msg__type"><i data-icon="handoff"></i>交接给 项目经理</span><span class="msg__time">10:18</span></div>
+                  <div class="msg__body">
+                    <p><strong>验收标准已交付</strong>，覆盖三项：</p>
+                    <ul><li>760px 宽度下表单无横向滚动</li><li>错误提示与字段关联（<code>aria-describedby</code>）</li><li>连续 3 次失败后显示找回入口</li></ul>
+                    <p><strong>未覆盖：</strong>第三方登录按钮的样式，需要人类确认是否在范围内。</p>
+                  </div>
+                  <div class="msg__foot">
+                    <a class="file-chip" href="#"><span class="ft ft--md">MD</span>login-acceptance.md<small>docs/requirements</small></a>
+                    <button class="link-btn" type="button" style="font-size:12px;color:var(--text-tertiary)"><i data-icon="terminal" class="icon--sm"></i>本轮控制台</button>
+                  </div>
+                </div>
+              </article>
+
+              <article class="msg msg--human">
+                <div class="msg__head"><span class="msg__type">追加指令</span><span class="msg__time">10:21</span><span class="msg__name">你</span></div>
+                <div class="bubble">补充：登录按钮保持品牌蓝，不要改动注册流程。<span class="mention">@Kai · 研发工程师</span> 实现时请同时覆盖中文输入法回车。</div>
+              </article>
+
+              <article class="msg">
+                <span class="av av--28 blue">K</span>
+                <div>
+                  <div class="msg__head"><span class="msg__name">Kai · 研发工程师</span><span class="msg__type"><i data-icon="question"></i>向你提问</span><span class="msg__time">10:24</span></div>
+                  <div class="ask only-normal">
+                    <div class="ask__head"><i data-icon="st-attention" class="icon--sm"></i>需要你回答 · 已等待 12 分钟</div>
+                    <div class="msg__body">第三方登录（GitHub / 企业微信）按钮是否也要按新布局调整？如果要，需要提供企业微信的品牌规范。</div>
+                    <div class="ask__actions"><button class="btn btn--sm btn--primary" type="button"><i data-icon="reply" class="icon--sm"></i>回复</button><button class="btn btn--sm btn--ghost" type="button">查看上下文</button></div>
+                  </div>
+                  <div class="msg__body only-failed">第三方登录（GitHub / 企业微信）按钮是否也要按新布局调整？</div>
+                </div>
+              </article>
+            </div>
+          </div>
+          <div class="composer-dock">
+            <form class="composer only-normal" onsubmit="return false">
+              <div class="composer__context"><i data-icon="reply" class="icon--sm"></i><span>回复 Kai · 研发工程师：第三方登录（GitHub / 企业微信）按钮是否也要按新布局调整？</span><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="改为追加指令" style="width:18px;height:18px;color:inherit"><i data-icon="x" class="icon--sm"></i></button></div>
+              <textarea rows="2" placeholder="输入回答；@ 可指定成员" aria-label="消息内容"></textarea>
+              <div class="composer__bar">
+                <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加文件"><i data-icon="paperclip"></i></button>
+                <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加图片"><i data-icon="image"></i></button>
+                <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="提及成员"><i data-icon="at"></i></button>
+                <span class="composer__hint">Enter 发送 · ⇧Enter 换行</span>
+                <button class="btn btn--primary btn--sm" type="submit"><i data-icon="send" class="icon--sm"></i>发送</button>
+              </div>
+            </form>
+            <div class="composer only-failed" style="opacity:.6">
+              <textarea rows="1" disabled placeholder="任务因错误中断，重试后可继续发送消息" aria-label="消息内容"></textarea>
+              <div class="composer__bar"><span class="composer__hint">重试成功后自动恢复输入</span><button class="btn btn--primary btn--sm" type="button" disabled>发送</button></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 文件：当前文件与变更共用同一棵树和预览头 -->
+        <section class="panel" data-tab-panel="files" data-group="ws" data-view-scope hidden>
+          <div class="split" style="--split-w:268px">
+            <div class="split__side is-collapsible">
+              <div class="pane-head">
+                <div class="seg" role="group" aria-label="文件来源"><button class="seg__item is-active" type="button" data-view="current">当前文件</button><button class="seg__item" type="button" data-view="changes">变更 <span class="faint">3</span></button></div>
+                <span class="spacer"></span>
+                <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="刷新" title="刷新"><i data-icon="refresh" class="icon--sm"></i></button>
+              </div>
+              <div class="tree" data-view-panel="current" role="tree">
+                <div class="tree__item is-open" data-folder style="--depth:0"><i data-icon="chevron-right" class="twisty"></i><i data-icon="folder" class="folder-ic"></i>docs</div>
+                <div class="tree__kids">
+                  <div class="tree__item is-open" data-folder style="--depth:1"><i data-icon="chevron-right" class="twisty"></i><i data-icon="folder" class="folder-ic"></i>requirements</div>
+                  <div class="tree__kids"><div class="tree__item" style="--depth:2"><span class="spacer-twisty"></span><span class="ft ft--md">MD</span>login-acceptance.md</div></div>
+                </div>
+                <div class="tree__item is-open" data-folder style="--depth:0"><i data-icon="chevron-right" class="twisty"></i><i data-icon="folder" class="folder-ic"></i>src</div>
+                <div class="tree__kids">
+                  <div class="tree__item is-open" data-folder style="--depth:1"><i data-icon="chevron-right" class="twisty"></i><i data-icon="folder" class="folder-ic"></i>login</div>
+                  <div class="tree__kids">
+                    <div class="tree__item is-selected" style="--depth:2"><span class="spacer-twisty"></span><span class="ft ft--js">JS</span>validate.js</div>
+                    <div class="tree__item" style="--depth:2"><span class="spacer-twisty"></span><span class="ft ft--test">T</span>validate.test.js</div>
+                  </div>
+                </div>
+                <div class="tree__item" data-folder style="--depth:0"><i data-icon="chevron-right" class="twisty"></i><i data-icon="folder" class="folder-ic"></i>web</div>
+                <div class="tree__kids" hidden></div>
+              </div>
+              <div class="change-list" data-view-panel="changes" hidden>
+                <div class="row is-selected" data-selectable><span class="ft ft--css">CS</span><span class="row__title" style="font-weight:400">web/login.css</span><span class="tnum" style="font-size:12px"><span style="color:var(--code-add-text)">+24</span> <span style="color:var(--code-del-text)">−9</span></span></div>
+                <div class="row" data-selectable><span class="ft ft--js">JS</span><span class="row__title" style="font-weight:400">src/login/validate.js</span><span class="tag tag--accent">新增</span></div>
+                <div class="row" data-selectable><span class="ft ft--test">T</span><span class="row__title" style="font-weight:400">src/login/validate.test.js</span><span class="tag tag--accent">新增</span></div>
+              </div>
+            </div>
+            <div class="split__main">
+              <div class="pane-head" data-view-panel="current">
+                <span class="mono truncate" style="color:var(--text-secondary)">src / login / <strong style="color:var(--text);font-weight:600">validate.js</strong></span>
+                <span class="faint">10:36 · Kai 写入</span>
+                <span class="spacer"></span>
+                <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径" title="复制路径"><i data-icon="copy" class="icon--sm"></i></button>
+                <button class="btn btn--sm" type="button"><i data-icon="download" class="icon--sm"></i>下载</button>
+              </div>
+              <pre class="code scroll" data-view-panel="current"><span><b class="tk-k">export function</b> <b class="tk-f">validate</b>({ username, password }) {</span><span>  <b class="tk-k">const</b> errors = {};</span><span>  <b class="tk-k">if</b> (!username?.trim()) errors.username = <b class="tk-s">'请输入用户名'</b>;</span><span>  <b class="tk-k">if</b> (!password || password.length &lt; <b class="tk-n">8</b>) errors.password = <b class="tk-s">'密码至少 8 位'</b>;</span><span>  <b class="tk-c">// 连续失败 3 次后显示找回入口（见验收标准第 3 条）</b></span><span>  <b class="tk-k">return</b> errors;</span><span>}</span><span></span><span><b class="tk-k">export function</b> <b class="tk-f">shouldOfferRecovery</b>(failures) {</span><span>  <b class="tk-k">return</b> failures &gt;= <b class="tk-n">3</b>;</span><span>}</span></pre>
+              <div class="pane-head" data-view-panel="changes" hidden>
+                <span class="mono truncate"><strong style="font-weight:600">web/login.css</strong></span>
+                <span class="faint">累计变更 · 本任务内</span>
+                <span class="spacer"></span>
+                <div class="seg seg--icon" role="group" aria-label="对比方式"><button class="seg__item is-active" type="button" title="行内对比"><i data-icon="list" class="icon--sm"></i></button><button class="seg__item" type="button" title="左右对比"><i data-icon="panel-left" class="icon--sm"></i></button></div>
+                <div class="seg" role="group" aria-label="显示范围"><button class="seg__item is-active" type="button">仅差异</button><button class="seg__item" type="button">完整文件</button></div>
+              </div>
+              <pre class="diff scroll" data-view-panel="changes" hidden><span class="hunk"><i></i><i></i><b> </b>@@ -12,9 +12,24 @@ .login-card</span><span><i>12</i><i>12</i><b> </b>.login-card {</span><span class="del"><i>13</i><i></i><b>−</b>  display: flex;</span><span class="del"><i>14</i><i></i><b>−</b>  gap: 32px;</span><span class="add"><i></i><i>13</i><b>+</b>  display: grid;</span><span class="add"><i></i><i>14</i><b>+</b>  grid-template-columns: minmax(0, 1fr);</span><span class="add"><i></i><i>15</i><b>+</b>  gap: 16px;</span><span><i>15</i><i>16</i><b> </b>  max-width: 440px;</span><span><i>16</i><i>17</i><b> </b>}</span><span class="add"><i></i><i>18</i><b>+</b>.field-error { margin-top: 4px; color: var(--danger); }</span></pre>
+            </div>
+          </div>
+        </section>
+
+        <!-- 控制台：按执行分组，命令/路径才用等宽字体 -->
+        <section class="panel" data-tab-panel="console" data-group="ws" hidden>
+          <div class="split" style="--split-w:248px">
+            <div class="split__side is-collapsible" style="background:var(--bg-canvas)">
+              <div class="pane-head"><strong style="font-size:12px">成员</strong><span class="faint">5</span></div>
+              <div style="padding:4px 0">
+                <div class="console-member" data-selectable data-member="pm"><span class="av av--28 violet">项</span><span><strong>项目经理</strong><small>Claude Code · 3 次执行</small></span></div>
+                <div class="console-member" data-selectable data-member="noah"><span class="av av--28 cyan">N</span><span><strong>Noah · 需求分析师</strong><small>Claude Code · 1 次执行</small></span></div>
+                <div class="console-member is-selected" data-selectable data-member="kai"><span class="av av--28 blue">K</span><span><strong>Kai · 研发工程师</strong><small class="only-normal" style="color:var(--st-attention)">等待你的澄清</small><small class="only-failed" style="color:var(--st-failed)">错误中断</small></span></div>
+                <div class="console-member" data-selectable data-member="sora"><span class="av av--28 green">S<span class="av__presence is-live" title="执行中"></span></span><span><strong>Sora · 测试工程师</strong><small style="color:var(--live)">执行中 · 准备回归用例</small></span></div>
+                <div class="console-member" data-selectable data-member="lena"><span class="av av--28 orange">L</span><span><strong>Lena · 产品设计师</strong><small>尚未执行</small></span></div>
+              </div>
+            </div>
+            <div class="split__main">
+              <div class="pane-head">
+                <strong style="font-size:13px">Kai · 研发工程师</strong><span class="faint">Claude Code · sonnet · 2 次执行</span>
+                <span class="spacer"></span>
+                <div class="seg" role="group" aria-label="记录类型"><button class="seg__item is-active" type="button">全部</button><button class="seg__item" type="button">工具</button><button class="seg__item" type="button">输出</button></div>
+                <button class="btn btn--ghost btn--sm" type="button"><i data-icon="arrow-down" class="icon--sm"></i>最新</button>
+              </div>
+              <div class="scroll" style="padding:16px 20px">
+                <section class="trace">
+                  <div class="trace__head"><i data-icon="chevron-right" class="icon--sm faint"></i><strong>执行 #1</strong><span class="tag">功能开发</span><span class="faint">10:10 – 10:19 · 9 分钟 · 14 条记录</span><span class="spacer"></span><span class="status st-done"><i data-icon="st-done"></i>已结束</span></div>
+                </section>
+                <section class="trace">
+                  <div class="trace__head"><i data-icon="chevron-down" class="icon--sm faint"></i><strong>执行 #2</strong><span class="tag">功能开发</span><span class="faint">10:22 – 10:24 · 2 分 14 秒</span><span class="spacer"></span><span class="status st-attention only-normal"><i data-icon="st-attention"></i>等待你的澄清</span><span class="status st-failed only-failed"><i data-icon="st-failed"></i>失败</span></div>
+                  <div class="log log--prompt"><i data-icon="code"></i><div><span class="log__kind">本轮提示词</span>已脱敏 · 1,842 字 <button class="link-btn" type="button" style="font-size:12px;margin-left:6px">展开</button><div class="faint" style="font-size:12px;margin-top:2px">会话 <span class="mono">5f3c9a1e-7b2d-4c8e-a1f0</span></div></div><span class="log__time">10:22:03</span></div>
+                  <div class="log log--think"><i data-icon="sparkle"></i><div><span class="log__kind">思考</span><span class="log__text">先确认第三方登录按钮是否在本次范围内，避免返工；同时检查现有 CSS 是否已有错误态变量。</span></div><span class="log__time">10:22:09</span></div>
+                  <div class="log"><i data-icon="file"></i><div><span class="log__kind">读取</span><span class="cmd">docs/requirements/login-acceptance.md</span></div><span class="log__time">10:22:12</span></div>
+                  <div class="log"><i data-icon="terminal"></i><div><span class="log__kind">命令</span><span class="cmd">npm test -- login</span> <span class="tag tag--outline exit">exit 0</span><div class="out">PASS  src/login/validate.test.js
+  ✓ 空用户名 (3 ms)
+  ✓ 密码少于 8 位 (1 ms)
+Tests: 2 passed, 2 total</div></div><span class="log__time">10:23:40</span></div>
+                  <div class="log"><i data-icon="edit"></i><div><span class="log__kind">写入</span><span class="cmd">web/login.css</span> <span class="tnum" style="font-size:12px"><span style="color:var(--code-add-text)">+24</span> <span style="color:var(--code-del-text)">−9</span></span></div><span class="log__time">10:23:58</span></div>
+                  <div class="log"><i data-icon="message"></i><div><span class="log__kind">输出</span>布局已改为单列栅格，错误提示紧贴字段。等待确认第三方登录范围后继续。</div><span class="log__time">10:24:10</span></div>
+                  <div class="log only-normal"><i data-icon="question" style="color:var(--st-attention)"></i><div><span class="log__kind" style="color:var(--st-attention)">提问</span>已向你提问：第三方登录按钮是否也要按新布局调整？</div><span class="log__time">10:24:12</span></div>
+                  <div class="log log--error only-failed"><i data-icon="x-circle"></i><div><span class="log__kind">失败</span>Claude Code 进程退出（code 127）：未找到可执行文件<div class="out">spawn claude ENOENT
+PATH=/usr/local/bin:/usr/bin:/bin</div></div><span class="log__time">10:24:12</span></div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- 任务详情：只放事实，不重复协作内容 -->
+      <aside class="inspector" id="task-inspector" aria-label="任务详情">
+        <section class="insp-section">
+          <div class="insp-title">概要</div>
+          <dl class="kv">
+            <dt>状态</dt><dd><span class="status st-attention only-normal"><i data-icon="st-attention"></i>等待你的澄清</span><span class="status st-failed only-failed"><i data-icon="st-failed"></i>错误中断</span></dd>
+            <dt>经理</dt><dd><span class="av av--20 violet">项</span>项目经理</dd>
+            <dt>工作流</dt><dd><a href="workflows.html">软件交付</a></dd>
+            <dt>开始于</dt><dd class="tnum">今天 09:58</dd>
+            <dt>交付文件</dt><dd><button class="link-btn" type="button" data-tab="files">3 个文件</button></dd>
+          </dl>
+        </section>
+        <section class="insp-section">
+          <div class="insp-title">协作焦点</div>
+          <div class="steps">
+            <div class="step"><i data-icon="st-done" class="st st-done"></i><span class="step__title">需求与验收标准</span><span class="step__who">Noah · 已交接</span></div>
+            <div class="step is-todo"><i data-icon="st-draft" class="st st-neutral"></i><span class="step__title">方案与交互设计</span><span class="step__who">未派工</span></div>
+            <div class="step is-current"><i data-icon="st-attention" class="st st-attention"></i><span class="step__title">功能开发</span><span class="step__who">Kai · 当前焦点</span></div>
+            <div class="step"><i data-icon="st-running" class="st st-running"></i><span class="step__title">质量验证与缺陷清单</span><span class="step__who" style="color:var(--live)">Sora · 执行中</span></div>
+            <div class="step is-todo"><i data-icon="st-draft" class="st st-neutral"></i><span class="step__title">缺陷修复</span><span class="step__who">—</span></div>
+            <div class="step is-todo"><i data-icon="st-draft" class="st st-neutral"></i><span class="step__title">回归验证</span><span class="step__who">—</span></div>
+          </div>
+          <p class="faint" style="font-size:11px;line-height:16px;margin-top:10px">依据交接记录与经理当前焦点呈现，不代表平台判定完成度。</p>
+        </section>
+        <section class="insp-section">
+          <div class="insp-title">成员<span class="faint" style="font-weight:400">5</span><span class="spacer"></span><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加成员"><i data-icon="plus" class="icon--sm"></i></button></div>
+          <div class="member"><span class="av av--24 violet">项<span class="av__badge" title="项目经理"><i data-icon="star"></i></span></span><span class="member__name">项目经理</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-open-console="pm" aria-label="打开 项目经理 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member"><span class="av av--24 cyan">N</span><span class="member__name">Noah · 需求分析师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-open-console="noah" aria-label="打开 Noah · 需求分析师 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member"><span class="av av--24 blue">K</span><span class="member__name">Kai · 研发工程师</span><span class="member__state st-attention only-normal">等待你</span><span class="member__state st-failed only-failed">错误</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-open-console="kai" aria-label="打开 Kai · 研发工程师 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member"><span class="av av--24 green">S<span class="av__presence is-live" title="执行中"></span></span><span class="member__name">Sora · 测试工程师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-open-console="sora" aria-label="打开 Sora · 测试工程师 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member"><span class="av av--24 orange">L</span><span class="member__name">Lena · 产品设计师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-open-console="lena" aria-label="打开 Lena · 产品设计师 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+        </section>
+        <section class="insp-section">
+          <div class="insp-title">描述</div>
+          <p style="font-size:13px;color:var(--text-secondary)">登录页在窄窗口下错位、错误提示不可读；请重构布局并为表单校验补齐单元测试，交付前给出截图与测试报告。</p>
+        </section>
+        <section class="insp-section">
+          <div class="insp-title">工作目录<span class="spacer"></span><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径" title="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中打开" title="在访达中打开"><i data-icon="external" class="icon--sm"></i></button></div>
+          <div class="mono truncate" style="font-size:12px;color:var(--text-secondary)" title="~/AgentForge/tasks/task_4eb98664/run_mwaxm7sc">~/AgentForge/tasks/task_4eb98664/run_mwaxm7sc</div>
+        </section>
+      </aside>
+    </div>
+  </main>
+</div>
+
+<div class="menu" id="menu-run" role="menu" style="width:220px">
+  <button class="menu__item" type="button"><i data-icon="users"></i>编辑成员</button>
+  <button class="menu__item" type="button"><i data-icon="link"></i>复制任务链接</button>
+  <button class="menu__item" type="button"><i data-icon="folder"></i>在访达中打开工作目录</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="stop"></i>终止运行…</button>
+</div>
+<script>
+/* 任务详情栏：沿用现有规则——协作页默认展开，文件 / 控制台默认收起，各页签记住手动选择；
+   窗口 ≤1180px 时改为浮层，点击外部或 Esc 关闭。 */
+document.addEventListener('DOMContentLoaded', () => {
+  const ws = document.getElementById('ws'), toggle = document.getElementById('inspector-toggle'), panel = document.getElementById('task-inspector');
+  const manual = {};
+  let current = new URLSearchParams(location.search).get('tab') || 'collab';
+  const narrow = () => innerWidth <= 1180;
+  const isOpen = () => narrow() ? manual[current] === true : (manual[current] ?? current === 'collab');
+  const apply = () => {
+    const open = isOpen();
+    ws.classList.toggle('is-inspector-hidden', !narrow() && !open);
+    ws.classList.toggle('is-inspector-open', narrow() && open);
+    toggle.classList.toggle('is-active', open);
+    toggle.setAttribute('aria-pressed', String(open));
+  };
+  toggle.addEventListener('click', (event) => { event.stopPropagation(); manual[current] = !isOpen(); apply(); });
+  document.querySelectorAll('[data-tab]').forEach((tab) => tab.addEventListener('click', () => { current = tab.dataset.tab; apply(); }));
+  document.addEventListener('click', (event) => { if (narrow() && isOpen() && !panel.contains(event.target)) { manual[current] = false; apply(); } });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && narrow() && isOpen()) { manual[current] = false; apply(); }
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'i') { event.preventDefault(); manual[current] = !isOpen(); apply(); }
+  });
+  addEventListener('resize', apply);
+  document.querySelectorAll('[data-open-console]').forEach((button) => button.addEventListener('click', (event) => {
+    event.stopPropagation();
+    document.querySelector('[data-tab-group="ws"] [data-tab="console"]').click();
+    document.querySelectorAll('.console-member').forEach((row) => row.classList.toggle('is-selected', row.dataset.member === button.dataset.openConsole));
+  }));
+  apply();
+});
+</script>
+</body>
+</html>

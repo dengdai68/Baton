@@ -371,7 +371,7 @@ test("Console renders only audit summaries, including legacy runtime and Trace f
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
   const consoleRenderer = source.slice(source.indexOf("function isCurrentRuntimeAudit"), source.indexOf("function artifactSnapshotTree"));
   assert.match(consoleRenderer, /历史运行记录已按当前审计边界隐藏原始内容/);
-  assert.match(consoleRenderer, /历史 Trace 失败原因已按当前审计边界隐藏原始内容/);
+  assert.match(consoleRenderer, /历史调用记录 失败原因已按当前审计边界隐藏原始内容/);
   assert.match(consoleRenderer, /auditVersion === 2/);
   assert.doesNotMatch(consoleRenderer, /toolInput|toolOutput|COMMAND|INPUT|OUTPUT/);
 });

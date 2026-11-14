@@ -1,3 +1,4 @@
+import { communicationDayLabel } from '../web/communication.js';
 import {runtimeLabel,RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -18,10 +19,10 @@ function closePanel() {
   const options = ["quit", "tray"].map(value => ({ value, checked: false, disabled: true })), save = { disabled: true }, status = {}, retry = { hidden: true };
   const form = { querySelectorAll: () => options, querySelector: () => save, hidden: false };
   const panel = { hidden: false, querySelector: selector => ({ '[data-close-form]': form, '[data-close-status]': status, '[data-close-retry]': retry })[selector] };
-  return { panel, options, save, status, retry, form, selected: () => options.find(option => option.checked)?.value || "", choose(value) { options.forEach(option => { option.checked = option.value === value; }); form.onchange(); } };
+  return { panel, options, save, status, retry, form, selected: () => options.find(option => option.checked)?.value || "", choose(value) { options.forEach(option => { option.checked = option.value === value; }); return form.onchange(); } };
 }
 test('plugin update settings preserve draft during refresh, validate, save, run when disabled and dispose polling',async t=>{
-  const enabled={checked:false},interval={value:''},save={},check={},status={},note={};
+  const enabled={checked:false},interval={value:'',setAttribute(key,value){this[key]=value;}},save={},check={},status={},note={};
   const form={querySelector:key=>({'[name=enabled]':enabled,'[name=intervalMinutes]':interval,'[type=submit]':save})[key]};
   const panel={hidden:false,querySelector:key=>({'[data-plugin-update-form]':form,'[data-check-plugin-updates]':check,'[data-plugin-update-status]':status,'[data-plugin-update-note]':note})[key]};
   let saved={enabled:true,intervalMinutes:2},fail=false,calls=[];
@@ -53,28 +54,31 @@ test('storage HTTP validates before its single restart request and refuses busy 
   await writeFile(join(target,'keep.txt'),'keep');busy=true;assert.equal((await save(target)).status,409);assert.equal(requests.length,1);assert.equal(await readFile(join(target,'keep.txt'),'utf8'),'keep');
 });
 test('collaboration aligns by sender, never by the human recipient or human filter',async()=>{
-  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8'),start=source.indexOf('function renderCollaboration('),end=source.indexOf('/* ---------- 任务空间数据与动作',start),dock={querySelector(){return null;}};
+  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8'),start=source.indexOf('function confirmTaskOutgoing('),end=source.indexOf('/* ---------- 任务空间数据与动作',start),dock={querySelector(){return null;},querySelectorAll(){return [];}};
   const messages=[{id:'human',createdAt:'2026-01-01T00:00:00Z',sender:{type:'human',name:'操作者'},recipient:{type:'agent',name:'员工'},content:'HUMAN-CONTENT'},{id:'employee',createdAt:'2026-01-01T00:00:01Z',sender:{type:'agent',name:'员工'},recipient:{type:'human',name:'操作者'},content:'AGENT-TO-HUMAN'}];
-  const render=runWithCache(`${source.slice(start,end)};renderCollaboration`,{$:selector=>selector==='#collaboration-panel'?dock:{addEventListener(){}},state:{workspace:{pendingQuestions:[]}},workspaceView:()=>({draft:'',collaborationItems:collaborationRecords({messages})}),collaborationRecords,acceptanceReview:()=>null,esc:String,exactTime:String,collaborationMessageMarkup:content=>content,sendInstruction(){},refreshCollaborationBodies(){},messageAttachments(){return "";},draftAttachments(){return "";},attachmentControls(){return "";},bindTaskAttachments(){},requestAnimationFrame:callback=>callback()});
+  const render=runWithCache(`${source.slice(start,end)};renderCollaboration`,{$:selector=>selector==='#collaboration-panel'?dock:{addEventListener(){}},state:{workspace:{pendingQuestions:[]}},workspaceView:()=>({draft:'',collaborationItems:collaborationRecords({messages})}),collaborationRecords,communicationDayLabel,acceptanceReview:()=>null,esc:String,exactTime:String,roleColor:()=> 'color-system',initialsOf:agent=>agent.name?.slice(0,1)||'?',collaborationMessageMarkup:content=>content,sendInstruction(){},refreshCollaborationBodies(){},messageAttachments(){return "";},draftAttachments(){return "";},attachmentControls(){return "";},outgoingMessageFeedback(){return '';},outgoingAttachmentMarkup(){return '';},bindTaskAttachments(){},requestAnimationFrame:callback=>callback()});
   render({run:{id:'run',status:'paused',task:{}},messages},[]);
   const articles=dock.innerHTML.match(/<article[\s\S]*?<\/article>/g);assert.equal(articles.length,2);assert.match(articles[0],/class="collaboration-row from-human/);assert.match(articles[1],/AGENT-TO-HUMAN/);assert.doesNotMatch(articles[1],/from-human/);
 });
 test('plugin and MCP empty/error states are outside their card grid, and search transitions remain truthful',async t=>{
   for(const createUI of [createMarketplaceUI,createMcpMarketplaceUI]) {
-    const nodes=new Map(),query=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:false,dataset:{},querySelector:query,insertAdjacentHTML(){},setAttribute(key,value){this[key]=value;}});return nodes.get(selector);};
+    const nodes=new Map(),query=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:false,dataset:{},classList:{toggle(){}},querySelector:query,insertAdjacentHTML(){},setAttribute(key,value){this[key]=value;}});return nodes.get(selector);};
     const root={isConnected:true,querySelector:query};let fail=false;
     const ui=createUI({api:async()=>{if(fail)throw Error('read failed');return {plugins:[],entries:[]};},esc:String});
     t.after(()=>ui.unmount());
-    ui.mount(root);await new Promise(done=>setImmediate(done));
+    ui.mount(root);assert.equal(query('[data-market-empty]')['aria-busy'],'true');await new Promise(done=>setImmediate(done));
     assert.match(root.innerHTML,/<div data-market-list hidden[^>]*><\/div><div class="directory-empty market-directory-empty"/);
     assert.equal(query('[data-market-list]').innerHTML,'');assert.equal(query('[data-market-list]').hidden,true);assert.match(query('[data-market-empty]').innerHTML,/<strong>尚未安装/);
+    assert.equal(query('[data-market-empty]')['aria-busy'],'false');assert.match(root.innerHTML,/<div class="directory-content"><div data-market-list/);
     query('input').oninput({target:{value:'missing'}});await new Promise(done=>setTimeout(done,250));assert.match(query('[data-market-empty]').innerHTML,/<strong>没有匹配的/);
     ui.unmount();fail=true;ui.mount(root);await new Promise(done=>setImmediate(done));assert.equal(query('[data-market-empty]').textContent,'read failed');assert.equal(query('[data-market-empty]').role,'alert');
     query('input').oninput({target:{value:'another search'}});assert.equal(query('[data-market-empty]').textContent,'read failed','typing after a failed read must not imply an empty catalog');
   }
 });
 function cliPanel() {
-  const install = {}, refresh = {}, status = {}, paths = {};
+  const install = {}, refresh = {}, paths = {};
+  // Mimic the DOM: assigning innerHTML updates the visible text (tags stripped).
+  const status = { textContent: '', set innerHTML(value) { this.textContent = String(value).replace(/<[^>]*>/g, ''); }, get innerHTML() { return this.textContent; } };
   return { install, refresh, status, paths, panel: { hidden: false, querySelector: key => ({ '[data-cli-install]': install, '[data-cli-refresh]': refresh, '[data-cli-status]': status, '[data-cli-paths]': paths })[key] } };
 }
 test('General CLI installation needs a desktop bridge and explicit click; cancel, failure, retry and detach are truthful', async () => {
@@ -104,18 +108,16 @@ test("General settings keeps Web separate and does not choose a Mac close defaul
   assert.equal(mac.selected(), ""); assert.equal(mac.options.every(option => !option.checked), true); assert.equal(mac.save.disabled, true); assert.equal(writes, 0);
   assert.match(mac.status.textContent, /首次关闭/);
 });
-test("General settings preserves failed save drafts, retries and ignores late detached reads", async () => {
+test("General settings saves immediately, restores a failed change and ignores detached reads", async () => {
   const mac = closePanel(); let fail = true, reads = 0, saved = "quit";
   const desktop = { getPreferences: async () => { reads++; return { platform: "darwin", closeMode: saved }; }, setCloseMode: async mode => {
     if (fail) throw new Error("disk unavailable"); saved = mode; return { platform: "darwin", closeMode: mode };
   } };
   const ui = createClosePreferenceUI(mac.panel, desktop);
-  await ui.refresh(); mac.choose("tray");
-  await ui.refresh(); assert.equal(reads, 1, "focus must not overwrite an unsaved draft");
-  await mac.form.onsubmit({ preventDefault() {} });
-  assert.equal(saved, "quit"); assert.equal(mac.selected(), "tray"); assert.equal(mac.save.disabled, false); assert.match(mac.status.textContent, /保存失败/);
-  fail = false; await mac.form.onsubmit({ preventDefault() {} });
-  assert.equal(saved, "tray"); assert.equal(mac.save.disabled, true); assert.match(mac.status.textContent, /已保存/);
+  await ui.refresh(); await mac.choose("tray");
+  assert.equal(saved,"quit");assert.equal(mac.selected(),"quit");assert.equal(mac.save.hidden,true);assert.match(mac.status.textContent,/保存失败/);
+  fail=false;await mac.choose("tray");
+  assert.equal(saved,"tray");assert.equal(mac.save.disabled,true);assert.match(mac.status.textContent,/已保存/);
   let finish; const late = closePanel();
   const detached = createClosePreferenceUI(late.panel, { getPreferences: () => new Promise(resolve => { finish = resolve; }) });
   const pending = detached.refresh(); detached.dispose(); finish({ platform: "darwin", closeMode: "tray" }); await pending;
@@ -129,10 +131,10 @@ test("General settings preserves failed save drafts, retries and ignores late de
 test("Runtime headings stay subordinate and General uses an explicit native radio group", async () => {
   const settings = await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8");
   const css = await readFile(new URL("../web/styles.css", import.meta.url), "utf8");
-  const desktop = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
+  const desktop = (await Promise.all(["../web/tokens.css","../web/styles.css","../apps/electron/compact.css"].map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
   assert.doesNotMatch(settings, /本机执行说明与版本|data-control-version|<select[^>]*name="closeMode"/);
   for (const mode of ["quit", "tray"]) assert.match(settings, new RegExp(`type="radio" name="closeMode" value="${mode}" disabled`));
-  assert.match(settings, /fieldset class="settings-radio-group"><legend>关闭主窗口时/);
+  assert.match(settings, /fieldset class="settings-radio-group settings-segmented"><legend class="visually-hidden">关闭主窗口时/);
   assert.match(css, /\.settings-section h4 \{/);
   assert.match(desktop, /\.settings-section h4 \{ font-size:13px; font-weight:600/);
   assert.doesNotMatch(settings, /profile && !profile\.system/);
@@ -142,11 +144,12 @@ test("team edits preserve inactive members and allow an empty manager-free roste
   const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
   const controller=source.slice(source.indexOf('async function teamModal('),source.indexOf('const newTeamModal ='));
   const agents=[{id:'active',status:'active',kind:'business',name:'员工'},{id:'inactive',status:'inactive',kind:'business',name:'停用员工'}];
-  const handlers={},calls=[],errors=[];let selected=['active','inactive'],picker;
-  const form={name:{value:'更新团队名'},mission:{value:'使命'},elements:{status:{value:'inactive'}},closest:()=>({classList:{add(){}}}),addEventListener:(name,handler)=>{handlers[name]=handler;}};
+  const handlers={},calls=[],errors=[],enabledToggle={};let selected=['active','inactive'],picker;
+  const form={name:{value:'更新团队名'},mission:{value:'使命'},elements:{status:{value:'inactive'}},querySelector:selector=>selector==='[data-enabled-toggle]'?enabledToggle:null,closest:()=>({classList:{add(){}}}),addEventListener:(name,handler)=>{handlers[name]=handler;}};
   const context={loadCatalogReferences:async()=>{},state:{agents},esc:String,openModal(){},$:selector=>selector==='#team-form'?form:{},createEmployeeMultiSelect:(host,options)=>{picker=options;return{value:()=>selected};},clearInvalid(){},setInvalid:(field,error)=>errors.push(error),api:async(path,options)=>calls.push({path,input:JSON.parse(options.body)}),closeModal(){},toast(){},refresh:async()=>{}};
   await runWithCache(`${controller};teamModal({id:'team',memberAgentIds:['active','inactive']});`,context);
   assert.deepEqual(Array.from(picker.selectedIds),['active','inactive']);assert.equal(picker.items,agents);
+  enabledToggle.onchange({target:{checked:true}});assert.equal(form.elements.status.value,'active');enabledToggle.onchange({target:{checked:false}});assert.equal(form.elements.status.value,'inactive');
   await handlers.submit({preventDefault(){}});assert.deepEqual(calls[0],{path:'/api/teams/team',input:{name:'更新团队名',mission:'使命',status:'inactive',memberAgentIds:['active','inactive']}});
   selected=[];await handlers.submit({preventDefault(){}});assert.deepEqual(calls[1].input.memberAgentIds,[]);
   form.name.value=' ';await handlers.submit({preventDefault(){}});assert.equal(calls.length,2);assert.equal(errors.length,1);
@@ -196,16 +199,19 @@ test("sidebar counts only human attention and unread replies rather than invento
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
   const shell = source.slice(source.indexOf("function renderShell()"), source.indexOf("let navigationRequest"));
   const nodes = new Map();
+  const headers = ['tasks','inbox','agents'].map(headerView => ({dataset:{headerView},hidden:true}));
   const context = { state: { currentView: "tasks", communicationUnreadCount: 3, runs: [{ taskId: "a", status: "running" }, { taskId: "b", status: "paused" }, { taskId: "b", status: "failed" }, { taskId: "archived", status: "failed", task: { archivedAt: "yesterday" } }] }, taskNeedsAttention,
+    $$: () => headers,
     $: selector => { if (!nodes.has(selector)) nodes.set(selector, { style: {}, setAttribute() {} }); return nodes.get(selector); } };
   runWithCache(`${shell}; renderShell();`, context);
-  assert.equal(nodes.get("#nav-task-count").textContent, 1);
-  assert.equal(nodes.get("#nav-ws-hint").textContent, "待你处理");
+  assert.deepEqual(headers.map(host=>host.hidden),[false,true,true], 'only the active page exposes its header actions');
+  assert.equal(nodes.get("#nav-inbox-count").textContent, 1, "the attention count lives on 待我处理 only");
+  assert.equal(nodes.has("#nav-task-count"), false, "任务中心 no longer duplicates the count");
   assert.equal(nodes.get("#nav-communication-count").textContent, 3);
   for (const id of ["team", "workflow", "agent"]) assert.equal(nodes.has(`#nav-${id}-count`), false);
   context.state.navigationNotifications = { taskAttentionCount: 0, communicationUnreadCount: 0 };
   runWithCache("renderShell();", context);
-  assert.equal(nodes.get("#nav-task-count").hidden, true);
+  assert.equal(nodes.get("#nav-inbox-count").hidden, true);
   assert.equal(nodes.get("#nav-communication-count").hidden, true);
 });
 
@@ -255,7 +261,7 @@ test("workspace removes delivery-version navigation without removing backend Art
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
   assert.doesNotMatch(source, /data-ws-tab="artifacts"|artifact-snapshots-panel|loadArtifactSnapshot|selectedArtifactId/);
   assert.match(source, /data-open-acceptance-directory/);
-  assert.ok(source.includes('>CHANGE</button>'));
+  assert.ok(source.includes('>变更</button>'));
   assert.match(source, /data-back-to-tasks aria-label=.*返回触发记录.*返回任务列表/);
   assert.match(source, /data-back-to-tasks.*setView\("automations"\).*return setView\("tasks"\)/);
   const apiSource = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
@@ -363,9 +369,9 @@ test('CHANGE keeps its tree free of explanatory text and surfaces read errors ou
   const source = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
   const view = { changes: { repositories: [] } }, tree = { scrollTop: 0 };
   const host = { innerHTML: '', dataset: {}, querySelector: () => tree };
-  const render = runWithCache(`${source.slice(source.indexOf('function renderWorkingChanges('), source.indexOf('async function loadWorkingChanges('))}; renderWorkingChanges;`, {
+  const render = runWithCache(`${source.slice(source.indexOf('function workingFileSources('), source.indexOf('function renderWorkingDirectory('))}${source.slice(source.indexOf('function renderWorkingChanges('), source.indexOf('async function loadWorkingChanges('))}; renderWorkingChanges;`, {
     state: { selectedRunId: 'run' }, $: () => host, workspaceView: () => view,
-    syncWorkingRefresh: () => {}, rememberDiffReading: () => {}, presentationPreferences: {}, esc: String,
+    syncWorkingRefresh: () => {}, workingRefreshMarkup: () => '<button class="workspace-refresh">刷新</button>', rememberDiffReading: () => {}, presentationPreferences: {}, esc: String,
     workingChangesTree: repo => `<ul>${repo.path || 'docs'}</ul>`, workingDiffMarkup: () => ''
   });
   const repo = (path, changes = [], rest = {}) => ({ path, initialized: true, changes, ...rest });
@@ -601,8 +607,9 @@ test("workspace settings persist and affect only new Tasks with atomic audit", a
 
 test("overview task titles and metadata form separate lines", async () => {
   const css = await readFile(new URL("../web/styles.css", import.meta.url), "utf8");
-  const desktop = await readFile(new URL("../apps/electron/compact.css", import.meta.url), "utf8");
-  const rules = selector => css.match(new RegExp(`^\\.${selector} \\{([^}]+)\\}`, "m"))[1];
+  const desktop = (await Promise.all(["../web/tokens.css","../web/styles.css","../apps/electron/compact.css"].map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
+  // Overview rows are scoped to the overview so they never leak into task center rows.
+  const rules = selector => css.match(new RegExp(`^(?:#overview-view )?\\.${selector} \\{([^}]+)\\}`, "m"))[1];
   for (const selector of ["task-row-title", "task-row-meta"]) assert.match(rules(selector), /display:block/);
   assert.match(rules("task-row-title"), /overflow:hidden; text-overflow:ellipsis; white-space:nowrap/);
   assert.match(rules("task-row-copy"), /min-width:0/);
@@ -618,9 +625,9 @@ function memoryStorage() {
 test("Runtime settings keep the shared card spacing container during loading failure", async () => {
   const source = await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8");
   const css = await readFile(new URL("../web/styles.css", import.meta.url), "utf8");
-  assert.match(source, /<div class="repository-access-grid" data-runtime-config><\/div>/);
+  assert.match(source, /<div class="repository-access-grid settings-box" data-runtime-config><\/div>/);
   assert.match(css, /\.repository-access-grid\{display:grid;gap:12px\}/);
-  const container = { className: "repository-access-grid", innerHTML: "", isConnected: true };
+  const container = { className: "repository-access-grid settings-box", innerHTML: "", isConnected: true };
   const context = {
     root: { querySelector: () => container }, runtimeLoaded: false,
     api: async () => { throw new Error("unavailable"); },
@@ -628,7 +635,7 @@ test("Runtime settings keep the shared card spacing container during loading fai
   };
   const start = source.indexOf("  async function loadRuntimes()"), end = source.indexOf("  async function loadWorkspace()", start);
   await runWithCache(`${source.slice(start, end)}; loadRuntimes()`, context);
-  assert.equal(container.className, "repository-access-grid");
+  assert.equal(container.className, "repository-access-grid settings-box");
   assert.match(container.innerHTML, /role="alert">unavailable/);
   assert.match(container.innerHTML, /data-retry-runtime/);
   assert.equal(context.runtimeLoaded, false);
@@ -636,13 +643,13 @@ test("Runtime settings keep the shared card spacing container during loading fai
 
 test("task search combines name and exact status without a team relation", async () => {
   const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
-  const matches = runWithCache(`${source.slice(source.indexOf("function taskMatchesSearch("), source.indexOf("function renderTasks()"))}; taskMatchesSearch`);
-  const task = { title: "验收 Alpha 门户", status: "awaiting_acceptance" };
-  assert.equal(matches(task, { name: " ALPHA ", status: "awaiting_acceptance" }), true);
-  for (const query of [{ name: "不存在" }, { status: "done" }, { name: "门户", status: "running" }]) assert.equal(matches(task, query), false);
-  assert.equal(matches(task), true);
-  assert.equal(matches({}, { name: "任务" }), false);
-  assert.equal(task.status, "awaiting_acceptance");
+  // Matching is server-side; the client must forward name+status+workflow exactly once
+  // and never invent a team/relation parameter.
+  assert.match(source, /query\.set\('search',state\.taskSearch\.name\);query\.set\('status',state\.taskSearch\.status\);query\.set\('workflow',state\.taskSearch\.workflow\)/);
+  assert.doesNotMatch(source.slice(source.indexOf("if(view==='tasks')"), source.indexOf("const request=++directoryRequest")), /teamId|memberAgentIds/);
+  // Chip mapping stays client-side: attention/active/done semantics cannot drift.
+  const chips = runWithCache(`const taskNeedsAttention = status => ["awaiting_human","awaiting_acceptance","paused","blocked","failed"].includes(status);${source.slice(source.indexOf("function taskMatchesChip("), source.indexOf("function taskGroupOrder("))}; [taskMatchesChip("awaiting_human","attention"), taskMatchesChip("review","active"), taskMatchesChip("completed","done"), taskMatchesChip("paused","attention"), taskMatchesChip("backlog","active")]`);
+  assert.equal(chips.join(","), "true,true,true,true,false");
   assert.match(source, /name="runtimeProfileId"/);
   assert.doesNotMatch(source, /name="executable"/);
   const settings = await readFile(new URL('../web/settings.mjs', import.meta.url), 'utf8');
@@ -652,12 +659,15 @@ test("task search combines name and exact status without a team relation", async
 
 test("presentation choices survive reload without storing credentials or domain state", () => {
   const storage = memoryStorage();
-  const choices = { version: 1, theme: "minimal", hiddenViews: ["manual", "agents", "roles", "manual", "settings", "unknown"], showGroups: false, showIcons: false, showCounts: false, token: "private-sentinel", task: { status: "done" } };
+  const choices = { version: 1, theme: "dark", hiddenViews: ["manual", "agents", "roles", "manual", "settings", "unknown"], showGroups: false, showIcons: false, showCounts: false, token: "private-sentinel", task: { status: "done" } };
   assert.equal(savePreferences(choices, () => storage), true);
   const restored = readPreferences(() => storage);
-  assert.deepEqual(restored, { version: 2, theme: "minimal", hiddenViews: ["overview", "agents", "roles", "manual"], showGroups: false, showIcons: false, showCounts: false, showUnread: true, directoryTheme: "vscode-light" });
+  assert.deepEqual(restored, { version: 2, theme: "dark", hiddenViews: ["agents", "roles", "manual"], showGroups: false, showIcons: false, showCounts: false, showUnread: true, directoryTheme: "vscode-light" });
+  // Appearance is light / dark / system; retired themes are not migrated and fall back to light.
+  for (const theme of ["light", "dark", "system"]) assert.equal(normalizePreferences({ version: 2, theme }).theme, theme);
+  for (const theme of ["warm", "minimal", "injected", undefined]) assert.equal(normalizePreferences({ version: 2, theme }).theme, "light", String(theme));
   assert.doesNotMatch(storage.getItem(PREFERENCES_KEY), /private-sentinel|token|task|settings|unknown/);
-  assert.deepEqual(normalizePreferences(null).hiddenViews, ["overview", "manual"]);
+  assert.deepEqual(normalizePreferences(null).hiddenViews, ["manual"]);
   assert.deepEqual(normalizePreferences({ version: 2, hiddenViews: [] }).hiddenViews, [], "a deliberate later choice can show overview");
   // The working-directory theme is a local display preference with three
   // honest options; unknown or missing values fall back to the default.
@@ -676,29 +686,48 @@ test("broken or unavailable local storage cannot prevent default navigation", ()
   assert.deepEqual(normalizePreferences({ version: 1, theme: "injected", hiddenViews: "tasks", showIcons: "false" }), defaults);
   const unavailable = () => { throw new Error("storage disabled"); };
   assert.deepEqual(readPreferences(unavailable), defaults);
-  assert.equal(savePreferences({ ...defaults, theme: "minimal" }, unavailable), false);
+  assert.equal(savePreferences({ ...defaults, theme: "dark" }, unavailable), false);
   assert.equal(savePreferences(defaults, () => ({ setItem() { throw new Error("quota"); } })), false);
 });
 
 test("hiding every optional entry leaves Settings reachable and empty groups hidden", () => {
   const items = [...NAVIGATION.map(({ id }) => ({ dataset: { view: id }, hidden: false })), { dataset: { view: "settings" }, hidden: true }];
-  const groups = ["OPERATIONS", "BUILD", "REFERENCE"].map((name) => ({ hidden: false, querySelectorAll: () => items.filter((item) => NAVIGATION.some((entry) => entry.id === item.dataset.view && entry.group === name)) }));
+  const groups = ["工作", "组织", "扩展"].map((name) => ({ hidden: false, querySelectorAll: () => items.filter((item) => NAVIGATION.some((entry) => entry.id === item.dataset.view && entry.group === name)) }));
   const document = {
     documentElement: { dataset: {} },
     querySelector: () => null,
     querySelectorAll: (selector) => selector === "[data-navigation-group]" ? groups : items,
   };
-  applyPreferences(document, { version: 2, theme: "minimal", hiddenViews: [...NAVIGATION.map(({ id }) => id), "settings"] });
+  applyPreferences(document, { version: 2, theme: "dark", hiddenViews: [...NAVIGATION.map(({ id }) => id), "settings"] });
   assert.equal(items.at(-1).hidden, false);
   assert.equal(items.slice(0, -1).every((item) => item.hidden), true);
   assert.equal(groups.every((group) => group.hidden), true);
-  assert.equal(document.documentElement.dataset.theme, "minimal");
+  assert.equal(document.documentElement.dataset.theme, "dark");
   applyPreferences(document, normalizePreferences(null));
-  assert.equal(items.find((item) => item.dataset.view === "overview").hidden, true);
+  assert.equal(items.find((item) => item.dataset.view === "inbox").hidden, false);
   assert.equal(items.filter((item) => !["overview", "manual"].includes(item.dataset.view)).every((item) => !item.hidden), true);
   assert.equal(items.find(item => item.dataset.view === "manual").hidden, true);
-  assert.deepEqual(groups.map(group => group.hidden), [false, false, true]);
-  assert.equal(document.documentElement.dataset.theme, "warm");
+  assert.deepEqual(groups.map(group => group.hidden), [false, false, false], "扩展 stays visible via 插件/MCP even though 开发手册 is hidden");
+  assert.equal(document.documentElement.dataset.theme, "light");
+});
+
+test("appearance choice is mirrored to the desktop host and colors native chrome", () => {
+  const calls = [], meta = { content: "", setAttribute(name, value) { this[name] = value; } };
+  const view = { matchMedia: query => ({ matches: query === "(prefers-color-scheme: dark)" }), agentforgeDesktop: { setAppearance: async theme => { calls.push(theme); } } };
+  const document = { defaultView: view, documentElement: { dataset: {} }, querySelector: selector => selector === 'meta[name="theme-color"]' ? meta : null, querySelectorAll: () => [] };
+  for (const [theme, color] of [["light", "#ffffff"], ["dark", "#111215"], ["system", "#111215"]]) {
+    applyPreferences(document, { version: 2, theme });
+    console.log(`theme=${theme} → data-theme=${document.documentElement.dataset.theme}, theme-color=${meta.content}`);
+    assert.equal(document.documentElement.dataset.theme, theme);
+    assert.equal(meta.content, color, "system follows the OS appearance (dark in this fixture)");
+  }
+  assert.deepEqual(calls, ["light", "dark", "system"]);
+  // A browser without the desktop bridge (or a rejecting host) still applies the theme.
+  view.agentforgeDesktop = { setAppearance: async () => { throw new Error("host closed"); } };
+  applyPreferences(document, { version: 2, theme: "dark" });
+  delete view.agentforgeDesktop;
+  applyPreferences(document, { version: 2, theme: "light" });
+  assert.equal(document.documentElement.dataset.theme, "light");
 });
 
 test("settings categories are refreshable routes and configuration leaves the employee shell", async () => {
@@ -734,7 +763,7 @@ test("Console initializes Settings with ready validation helpers", async () => {
     createToast: () => () => {},
     createCommunicationUI: () => ({}), readPreferences: () => normalizePreferences(null), applyPreferences() {},
     createSettingsUI: (value) => { dependencies = value; return {}; },
-    createMarketplaceUI: () => ({}), createMcpMarketplaceUI: () => ({}), openModal() {}, closeModal() {},
+    createMarketplaceUI: () => ({}), createMcpMarketplaceUI: () => ({}), actionMenu() {}, openModal() {}, closeModal() {},
   });
   assert.equal(typeof dependencies.clearInvalid, "function");
   assert.equal(typeof dependencies.setInvalid, "function");
@@ -769,7 +798,9 @@ test("in-app confirm dialog resolves on buttons and cancels on modal close", asy
   assert.equal(backdrop.classList.contains("open"), true);
   assert.equal(modal.classList.contains("confirm-dialog"), true);
   assert.match(content.innerHTML, /confirm-dialog-actions/);
-  assert.match(content.innerHTML, /small-button danger/);
+  assert.match(content.innerHTML, /danger-button danger-solid/);
+  assert.equal(modal.classList.contains('detail-drawer'), false, 'confirmation remains centered');
+  assert.equal(modal.classList.contains('command-dialog'), false, 'confirmation never inherits command panel sizing');
   assert.doesNotMatch(content.innerHTML, /form-actions/, "confirm dialogs must not use the scrolling form-actions grouping");
   cancelButton.click();
   assert.equal(await declined, false, "cancel button resolves false");
@@ -1015,3 +1046,149 @@ test("thinking hydration displays recorded public text and explains empty histor
 function runWithCache(source,context={},...options){context.ByteCache=ByteCache;context.runtimeLabel=runtimeLabel;context.RUNTIME_IDS=RUNTIME_IDS;return vm.runInNewContext(source,context,...options);}
 
 test('work-root reset preserves presentation preferences and reloads the retained login',async()=>{const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');const callback=source.slice(source.indexOf('onDataReset:'),source.indexOf('onWorkspaceSaved:'));assert.doesNotMatch(callback,/removeItem|clear\(/);assert.match(callback,/location.replace/);});
+
+async function inboxHarness(extra = {}) {
+  const source = await readFile(new URL('../web/app.js', import.meta.url),'utf8');
+  const block = source.slice(source.indexOf('const inboxGroups ='),source.indexOf('/* ---------- 总览 ---------- */'));
+  const state = {currentView:'inbox',inboxSelection:'a',inboxErrors:{},inboxResults:{awaiting_human:{tasks:[{id:'a',title:'登录',status:'awaiting_human',runs:[{id:'run/a'}]},{id:'b',title:'导出',status:'awaiting_human',runs:[{id:'run/b'}]}]}},inboxDetails:{}};
+  const preview = {dataset:{},isConnected:true,innerHTML:'',querySelector(){return null;}};
+  const context = {state,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:()=>preview,esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
+  const controller = runWithCache(block+';({refreshInbox,renderInbox,renderInboxPreview,sendInboxAnswer,inboxFacts,inboxDrafts,inboxAnswered,inboxTasks})',context);
+  return {controller,state:context.state,preview,...context};
+}
+test('inbox rows derive real question identity, failure text and acceptance from compact facts',async()=>{
+  const {controller} = await inboxHarness();
+  const question={id:'q',content:'是否调整第三方登录？',sender:{id:'kai',name:'Kai'},recipient:{type:'human'}};
+  const workspace={run:{participants:[{id:'kai',name:'Kai · 研发工程师',color:'blue'}]},pendingQuestions:[question]};
+  assert.equal(controller.inboxFacts({status:'awaiting_human'},workspace).description,'Kai · 研发工程师 向你提问');
+  assert.equal(controller.inboxFacts({status:'awaiting_human'},workspace).summary,question.content);
+  assert.equal(controller.inboxFacts({status:'failed'},{run:{failure:{message:'code 127: missing executable'}}}).summary,'code 127: missing executable');
+  assert.equal(controller.inboxFacts({status:'awaiting_acceptance'},{run:{manager:{name:'经理'},acceptanceRequest:{summary:'已交付'}}}).description,'经理 提交了验收');
+});
+test('inbox state previews use exact context, inline reply, acceptance, raw error and pause reason',async()=>{
+  const calls=[];
+  const h=await inboxHarness({api:async path=>{calls.push(path);return path.endsWith('/timeline')?{events:[{type:'run.paused',data:{reason:'等待录音'}}]}:{items:[{id:'input',from:'Noah',content:'原始交接 <script>'},{id:'unrelated',from:'其他成员',content:'无关消息'}]};}});
+  const task={id:'a',title:'登录',status:'awaiting_human'};
+  h.state.inboxDetails.a={run:{id:'r',task:{workflowSnapshot:{nodes:[{id:'dev',name:'功能开发'}]}},participants:[]},pendingQuestions:[{id:'q',traceId:'t',workflowNodeId:'dev',content:'问题全文',sender:{name:'Kai'},recipient:{type:'human'}}],traces:[{id:'t',inputMessageId:'input'}]};
+  await h.controller.renderInboxPreview(task);
+  assert.match(h.preview.innerHTML,/Noah 的交接/);assert.match(h.preview.innerHTML,/原始交接 &lt;script>/);assert.doesNotMatch(h.preview.innerHTML,/无关消息/);
+  assert.match(h.preview.innerHTML,/<label[^>]*for="inbox-answer-text"/);assert.match(h.preview.innerHTML,/data-question-id="q"/);assert.match(h.preview.innerHTML,/发送并处理下一项/);
+  assert.match(h.preview.innerHTML,/功能开发/);
+  h.state.inboxDetails.a={run:{id:'r',artifactCount:2,task:{}},pendingQuestions:[]};
+  await h.controller.renderInboxPreview({...task,status:'awaiting_acceptance'});assert.match(h.preview.innerHTML,/宽窄布局/);assert.match(h.preview.innerHTML,/2 项交付文件/);assert.match(h.preview.innerHTML,/data-inbox-confirm="r"/);assert.match(h.preview.innerHTML,/继续咨询/);
+  h.state.inboxDetails.a.run.failure={message:'进程退出 code 127 <bad>'};
+  await h.controller.renderInboxPreview({...task,status:'failed'});assert.match(h.preview.innerHTML,/<pre class="inbox-error">进程退出 code 127 &lt;bad>/);assert.match(h.preview.innerHTML,/查看恢复选项/);
+  await h.controller.renderInboxPreview({...task,status:'paused'});assert.match(h.preview.innerHTML,/等待录音/);assert.match(h.preview.innerHTML,/查看并继续/);
+});
+test('inbox stale previews and refresh tickets cannot overwrite newer views',async()=>{
+  let firstResolve;
+  const h=await inboxHarness({api:path=>path.includes('run%2Fa')?new Promise(resolve=>firstResolve=resolve):Promise.resolve({run:{id:'b',task:{}},pendingQuestions:[]})});
+  const old=h.controller.renderInboxPreview({id:'a',title:'OLD',status:'done',runs:[{id:'run/a'}]});
+  await h.controller.renderInboxPreview({id:'b',title:'NEW',status:'done',runs:[{id:'run/b'}]});
+  firstResolve({run:{id:'old'},pendingQuestions:[]});await old;assert.match(h.preview.innerHTML,/NEW/);assert.doesNotMatch(h.preview.innerHTML,/OLD/);
+  const resolvers=[];
+  const r=await inboxHarness({api:path=>new Promise(resolve=>resolvers.push({path,resolve}))});
+  const pending=r.controller.refreshInbox();
+  r.state.inboxView='recent';const recent=r.controller.refreshInbox();
+  assert.equal(resolvers.length,6);
+  resolvers[5].resolve({tasks:[{id:'done',status:'done',updatedAt:'2026-11-12'}],total:1,page:1,totalPages:1});await recent;
+  resolvers.slice(0,5).forEach(({resolve})=>resolve({tasks:[],total:0}));await pending;
+  assert.equal(r.state.inboxResults.done.tasks[0].id,'done');assert.equal(r.state.inboxLoadedView,'recent');
+});
+test('inbox reply uses existing precise message contract, preserves failure draft, and selects next or stays',async()=>{
+  for(const mode of ['next','stay','failure']) {
+    const requests=[];let renders=0;
+    const h=await inboxHarness({api:async(path,options)=>{requests.push({path,options});if(options?.method==='POST'){if(mode==='failure')throw Error('发送失败');return {resumed:true};}return {tasks:[],total:0,page:1,totalPages:1};}});
+    const input={value:'  只调整 GitHub  ',readOnly:false},error={hidden:true},buttons=[{},{}];
+    const form={dataset:{runId:'run/a',questionId:'question/a',taskId:'a'},isConnected:true,querySelector:selector=>selector==='textarea'?input:error,querySelectorAll:()=>buttons};
+    h.controller.inboxDrafts.set('run/a:question/a',input.value);
+    // Only rendering is stubbed; execute real send/refresh/query logic.
+    const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
+    const send=runWithCache(source.slice(source.indexOf('async function sendInboxAnswer('),source.indexOf('/* ---------- 总览 ---------- */'))+';sendInboxAnswer',{
+      ...h, inboxTasks:h.controller.inboxTasks,inboxDrafts:h.controller.inboxDrafts,inboxAnswered:h.controller.inboxAnswered,
+      refreshInbox:async()=>{h.state.inboxResults.awaiting_human.tasks.shift();},renderInbox:()=>renders++,toast(){},Date,encodeURIComponent,
+    });
+    await send({preventDefault(){},currentTarget:form,submitter:{value:mode}});
+    assert.equal(requests[0].path,'/api/runs/run%2Fa/messages');
+    assert.deepEqual(JSON.parse(requests[0].options.body),{recipientAgentId:null,replyToMessageId:'question/a',content:'只调整 GitHub',attachmentIds:[]});
+    if(mode==='failure'){assert.equal(h.controller.inboxDrafts.get('run/a:question/a'),input.value);assert.equal(error.textContent,'发送失败');assert.equal(renders,0);}
+    else {assert.equal(h.controller.inboxDrafts.has('run/a:question/a'),false);assert.equal(renders,1);if(mode==='next')assert.equal(h.state.inboxSelection,'b');else assert.equal(h.state.inboxReceipt.inboxAnswer,'只调整 GitHub');}
+    assert.ok(buttons.every(button=>!button.disabled));assert.equal(input.readOnly,false);
+  }
+});
+test('inbox rich grouped rows hide empty groups and retain the live composer on polling',async()=>{
+  const h=await inboxHarness();
+  const list={innerHTML:''},chips={innerHTML:''},host={innerHTML:'',querySelector:selector=>selector==='.inbox-list'?list:null};
+  h.state.inboxDetails.a={run:{id:'r',participants:[{id:'kai',name:'Kai',color:'blue'}]},pendingQuestions:[{id:'q',content:'第三方登录是否在范围内？',sender:{id:'kai',name:'Kai'},recipient:{type:'human'}}]};
+  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
+  const render=runWithCache(source.slice(source.indexOf('function renderInbox()'),source.indexOf('async function renderInboxPreview('))+';renderInbox',{
+    ...h,$:selector=>selector==='#inbox-content'?host:selector==='#inbox-header-actions'?chips:h.preview,inboxTasks:h.controller.inboxTasks,inboxVisibleGroups:()=>[['awaiting_human','等待你的澄清'],['failed','执行中断']],
+    inboxFacts:h.controller.inboxFacts,inboxStatusIcon:()=>'<svg width="16"></svg>',renderInboxPreview(){},inboxPreviewRequest:0,setTitleCount(){},
+  });
+  render();assert.match(list.innerHTML,/Kai 向你提问/);assert.match(list.innerHTML,/第三方登录是否在范围内/);assert.match(list.innerHTML,/<button class="inbox-item selected"/);assert.doesNotMatch(list.innerHTML,/执行中断/);assert.match(chips.innerHTML,/data-inbox-view="recent"/);assert.doesNotMatch(host.innerHTML,/data-inbox-view/);
+  const form={dataset:{questionId:'q'}},input={value:'正在输入的回答'};
+  h.preview.innerHTML='LIVE COMPOSER';h.preview.querySelector=selector=>selector==='#inbox-answer-text'?input:selector==='[data-question-id]'?form:null;
+  h.api=async()=>({items:[]});
+  // Re-rendering an updated summary for the same immutable question cannot replace its live input.
+  await h.controller.renderInboxPreview({id:'a',title:'登录',status:'awaiting_human'});
+  assert.equal(h.preview.innerHTML,'LIVE COMPOSER');assert.equal(input.value,'正在输入的回答');
+});
+test('inbox Enter sends next, while modified Enter and IME remain editable',async()=>{
+  const input={},next={},form={querySelector:selector=>selector==='textarea'?input:next,requestSubmit:button=>{assert.equal(button,next);form.submitted=(form.submitted||0)+1;}};
+  const h=await inboxHarness({api:async()=>({items:[]})});
+  h.state.inboxDetails.a={run:{id:'r',participants:[],task:{}},pendingQuestions:[{id:'q',content:'问题',sender:{name:'Kai'},recipient:{type:'human'}}]};
+  h.preview.querySelector=selector=>selector==='[data-inbox-answer]'?form:null;
+  await h.controller.renderInboxPreview({id:'a',title:'登录',status:'awaiting_human'});
+  let prevented=0;
+  for(const flags of [{shiftKey:true},{ctrlKey:true},{metaKey:true},{altKey:true},{isComposing:true},{keyCode:229}])input.onkeydown({key:'Enter',preventDefault(){prevented++;},...flags});
+  assert.equal(form.submitted,undefined);assert.equal(prevented,0);
+  input.onkeydown({key:'Enter',preventDefault(){prevented++;}});assert.equal(form.submitted,1);assert.equal(prevented,1);
+});
+test('inbox recent view merges same-day local answers with the latest 20 done tasks without duplicates',async()=>{
+  const calls=[],h=await inboxHarness({api:async path=>{calls.push(path);return {tasks:[{id:'done',status:'done',updatedAt:'2020-01-01'},{id:'answered',status:'done',updatedAt:'2020-01-01'}],total:80,totalPages:4,page:1};}});
+  h.state.inboxView='recent';
+  h.controller.inboxAnswered.set('answered',{id:'answered',inboxAnsweredAt:new Date().toISOString(),inboxAnswer:'已回答'});
+  h.controller.inboxAnswered.set('yesterday',{id:'yesterday',inboxAnsweredAt:new Date(Date.now()-86400000).toISOString()});
+  await h.controller.refreshInbox();
+  assert.equal(calls.length,1);assert.match(calls[0],/status=done/);assert.match(calls[0],/pageSize=20/);
+  assert.equal(h.state.inboxResults.done.tasks.length,2);assert.equal(h.state.inboxResults.done.tasks[0].id,'answered');assert.equal(h.state.inboxResults.done.totalPages,1);
+});
+
+test('market chips filter the complete catalog before paging and retain truthful source, components and use counts',async t=>{
+  const nodes=new Map(),query=selector=>{if(!nodes.has(selector))nodes.set(selector,{hidden:false,dataset:{},classList:{toggle(){}},querySelector:query,setAttribute(key,value){this[key]=value;}});return nodes.get(selector);};
+  const root={isConnected:true,querySelector:query},headerActions={querySelector:query},calls=[];
+  const catalog=Array.from({length:25},(_,i)=>({id:'p'+i,name:'Plugin '+i,description:'Description',version:'1.2.0',components:{skills:2,agents:1,hooks:0},source:{url:'file:///tmp/plugin-source'},createdAt:'2026-11-01'}));
+  const ui=createMarketplaceUI({esc:String,headerActions,api:async path=>{
+    calls.push(path);const url=new URL(path,'http://fixture');const page=Number(url.searchParams.get('page'));
+    if(url.pathname==='/api/agents')return {agents:[{status:'inactive',runtime:{extensionSelection:{pluginIds:['p24']}}}],page:1,totalPages:1};
+    const items=url.searchParams.get('usage')==='unused'?catalog.filter(item=>item.id!=='p24'):catalog;
+    return {plugins:items.slice((page-1)*20,page*20),page,totalPages:2,hasMore:page===1};
+  }});t.after(()=>ui.unmount());ui.mount(root);
+  await new Promise(done=>setImmediate(done));
+  assert.match(query('[data-market-chips]').innerHTML,/全部 <span>25/);assert.match(query('[data-market-chips]').innerHTML,/未被使用 <span>24/);
+  assert.doesNotMatch(root.innerHTML,/data-install-plugin/);assert.match(headerActions.innerHTML,/data-install-plugin/);assert.match(headerActions.innerHTML,/data-extension-update="all"/);assert.doesNotMatch(query('[data-market-chips]').innerHTML,/data-market-filter="attention"/,'the API has no pending update candidates');
+  assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
+  assert.match(query('[data-market-list]').innerHTML,/2 Skill · 1 Subagent/);assert.doesNotMatch(query('[data-market-list]').innerHTML,/0 Hook/);assert.match(query('[data-market-list]').innerHTML,/本地目录 · \/tmp\/plugin-source/);
+  query('[data-market-pager]').onclick({target:{closest:()=>({dataset:{page:'2'}})}});
+  assert.match(query('[data-market-list]').innerHTML,/Plugin 24/);assert.match(query('[data-market-list]').innerHTML,/1 位员工/);
+  query('[data-market-chips]').onclick({target:{closest:()=>({dataset:{marketFilter:'unused'}})}});await new Promise(done=>setImmediate(done));
+  assert.match(query('[data-market-chips]').innerHTML,/data-market-filter="unused" aria-pressed="true"/);
+  query('[data-market-pager]').onclick({target:{closest:()=>({dataset:{page:'2'}})}});
+  assert.doesNotMatch(query('[data-market-list]').innerHTML,/Plugin 24/);assert.match(query('[data-market-list]').innerHTML,/未被使用/);
+  query('[data-market-chips]').onclick({target:{closest:()=>({dataset:{marketFilter:'all'}})}});await new Promise(done=>setImmediate(done));
+  assert.equal(query('[data-market-list]').hidden,false);assert.equal((query('[data-market-list]').innerHTML.match(/<article /g)||[]).length,20);
+  assert.ok(calls.some(path=>path.includes('usage=unused')&&path.includes('page=2')));
+});
+
+test('role rows expose the editor from the row and menu while capping bound avatars',async()=>{
+  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
+  const nodes={'#roles-search':{value:''},'#roles-grid':{},'#roles-empty':{}};
+  const employees=Array.from({length:7},(_,i)=>({id:'a'+i,name:'Employee '+i,roleIds:['role']}));
+  const role={id:'role',name:'规范',prompt:'One long prompt',createdAt:'2026-11-01'};
+  const render=runWithCache(source.slice(source.indexOf('function renderRoles()'),source.indexOf('function roleModal('))+';renderRoles',{
+    $:selector=>nodes[selector],state:{roles:[role],listPages:{},directoryPages:{roles:{items:[role],page:1}},catalogReferences:{agents:employees}},paginate:()=>({}),esc:String,roleColor:()=> 'color-blue',initialsOf:()=> 'E',exactTime:String,timeAgo:()=> '昨天',renderListPager(){},setTitleCount(){},actionMenu:content=>`<details class="action-menu">${content}</details>`
+  });render();
+  const html=nodes['#roles-grid'].innerHTML;
+  assert.equal((html.match(/data-edit-role=/g)||[]).length,2);assert.equal((html.match(/title="Employee/g)||[]).length,5);assert.match(html,/directory-avatar-overflow">\+2/);
+  assert.match(html,/<details class="action-menu"><button[^>]*data-edit-role=[\s\S]*data-delete-role=/);assert.match(html,/创建于 2026-11-01/);assert.match(html,/role-row-prompt/);
+});

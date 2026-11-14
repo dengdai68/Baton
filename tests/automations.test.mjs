@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { createStore } from '../server/store.mjs';
 import { previewSchedule } from '../server/automation-schedule.mjs';
 import { createAutomationScheduler } from '../server/automation-scheduler.mjs';
+import { createAutomationUI, automationScheduleLabel } from '../web/automations.mjs';
 import { taskPrompt } from '../server/prompts.mjs';
 function setup() {
   const store=createStore({workspaceRoot:'/tmp/automation-unit-work'});
@@ -199,4 +200,22 @@ test('automation stores an explicit selected business employee manager and freez
 
 test('automation uses the same tasks/TaskID/RunID workspace allocation as manual tasks',()=>{
  const {store,automation}=setup();try{const trigger=store.triggerAutomation(automation.id),task=store.getTask(trigger.taskId),run=store.getRun(trigger.runId);assert.equal(task.workspacePath,join('/tmp/automation-unit-work','tasks',task.id));assert.equal(run.workspacePath,join(task.workspacePath,run.id));}finally{store.close();}
+});
+
+test('automation directory describes the same Cron presets without guessing custom schedules',()=>{
+  for(const [cron,label] of [['0 9 * * 1-5','工作日 09:00'],['30 10 * * 1','每周一 10:30'],['0 8 1 * *','每月 1 日 08:00'],['5 7 * * *','每天 07:05'],['0 9 * * 0','每周日 09:00'],['0 9 * * 7','每周日 09:00'],['*/15 * * * *','自定义规则'],['0 9 1 * 1','自定义规则']])assert.equal(automationScheduleLabel(cron),label);
+});
+
+test('automation switch failure restores its checked state and does not navigate',async t=>{
+  const previous=globalThis.document;globalThis.document={activeElement:null,visibilityState:'hidden'};
+  const nodes=new Map(),target={innerHTML:'',setAttribute(){},removeAttribute(){},querySelector(selector){if(selector==='#automation-search' && !this.innerHTML)return null;if(!nodes.has(selector))nodes.set(selector,{innerHTML:''});return nodes.get(selector);}};
+  const item={id:'auto',enabled:false,title:'Auto',objective:'Description',cron:'0 9 * * 1-5',memberAgentIds:[],latestTrigger:null};
+  const errors=[],navigations=[];
+  const ui=createAutomationUI({api:async(path,options)=>{if(options?.method==='PUT')throw Error('保存失败');return {items:[item],page:1,total:1,totalPages:1};},esc:String,pill:String,exactTime:String,catalog:()=>({agents:[]}),navigate:id=>navigations.push(id),toast:(message)=>errors.push(message)});
+  t.after(()=>{ui.unmount();if(previous===undefined)delete globalThis.document;else globalThis.document=previous;});
+  ui.mount(target);await new Promise(done=>setImmediate(done));
+  assert.match(nodes.get('[data-auto-results]').innerHTML,/data-auto-nav="auto"/);
+  const input={checked:true,disabled:false,isConnected:true,dataset:{autoEnable:'auto'},closest(selector){if(selector==='[data-auto-nav]')return {dataset:{autoNav:'auto'}};if(selector==='button')return null;return this;}};
+  target.onclick({target:input});target.onchange({target:input});await new Promise(done=>setImmediate(done));
+  assert.equal(input.checked,false);assert.equal(input.disabled,false);assert.deepEqual(errors,['保存失败']);assert.deepEqual(navigations,[]);
 });

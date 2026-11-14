@@ -1,0 +1,219 @@
+/* =====================================================================
+   AgentForge 设计 Token（重设计提案）
+   三层结构：
+     1. 原始色板 Primitive   —— 只在本文件出现，组件禁止直接引用
+     2. 语义 Token Semantic —— 组件唯一可用的颜色来源（--bg-* --text-* --border-* --accent-* --st-*）
+     3. 组件 Token Component —— 尺寸、圆角、密度（--control-h --row-h --r-* …）
+   风格：data-style = graphite | paper | command
+   模式：data-mode  = light | dark
+   密度：data-density = compact | comfortable（未设置时取风格默认）
+   ===================================================================== */
+
+/* ---------- 1. 与风格无关的基础 Token ---------- */
+:root {
+  /* 品牌（来源：用户提供的蓝/青/紫缎带 A 图标） */
+  --brand-blue-50:#EEF3FF; --brand-blue-100:#DCE6FE; --brand-blue-200:#C2D3FC; --brand-blue-400:#6E90F2;
+  --brand-blue-500:#3D6BF0; --brand-blue-600:#2558D9; --brand-blue-700:#1E46B7; --brand-blue-800:#1A3C9C;
+  --brand-cyan-600:#0B7A8C; --brand-violet-600:#6B4EC4;
+
+  /* 身份色：只用于头像，不表达状态 */
+  --av-violet:#7341B8; --av-cyan:#007D86; --av-blue:#2461C2; --av-orange:#AD5508; --av-green:#25803E; --av-system:#3F4A5E;
+
+  /* 固定用途色：只在对应组件中使用，不随风格变化 */
+  --on-solid:#FFFFFF;                         /* 实色底（头像、危险按钮、开关圆点）上的前景 */
+  --on-solid-soft:rgba(255,255,255,.16); --on-solid-line:rgba(255,255,255,.24); --on-solid-text:rgba(255,255,255,.9);
+  --knob-shadow:0 1px 2px rgba(0,0,0,.22);
+  --kbd-line-inverse:rgba(127,127,127,.45);
+  --chrome-close:#FF5F57; --chrome-minimize:#FEBC2E; --chrome-zoom:#28C840; --chrome-edge:rgba(0,0,0,.14);
+  --ft-md:#4E7BD8; --ft-js:#C9A227; --ft-js-ink:#2B2200; --ft-test:#2F9B63; --ft-json:#8C6BC8; --ft-css:#2F86C9;
+  --syn-keyword:#8239D9; --syn-string:#0B7A4B; --syn-func:#2558D9; --syn-number:#B5520B;
+
+  /* 字体：系统字体优先，中文回退到苹方 / 冬青 / 雅黑；等宽只用于代码、路径、ID、Cron */
+  --font-sans:-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono:"SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+
+  /* 字阶（桌面）：只允许以下 7 级，禁止 8/9/10px 正文 */
+  --fs-caption:11px;  --lh-caption:16px;   /* 表头、计数、时间 */
+  --fs-small:12px;    --lh-small:18px;     /* 次要说明、标签、按钮 */
+  --fs-body:13px;     --lh-body:20px;      /* 界面默认 */
+  --fs-read:14px;     --lh-read:22px;      /* 消息、Markdown 阅读 */
+  --fs-title-sm:15px; --lh-title-sm:22px;  /* 区块标题、弹窗标题 */
+  --fs-title:20px;    --lh-title:28px;     /* 页面标题 */
+  --fs-display:28px;  --lh-display:36px;   /* 登录、首次引导 */
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600;
+
+  /* 间距：4px 基准 */
+  --sp-0:0; --sp-1:2px; --sp-2:4px; --sp-3:6px; --sp-4:8px; --sp-5:12px; --sp-6:16px; --sp-7:20px; --sp-8:24px; --sp-9:32px; --sp-10:40px; --sp-11:48px;
+
+  /* 动效 */
+  --ease:cubic-bezier(.2,0,0,1); --ease-out:cubic-bezier(.16,1,.3,1);
+  --dur-fast:120ms; --dur-base:180ms; --dur-slow:240ms;
+
+  /* 层级 */
+  --z-sticky:10; --z-dropdown:40; --z-drawer:60; --z-dialog:80; --z-palette:90; --z-toast:100;
+
+  /* 布局 */
+  --inspector-w:320px; --reading-max:760px; --form-max:640px; --settings-max:720px;
+  --pad-record:clamp(16px, 3vw, 40px);     /* 协作 / 沟通记录区左右留白：宽度随窗口自适应，不设最大宽度 */
+  --av-radius:.3;                           /* 头像统一为大圆角方形：圆角 = 边长 × 0.3 */
+
+  /* 成员执行中：绿点（沿用现有「运行绿点」规则），只表示成员正在执行，不表示任务状态 */
+  --live:#1F9D5C; --live-soft:rgba(31,157,92,.12); --live-line:rgba(31,157,92,.36);
+}
+
+/* 深色模式下的语法高亮（三种风格共用） */
+[data-mode="dark"] { --syn-keyword:#C79BFF; --syn-string:#7FD6A3; --syn-func:#8EA8FF; --syn-number:#F2A65E;
+  --live:#3CCB7F; --live-soft:rgba(60,203,127,.14); --live-line:rgba(60,203,127,.38); }
+
+/* ---------- 2. 风格 A · 石墨 Graphite（Linear / Multica 向：冷静、紧凑、克制） ---------- */
+:root, [data-style="graphite"] {
+  --sidebar-w:232px; --header-h:48px; --toolbar-h:44px;
+  --control-h:28px; --control-h-sm:24px; --control-h-lg:32px;
+  --row-h:38px; --nav-h:28px; --pad-page:24px;
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-full:999px;
+  --title-size:var(--fs-title-sm); --title-weight:600;
+  --ui-size:var(--fs-body); --ui-line:var(--lh-body);
+}
+[data-style="graphite"][data-mode="light"], :root:not([data-mode="dark"]) {
+  color-scheme:light;
+  --bg-window:#FFFFFF; --bg-canvas:#FFFFFF; --bg-sidebar:#F7F7F8; --bg-subtle:#F8F8F9; --bg-raised:#FFFFFF;
+  --bg-hover:#F2F2F4; --bg-active:#EAEAED; --bg-selected:#EEF2FD; --bg-input:#FFFFFF; --bg-overlay:rgba(17,18,22,.28);
+  --border-subtle:#EFEFF2; --border:#E4E4E9; --border-strong:#D2D3DA;
+  --text:#1B1C22; --text-secondary:#5C5F6A; --text-tertiary:#8A8D97; --text-disabled:#B4B6BE; --text-on-accent:#FFFFFF; --text-link:#2350C4;
+  --accent:#2558D9; --accent-hover:#1E46B7; --accent-active:#1A3C9C; --accent-soft:#EEF3FF; --accent-soft-hover:#E2EAFF; --accent-text:#2350C4; --accent-border:#C9D7FA;
+  --focus:rgba(37,88,217,.42);
+  --st-running:#2558D9;  --st-running-bg:#EEF3FF;  --st-running-border:#C9D7FA;
+  --st-attention:#A85F0A; --st-attention-bg:#FFF5E6; --st-attention-border:#F5D9AE;
+  --st-done:#0D7A68;     --st-done-bg:#E8F6F2;     --st-done-border:#BFE3D9;
+  --st-failed:#C53B36;   --st-failed-bg:#FDEFEE;   --st-failed-border:#F4C9C6;
+  --st-planning:#6B4EC4; --st-planning-bg:#F3EFFF; --st-planning-border:#DCD2F7;
+  --st-neutral:#6B6E78;  --st-neutral-bg:#F2F2F4;  --st-neutral-border:#E4E4E9;
+  --code-bg:#F8F8F9; --code-add:#E9F7EF; --code-add-text:#1A7F45; --code-del:#FDEEEE; --code-del-text:#B42F2A;
+  --shadow-xs:0 1px 2px rgba(16,17,20,.05);
+  --shadow-pop:0 0 0 1px rgba(16,17,20,.06), 0 8px 24px rgba(16,17,20,.10);
+  --shadow-dialog:0 0 0 1px rgba(16,17,20,.06), 0 24px 64px rgba(16,17,20,.18);
+}
+[data-style="graphite"][data-mode="dark"], :root[data-mode="dark"]:not([data-style]) {
+  color-scheme:dark;
+  --bg-window:#111215; --bg-canvas:#111215; --bg-sidebar:#0D0E10; --bg-subtle:#15161A; --bg-raised:#18191D;
+  --bg-hover:#1E1F24; --bg-active:#26272D; --bg-selected:#1A2036; --bg-input:#141518; --bg-overlay:rgba(0,0,0,.55);
+  --border-subtle:#1C1D22; --border:#2A2B31; --border-strong:#3A3B43;
+  --text:#EDEEF0; --text-secondary:#A3A6B0; --text-tertiary:#73767F; --text-disabled:#4E5059; --text-on-accent:#FFFFFF; --text-link:#8EA8FF;
+  --accent:#3D6BF0; --accent-hover:#5079F2; --accent-active:#2F5AD8; --accent-soft:rgba(80,121,242,.16); --accent-soft-hover:rgba(80,121,242,.24); --accent-text:#8EA8FF; --accent-border:rgba(80,121,242,.45);
+  --focus:rgba(110,144,242,.55);
+  --st-running:#8EA8FF;  --st-running-bg:rgba(80,121,242,.15);  --st-running-border:rgba(80,121,242,.35);
+  --st-attention:#F0B25A; --st-attention-bg:rgba(240,178,90,.13); --st-attention-border:rgba(240,178,90,.32);
+  --st-done:#4CC4AC;     --st-done-bg:rgba(76,196,172,.13);     --st-done-border:rgba(76,196,172,.3);
+  --st-failed:#F08079;   --st-failed-bg:rgba(240,128,121,.13);  --st-failed-border:rgba(240,128,121,.32);
+  --st-planning:#B6A2F6; --st-planning-bg:rgba(182,162,246,.13); --st-planning-border:rgba(182,162,246,.3);
+  --st-neutral:#A3A6B0;  --st-neutral-bg:rgba(255,255,255,.06); --st-neutral-border:rgba(255,255,255,.1);
+  --code-bg:#15161A; --code-add:rgba(46,160,90,.16); --code-add-text:#6BD394; --code-del:rgba(240,90,80,.15); --code-del-text:#F59A93;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-pop:0 0 0 1px rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.55);
+  --shadow-dialog:0 0 0 1px rgba(255,255,255,.07), 0 28px 72px rgba(0,0,0,.6);
+}
+
+/* ---------- 3. 风格 B · 纸张 Paper（Notion 向：温和、文档感、阅读优先） ---------- */
+[data-style="paper"] {
+  --sidebar-w:244px; --header-h:46px; --toolbar-h:46px;
+  --control-h:30px; --control-h-sm:26px; --control-h-lg:34px;
+  --row-h:42px; --nav-h:30px; --pad-page:44px;
+  --r-xs:3px; --r-sm:5px; --r-md:6px; --r-lg:10px; --r-full:999px;
+  --title-size:var(--fs-display); --title-weight:700;
+  --ui-size:14px; --ui-line:22px;
+}
+[data-style="paper"][data-mode="light"] {
+  color-scheme:light;
+  --bg-window:#FFFFFF; --bg-canvas:#FFFFFF; --bg-sidebar:#F7F7F5; --bg-subtle:#FBFBFA; --bg-raised:#FFFFFF;
+  --bg-hover:#F1F1EF; --bg-active:#E6E5E2; --bg-selected:#EDF3FC; --bg-input:#FFFFFF; --bg-overlay:rgba(15,15,15,.32);
+  --border-subtle:#ECECEA; --border:#E2E1DE; --border-strong:#D3D1CB;
+  --text:#37352F; --text-secondary:#73726E; --text-tertiary:#9B9A97; --text-disabled:#C4C3BF; --text-on-accent:#FFFFFF; --text-link:#2350C4;
+  --accent:#2558D9; --accent-hover:#1E46B7; --accent-active:#1A3C9C; --accent-soft:#EDF2FC; --accent-soft-hover:#E1E9FA; --accent-text:#2350C4; --accent-border:#CAD7F5;
+  --focus:rgba(37,88,217,.36);
+  --st-running:#2558D9;  --st-running-bg:#EDF2FC;  --st-running-border:#CAD7F5;
+  --st-attention:#A0590C; --st-attention-bg:#FBF2E3; --st-attention-border:#EFD8B3;
+  --st-done:#0F7B6C;     --st-done-bg:#E6F3F0;     --st-done-border:#BFE0D8;
+  --st-failed:#C4423D;   --st-failed-bg:#FDEBEC;   --st-failed-border:#F4CDCB;
+  --st-planning:#7451C2; --st-planning-bg:#F3EEFB; --st-planning-border:#DED2F2;
+  --st-neutral:#787774;  --st-neutral-bg:#F1F1EF;  --st-neutral-border:#E2E1DE;
+  --code-bg:#F7F6F3; --code-add:#EAF4EC; --code-add-text:#2B7A45; --code-del:#FBEDEB; --code-del-text:#B33A33;
+  --shadow-xs:0 1px 2px rgba(40,38,34,.05);
+  --shadow-pop:0 0 0 1px rgba(40,38,34,.07), 0 6px 18px rgba(40,38,34,.09);
+  --shadow-dialog:0 0 0 1px rgba(40,38,34,.07), 0 20px 56px rgba(40,38,34,.16);
+}
+[data-style="paper"][data-mode="dark"] {
+  color-scheme:dark;
+  --bg-window:#191919; --bg-canvas:#191919; --bg-sidebar:#202020; --bg-subtle:#1F1F1F; --bg-raised:#252525;
+  --bg-hover:#2A2A2A; --bg-active:#323232; --bg-selected:#232A38; --bg-input:#1E1E1E; --bg-overlay:rgba(0,0,0,.55);
+  --border-subtle:#252525; --border:#2F2F2F; --border-strong:#3E3E3E;
+  --text:#E9E8E5; --text-secondary:#A8A7A2; --text-tertiary:#7C7B77; --text-disabled:#55544F; --text-on-accent:#FFFFFF; --text-link:#8EA8FF;
+  --accent:#3D6BF0; --accent-hover:#5079F2; --accent-active:#2F5AD8; --accent-soft:rgba(80,121,242,.16); --accent-soft-hover:rgba(80,121,242,.24); --accent-text:#8EA8FF; --accent-border:rgba(80,121,242,.42);
+  --focus:rgba(110,144,242,.5);
+  --st-running:#8EA8FF;  --st-running-bg:rgba(80,121,242,.15);  --st-running-border:rgba(80,121,242,.35);
+  --st-attention:#E9AE5E; --st-attention-bg:rgba(233,174,94,.13); --st-attention-border:rgba(233,174,94,.3);
+  --st-done:#6CC08E;     --st-done-bg:rgba(108,192,142,.13);    --st-done-border:rgba(108,192,142,.3);
+  --st-failed:#EE857D;   --st-failed-bg:rgba(238,133,125,.13);  --st-failed-border:rgba(238,133,125,.3);
+  --st-planning:#B9A3F2; --st-planning-bg:rgba(185,163,242,.13); --st-planning-border:rgba(185,163,242,.3);
+  --st-neutral:#A8A7A2;  --st-neutral-bg:rgba(255,255,255,.06); --st-neutral-border:rgba(255,255,255,.1);
+  --code-bg:#1F1F1F; --code-add:rgba(70,160,100,.16); --code-add-text:#7FD39C; --code-del:rgba(230,100,90,.15); --code-del-text:#F2A098;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.4);
+  --shadow-pop:0 0 0 1px rgba(255,255,255,.06), 0 10px 28px rgba(0,0,0,.5);
+  --shadow-dialog:0 0 0 1px rgba(255,255,255,.07), 0 28px 72px rgba(0,0,0,.55);
+}
+
+/* ---------- 4. 风格 C · 夜航 Command（Raycast 向：深色优先、键盘优先、面板化） ---------- */
+[data-style="command"] {
+  --sidebar-w:224px; --header-h:52px; --toolbar-h:44px;
+  --control-h:30px; --control-h-sm:24px; --control-h-lg:34px;
+  --row-h:38px; --nav-h:30px; --pad-page:20px;
+  --r-xs:5px; --r-sm:8px; --r-md:10px; --r-lg:14px; --r-full:999px;
+  --title-size:var(--fs-title-sm); --title-weight:600;
+  --ui-size:var(--fs-body); --ui-line:var(--lh-body);
+}
+[data-style="command"][data-mode="dark"] {
+  color-scheme:dark;
+  --bg-window:#0B0C0F; --bg-canvas:#121317; --bg-sidebar:#0B0C0F; --bg-subtle:#16171C; --bg-raised:#1A1B20;
+  --bg-hover:#1F2026; --bg-active:#272830; --bg-selected:#1B2138; --bg-input:#0F1013; --bg-overlay:rgba(0,0,0,.6);
+  --border-subtle:#1C1D23; --border:#26272E; --border-strong:#363842;
+  --text:#F3F4F6; --text-secondary:#A7AAB4; --text-tertiary:#6F727D; --text-disabled:#4A4C55; --text-on-accent:#FFFFFF; --text-link:#93A9FF;
+  --accent:#4A6CF7; --accent-hover:#5E7DF8; --accent-active:#3B5BE6; --accent-soft:rgba(94,125,248,.16); --accent-soft-hover:rgba(94,125,248,.25); --accent-text:#93A9FF; --accent-border:rgba(94,125,248,.45);
+  --focus:rgba(120,148,250,.6);
+  --st-running:#93A9FF;  --st-running-bg:rgba(94,125,248,.15);  --st-running-border:rgba(94,125,248,.36);
+  --st-attention:#F4B860; --st-attention-bg:rgba(244,184,96,.12); --st-attention-border:rgba(244,184,96,.32);
+  --st-done:#52CBB2;     --st-done-bg:rgba(82,203,178,.12);     --st-done-border:rgba(82,203,178,.3);
+  --st-failed:#F5837B;   --st-failed-bg:rgba(245,131,123,.12);  --st-failed-border:rgba(245,131,123,.32);
+  --st-planning:#BCA8FA; --st-planning-bg:rgba(188,168,250,.12); --st-planning-border:rgba(188,168,250,.3);
+  --st-neutral:#A7AAB4;  --st-neutral-bg:rgba(255,255,255,.06); --st-neutral-border:rgba(255,255,255,.1);
+  --code-bg:#0F1013; --code-add:rgba(46,160,90,.16); --code-add-text:#6BD394; --code-del:rgba(240,90,80,.15); --code-del-text:#F59A93;
+  --shadow-xs:0 1px 2px rgba(0,0,0,.5);
+  --shadow-pop:0 0 0 1px rgba(255,255,255,.07), 0 12px 32px rgba(0,0,0,.6);
+  --shadow-dialog:0 0 0 1px rgba(255,255,255,.08), 0 32px 80px rgba(0,0,0,.65);
+}
+[data-style="command"][data-mode="light"] {
+  color-scheme:light;
+  --bg-window:#ECECEF; --bg-canvas:#FFFFFF; --bg-sidebar:#ECECEF; --bg-subtle:#F6F6F8; --bg-raised:#FFFFFF;
+  --bg-hover:#F0F0F3; --bg-active:#E6E6EA; --bg-selected:#ECF0FE; --bg-input:#FFFFFF; --bg-overlay:rgba(14,15,18,.3);
+  --border-subtle:#EEEEF1; --border:#E1E1E6; --border-strong:#CDCDD4;
+  --text:#16171B; --text-secondary:#5A5D68; --text-tertiary:#8B8E98; --text-disabled:#B6B8BF; --text-on-accent:#FFFFFF; --text-link:#2F52D6;
+  --accent:#3558E6; --accent-hover:#2A49CC; --accent-active:#233FB3; --accent-soft:#EDF1FE; --accent-soft-hover:#E1E8FD; --accent-text:#2F52D6; --accent-border:#C8D3FA;
+  --focus:rgba(53,88,230,.4);
+  --st-running:#2F52D6;  --st-running-bg:#EDF1FE;  --st-running-border:#C8D3FA;
+  --st-attention:#A85F0A; --st-attention-bg:#FFF5E6; --st-attention-border:#F5D9AE;
+  --st-done:#0D7A68;     --st-done-bg:#E8F6F2;     --st-done-border:#BFE3D9;
+  --st-failed:#C53B36;   --st-failed-bg:#FDEFEE;   --st-failed-border:#F4C9C6;
+  --st-planning:#6B4EC4; --st-planning-bg:#F3EFFF; --st-planning-border:#DCD2F7;
+  --st-neutral:#6B6E78;  --st-neutral-bg:#F2F2F4;  --st-neutral-border:#E4E4E9;
+  --code-bg:#F6F6F8; --code-add:#E9F7EF; --code-add-text:#1A7F45; --code-del:#FDEEEE; --code-del-text:#B42F2A;
+  --shadow-xs:0 1px 2px rgba(16,17,20,.06);
+  --shadow-pop:0 0 0 1px rgba(16,17,20,.07), 0 10px 28px rgba(16,17,20,.12);
+  --shadow-dialog:0 0 0 1px rgba(16,17,20,.07), 0 28px 72px rgba(16,17,20,.2);
+}
+
+/* ---------- 5. 密度覆盖（用户偏好，优先级高于风格默认） ---------- */
+[data-density="compact"] { --control-h:28px; --control-h-lg:32px; --row-h:36px; --nav-h:28px; --ui-size:13px; --ui-line:20px; }
+[data-density="comfortable"] { --control-h:32px; --control-h-lg:36px; --row-h:44px; --nav-h:32px; --ui-size:14px; --ui-line:22px; }
+
+/* ---------- 6. 系统偏好 ---------- */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast:0ms; --dur-base:0ms; --dur-slow:0ms; }
+}

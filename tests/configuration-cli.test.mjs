@@ -943,3 +943,55 @@ test('bare Skill import uses the same plugin url/path schema and discloses updat
 test('plugin help treats optional allowed-tools as metadata and explains existing-install refresh',async()=>{
  const help=await captured(['plugins','import','--help']),plain=help.stdout.replace(/\s+/g,'');assert.match(plain,/allowed-tools\/allowedTools/);assert.match(plain,/不参与平台兼容性判断/);assert.match(plain,/无需重装/);
 });
+
+test('extension usage filters are validated and forwarded with search before server pagination',async()=>{
+ const f=await fixture();
+ for(const group of ['plugins','mcps']){
+  let calls=0;
+  const fetcher=async raw=>{const url=new URL(raw);calls++;assert.equal(url.searchParams.get('usage'),'unused');assert.equal(url.searchParams.get('search'),'sample');return new Response(JSON.stringify({[group==='plugins'?'plugins':'entries']:[],page:1,total:0,totalPages:1,pageSize:20,hasMore:false}));};
+  await execute([group,'list','--usage','unused','--search','sample','--session-file',f.sessionFile],{fetcher});assert.equal(calls,1);
+  await assert.rejects(()=>execute([group,'list','--usage','unknown','--session-file',f.sessionFile],{fetcher}),/all.*unused/);assert.equal(calls,1);
+  const help=await captured([group,'list','--help']);assert.match(help.stdout,/--usage all\|unused/);
+  assert.deepEqual(resources[group].listQuery.usage.enum,['all','unused']);
+ }
+});
+
+test('task CLI request IDs validate offline and keyed replies reach authoritative replay after resolution', async () => {
+  const f=await fixture(),writes=[];
+  const fetcher=async(url,options)=>{
+    if(url.endsWith('/api/tasks/task_one'))return new Response(JSON.stringify({task:{id:'task_one',runs:[{id:'run_one'}]}}));
+    if(url.includes('/workspace?view=compact'))return new Response(JSON.stringify({pendingQuestions:[]}));
+    assert.ok(url.endsWith('/api/runs/run_one/messages'));const body=JSON.parse(options.body);writes.push(body);
+    return new Response(JSON.stringify({message:{id:'saved-message',clientRequestId:body.clientRequestId,replyToMessageId:body.replyToMessageId},queued:true,replayed:true}));
+  };
+  const invoke=(value,extra=[])=>execute(['tasks','reply','task_one','--file','-','--session-file',f.sessionFile,...extra],{fetcher,stdin:input(value)});
+  const value={content:'已保存的回答',replyToMessageId:'resolved-question'};
+  for(const clientRequestId of ['',null,'short','x'.repeat(101),'invalid/id'])await assert.rejects(invoke({...value,clientRequestId}),error=>error.code==='USAGE');
+  await assert.rejects(invoke({...value,clientRequestId:'request-file'},['--client-request-id','request-flag']),error=>error.code==='USAGE');
+  assert.equal(writes.length,0);
+  const result=await invoke(value,['--client-request-id','request-replay-001']);
+  assert.equal(result.message.clientRequestId,'request-replay-001');assert.equal(result.replayed,true);
+  assert.equal(writes[0].replyToMessageId,'resolved-question');
+  assert.match(formatOutput(['tasks','reply'],await execute(['tasks','reply','--help']),{help:true}),/client-request-id/);
+  assert.match(formatOutput(['tasks','reply'],result),/发送请求 ID/);
+});
+
+test('keyed CLI file retries read bounded collaboration pages and reuse exact attachments', async t => {
+  const {createHash}=await import('node:crypto');
+  const f=await fixture(),file=join(f.root,'附件.txt'),body='original-file';await writeFile(file,body);
+  const attachment={id:'attachment-original',name:'附件.txt',bytes:Buffer.byteLength(body),sha256:createHash('sha256').update(body).digest('hex')};
+  const writes=[],reads=[];let existing=true;
+  const fetcher=async(url,options)=>{
+    if(url.endsWith('/api/tasks/task_one'))return new Response(JSON.stringify({task:{id:'task_one',runs:[{id:'run_one'}]}}));
+    if(url.includes('/workspace?view=compact'))return new Response(JSON.stringify({pendingQuestions:[]}));
+    if(url.includes('/collaboration?')){
+      reads.push(url);const older=new URL(url).searchParams.has('before');
+      return new Response(JSON.stringify({items:older&&existing?[{clientRequestId:'request-files-001',attachments:[attachment]}]:[],hasMore:!older,nextBefore:'older-cursor'}));
+    }
+    assert.ok(url.endsWith('/messages'),'no second upload');writes.push(JSON.parse(options.body));
+    return new Response(JSON.stringify({message:{id:'saved-file-message',clientRequestId:'request-files-001',attachments:[attachment]},replayed:true}));
+  };
+  const invoke=()=>execute(['tasks','message','task_one','--file','-','--client-request-id','request-files-001','--session-file',f.sessionFile],{fetcher,stdin:input({content:'',attachmentPaths:[file]})});
+  const result=await invoke();assert.equal(result.replayed,true);assert.deepEqual(writes[0].attachmentIds,[attachment.id]);assert.equal(reads.length,2);
+  await writeFile(file,'changed-file');await assert.rejects(invoke(),error=>error.code==='CLIENT_REQUEST_CONFLICT');assert.equal(writes.length,1);
+});

@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设置 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .rt-logo { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: var(--r-sm); background: var(--bg-active); color: var(--text-secondary); font: 600 11px/1 var(--font-mono); }
+  .rt-row.is-locked .srow__label { color: var(--text-secondary); }
+  .danger-zone { border-color: var(--st-failed-border); }
+  .path { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; font-family: var(--font-mono); font-size: 12px; color: var(--text-secondary); }
+  .path span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mode-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-5); }
+  .mode-card { padding: var(--sp-3); border: 1px solid var(--border); border-radius: var(--r-md); background: var(--bg-raised); text-align: left; }
+  .mode-card.is-active { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+  .mode-card__pv { height: 64px; border-radius: calc(var(--r-md) - 3px); border: 1px solid var(--border-subtle); display: grid; grid-template-columns: 30% 1fr; overflow: hidden; }
+  .mode-card__pv i { display: block; }
+  .mode-card__label { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-4) var(--sp-2) var(--sp-1); font-weight: var(--fw-medium); }
+  .nav-pref { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nav-pref .srow { min-height: 44px; }
+  .nav-pref .srow:nth-child(2) { border-top: 0; }
+  .nav-pref .srow:nth-child(odd) { border-right: 1px solid var(--border-subtle); }
+  @media (max-width: 860px) { .mode-cards { grid-template-columns: minmax(0, 1fr); } .nav-pref { grid-template-columns: minmax(0, 1fr); } .nav-pref .srow:nth-child(2) { border-top: 1px solid var(--border-subtle); } .nav-pref .srow:nth-child(odd) { border-right: 0; } }
+</style>
+</head>
+<body data-page="settings">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title"><i data-icon="settings"></i>设置</div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索设置" aria-label="搜索设置"></label>
+    </header>
+    <div class="settings" data-tab-scope>
+      <nav class="settings-nav" aria-label="设置分类" data-tab-group="settings">
+        <p class="sb-label">通用</p>
+        <button class="nav-item is-active" type="button" data-tab="general"><i data-icon="settings"></i><span class="nav-label">常规</span></button>
+        <button class="nav-item" type="button" data-tab="appearance"><i data-icon="sun"></i><span class="nav-label">外观</span></button>
+        <button class="nav-item" type="button" data-tab="workspace"><i data-icon="folder"></i><span class="nav-label">工作目录</span></button>
+        <p class="sb-label" style="margin-top:12px">集成</p>
+        <button class="nav-item" type="button" data-tab="runtime"><i data-icon="cpu"></i><span class="nav-label">运行时</span></button>
+        <button class="nav-item" type="button" data-tab="cli"><i data-icon="terminal"></i><span class="nav-label">命令行 CLI</span></button>
+        <button class="nav-item" type="button" data-tab="repos"><i data-icon="branch"></i><span class="nav-label">仓库访问</span></button>
+        <p class="sb-label" style="margin-top:12px">系统</p>
+        <button class="nav-item" type="button" data-tab="updates"><i data-icon="download"></i><span class="nav-label">更新</span><span class="nav-badge nav-badge--accent">1</span></button>
+        <button class="nav-item" type="button" data-tab="logs"><i data-icon="file"></i><span class="nav-label">运行日志</span></button>
+      </nav>
+
+      <div class="settings-main">
+        <!-- 常规 -->
+        <div class="settings-inner" data-tab-panel="general" data-group="settings">
+          <h1>常规</h1><p class="lead">选择即生效，无需单独保存。</p>
+          <div class="sgroup">
+            <div class="sgroup__title">窗口</div>
+            <div class="sbox">
+              <div class="srow"><div class="srow__text"><div class="srow__label">关闭主窗口时</div><div class="srow__desc">⌘Q 始终退出程序。</div></div><div class="srow__control"><span class="saved"><i data-icon="check" class="icon--sm"></i>已保存</span><div class="seg"><button class="seg__item" type="button">退出程序</button><button class="seg__item is-active" type="button">保留在菜单栏</button></div></div></div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">账号</div>
+            <div class="sbox">
+              <div class="srow"><span class="av av--32 av-system">管</span><div class="srow__text"><div class="srow__label">design-audit</div><div class="srow__desc">本机单管理员；命令行 CLI 复用此登录授权。</div></div><div class="srow__control"><button class="btn" type="button"><i data-icon="logout" class="icon--sm"></i>退出登录</button></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 外观 -->
+        <div class="settings-inner" data-tab-panel="appearance" data-group="settings" hidden>
+          <h1>外观</h1><p class="lead">外观偏好只保存在当前客户端，自动生效。</p>
+          <div class="sgroup">
+            <div class="sgroup__title">外观模式</div>
+            <div class="mode-cards">
+              <button class="mode-card is-active" type="button"><span class="mode-card__pv" style="background:#fff"><i style="background:#F7F7F8;border-right:1px solid #EFEFF2"></i><i style="background:linear-gradient(#fff 30%,#F2F2F4 30% 38%,#fff 38% 58%,#F2F2F4 58% 66%,#fff 66%)"></i></span><span class="mode-card__label">浅色<span class="radio is-on"><i></i></span></span></button>
+              <button class="mode-card" type="button"><span class="mode-card__pv" style="background:#111215"><i style="background:#0D0E10;border-right:1px solid #1C1D22"></i><i style="background:linear-gradient(#111215 30%,#1E1F24 30% 38%,#111215 38% 58%,#1E1F24 58% 66%,#111215 66%)"></i></span><span class="mode-card__label">深色<span class="radio"><i></i></span></span></button>
+              <button class="mode-card" type="button"><span class="mode-card__pv" style="background:linear-gradient(135deg,#fff 50%,#111215 50%)"><i style="background:linear-gradient(135deg,#F7F7F8 50%,#0D0E10 50%)"></i><i></i></span><span class="mode-card__label">跟随系统<span class="radio"><i></i></span></span></button>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">显示</div>
+            <div class="sbox">
+              <div class="srow"><div class="srow__text"><div class="srow__label">界面密度</div><div class="srow__desc">紧凑适合大量任务；舒适适合长时间阅读协作记录。</div></div><div class="srow__control"><div class="seg"><button class="seg__item is-active" type="button">紧凑</button><button class="seg__item" type="button">舒适</button></div></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">工作目录文件图标</div><div class="srow__desc">只影响任务「文件」页签的文件树与预览配色。图标来自 vscode-icons（MIT）。</div></div><div class="srow__control"><select class="select" style="width:180px" aria-label="工作目录文件图标"><option>VS Code · 浅色</option><option>VS Code · 深色</option><option>经典（无彩色图标）</option></select></div></div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">侧栏<span class="spacer"></span><button class="btn btn--ghost btn--sm" type="button">恢复默认</button></div>
+            <p class="sgroup__desc">隐藏入口不影响已有链接、任务执行或访问权限。</p>
+            <div class="sbox nav-pref">
+              <div class="srow"><i data-icon="inbox" class="faint"></i><div class="srow__text"><div class="srow__label">待我处理</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示待我处理"></span></div>
+              <div class="srow"><i data-icon="tasks" class="faint"></i><div class="srow__text"><div class="srow__label">任务</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示任务"></span></div>
+              <div class="srow"><i data-icon="clock" class="faint"></i><div class="srow__text"><div class="srow__label">自动化</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示自动化"></span></div>
+              <div class="srow"><i data-icon="message" class="faint"></i><div class="srow__text"><div class="srow__label">沟通</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示沟通"></span></div>
+              <div class="srow"><i data-icon="users" class="faint"></i><div class="srow__text"><div class="srow__label">团队</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示团队"></span></div>
+              <div class="srow"><i data-icon="workflow" class="faint"></i><div class="srow__text"><div class="srow__label">工作流</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示工作流"></span></div>
+              <div class="srow"><i data-icon="bot" class="faint"></i><div class="srow__text"><div class="srow__label">数字员工</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示数字员工"></span></div>
+              <div class="srow"><i data-icon="idcard" class="faint"></i><div class="srow__text"><div class="srow__label">角色</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示角色"></span></div>
+              <div class="srow"><i data-icon="plug" class="faint"></i><div class="srow__text"><div class="srow__label">插件</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示插件"></span></div>
+              <div class="srow"><i data-icon="mcp" class="faint"></i><div class="srow__text"><div class="srow__label">MCP</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示 MCP"></span></div>
+              <div class="srow"><i data-icon="book" class="faint"></i><div class="srow__text"><div class="srow__label">开发手册</div></div><span class="switch" role="switch" aria-checked="false" aria-label="显示开发手册"></span></div>
+              <div class="srow"><i data-icon="grid" class="faint"></i><div class="srow__text"><div class="srow__label">分组标题</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示分组标题"></span></div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">提醒角标</div>
+            <div class="sbox">
+              <div class="srow"><div class="srow__text"><div class="srow__label">待处理数量</div><div class="srow__desc">只计入等待你澄清、验收或处理中断的任务；为 0 时不显示。</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示待处理数量"></span></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">沟通未读数</div><div class="srow__desc">看到会话最新记录后清零。</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="显示沟通未读数"></span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 工作目录 -->
+        <div class="settings-inner" data-tab-panel="workspace" data-group="settings" hidden>
+          <h1>工作目录</h1><p class="lead">员工、角色、团队、工作流、自动化、任务、沟通与执行文件都保存在这里。</p>
+          <div class="sgroup">
+            <div class="sbox">
+              <div class="srow srow--expand">
+                <div class="srow__text"><div class="srow__label">位置</div><div class="srow__desc">更换会整理资料并重启本机服务；有任务或沟通正在执行时不能更换。已有任务的工作路径保持原位。</div></div>
+                <div class="srow__panel" style="margin-top:12px;padding-top:0;border-top:0">
+                  <div class="hstack"><input class="input mono" style="flex:1" value="~/AgentForge" aria-label="工作目录"><button class="btn" type="button">选择…</button><button class="btn btn--primary" type="button" disabled>保存并整理</button></div>
+                </div>
+              </div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">业务资料</div><div class="path"><span>~/AgentForge/records</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">配置目录</div><div class="srow__desc">设置、认证、运行时、插件、MCP、Git 凭据与日志保留在此，不随工作目录移动。</div><div class="path"><span>~/.agentforge</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="在访达中显示"><i data-icon="external" class="icon--sm"></i></button></div></div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title" style="color:var(--st-failed)">危险操作</div>
+            <div class="sbox danger-zone">
+              <div class="srow"><div class="srow__text"><div class="srow__label">清除所有数据</div><div class="srow__desc">永久删除当前工作目录中的全部文件与业务记录；账号、运行时、插件、MCP、Git 凭据、偏好与日志保留。需要输入密码确认。</div></div><div class="srow__control"><button class="btn btn--danger" type="button">清除所有数据…</button></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 运行时 -->
+        <div class="settings-inner" data-tab-panel="runtime" data-group="settings" hidden>
+          <h1>运行时</h1><p class="lead">启用的运行时可被员工选择。模型与思考等级留空时使用 CLI 默认配置，保存后用于之后的调用。</p>
+          <div class="sgroup">
+            <div class="sbox">
+              <div class="srow srow--expand rt-row">
+                <span class="rt-logo">CC</span>
+                <div class="srow__text"><div class="srow__label">Claude Code<span class="tag">8 位员工</span></div><div class="srow__desc">已安装 · opus · 思考 High</div></div>
+                <div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm is-active" type="button" aria-expanded="true" aria-label="收起配置"><i data-icon="chevron-up"></i></button><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用 Claude Code"></span></div>
+                <div class="srow__panel">
+                  <div class="field-row"><div class="field" style="margin:0"><span class="field__label">模型</span><input class="input mono" value="opus" aria-label="模型"><span class="field__hint">留空使用 CLI 默认模型</span></div><div class="field" style="margin:0"><span class="field__label">思考等级</span><select class="select" aria-label="思考等级"><option>默认</option><option>Low</option><option>Medium</option><option selected>High</option><option>Max</option></select></div></div>
+                  <div class="hstack" style="margin-top:14px;justify-content:flex-end"><button class="btn btn--ghost btn--sm" type="button">取消</button><button class="btn btn--primary btn--sm" type="button">保存</button></div>
+                </div>
+              </div>
+              <div class="srow rt-row"><span class="rt-logo">CX</span><div class="srow__text"><div class="srow__label">Codex<span class="tag">2 位员工</span></div><div class="srow__desc">已安装 · 使用 CLI 默认配置</div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="展开配置"><i data-icon="chevron-down"></i></button><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用 Codex"></span></div></div>
+              <div class="srow rt-row"><span class="rt-logo">DS</span><div class="srow__text"><div class="srow__label">DeepSeek Harness<span class="tag">1 位员工</span></div><div class="srow__desc">已安装 · deepseek-chat · 思考 Off</div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="展开配置"><i data-icon="chevron-down"></i></button><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用 DeepSeek Harness"></span></div></div>
+              <div class="srow rt-row"><span class="rt-logo">OC</span><div class="srow__text"><div class="srow__label">OpenCode</div><div class="srow__desc">已安装 · 未被使用</div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="展开配置"><i data-icon="chevron-down"></i></button><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用 OpenCode"></span></div></div>
+              <div class="srow rt-row"><span class="rt-logo">CU</span><div class="srow__text"><div class="srow__label">Cursor</div><div class="srow__desc">已安装 · 已停用</div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="展开配置"><i data-icon="chevron-down"></i></button><span class="switch" role="switch" aria-checked="false" aria-label="启用 Cursor"></span></div></div>
+              <div class="srow rt-row is-locked"><span class="rt-logo">GE</span><div class="srow__text"><div class="srow__label">Gemini CLI<span class="tag tag--outline">未安装</span></div><div class="srow__desc">在客户端 PATH 中找不到 gemini。安装后重新打开此页即可启用。</div></div><div class="srow__control"><span class="switch" role="switch" aria-checked="false" aria-disabled="true" disabled aria-label="Gemini CLI 未安装，不可启用" title="未安装，不可启用"></span></div></div>
+              <div class="srow rt-row is-locked"><span class="rt-logo">QW</span><div class="srow__text"><div class="srow__label">Qwen Code<span class="tag tag--outline">未安装</span></div><div class="srow__desc">在客户端 PATH 中找不到 qwen。</div></div><div class="srow__control"><span class="switch" role="switch" aria-checked="false" aria-disabled="true" disabled aria-label="Qwen Code 未安装，不可启用"></span></div></div>
+              <div class="srow rt-row is-locked"><span class="rt-logo">KM</span><div class="srow__text"><div class="srow__label">Kimi Code<span class="tag tag--outline">未安装</span></div><div class="srow__desc">在客户端 PATH 中找不到 kimi。</div></div><div class="srow__control"><span class="switch" role="switch" aria-checked="false" aria-disabled="true" disabled aria-label="Kimi Code 未安装，不可启用"></span></div></div>
+              <div class="srow rt-row is-locked"><span class="rt-logo">PI</span><div class="srow__text"><div class="srow__label">Pi<span class="tag tag--outline">未安装</span></div><div class="srow__desc">在客户端 PATH 中找不到 pi。</div></div><div class="srow__control"><span class="switch" role="switch" aria-checked="false" aria-disabled="true" disabled aria-label="Pi 未安装，不可启用"></span></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 命令行 CLI -->
+        <div class="settings-inner" data-tab-panel="cli" data-group="settings" hidden>
+          <h1>命令行 CLI</h1><p class="lead">在终端中使用 agentforge 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
+          <div class="sgroup">
+            <div class="sbox">
+              <div class="srow"><span class="rt-logo"><i data-icon="terminal" class="icon--sm"></i></span><div class="srow__text"><div class="srow__label">agentforge<span class="status status--pill st-done"><i data-icon="st-done"></i>已安装</span></div><div class="path"><span>~/.local/bin/agentforge · v0.1.9</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>刷新</button><button class="btn btn--sm" type="button">重新安装</button></div></div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">快速开始</div>
+<pre class="code-block">agentforge help
+agentforge schema agents
+agentforge tasks list --json</pre>
+            <p class="faint" style="font-size:12px;margin-top:8px">CLI 复用客户端登录授权，相当于本机管理员权限，只交给可信的 AI。配置保存不等于任务执行，也不能代替你确认交付。</p>
+          </div>
+          <details class="sgroup">
+            <summary class="link-btn" style="color:var(--text-secondary);font-size:12px"><i data-icon="chevron-right" class="icon--sm"></i>安装说明</summary>
+            <p class="muted" style="font-size:12px;margin-top:8px">仅 Mac 安装包支持，适用于默认配置目录的 zsh / bash；确认窗口会列出将写入的文件。不使用 sudo，不覆盖同名命令。安装后请新开终端；移动客户端后需重新安装。</p>
+          </details>
+        </div>
+
+        <!-- 仓库访问 -->
+        <div class="settings-inner" data-tab-panel="repos" data-group="settings" hidden>
+          <h1>仓库访问</h1><p class="lead">Token 仅用于拉取私有仓库，保存后不回显。</p>
+          <div class="sgroup">
+            <div class="sbox">
+              <div class="srow"><span class="rt-logo">GH</span><div class="srow__text"><div class="srow__label">GitHub<span class="status status--pill st-done"><i data-icon="st-done"></i>已配置</span></div><div class="srow__desc">11月2日保存</div></div><div class="srow__control"><button class="btn btn--sm" type="button">替换</button><button class="btn btn--ghost btn--sm" type="button" style="color:var(--st-failed)">移除</button></div></div>
+              <div class="srow srow--expand"><span class="rt-logo">GL</span><div class="srow__text"><div class="srow__label">GitLab</div><div class="srow__desc">未配置</div></div>
+                <div class="srow__panel" style="margin-top:12px;padding-top:0;border-top:0"><div class="hstack"><input class="input" type="password" style="flex:1" placeholder="粘贴 GitLab Token" aria-label="GitLab Token"><button class="btn btn--primary" type="button" disabled>保存</button></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 更新 -->
+        <div class="settings-inner" data-tab-panel="updates" data-group="settings" hidden>
+          <h1>更新</h1><p class="lead">只检查正式版；不会自动下载，也不会打断正在执行的任务。</p>
+          <div class="sgroup">
+            <div class="sgroup__title">应用</div>
+            <div class="sbox">
+              <div class="srow"><img src="../../../web/icons/application-ui.png" alt="" width="28" height="28" style="border-radius:7px"><div class="srow__text"><div class="srow__label">AgentForge 0.1.9</div><div class="srow__desc">当前版本 · <a href="#">GitHub 发布记录</a></div></div><div class="srow__control"><button class="btn btn--sm" type="button">检查更新</button></div></div>
+              <div class="srow srow--expand"><span class="rt-logo" style="background:var(--accent-soft);color:var(--accent-text)"><i data-icon="download" class="icon--sm"></i></span><div class="srow__text"><div class="srow__label">发现新版本 0.2.0</div><div class="srow__desc">正在下载安装包…</div></div><div class="srow__control"><span class="tnum muted" style="font-size:12px">62%</span><button class="btn btn--ghost btn--sm" type="button">取消</button></div>
+                <div class="srow__panel" style="margin-top:10px;padding-top:0;border-top:0"><div class="progress" role="progressbar" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100" aria-label="安装包下载进度"><i style="width:62%"></i></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="sgroup">
+            <div class="sgroup__title">插件</div>
+            <div class="sbox">
+              <div class="srow"><div class="srow__text"><div class="srow__label">自动更新 Git 插件</div><div class="srow__desc">仅在 AgentForge 服务运行时生效；本地目录与固定 SHA 不追随远端。</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="自动更新 Git 插件"></span></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">检查周期</div><div class="srow__desc">1–1440 分钟，默认 2 分钟。</div></div><div class="srow__control"><input class="input tnum" style="width:72px;text-align:right" value="2" aria-label="检查周期（分钟）"><span class="muted">分钟</span></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">上次检查</div><div class="srow__desc">尚未检查 · 下次 00:59</div></div><div class="srow__control"><button class="btn btn--sm" type="button"><i data-icon="refresh" class="icon--sm"></i>立即检查</button></div></div>
+            </div>
+            <p class="faint" style="font-size:12px;margin-top:8px">员工之后的调用使用新版本；已启动的任务保留创建时冻结的配置。</p>
+          </div>
+        </div>
+
+        <!-- 运行日志 -->
+        <div class="settings-inner" data-tab-panel="logs" data-group="settings" hidden>
+          <h1>运行日志</h1><p class="lead">任务、私聊、群聊与本机服务的详细诊断写入本机文件，这里只显示路径。</p>
+          <div class="sgroup">
+            <div class="sbox">
+              <div class="srow"><div class="srow__text"><div class="srow__label">日志目录</div><div class="path"><span>~/.agentforge/logs/af-7c21</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button><button class="btn btn--sm" type="button">在访达中显示</button></div></div>
+              <div class="srow"><div class="srow__text"><div class="srow__label">当前服务日志</div><div class="path"><span>~/.agentforge/logs/af-7c21/server-48211.jsonl</span></div></div><div class="srow__control"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="复制路径"><i data-icon="copy" class="icon--sm"></i></button></div></div>
+            </div>
+          </div>
+          <div class="callout"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">排查「找不到 CLI」</div><div class="callout__text">在日志中搜索 <code>provider.launch_diagnostic</code>，其中包含实际 PATH、目录检查与逐项建议；原始错误在同次调用的 <code>provider.spawn_error</code> 中。分享日志前请检查敏感内容。</div></div></div>
+          <details class="sgroup" style="margin-top:20px">
+            <summary class="link-btn" style="color:var(--text-secondary);font-size:12px"><i data-icon="chevron-right" class="icon--sm"></i>保留策略</summary>
+            <p class="muted" style="font-size:12px;margin-top:8px">JSONL 格式，每个进程独立文件，10 MiB 分卷；旧文件按 256 MiB 总量、30 天期限清理，当前分卷保留。</p>
+          </details>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

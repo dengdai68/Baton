@@ -45,6 +45,9 @@ export async function setupPluginMarketplace({page,api,root,developer,tester,man
   assert.ok(plugin);assert.equal(plugin.components.skills,2);assert.equal(plugin.components.agents,1);assert.equal(plugin.components.hooks,1);
   assert.equal(catalog.entries,undefined);assert.equal(plugin.skillIds,undefined);
   assert.equal(await fileExists(fixture.hookLog),false,'install never executes hook');
+  await page.locator('.extension-card-footer').first().waitFor();
+  assert.match(await page.locator('.extension-card-footer').first().textContent(),/2 Skill · 1 Subagent · 1 Hook/);
+  assert.match(await page.locator('.extension-source').first().textContent(),/本地目录/);
   await page.locator('[data-extension-detail]').first().click();
   await page.getByRole('tab',{name:/Subagent/}).click();
   assert.match(await page.locator('[role=tabpanel]').textContent(),/proof-reader/);

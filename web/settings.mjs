@@ -1,9 +1,19 @@
 import {runtimeLabel,RUNTIME_EFFORT_LEVELS} from "../client/runtime-providers.mjs";
-import { DIRECTORY_THEMES, NAVIGATION, normalizePreferences } from "./preferences.mjs";
+import { DIRECTORY_THEMES, NAVIGATION, normalizePreferences, THEMES } from "./preferences.mjs";
 import { createFloatingList, closeFloatingLists } from './floating-list.mjs';
 
-export const SETTINGS_PAGES = { general: "常规", appearance: "外观", workspace: "工作目录", cli: "命令行 CLI", repositories: "仓库访问", runtime: "Runtime", updates: "更新", logs: "运行日志" };
+export const SETTINGS_PAGES = { general: "常规", appearance: "外观", workspace: "工作目录", cli: "命令行 CLI", repositories: "仓库访问", runtime: "运行时", updates: "更新", logs: "运行日志" };
 const escape = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+
+const settingsIcon = id => {
+  const paths = {
+    general: '<path d="M4 5h16v14H4zM4 9h16M8 5v4"/>', appearance: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16a8 8 0 0 0 0-16"/>',
+    workspace: '<path d="M3 7h7l2 2h9v11H3zM3 7V4h7l2 3"/>', runtime: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"/>',
+    cli: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/>', repositories: '<circle cx="7" cy="6" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><path d="M7 8v8m10-8v2c0 4-10 0-10 6"/>',
+    updates: '<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 2M4 17l2 2a8 8 0 0 0 13-3"/>', logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7m-7 4h7"/>'
+  };
+  return `<svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] || paths.general}</svg>`;
+};
 
 // Mirrors the provider effort vocabularies observed from the real CLIs in
 // server/runtime/model-catalog.mjs; tests assert both sides stay equal. The
@@ -81,7 +91,7 @@ export function createClosePreferenceUI(panel, desktop) {
   const sync = () => { options.forEach(option => { option.disabled = !ready || busy; }); save.disabled = !dirty() || busy || !["quit", "tray"].includes(selected()); };
   function accept(value) {
     if (value?.platform !== "darwin" || ![null, "quit", "tray"].includes(value.closeMode)) throw new Error("客户端偏好不可用");
-    saved = value.closeMode; options.forEach(option => { option.checked = option.value === saved; }); ready = true;
+    saved = value.closeMode; status.classList?.toggle("saved", Boolean(saved)); options.forEach(option => { option.checked = option.value === saved; }); ready = true;
   }
   async function refresh() {
     if (disposed || panel.hidden || busy || dirty()) return;
@@ -90,20 +100,21 @@ export function createClosePreferenceUI(panel, desktop) {
     try {
       const value = await desktop.getPreferences();
       if (disposed || id !== request) return;
-      accept(value); status.textContent = saved ? "已保存；后续关闭窗口按此设置执行。" : "尚未设置；首次关闭窗口时会询问，取消不会保存选择。";
+      accept(value); status.textContent = saved ? "✓ 已保存；后续关闭窗口按此设置执行。" : "尚未设置；首次关闭窗口时会询问，取消不会保存选择。";
     } catch {
-      if (!disposed && id === request) { ready = false; status.textContent = "读取客户端偏好失败，请重试。"; retry.hidden = false; }
+      if (!disposed && id === request) { ready = false; status.classList?.remove("saved"); status.textContent = "读取客户端偏好失败，请重试。"; retry.hidden = false; }
     } finally { if (!disposed && id === request) { busy = false; sync(); } }
   }
-  form.onchange = () => { status.textContent = dirty() ? "尚未保存。" : "设置未更改。"; sync(); };
+  form.onchange = () => { sync(); if(dirty())return form.onsubmit({preventDefault(){}}); };
+  save.hidden = true;
   form.onsubmit = async event => {
     event.preventDefault(); if (save.disabled) return;
-    busy = true; sync(); status.textContent = "正在保存…";
+    busy = true; sync(); status.classList?.remove("saved"); status.textContent = "正在保存…";
     try {
       const value = await desktop.setCloseMode(selected());
       if (disposed) return;
-      accept(value); status.textContent = "已保存；后续关闭窗口按此设置执行。";
-    } catch { if (!disposed) status.textContent = "保存失败，原设置未更改。请重试；详细原因见运行日志。"; }
+      accept(value); status.textContent = "✓ 已保存；后续关闭窗口按此设置执行。";
+    } catch { if (!disposed) { options.forEach(option => { option.checked = option.value === saved; }); status.textContent = "保存失败，已恢复原设置；请重新选择。"; } }
     finally { if (!disposed) { busy = false; sync(); } }
   };
   retry.onclick = refresh;
@@ -118,7 +129,7 @@ export function createCliInstallationUI(panel, desktop) {
   function accept(value) {
     available = value.canInstall === true;
     paths.textContent = [value.commandPath, ...(value.profilePaths || [])].filter(Boolean).join('\n');
-    status.textContent = value.cancelled ? (value.installed ? '已取消重新安装；现有 CLI 保持不变。' : '已取消，未安装。') : value.installed ? '已安装。请新开终端运行 agentforge help；已有终端需重新打开。' : value.message || '自动安装尚未完成，可重试安装；仅写入当前用户的命令与受管 PATH 配置块。';
+    status.innerHTML = value.cancelled ? (value.installed ? '已取消重新安装；现有 CLI 保持不变。' : '已取消，未安装。') : value.installed ? '<span class="status-pill done">已安装</span> 请新开终端运行 agentforge help；已有终端需重新打开。' : escape(value.message || '自动安装尚未完成，可重试安装；仅写入当前用户的命令与受管 PATH 配置块。');
     button.textContent = value.installed ? '重新安装 CLI' : '安装 CLI';
     button.hidden = !value.supported;
   }
@@ -168,14 +179,17 @@ export function createPluginUpdateSettingsUI(panel, api) {
     catch(error){if(!disposed && id===request)status.textContent=error.message;}
     finally{if(!disposed && id===request){sync();schedule();}}
   }
-  form.oninput=()=>{note.textContent=valid()?(dirty()?'尚未保存。':''): '检查周期须为 1–1440 的整数分钟。';sync();};
+  save.hidden=true;
+  enabled.onchange=()=>{sync();if(!save.disabled)void form.onsubmit({preventDefault(){}});};
+  interval.onblur=()=>{sync();if(!save.disabled)void form.onsubmit({preventDefault(){}});};
+  form.oninput=()=>{note.classList?.remove("saved");interval.setAttribute("aria-invalid",String(!valid()));note.textContent=valid()?(dirty()?'尚未保存。':''): '检查周期须为 1–1440 的整数分钟。';sync();};
   form.onsubmit=async event=>{
     event.preventDefault();if(save.disabled)return;
     busy=true;++request;clearTimeout(timer);sync();note.textContent='正在保存…';
     try{
       const value=await api('/api/runtime/marketplace/updates/settings',{method:'PUT',body:JSON.stringify({enabled:enabled.checked,intervalMinutes:Number(interval.value)})});
-      if(disposed)return;saved=null;accept(value);note.textContent='已保存。';
-    }catch(error){if(!disposed)note.textContent=`保存失败：${error.message}`;}
+      if(disposed)return;saved=null;accept(value);save.hidden=true;note.textContent='✓ 已保存'; note.classList?.add("saved");
+    }catch(error){if(!disposed){note.textContent=`保存失败：${error.message}。请重试。`;save.hidden=false;}}
     finally{if(!disposed){busy=false;sync();schedule();}}
   };
   check.onclick=async()=>{
@@ -253,15 +267,15 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
         const label = runtimeLabel(profile.provider);
         const row = document.createElement('div'); row.className = 'runtime-provider-row'; row.dataset.runtimeProfile = profile.id;
         const availabilityLabel = () => profile.installed ? (profile.enabled ? '可用' : '已停用') : '未安装';
-        row.innerHTML = `<details class="runtime-config"><summary aria-label="${label} 配置"><span class="runtime-expand-icon" aria-hidden="true">›</span><div><h4>${label}</h4><p class="field-hint" data-runtime-summary></p></div></summary></details><div class="runtime-provider-actions"><label class="runtime-availability"><input type="checkbox" role="switch" aria-label="${label} 可用" ${profile.enabled ? 'checked' : ''} ${profile.installed ? '' : 'disabled'} /><span data-enabled-label>${availabilityLabel()}</span></label></div><p role="status" data-row-result></p>`;
+        row.innerHTML = `<details class="runtime-config"><summary aria-label="${label} 配置"><span class="settings-provider-icon" aria-hidden="true">${escape(({'claude-code':'CC',codex:'CX','deepseek-harness':'DS',opencode:'OC',cursor:'CU',gemini:'GE',qwen:'QW',kimi:'KM',pi:'PI'})[profile.provider] || label.slice(0,2).toUpperCase())}</span><div><h4 aria-label="${label}">${label}<span class="settings-provider-count">${profile.employeeCount} 位员工</span></h4><p class="field-hint" data-runtime-summary></p></div><span class="runtime-expand-icon" aria-hidden="true">⌄</span></summary></details><div class="runtime-provider-actions"><label class="runtime-availability"><input type="checkbox" role="switch" aria-label="${label} 可用" ${profile.enabled ? 'checked' : ''} ${profile.installed ? '' : 'disabled'} /><span class="visually-hidden" data-enabled-label>${availabilityLabel()}</span></label></div><p role="status" data-row-result></p>`;
         container.append(row);
         const summary = row.querySelector('[data-runtime-summary]');
-        const syncSummary = () => { summary.textContent = `${profile.model ? runtimeOptionLabel(profile.model) : 'CLI 默认模型'} · ${profile.effort ? runtimeOptionLabel(profile.effort) : '默认思考等级'} · ${profile.employeeCount} 位员工`; };
+        const syncSummary = () => { summary.textContent = `${availabilityLabel()} · ${profile.model ? runtimeOptionLabel(profile.model) : 'CLI 默认模型'} · ${profile.effort ? runtimeOptionLabel(profile.effort) : '默认思考等级'}`; };
         syncSummary();
         const toggle = row.querySelector('[role="switch"]'), rowResult = row.querySelector('[data-row-result]');
         const syncAvailability = () => {
           toggle.checked = profile.enabled; toggle.disabled = !profile.installed;
-          row.querySelector('[data-enabled-label]').textContent = availabilityLabel();
+          row.querySelector('[data-enabled-label]').textContent = availabilityLabel(); syncSummary();
           const test = row.querySelector('[data-test-runtime]');
           if (test) test.disabled = !profile.enabled || test.form.dataset.busy === 'true';
         };
@@ -287,10 +301,11 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
           card.innerHTML = `<form class="runtime-profile-form"><div class="form-grid">
             <div class="form-field runtime-model-field"><label for="${modelListId}-input">模型名字</label><div class="runtime-model-row"><div class="runtime-model-picker"><input id="${modelListId}-input" name="model" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${modelListId}" value="${escape(value.model)}" placeholder="选择或输入模型" autocomplete="off" spellcheck="false" /><button type="button" class="model-picker-toggle" aria-label="展开模型列表" aria-controls="${modelListId}">⌄</button><div id="${modelListId}" class="model-options" role="listbox" aria-label="模型列表" hidden></div></div><button type="button" class="model-refresh" data-refresh-models aria-label="刷新模型列表" title="刷新模型列表">↻</button></div><p class="field-hint" data-model-status>模型列表：尚未加载。</p></div>
             <div class="form-field runtime-effort-field"><label for="${modelListId}-effort">思考等级</label><select id="${modelListId}-effort" name="effort"></select><p class="field-hint" data-effort-status hidden></p></div>
-            </div><div class="form-actions"><button class="primary-button compact" type="submit">保存配置</button><button type="button" class="small-button" data-test-runtime ${profile.enabled ? '' : 'disabled'}>测试连接</button></div>
+            </div><div class="form-actions"><button type="button" class="ghost-button" data-cancel-runtime>取消</button><button class="primary-button compact" type="submit">保存配置</button><button type="button" class="small-button" data-test-runtime ${profile.enabled ? '' : 'disabled'}>测试连接</button></div>
             <p role="status" data-runtime-result style="overflow-wrap:anywhere;user-select:text"></p></form>`;
           disclosure.append(card);
           const form = card.querySelector('form'), status = card.querySelector('[data-runtime-result]');
+          card.querySelector('[data-cancel-runtime]').onclick = () => { closeFloatingLists(card); disclosure.open = false; card.remove(); disclosure.querySelector('summary').focus(); };
           const modelInput = form.elements.model, effortSelect = form.elements.effort;
           const modelStatus = card.querySelector('[data-model-status]'), effortStatus = card.querySelector('[data-effort-status]');
           const modelOptions = card.querySelector('.model-options');
@@ -408,20 +423,22 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     try {
       const result = await api("/api/settings/workspace");
       if (!container.isConnected) return;
-      container.innerHTML = `<form id="workspace-settings-form"><div class="form-field"><label for="default-workspace-root">工作目录</label><input id="default-workspace-root" name="workspaceRoot" value="${escape((workspaceLocation=result.workspaceRoot) || "")}" spellcheck="false" required /><p class="field-hint">员工、角色、团队、工作流、自动化、任务、沟通与执行文件保存在此目录。默认 ~/.agentforge/workspace，请输入绝对路径。</p><div class="field-error" role="alert"></div></div><p class="settings-note">更换目录会整理应用资料并重启本机服务；有任务或沟通执行时不能更换。已有任务的工作路径保持原位。设置、认证、Runtime、插件、MCP、Git 凭据和日志保留在 ~/.agentforge。</p><p class="settings-note">业务资料：<code>${escape(result.businessRoot || '')}</code></p><p class="settings-note">配置目录：<code>${escape(result.configurationRoot || '')}</code></p><div class="form-actions"><button class="primary-button compact" type="submit">保存并整理目录</button><span data-workspace-status role="status"></span></div></form>`;
+      container.innerHTML = `<div class="settings-group"><h4>存储位置</h4><form id="workspace-settings-form"><div class="settings-box"><div class="settings-row settings-row-wrap"><div class="settings-row-text"><label for="default-workspace-root">工作目录</label><small>员工、任务、沟通与执行文件保存在此目录。</small></div><div class="form-field settings-workspace-input"><input id="default-workspace-root" name="workspaceRoot" value="${escape((workspaceLocation=result.workspaceRoot) || "")}" spellcheck="false" required /><div class="field-error" role="alert"></div></div></div><div class="settings-row"><div class="settings-row-text"><strong>业务资料</strong><code data-business-root>${escape(result.businessRoot || '')}</code></div><button type="button" class="ghost-button" data-copy-setting="[data-business-root]">复制</button>${globalThis.window?.agentforgeDesktop?.openWorkspaceDirectory ? '<button type="button" class="small-button" data-open-workspace>打开工作目录</button>' : ''}</div><div class="settings-row"><div class="settings-row-text"><strong>配置目录</strong><code data-configuration-root>${escape(result.configurationRoot || '')}</code></div><button type="button" class="ghost-button" data-copy-setting="[data-configuration-root]">复制</button></div></div><p class="field-hint">默认 ~/.agentforge/workspace，请输入绝对路径。更换目录会整理应用资料并重启本机服务；有任务或沟通执行时不能更换。已有任务的工作路径保持原位。</p><div class="form-actions"><span data-workspace-status role="status"></span><button class="small-button" type="submit" disabled>保存并整理目录</button></div></form></div>`;
       const form = container.querySelector("form");
+      form.elements.workspaceRoot.addEventListener('input', () => { form.querySelector('[type="submit"]').disabled = form.elements.workspaceRoot.value.trim() === workspaceLocation; });
       form.addEventListener("submit", async (event) => {
         event.preventDefault(); clearInvalid(form);
-        const button = form.querySelector("button"), status = form.querySelector("[data-workspace-status]");
+        const button = form.querySelector('[type="submit"]'), status = form.querySelector("[data-workspace-status]");
         button.disabled = true; status.textContent = "";
         try {
           const saved = await api("/api/settings/workspace", { method: "PUT", body: JSON.stringify({ workspaceRoot: form.elements.workspaceRoot.value.trim() }) });
           onWorkspaceSaved(saved);
           if (!form.isConnected) return;
           form.elements.workspaceRoot.value = saved.workspaceRoot;
+          workspaceLocation = saved.workspaceRoot;
           status.textContent = saved.restarting ? "正在整理资料并重启本机服务，请勿退出应用。" : "当前已使用此数据目录。";
         } catch (error) { if (form.isConnected) setInvalid(form.elements.workspaceRoot, error.message); }
-        finally { button.disabled = false; }
+        finally { button.disabled = form.elements.workspaceRoot.value.trim() === workspaceLocation; }
       });
     } catch (error) {
       if (container.isConnected) container.innerHTML = `<p role="alert">${escape(error.message)}</p><button class="small-button" data-retry-workspace>重新读取</button>`;
@@ -432,7 +449,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     if (!root) return;
     const preferences = getPreferences();
     root.querySelectorAll('[name="theme"]').forEach((input) => { input.checked = input.value === preferences.theme; });
-    root.querySelectorAll('[name="directoryTheme"]').forEach((input) => { input.checked = input.value === preferences.directoryTheme; });
+    root.querySelectorAll('[name="directoryTheme"]').forEach((input) => { if (input.tagName === 'SELECT') input.value = preferences.directoryTheme; else input.checked = input.value === preferences.directoryTheme; });
     root.querySelectorAll("[data-nav-visible]").forEach((input) => { input.checked = !preferences.hiddenViews.includes(input.dataset.navVisible); });
     root.querySelectorAll("[data-display-option]").forEach((input) => { input.checked = preferences[input.dataset.displayOption]; });
   }
@@ -440,18 +457,19 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
   function changePreferences(value) {
     const saved = updatePreferences(value);
     const status = root.querySelector("[data-preferences-status]");
-    status.textContent = saved ? "已自动保存到当前客户端。" : "仅本次生效：当前环境无法保存偏好，刷新后可能恢复默认。";
+    status.textContent = saved ? "✓ 已保存到当前客户端。" : "仅本次生效：当前环境无法保存偏好，刷新后可能恢复默认。";
     status.classList.toggle("error", !saved);
+    status.classList.toggle("saved", saved);
     syncPreferences();
   }
 
   function renderProvider(card, provider) {
     const label = escape(provider.label), id = escape(provider.id);
-    card.innerHTML = `<div class="repository-access-card-head"><div><h4>${label}</h4><p>HTTPS · ${escape(provider.host)}</p></div><span class="status-pill ${provider.configured ? "active" : "paused"}">${provider.configured ? "已配置" : "未配置"}</span></div>
-      <p class="field-hint">${provider.id === "github" ? "使用具有 Contents: Read 权限的 fine-grained personal access token。" : "使用具有 read_repository 权限的 personal access token。"} 保存后不会显示原值。</p>
-      <form class="git-credential-form" novalidate><div class="form-field"><label for="git-token-${id}">${label} Token</label><div class="repository-token-row"><input id="git-token-${id}" name="token" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴新的 Token" /><button type="submit" class="primary-button compact">保存 Token</button>${provider.configured ? `<button type="button" class="ghost-button" data-remove-git-token="${id}">移除 Token</button>` : ""}</div><div class="field-error" role="alert"></div></div></form>`;
+    card.innerHTML = `<div class="repository-access-card-head"><span class="settings-provider-icon" aria-hidden="true">${id === 'github' ? 'GH' : 'GL'}</span><div class="settings-row-text"><h4>${label}<span class="settings-provider-count">${provider.configured ? '已配置' : '未配置'}</span></h4><small>HTTPS · ${escape(provider.host)}</small></div>${provider.configured ? `<div class="settings-row-controls"><button type="button" class="small-button" data-edit-git-token aria-expanded="false">替换</button><button type="button" class="ghost-button danger" data-remove-git-token="${id}">移除</button></div>` : ''}</div>
+      <form class="git-credential-form" novalidate ${provider.configured ? 'hidden' : ''}><div class="form-field"><label for="git-token-${id}">${label} Token</label><div class="repository-token-row"><input id="git-token-${id}" name="token" type="password" autocomplete="new-password" spellcheck="false" placeholder="粘贴新的 Token" /><button type="submit" class="primary-button compact">保存 Token</button></div><div class="field-error" role="alert"></div><p class="field-hint">${provider.id === 'github' ? '使用具有 Contents: Read 权限的 fine-grained personal access token。' : '使用具有 read_repository 权限的 personal access token。'} 保存后不会显示原值。</p></div></form>`;
     const form = card.querySelector("form");
-    const busy = (disabled) => form.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
+    card.querySelector('[data-edit-git-token]')?.addEventListener('click', event => { form.hidden = !form.hidden; event.currentTarget.setAttribute('aria-expanded', String(!form.hidden)); if (!form.hidden) form.elements.token.focus(); else inputClear(form); });
+    const busy = (disabled) => card.querySelectorAll("button").forEach((button) => { button.disabled = disabled; });
     const accept = (result) => {
       if (!card.isConnected) return;
       const updated = result.providers?.find((item) => item.id === provider.id);
@@ -508,78 +526,51 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     if (root !== target) {
       root = target;
       root.innerHTML = `<div class="settings-layout">
-        <nav class="settings-nav" aria-label="设置分类">${Object.entries(SETTINGS_PAGES).map(([id, label]) => `<button type="button" data-settings-page="${id}">${label}</button>`).join("")}</nav>
+        <nav class="settings-nav" aria-label="设置分类">${[['通用',['general','appearance','workspace']],['集成',['runtime','cli','repositories']],['系统',['updates','logs']]].map(([group,ids]) => `<div class="settings-nav-group"><span>${group}</span>${ids.map(id => `<button type="button" data-settings-page="${id}">${settingsIcon(id)}${SETTINGS_PAGES[id]}</button>`).join('')}</div>`).join('')}</nav>
         <div class="settings-content">
           <section class="settings-section" data-settings-panel="general" hidden>
-            <h3>常规</h3>
-            <form data-close-form><fieldset class="settings-radio-group"><legend>关闭主窗口时</legend><label class="settings-radio-option"><input type="radio" name="closeMode" value="quit" disabled /><span>退出程序</span></label><label class="settings-radio-option"><input type="radio" name="closeMode" value="tray" disabled /><span>保留在菜单栏</span></label></fieldset><p class="field-hint">Cmd+Q 始终退出程序。</p><div class="form-actions"><button class="primary-button compact" type="submit" disabled>保存</button></div></form>
-            <p data-close-status role="status">正在读取客户端偏好…</p><button class="small-button" data-close-retry hidden>重试</button>
-            <div class="settings-signout"><button type="button" class="ghost-button" id="logout-button">退出登录</button></div>
+            <h3>常规</h3><p class="settings-description">常规设置即时生效，自动保存在当前客户端。</p>
+            <div class="settings-group"><h4>窗口</h4><div class="settings-box"><form data-close-form class="settings-row"><div class="settings-row-text"><strong>关闭主窗口时</strong><small>Cmd+Q 始终退出程序。</small></div><fieldset class="settings-radio-group settings-segmented"><legend class="visually-hidden">关闭主窗口时</legend><label class="settings-radio-option"><input type="radio" name="closeMode" value="quit" disabled /><span>退出程序</span></label><label class="settings-radio-option"><input type="radio" name="closeMode" value="tray" disabled /><span>保留在菜单栏</span></label></fieldset><button class="primary-button compact" type="submit" disabled>保存</button></form></div><p data-close-status class="settings-status" role="status">正在读取客户端偏好…</p><button class="small-button" data-close-retry hidden>重试</button></div>
+            <div class="settings-group"><h4>账号</h4><div class="settings-box"><div class="settings-row"><span class="settings-account-avatar" aria-hidden="true">我</span><div class="settings-row-text"><strong data-settings-account>本机管理员</strong><small>本机单管理员 · CLI 与客户端共用登录授权。</small></div><button type="button" class="small-button" id="logout-button">退出登录</button></div></div></div>
           </section>
-          <section class="settings-section" data-settings-panel="cli" hidden>
-            <h3>命令行 CLI</h3><p class="settings-description">在 Shell 中使用 agentforge，供受信任 AI 快速配置工作流、团队、数字员工、插件及 MCP。</p>
-            <div class="form-actions"><button type="button" class="primary-button compact" data-cli-install disabled>安装 CLI</button><button type="button" class="small-button" data-cli-refresh>刷新</button></div>
-            <p data-cli-status role="status">正在检查 CLI 安装…</p><pre data-cli-paths style="white-space:pre-wrap;overflow-wrap:anywhere;user-select:text"></pre>
-            <p class="settings-note">仅 Mac 安装包支持，适用于默认配置目录的 zsh/bash。客户端确认窗口列出将写入的文件；不使用 sudo，不覆盖其他同名命令。安装后新开终端；移动客户端后请重新安装 CLI。自定义 Shell/ZDOTDIR 需手动配置。</p>
-            <details><summary>AI 配置 CLI 使用说明</summary><p class="settings-note">安装版启动时默认安装 CLI，并复用当前客户端登录授权；客户端未登录时可单独登录。CLI 不读取浏览器 Cookie 或数据库。</p><pre style="white-space:pre-wrap;overflow-wrap:anywhere;user-select:text">agentforge help\nagentforge schema agents\nagentforge auth login --username YOUR_NAME</pre><p class="field-hint">无需系统 Node。help / schema 提供字段、依赖顺序和完整 JSON 模板；源码使用 npm --silent run cli -- help。交互登录隐藏输入密码；脚本显式使用 --password-stdin 管道，不放在命令参数。配置保存不等于任务执行，不能自动确认交付。CLI 会话是本机管理员权限，只交给可信 AI。</p></details>
-          </section>
-          <section class="settings-section" data-settings-panel="updates" hidden>
-            <section class="settings-update-module" aria-labelledby="app-update-title">
-            <h3 id="app-update-title">应用更新</h3><p class="settings-description app-update-version"><span data-app-version>正在读取当前版本…</span><a data-app-github href="https://github.com/dengdai68/AgentForge" target="_blank" rel="noopener noreferrer">GitHub</a></p>
-            <p data-app-update-status role="status" aria-live="polite">正在读取更新状态…</p>
-            <div class="app-update-progress-row" data-app-update-progress hidden><progress class="app-update-progress" max="100" value="0" aria-label="安装包下载进度"></progress><span data-app-update-percent aria-hidden="true">0%</span></div>
-            <div class="form-actions"><button type="button" class="small-button" data-app-update-check>检查更新</button><button type="button" class="primary-button compact" data-app-update-download hidden>下载更新</button><button type="button" class="primary-button compact" data-app-update-install hidden>重启并安装</button></div>
-            <p class="settings-note" data-app-update-note>只检查正式版，Beta 不参与更新。</p>
-            </section>
-            <section class="settings-update-module" aria-labelledby="plugin-update-title">
-            <h3 id="plugin-update-title">插件更新</h3><p class="settings-description">自动检查已安装 Git 插件；仅在 AgentForge 服务运行时生效。</p>
-            <form data-plugin-update-form><label class="settings-check"><input type="checkbox" name="enabled" aria-label="插件自动更新" disabled>启用自动更新</label><div class="form-field plugin-update-interval"><label for="plugin-update-interval">检查周期（分钟）</label><input id="plugin-update-interval" type="number" name="intervalMinutes" min="1" max="1440" step="1" required disabled><p class="field-hint">默认 2 分钟，范围 1–1440 分钟。</p></div><div class="form-actions"><button type="submit" class="primary-button compact" disabled>保存</button><button type="button" class="small-button" data-check-plugin-updates disabled>立即检查</button></div><p data-plugin-update-note role="status"></p></form>
-            <p data-plugin-update-status role="status">正在读取…</p><p class="settings-note">关闭自动更新后仍可立即检查；已开始的检查继续完成。本地目录与固定 SHA 不追随远端更新，不更新 MCP 或应用本身。当前员工使用新版本，已启动任务保留冻结配置。</p>
-            </section>
-          </section>
-          <section class="settings-section" data-settings-panel="logs" hidden>
-            <h3>运行日志</h3><p class="settings-description">任务、私聊、群聊与本机服务的详细诊断写入本机文件，此处只显示路径。</p>
-            <p class="settings-note">找不到 CLI 时，在日志文件中搜索 provider.launch_diagnostic：包含实际 PATH、目录与可执行文件检查，以及逐项排查建议。原始错误在同次调用的 provider.spawn_error / provider.stderr 中。</p><dl class="runtime-details"><div><dt>日志目录</dt><dd data-log-directory style="overflow-wrap:anywhere;user-select:text">正在读取…</dd></div><div><dt>当前服务日志</dt><dd data-log-file style="overflow-wrap:anywhere;user-select:text">正在读取…</dd></div></dl>
-            <button class="small-button" data-logs-refresh>刷新路径</button><p data-log-status role="status">正在读取…</p>
-            <p class="settings-note">JSONL 格式，保留错误原文、堆栈、进程退出信息及脱敏诊断输出。每进程独立文件，10 MiB 分卷；当前实例的旧诊断文件按 256 MiB 总量、30 天保留期限清理，当前分卷保留。默认位于 ~/.agentforge/logs/&lt;实例标识&gt;。请在运行服务的机器上打开此路径，分享日志前检查敏感内容。旧版本未保存的错误无法恢复。</p>
-          </section>
-          <p class="settings-save-status" data-preferences-status role="status">外观和展示偏好自动保存在当前客户端。</p>
-          <section class="settings-section" data-settings-panel="appearance" aria-labelledby="appearance-title">
-            <h3 id="appearance-title">界面主题</h3><p class="settings-description">外观偏好保存在当前客户端；客户端使用独立的管理工作台布局。</p>
-            <fieldset class="theme-options"><legend class="visually-hidden">界面主题</legend>${[
-              ["warm", "暖白", "暖色浅底与柔和层次。"],
-              ["minimal", "极简", "平面层次、克制圆角与清晰的管理界面。"],
-            ].map(([id, label, description]) => `<label class="theme-option"><input type="radio" name="theme" value="${id}" /><span class="theme-preview ${id}" aria-hidden="true"><i></i><span><b></b><em></em><em></em></span></span><strong>${label}</strong><small>${description}</small></label>`).join("")}</fieldset>
-            <hr class="settings-divider" />
-            <h3 id="directory-theme-title">工作目录主题</h3><p class="settings-description">只影响任务空间「工作目录」页签的文件树图标与选中文件的内容配色；交付快照、控制台、协作记录和其他页面不受影响。图标来自 vscode-icons（MIT）。</p>
-            <fieldset class="theme-options"><legend class="visually-hidden">工作目录主题</legend>${DIRECTORY_THEMES.map((theme) => `<label class="theme-option directory-theme-option"><input type="radio" name="directoryTheme" value="${theme.id}" /><strong>${escape(theme.label)}</strong><small>${escape(theme.description)}</small></label>`).join("")}</fieldset>
-            <hr class="settings-divider" />
-            <div class="settings-section-heading"><h3 id="navigation-title">侧栏展示</h3><button type="button" class="small-button" data-reset-navigation>恢复默认展示</button></div>
-            <p class="settings-description">选择侧栏中保留的入口。设置始终显示，隐藏入口不影响已有页面链接、任务执行或访问权限。</p>
-            <div class="navigation-options">${["OPERATIONS", "BUILD", "REFERENCE"].map((group) => `<fieldset><legend>${group}</legend>${NAVIGATION.filter((item) => item.group === group).map(({ id, label }) => `<label class="settings-toggle"><span>${label}</span><input type="checkbox" data-nav-visible="${id}" aria-label="显示${label}" /></label>`).join("")}</fieldset>`).join("")}</div>
-            <h4 class="settings-subheading">导航细节</h4>${[
-              ["showGroups", "分组标题", "OPERATIONS / BUILD / REFERENCE；空分组自动隐藏。"],
-              ["showIcons", "导航图标", "宽屏按偏好显示；窄窗口仍保留图标，方便识别入口。"],
-              ["showCounts", "任务待处理提醒", "只显示待你回复、验收或处理的任务数；零值不显示。"],
-              ["showUnread", "沟通未读提醒", "显示员工新回复的未读数；看到会话最新记录后清零。"],
-            ].map(([id, label, hint]) => `<label class="settings-toggle"><span><strong>${label}</strong><small>${hint}</small></span><input type="checkbox" data-display-option="${id}" aria-label="显示${label}" /></label>`).join("")}
-          </section>
-          <section class="settings-section" data-settings-panel="repositories" aria-labelledby="repositories-title" hidden>
-            <h3 id="repositories-title">仓库访问</h3><p class="settings-description">Token 仅用于拉取私有仓库，保存后不回显。</p>
-            <div id="git-credential-config" class="repository-access-grid" aria-live="polite"></div>
+          <section class="settings-section" data-settings-panel="appearance" aria-labelledby="appearance-title" hidden>
+            <h3 id="appearance-title">外观</h3><p class="settings-description">外观与展示偏好保存在当前客户端，选择后立即生效。</p>
+            <div class="settings-group"><h4>外观模式</h4><fieldset class="theme-options appearance-options"><legend class="visually-hidden">外观模式</legend>${THEMES.map(({id,label,description}) => `<label class="theme-option" title="${escape(description)}"><span class="theme-preview ${id}" aria-hidden="true"><i></i><span><b></b><em></em><em></em></span></span><span class="theme-option-label"><strong>${label}</strong><input type="radio" name="theme" value="${id}" /></span></label>`).join('')}</fieldset></div>
+            <div class="settings-group"><h4>显示</h4><div class="settings-box"><label class="settings-row"><span class="settings-row-text"><strong>工作目录图标</strong><small>文件树图标与选中文件的内容配色；不影响协作和控制台。</small></span><select name="directoryTheme" aria-label="工作目录主题">${DIRECTORY_THEMES.map(theme => `<option value="${theme.id}">${escape(theme.label)}</option>`).join('')}</select></label></div></div>
+            <div class="settings-group"><div class="settings-section-heading"><h4 id="navigation-title">侧栏展示</h4><button type="button" class="ghost-button" data-reset-navigation>恢复默认</button></div><p class="settings-description">设置始终显示。隐藏入口不影响已有链接、任务执行或访问权限。</p><div class="navigation-options">${NAVIGATION.map(({id,label}) => `<label class="settings-toggle"><span>${label}</span><input type="checkbox" role="switch" data-nav-visible="${id}" aria-label="显示${label}" /></label>`).join('')}</div><div class="settings-box settings-navigation-details">${[['showGroups','分组标题','工作 / 组织 / 扩展；空分组自动隐藏。'],['showIcons','导航图标','窄窗口始终保留图标，方便识别入口。']].map(([id,label,hint]) => `<label class="settings-row settings-toggle"><span class="settings-row-text"><strong>${label}</strong><small>${hint}</small></span><input type="checkbox" role="switch" data-display-option="${id}" aria-label="显示${label}" /></label>`).join('')}</div></div>
+            <div class="settings-group"><h4>提醒</h4><div class="settings-box">${[['showCounts','任务待处理提醒','只显示待你回复、验收或处理的任务数；零值不显示。'],['showUnread','沟通未读提醒','显示员工新回复的未读数；看到最新记录后清零。']].map(([id,label,hint]) => `<label class="settings-row settings-toggle"><span class="settings-row-text"><strong>${label}</strong><small>${hint}</small></span><input type="checkbox" role="switch" data-display-option="${id}" aria-label="显示${label}" /></label>`).join('')}</div></div>
+            <p class="settings-save-status" data-preferences-status role="status">外观和展示偏好自动保存在当前客户端。</p>
           </section>
           <section class="settings-section" data-settings-panel="workspace" aria-labelledby="workspace-settings-title" hidden>
-            <h3 id="workspace-settings-title">数据与工作目录</h3><p class="settings-description">集中管理任务文件、配置、执行记录和扩展的存放位置。</p>
-            <div data-workspace-config></div>
-            <hr class="settings-divider" />
-            <h3 id="data-management-title">数据管理</h3><p class="settings-description">删除整个当前工作目录，保留设置与登录。</p><p class="settings-note">包含当前工作目录中的所有文件和业务记录；配置目录中的账号、认证、Runtime、插件、MCP、Git 凭据、偏好和日志保留。</p><button type="button" class="danger-button" data-reset-all>清除所有数据</button>
+            <h3 id="workspace-settings-title">工作目录</h3><p class="settings-description">集中管理任务文件、配置、执行记录和扩展的存放位置。</p><div data-workspace-config></div>
+            <div class="settings-group"><h4 id="data-management-title">危险操作</h4><div class="settings-box settings-danger-zone"><div class="settings-row"><div class="settings-row-text"><strong>清除所有数据</strong><small>删除整个当前工作目录，保留设置与登录。</small></div><button type="button" class="small-button danger" data-reset-all>清除所有数据</button></div></div><p class="field-hint">包括当前工作目录中的所有文件和业务记录；配置目录中的账号、认证、Runtime、插件、MCP、Git 凭据、偏好和日志保留。</p></div>
           </section>
           <section class="settings-section" data-settings-panel="runtime" aria-labelledby="runtime-title" hidden>
-            <h3 id="runtime-title">Runtime</h3><p class="settings-description">保存后用于后续调用；留空使用 CLI 默认配置。</p>
-            <div class="repository-access-grid" data-runtime-config></div>
+            <h3 id="runtime-title">运行时</h3><p class="settings-description">启用的运行时可被员工选择。模型与思考等级留空时使用 CLI 默认配置，保存后用于之后的调用。</p><div class="repository-access-grid settings-box" data-runtime-config></div>
+          </section>
+          <section class="settings-section" data-settings-panel="cli" hidden>
+            <h3>命令行 CLI</h3><p class="settings-description">在终端中使用 agentforge 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
+            <div class="settings-group"><div class="settings-box"><div class="settings-row"><span class="settings-provider-icon" aria-hidden="true">${settingsIcon('cli')}</span><div class="settings-row-text"><strong>agentforge</strong><small data-cli-status role="status">正在检查 CLI 安装…</small></div><div class="settings-row-controls"><button type="button" class="ghost-button" data-cli-refresh>刷新</button><button type="button" class="small-button" data-cli-install disabled>安装 CLI</button></div></div><pre class="settings-paths" data-cli-paths></pre></div></div>
+            <div class="settings-group"><h4>快速开始</h4><pre class="settings-code">agentforge help\nagentforge schema agents\nagentforge tasks list --json</pre><p class="field-hint">CLI 复用客户端登录授权，相当于本机管理员权限，只交给可信的 AI。配置保存不等于任务执行，也不能代替你确认交付。</p></div>
+            <details class="settings-explanation"><summary>安装说明与登录</summary><p>仅 Mac 安装包支持，适用于默认配置目录的 zsh/bash。确认窗口列出将写入的文件；不使用 sudo，不覆盖同名命令。安装后请新开终端，移动客户端后需重新安装。自定义 Shell/ZDOTDIR 需手动配置。</p><pre class="settings-code">agentforge auth login --username YOUR_NAME</pre><p>无需系统 Node。客户端未登录时可单独登录；密码用隐藏输入或显式 --password-stdin 管道，不放在命令参数。CLI 不读取浏览器 Cookie 或数据库。</p></details>
+          </section>
+          <section class="settings-section" data-settings-panel="repositories" aria-labelledby="repositories-title" hidden>
+            <h3 id="repositories-title">仓库访问</h3><p class="settings-description">Token 仅用于拉取私有仓库，保存后不回显。</p><div id="git-credential-config" class="repository-access-grid settings-box" aria-live="polite"></div>
+          </section>
+          <section class="settings-section" data-settings-panel="updates" hidden>
+            <h3>更新</h3><p class="settings-description">只检查正式版；不会自动下载，也不会打断正在执行的任务。</p>
+            <section class="settings-group settings-update-module" aria-labelledby="app-update-title"><h4 id="app-update-title">应用</h4><div class="settings-box"><div class="settings-row"><img src="/icons/application-ui.png" alt="" width="28" height="28"><div class="settings-row-text"><strong>AgentForge</strong><small><span data-app-version>正在读取当前版本…</span> · <a data-app-github href="https://github.com/dengdai68/AgentForge" target="_blank" rel="noopener noreferrer">GitHub</a></small></div><button type="button" class="small-button" data-app-update-check>检查更新</button></div><div class="settings-row"><div class="settings-row-text"><small data-app-update-status role="status" aria-live="polite">正在读取更新状态…</small></div><div class="settings-row-controls"><button type="button" class="primary-button compact" data-app-update-download hidden>下载更新</button><button type="button" class="primary-button compact" data-app-update-install hidden>重启并安装</button></div></div><div class="app-update-progress-row" data-app-update-progress hidden><progress class="app-update-progress" max="100" value="0" aria-label="安装包下载进度"></progress><span data-app-update-percent aria-hidden="true">0%</span></div></div><p class="field-hint" data-app-update-note>只检查正式版，Beta 不参与更新。</p></section>
+            <section class="settings-group settings-update-module" aria-labelledby="plugin-update-title"><h4 id="plugin-update-title">插件</h4><form data-plugin-update-form><div class="settings-box"><label class="settings-row settings-toggle"><span class="settings-row-text"><strong>自动更新 Git 插件</strong><small>仅在 AgentForge 服务运行时生效；本地目录与固定 SHA 不追随远端。</small></span><input type="checkbox" role="switch" name="enabled" aria-label="插件自动更新" disabled></label><div class="settings-row"><div class="settings-row-text"><label for="plugin-update-interval">检查周期</label><small>1–1440 分钟，默认 2 分钟。</small></div><div class="settings-row-controls"><input id="plugin-update-interval" type="number" name="intervalMinutes" min="1" max="1440" step="1" required disabled><span>分钟</span></div></div><div class="settings-row"><div class="settings-row-text"><strong>上次检查</strong><small data-plugin-update-status role="status">正在读取…</small></div><button type="button" class="small-button" data-check-plugin-updates disabled>立即检查</button></div></div><div class="settings-status"><span data-plugin-update-note role="status"></span><button type="submit" class="primary-button compact" disabled>保存</button></div></form><p class="field-hint">关闭自动更新后仍可立即检查；已开始的检查继续完成。员工之后的调用使用新版本；已启动的任务保留冻结配置。不更新 MCP 或应用本身。</p></section>
+          </section>
+          <section class="settings-section" data-settings-panel="logs" hidden>
+            <h3>运行日志</h3><p class="settings-description">任务、私聊、群聊与本机服务的详细诊断写入本机文件，这里只显示路径。</p>
+            <div class="settings-group"><div class="settings-box"><div class="settings-row"><div class="settings-row-text"><strong>日志目录</strong><code data-log-directory>正在读取…</code></div><div class="settings-row-controls"><button class="ghost-button" data-copy-setting="[data-log-directory]">复制</button><button class="small-button" data-logs-refresh>刷新路径</button></div></div><div class="settings-row"><div class="settings-row-text"><strong>当前服务日志</strong><code data-log-file>正在读取…</code></div><button class="ghost-button" data-copy-setting="[data-log-file]">复制</button></div></div><p class="settings-status" data-log-status role="status">正在读取…</p></div>
+            <div class="settings-note"><strong>排查「找不到 CLI」</strong><p>在日志中搜索 <code>provider.launch_diagnostic</code>，其中包含实际 PATH、目录检查与逐项建议；原始错误在同次调用的 <code>provider.spawn_error / provider.stderr</code> 中。分享日志前请检查敏感内容。</p></div>
+            <details class="settings-explanation"><summary>保留策略</summary><p>JSONL 格式，保留错误原文、堆栈、进程退出信息及脱敏诊断输出。每进程独立文件，10 MiB 分卷；旧文件按 256 MiB 总量、30 天期限清理，当前分卷保留。默认位于 ~/.agentforge/logs/&lt;实例标识&gt;。请在运行服务的机器上打开路径。旧版本未保存的错误无法恢复。</p></details>
           </section>
         </div></div>`;
       const layout = root.firstElementChild;
+      api('/api/auth/session').then(account => { if (layout.isConnected && account.username) layout.querySelector('[data-settings-account]').textContent = account.username; }).catch(() => {});
       closePreferenceUI = createClosePreferenceUI(root.querySelector('[data-settings-panel="general"]'), globalThis.window?.agentforgeDesktop);
       pluginUpdateUI = createPluginUpdateSettingsUI(root.querySelector('[data-settings-panel="updates"]'), api);
       const cliPanel = root.querySelector('[data-settings-panel="cli"]');
@@ -588,6 +579,11 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
       globalThis.window?.addEventListener("focus", refreshHostSettings);
       layout.addEventListener("click", (event) => {
         const button = event.target.closest("button");
+        if (button?.dataset.copySetting) {
+          const value = layout.querySelector(button.dataset.copySetting)?.textContent?.trim();
+          if (value && value !== '正在读取…') void navigator.clipboard.writeText(value).then(() => notify('路径已复制。')).catch(error => notify(`复制失败：${error.message}`, true));
+        }
+        if (button?.hasAttribute('data-open-workspace')) void host?.openWorkspaceDirectory?.().catch(error => notify(error.message, true));
         if (button?.hasAttribute("data-reset-all")) confirmDataReset();
         if (button?.dataset.settingsPage) navigate(button.dataset.settingsPage);
         if (button?.hasAttribute("data-logs-refresh")) loadLogs();

@@ -1,5 +1,9 @@
 # Electron 客户端
 
+任务与沟通输入在renderer按Run/会话保留发送中或未确认记录，使用服务器保存的message ID/clientRequestId精确合并；任务请求标识与CLI共享HTTP/Store契约。宿主不保存消息、不重试派工，界面切换与后续输入不被延迟回执覆盖。
+
+纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，表单仍仅显式关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。
@@ -56,6 +60,10 @@ Electron 使用本仓库 renderer 界面，宿主代码位于 `apps/electron/`�
 
 开发可显式设置 `AGENTFORGE_DESKTOP_DATA_ROOT` 隔离启动资料，并用当前协议 locator 选择专用业务根；测试绝不改写真实安装。旧目录有实例而新目录空时拒绝静默新建，不自动执行旧数据转换或重置。
 
+## 外观
+
+纸张（Notion 向）设计系统：`web/tokens.css` 是唯一 Token 源，由 `server/index.mjs` 注入每个 HTML（原生对话框直接加载同一 tokens 文件），语义 Token 用 `light-dark()` 成对声明，`color-scheme` 随偏好 `light` / `dark` / `system` 切换；`web/preferences.mjs` 的 THEMES 提供三档，默认浅色。旧 warm/minimal 取值明确拒绝并回落浅色，不做迁移。偏好变更经 preload 的 `setAppearance` 桥（`desktop:appearance:set` IPC，仅校验主窗控制台 URL）同步 `nativeTheme.themeSource`，宿主与原生确认窗口即时换色并持久化到 `desktop-preferences.json`（appearance 键，写入序列化防丢键）。宿主桥仍保持关闭式：外观是唯一新增通道，没有通用文件/进程接口。
+
 ## 宿主边界
 
 窗口开启隔离与 sandbox，禁用 renderer Node。导航限定当前实例 origin；外链通过宿主处理。preload 只提供关闭偏好、CLI 安装、受限复制和打开当前 Run 工作目录等封闭能力，没有通用文件/进程接口。
@@ -82,7 +90,7 @@ web/ 是客户端 renderer 源码。服务始终为 HTML 加入 compact.css，�
 
 `npm run package:mac` 输出 Apple Silicon DMG/ZIP。当前要求 macOS 13+，采用 ad-hoc 签名，未经过 Developer ID 签名或 Apple 公证；发布上传 SHA-256 清单。构建和验证不得包含操作者的账户、凭据或业务数据。
 
-品牌样式使用 docs/06 的蓝/青/紫共享 tokens；员工可用与 Runtime 支持标签统一品牌蓝，全部目录空态明确共用背景、虚线边框、圆角与间距。侧栏、Dock/ICNS 使用用户原图派生的干净彩色资源，菜单栏使用独立无底板单色模板，随系统明暗变色。仅视觉变化，无 HTTP/CLI 或任务状态变更。
+品牌样式使用 docs/06 的蓝/青/紫共享 tokens；员工可用不显示徽章，Runtime 支持标签使用品牌蓝，全部目录空态明确共用背景、虚线边框、圆角与间距。侧栏、Dock/ICNS 使用用户原图派生的干净彩色资源，菜单栏使用独立无底板单色模板，随系统明暗变色。仅视觉变化，无 HTTP/CLI 或任务状态变更。
 
 ## 默认命令行集成
 
@@ -92,7 +100,7 @@ Mac 安装版从持久位置启动时默认执行用户级 CLI 安装，复用�
 
 设置页 Runtime 在原页面默认折叠，展开保留编辑 DOM；宿主 h3/h4 的字号层级适用于仓库访问及 Runtime。下拉模型标签与思考档位显示首字母大写，但值保持 Provider 原始值；设置布局不改变 CLI 协议。
 
-设置中的 Runtime 与仓库访问使用紧凑二级分组与分隔行；主/子标题保持递减。任务中心和归档列表直接显示可用操作，不再折叠进“更多”；保留原确认、禁用条件及 HTTP/CLI 协议。桌面密度只由 compact.css 覆盖。
+设置中的 Runtime 与仓库访问使用紧凑二级分组与分隔行；主/子标题保持递减。任务中心和归档列表显示一个下一步，编辑/归档/删除放入更多菜单；保留原确认、禁用条件及 HTTP/CLI 协议。桌面密度只由 compact.css 覆盖。
 
 新建任务为内容优先的 task-create-modal：正文随窗口在六至十二行之间调整，最高十二行，超出文字在输入框内滚动；验收标准默认折叠可空，团队/流程底部同排，目录仅小字。不再展示执行说明或经理/节点详情；底部操作固定、短窗口正文滚动，现有创建/启动与 CLI 字段不变。
 

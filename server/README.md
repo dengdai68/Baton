@@ -1,5 +1,9 @@
 # 控制面
 
+任务 `POST /api/runs/:id/messages` 可选 `clientRequestId` 的 Run 范围幂等性由 `Store.submitHumanMessage` 拥有：原命令摘要、消息与派工回执原子保存；重放在状态/归档门禁前返回原事实。HTTP 仅对首次命令唤醒执行，冲突返回 409。协作投影透出请求 ID；详细契约见 docs/03、CLI 对齐见 docs/21。
+
+纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 createTask 的 teamIds 只是创建时选人输入：Store 校验团队 active，展开其中 active 成员，与显式 memberAgentIds 合并去重；显式停用成员仍拒绝，显式从最终成员中选择一位经理。任务仅持久化独立成员及冻结快照，团队后续变化不联动任务。不再使用任务优先级；CLI --start 顺序调用既有创建/启动 HTTP，不新增调度规则。
 
 失败 Run 的人工恢复继续原 Dispatch/成员会话，保留消息和咨询依赖、累计 attempts 与失败 Trace，不取消其他排队工作。下次领取优先处理人类恢复的投递；已完成投递的旧错误不再成为恢复入口。没有执行投递的准备失败保留原队列，空队列才启动经理。

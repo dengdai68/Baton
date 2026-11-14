@@ -26,10 +26,10 @@ const manager = store.createAgent({name:'配置验收经理',kind:'manager',syst
 const worker = store.createAgent({name:'配置验收成员',systemPrompt:'直接用一句中文回复：固定 Runtime 配置验证成功。无需工具和文件。',runtime:{profileId:profiles.codex.id}});
 const team = store.createTeam({name:'配置验收团队',memberAgentIds: [...new Set([worker.id, manager.id])]});
 const flow = store.createWorkflowTemplate({name:'配置验收流程',nodes:[{id:'check',title:'配置验收',staffingGuidance:'配置验收成员使用 Codex',deliverable:'一句文字交接即可；无需文件。'}]});
-const task = store.createTask({managerAgentId:'system_project_manager',title:'Runtime 固定配置与 CLI 登录验收',objective:'将 check 节点交给配置验收成员，一句文字交接后经理直接提交人类验收。无需文件或额外验证。',memberAgentIds: team.memberAgentIds,workflowTemplateId:flow.id});
+const task = store.createTask({managerAgentId:manager.id,title:'Runtime 固定配置与 CLI 登录验收',objective:'将 check 节点交给配置验收成员，一句文字交接后经理直接提交人类验收。无需文件或额外验证。',memberAgentIds: team.memberAgentIds,workflowTemplateId:flow.id});
 const chat = store.openCommunication({kind:'agent',targetId:worker.id});
 // Presentation fixture only: no Provider execution is claimed by this lifecycle.
-const completedTask = store.createTask({managerAgentId:'system_project_manager',title:'已完成任务的直接操作',objective:'仅验收操作展示与确认流程。',memberAgentIds: team.memberAgentIds,workflowTemplateId:flow.id});
+const completedTask = store.createTask({managerAgentId:manager.id,title:'已完成任务的直接操作',objective:'仅验收操作展示与确认流程。',memberAgentIds: team.memberAgentIds,workflowTemplateId:flow.id});
 const completedRun = store.createRun(completedTask.id);
 store.updateRun(completedRun.id,{status:'running'}); store.setTaskStatus(completedTask.id,'running');
 store.updateRun(completedRun.id,{status:'review'}); store.setTaskStatus(completedTask.id,'review');
@@ -65,7 +65,7 @@ try {
     await dsh.getByRole('heading',{name:'DeepSeek Harness',exact:true}).waitFor();
     assert.equal((await cli(['runtimes','get','DeepSeek Harness'])).installed,false);
     const toggle=dsh.getByRole('switch');
-    for (const theme of ['minimal','warm']) for (const width of [1320,760]) {
+    for (const theme of ['light','dark']) for (const width of [1320,760]) {
       await app.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,760),{origin,width});
       await page.waitForFunction(width=>innerWidth===width,width);
       await page.goto(origin+'/settings/appearance'); await page.locator(`[name="theme"][value="${theme}"]`).check();
@@ -103,7 +103,7 @@ try {
   } else {
   assert.equal((await stat(join(data,'desktop-cli-session.json'))).mode&0o777,0o600);
   assert.equal((await cli(['auth','status'])).username,'settings-qa');
-  assert.equal((await cli(['runtimes','list'])).total,3);
+  assert.equal((await cli(['runtimes','list'])).total,Object.keys(profiles).length);
   assert.equal((await cli(['runtimes','get','codex'])).id,profiles.codex.id);
   const logout = await cli(['auth','logout']); assert.equal(logout.loggedOut,false); assert.equal((await cli(['auth','status'])).username,'settings-qa');
   console.log('PASS desktop shared login'); evidence.cases.push('CLI uses desktop authorization without separate login; CLI logout leaves desktop signed in');
@@ -115,7 +115,7 @@ try {
   assert.equal((await api(`/api/tasks/${task.id}/run`,{})).status,400);
   assert.equal((await api(`/api/communications/${chat.id}/messages`,{content:'disabled probe',clientRequestId:randomBytes(12).toString('hex')})).status,400);
   assert.equal(await page.locator('.runtime-config[open]').count(),0);
-  for (const theme of ['minimal','warm']) for (const width of [1320,760]) {
+  for (const theme of ['light','dark']) for (const width of [1320,760]) {
     await app.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,760),{origin,width});
     await page.waitForFunction(width=>innerWidth===width,width);
     await page.goto(origin+'/settings/appearance'); await page.locator(`[name="theme"][value="${theme}"]`).check();
@@ -132,7 +132,7 @@ try {
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     await page.screenshot({path:join(root,`repositories-${theme}-${width}.png`)});
     await page.goto(origin+'/settings/runtime'); await codex.waitFor();
-    assert.equal(await codex.evaluate(row=>getComputedStyle(row).paddingTop),'10px');
+    assert.equal(await codex.evaluate(row=>getComputedStyle(row).paddingTop),'12px');
     assert.equal(await page.locator('.runtime-config[open]').count(),0);
     assert.equal(await codex.locator('h4').evaluate(h=>parseFloat(getComputedStyle(h).fontSize)<parseFloat(getComputedStyle(document.querySelector('[data-settings-panel="runtime"] h3')).fontSize)),true);
     await codex.locator('summary').click();
@@ -172,10 +172,10 @@ try {
     await page.screenshot({path:join(root,`inline-${theme}-${width}.png`)});
     await codex.locator('summary').click();
     await page.goto(origin+'/tasks');
-    if(theme==='minimal'&&width===1320) {
+    if(theme==='light'&&width===1320) {
       await app.evaluate(({shell})=>{const original=shell.openPath.bind(shell);shell.openPath=async path=>{globalThis.settingsOpenedDirectory=path;const result=await original(path);globalThis.settingsOpenResult=result;return result;};});
       await page.goto(origin+'/runs/'+completedRun.id);
-      await page.locator('[data-toggle-task-details]').click();
+      if (!await page.locator('.workspace-path').isVisible()) await page.locator('[data-toggle-task-details]').click();
       const directory=page.locator('.workspace-path');await directory.getByRole('button',{name:'打开',exact:true}).click();
       await poll('native directory opening',()=>app.evaluate(()=>globalThis.settingsOpenResult===''));
       assert.equal(await app.evaluate(()=>globalThis.settingsOpenedDirectory),completedRun.workspacePath,'host opens the authenticated current Run directory');
@@ -183,42 +183,46 @@ try {
       await page.goto(origin+'/tasks');
     }
     const checkTaskAlignment=async()=>{
+      await page.locator('#task-search-form').waitFor();
       const geometry=await page.evaluate(()=>{
-        const form=document.querySelector('#task-search-form').getBoundingClientRect(),list=document.querySelector('#tasks-table').getBoundingClientRect();
-        return {left:list.left-form.left,right:list.right-form.right,gap:list.top-form.bottom,overflow:document.documentElement.scrollWidth>innerWidth};
+        const form=document.querySelector('#task-search-form').getBoundingClientRect(),bar=document.querySelector('#task-filter-bar'),toolbar=bar.getBoundingClientRect(),style=getComputedStyle(bar),list=document.querySelector('#tasks-table').getBoundingClientRect();
+        return {left:list.left-toolbar.left,right:list.right-toolbar.right,insetLeft:form.left-toolbar.left,insetRight:toolbar.right-form.right,paddingLeft:parseFloat(style.paddingLeft),paddingRight:parseFloat(style.paddingRight),gap:list.top-toolbar.bottom,overflow:document.documentElement.scrollWidth>innerWidth};
       });
-      assert.ok(Math.abs(geometry.left)<1&&Math.abs(geometry.right)<1,'task list and search/actions share both edges');
-      assert.ok(Math.abs(geometry.gap-8)<1,'task list follows the search area with eight pixels');
+      assert.ok(Math.abs(geometry.left)<1&&Math.abs(geometry.right)<1&&Math.abs(geometry.insetLeft-geometry.paddingLeft)<1&&Math.abs(geometry.insetRight-geometry.paddingRight)<1,'full-bleed task rows align with the toolbar while filters retain its padding: '+JSON.stringify(geometry));
+      assert.ok(geometry.gap>=0 && geometry.gap<=24,'task list stays adjacent to its toolbar');
       assert.equal(geometry.overflow,false,'task layout does not widen the window');
     };
     await checkTaskAlignment();
     const search=page.locator('#task-search-form');
     await search.getByRole('searchbox').fill('no-matching-task-layout-probe');
-    await search.getByRole('button',{name:'搜索',exact:true}).click();
+    assert.equal(await search.locator('[type=submit]').count(),0,'task names filter as they are typed');
     await page.getByText('没有匹配的任务',{exact:true}).waitFor();await checkTaskAlignment();
-    await search.getByRole('button',{name:'重置',exact:true}).click();
-    const actions=page.locator(`[data-archive-task="${completedTask.id}"]`).locator('..');
-    await actions.waitFor();
-    assert.deepEqual(await actions.getByRole('button').allTextContents(),['归档','删除任务']);
+    await search.getByRole('searchbox').clear();
+    const archive=page.locator(`.action-menu [data-archive-task="${completedTask.id}"]`);await archive.waitFor({state:'attached'});
+    await archive.locator('xpath=ancestor::details').locator('summary').click();
+    const actions=archive.locator('..');
+    await actions.getByRole('menuitem').first().waitFor();
+    assert.deepEqual(await actions.getByRole('menuitem').allTextContents(),['归档','删除任务']);
     assert.equal(await page.locator('[data-task-more]').count(),0);
     assert.ok(await page.locator(`[data-run-task="${task.id}"]`).isVisible());
-    await actions.getByRole('button',{name:'删除任务',exact:true}).click();
+    await actions.getByRole('menuitem',{name:'删除任务',exact:true}).click();
     assert.ok(await page.locator('#confirm-delete-task').isDisabled(),'direct deletion retains explicit acknowledgement');
     await page.locator('[data-close-modal]').click();
     await page.screenshot({path:join(root,`task-actions-${theme}-${width}.png`)});
-    await page.locator(`[data-archive-task="${completedTask.id}"]`).click();
+    await page.locator(`.action-menu [data-archive-task="${completedTask.id}"]`).locator('xpath=ancestor::details').locator('summary').click();
+    await page.locator(`.action-menu [data-archive-task="${completedTask.id}"]`).click();
     await page.locator('[data-confirm-dialog-accept]').click();
-    await page.locator(`[data-archive-task="${completedTask.id}"]`).waitFor({state:'detached'});
+    await page.locator(`.action-menu [data-archive-task="${completedTask.id}"]`).waitFor({state:'detached'});
     await page.locator('[data-task-center-page="archive"]').click();
-    const restore=page.locator(`[data-unarchive-task="${completedTask.id}"]`); await restore.waitFor();await checkTaskAlignment();
-    assert.deepEqual(await restore.locator('..').getByRole('button').allTextContents(),['恢复任务','删除任务']);
+    const restore=page.locator(`.action-menu [data-unarchive-task="${completedTask.id}"]`); await restore.locator('xpath=ancestor::details').locator('summary').click(); await restore.locator('..').getByRole('menuitem').first().waitFor();await checkTaskAlignment();
+    assert.deepEqual(await restore.locator('..').getByRole('menuitem').allTextContents(),['恢复任务','删除任务']);
     await page.screenshot({path:join(root,`archive-actions-${theme}-${width}.png`)});
     await restore.click();
     await poll('restored task',async()=>!(await api('/api/bootstrap')).value.tasks.find(t=>t.id===completedTask.id).archivedAt);
   }
-  evidence.cases.push('task search/actions and list share left/right edges with eight-pixel separation in current, empty-search and archive views; both themes at 1320/760');
+  evidence.cases.push('task search/actions stay within toolbar padding and the list spans the toolbar edges and bounded separation in current, empty-search and archive views; both themes at 1320/760');
   evidence.cases.push('same-row close choices, model/effort and equally tall token/save controls; matched four-pixel menus and real native opening of the authenticated current Run folder');
-  evidence.cases.push('compact secondary Runtime/repository groups; directly visible start/archive/restore/delete actions in both themes at 1320/760; delete acknowledgement preserved; archive/restore round trip');
+  evidence.cases.push('compact secondary Runtime/repository groups; visible next action with keyboard-accessible archive/restore/delete menus in both themes at 1320/760; delete acknowledgement preserved; archive/restore round trip');
   await page.goto(origin+'/settings/runtime'); await codex.waitFor();
   assert.equal((await cli(['runtimes','get','codex'])).model,'manual-settings-probe');
   for(const body of [{name:'old'},{executable:'/tmp/x'},{provider:'codex'},{profile:'legacy'},{enabled:'yes'},{}])assert.equal((await api(`/api/settings/runtime-profiles/${profiles.codex.id}`,body,'PUT')).status,400);

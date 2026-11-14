@@ -1,5 +1,7 @@
 # 配置目录与工作目录
 
+扩展目录增加只读使用筛选 `usage=all|unused`，默认 all。Store 汇总当前未删除员工的直接扩展选择与当前角色选择，传入配置目录查询的排除 ID 集合；搜索与排除先于排序后分页，不新增存储字段、迁移或执行状态。业务存储不可用时拒绝 unused，不将未知引用显示为空。App 与 CLI plugins/mcps list --usage 共用相同结果。
+
 ## 决策
 
 只有两个用户可理解的根：配置目录 `~/.agentforge`，工作目录由用户设置，默认 `~/.agentforge/workspace`。源码开发使用独立的 `workspace-dev` 和 `desktop-dev` 配置命名空间，不得与正式实例共用清除范围。配置目录不随工作目录更换而搬迁。

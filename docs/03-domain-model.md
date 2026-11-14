@@ -1,5 +1,9 @@
 # 领域模型
 
+任务人类消息可提供 `clientRequestId`（8–100 位 ASCII 字母、数字、下划线或连字符）。ID 仅在同一 Run 内唯一；Store 将该 ID、原命令的 SHA-256 摘要（正文保留原始空白；省略正文与附件-only 空串等价，省略/null 接收人及回复等价；附件按 ID 顺序）与原始 queued/resumed/interactionOnly 回执随 Message 在同一事务保存。相同 ID 和命令返回原消息及 `replayed=true`，不新增事件、消息、派工，不唤醒执行；首次为 `replayed=false`。重放先于当前状态/归档门禁，因此消息保存后进入失败、已回答或归档仍能确认原事实。相同 ID 改命令返回 HTTP 409；未保存的新命令仍遵循全部原有门禁。未提供 ID 沿用一次新发送语义，不按正文或时间猜测重复。认证与执行协调规则不变。`/collaboration` 与 CLI 输出保留 `clientRequestId` 用于精确认领；仅内部 Message.clientRequest 保存摘要和回执，不进入协作展示。
+
+扩展目录增加只读使用筛选 `usage=all|unused`，默认 all。Store 汇总当前未删除员工的直接扩展选择与当前角色选择，传入配置目录查询的排除 ID 集合；搜索与排除先于排序后分页，不新增存储字段、迁移或执行状态。业务存储不可用时拒绝 unused，不将未知引用显示为空。App 与 CLI plugins/mcps list --usage 共用相同结果。
+
 任务创建接受可选 teamIds 和 memberAgentIds；至少选一人或一个团队。Store 展开可用团队中的 active 成员，与显式员工合并去重，校验显式 managerAgentId 为最终员工集合中的一位可用员工；显式停用/删除员工、停用/不存在团队、数组内重复 ID 拒绝。teamIds 不持久化，不恢复旧 teamId 团队绑定。任务不再使用任务优先级，废弃字段明确拒绝；冻结事实和人类最终确认不变。
 
 任务独立持有 `memberAgentIds` 与冻结员工快照，通过必填的 `managerAgentId` 从成员中指定唯一的本次经理；不再写入或接受 `teamId`。团队只是可空的员工集合，不绑定经理；在任务或群聊选团队时展开为员工 ID 并集，之后团队编辑/删除不影响已加入的成员。任务列表、详情和员工控制台不展示团队名称。新任务启动前拒绝已删除成员；在途 Run 继续使用原冻结成员完成执行，不重建会话或改写历史。

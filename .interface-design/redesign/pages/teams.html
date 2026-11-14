@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>团队 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .team-row { grid-template-columns: 32px minmax(0, 1fr) 220px 92px 150px; padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+  .team-row .row__sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+  .member-names { font-size: var(--fs-small); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 1100px) { .team-row { grid-template-columns: 32px minmax(0, 1fr) 140px 120px; } .team-row .c-status { display: none; } }
+</style>
+</head>
+<body data-page="teams">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="users"></i>团队<span class="tb-count">3</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><button class="btn btn--primary" type="button" data-open="dialog-team"><i data-icon="plus"></i>新建团队</button></div>
+    </header>
+    <div class="page-hero"><h1>团队</h1><p>保存常用的成员组合。创建任务时选择团队会展开为个人，也可以跨团队挑选。</p></div>
+    <div class="toolbar"><label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索团队或成员" aria-label="搜索团队"></label><span class="spacer"></span></div>
+    <div class="scroll">
+      <div class="row team-row">
+        <span class="av av--32 av--sq blue">产</span>
+        <div style="min-width:0"><div class="row__title">产品交付小队</div><div class="row__sub">从需求到回归的完整软件交付，产出可验收文件</div></div>
+        <div style="min-width:0"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span><span class="av av--20 orange">L</span><span class="av av--20 blue">K</span><span class="av av--20 green">S</span></span><div class="member-names">项目经理、Noah、Lena、Kai、Sora</div></div>
+        <span class="c-status status st-done"><span class="dot"></span>启用</span>
+        <div class="row__actions"><button class="btn btn--sm on-hover" type="button"><i data-icon="message" class="icon--sm"></i>群聊</button><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-team" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </div>
+      <div class="row team-row">
+        <span class="av av--32 av--sq violet">内</span>
+        <div style="min-width:0"><div class="row__title">内容工作室</div><div class="row__sub">选题、写作、审校一条龙交付长文</div></div>
+        <div style="min-width:0"><span class="av-stack"><span class="av av--20 cyan">N</span><span class="av av--20 violet">M</span><span class="av av--20 green">S</span></span><div class="member-names">Noah、Mira、Sora</div></div>
+        <span class="c-status status st-done"><span class="dot"></span>启用</span>
+        <div class="row__actions"><button class="btn btn--sm on-hover" type="button"><i data-icon="message" class="icon--sm"></i>群聊</button><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-team" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </div>
+      <div class="row team-row">
+        <span class="av av--32 av--sq orange">增</span>
+        <div style="min-width:0"><div class="row__title">增长实验组</div><div class="row__sub">围绕注册转化设计与复盘实验</div></div>
+        <div style="min-width:0"><span class="av-stack"><span class="av av--20 orange">I</span><span class="av av--20 cyan is-muted">T</span></span><div class="member-names">Iris、Theo（已停用）</div></div>
+        <span class="c-status status st-neutral"><span class="dot"></span>停用</span>
+        <div class="row__actions"><button class="btn btn--sm on-hover" type="button"><i data-icon="message" class="icon--sm"></i>群聊</button><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-team" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </div>
+    </div>
+  </main>
+</div>
+<div class="menu" id="menu-team" role="menu">
+  <button class="menu__item" type="button" data-open="dialog-team"><i data-icon="edit"></i>编辑团队</button>
+  <button class="menu__item" type="button"><i data-icon="plus"></i>用此团队新建任务</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除团队…</button>
+</div>
+<div class="overlay" id="dialog-team" data-explicit-close>
+  <form class="dialog" role="dialog" aria-modal="true" aria-labelledby="team-title" onsubmit="return false">
+    <div class="dialog__head"><h2 id="team-title">编辑团队</h2><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+    <div class="dialog__body">
+      <div class="field"><span class="field__label">名称<span class="req">*</span></span><input class="input" value="产品交付小队"></div>
+      <div class="field"><span class="field__label">使命<span class="opt">（选填）</span></span><textarea class="textarea" rows="2">从需求到回归的完整软件交付，产出可验收文件</textarea></div>
+      <div class="field"><span class="field__label">成员<span class="req">*</span></span><div class="picker"><span class="token"><span class="av av--16 violet">项</span>项目经理<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 cyan">N</span>Noah<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 orange">L</span>Lena<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 blue">K</span>Kai<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 green">S</span>Sora<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="按姓名或能力搜索" aria-label="添加成员"></div><span class="field__hint">团队不指定经理；创建任务时再选择本次的经理。</span></div>
+      <div class="srow" style="padding:0;min-height:0"><div class="srow__text"><div class="srow__label">启用</div><div class="srow__desc">停用后不出现在新建任务的团队候选中</div></div><span class="switch is-on" role="switch" aria-checked="true" aria-label="启用团队"></span></div>
+    </div>
+    <div class="dialog__foot"><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--primary" type="submit">保存</button></div>
+  </form>
+</div>
+</body>
+</html>

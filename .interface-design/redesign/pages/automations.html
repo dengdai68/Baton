@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>自动化 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .auto-row { grid-template-columns: 28px minmax(0, 1fr) 190px 128px 132px 84px 40px; }
+  .auto-row .sched { display: flex; flex-direction: column; line-height: 18px; }
+  .auto-row .sched small { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--text-tertiary); }
+  .head-row { grid-template-columns: 28px minmax(0, 1fr) 190px 128px 132px 84px 40px; min-height: 34px; font-size: var(--fs-caption); color: var(--text-tertiary); background: var(--bg-canvas); }
+  .head-row:hover { background: var(--bg-canvas); }
+  .preset { display: flex; gap: var(--sp-3); flex-wrap: wrap; }
+  .next-runs { margin: var(--sp-3) 0 0; padding: 0; list-style: none; font-size: var(--fs-small); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+  .next-runs li { display: flex; gap: var(--sp-4); padding: 3px 0; }
+  @media (max-width: 1100px) { .auto-row, .head-row { grid-template-columns: 28px minmax(0, 1fr) 170px 120px 40px; } .auto-row .c-last, .head-row .c-last, .auto-row .c-members, .head-row .c-members { display: none; } }
+</style>
+</head>
+<body data-page="automations">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="clock"></i>自动化<span class="tb-count">3</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><button class="btn btn--primary" type="button" data-open="dialog-new-automation"><i data-icon="plus"></i>新建自动化</button></div>
+    </header>
+    <div class="page-hero"><h1>自动化</h1><p>按计划重复执行任务。每轮独立记录，按你设置的规则确认完成。</p></div>
+    <div class="toolbar">
+      <div class="vtabs"><button class="vtab is-active" type="button">全部 <span class="count">3</span></button><button class="vtab" type="button">已启用 <span class="count">2</span></button><button class="vtab" type="button">已停用 <span class="count">1</span></button></div>
+      <span class="spacer"></span>
+      <label class="search"><i data-icon="search"></i><input class="input" placeholder="筛选自动化" aria-label="筛选自动化"></label>
+    </div>
+    <div class="scroll">
+      <div class="row head-row"><span></span><span>名称</span><span>执行规则</span><span>下次执行</span><span class="c-last">最近一轮</span><span class="c-members">成员</span><span></span></div>
+      <a class="row auto-row" href="automation.html">
+        <span class="switch is-on" role="switch" aria-checked="true" aria-label="启用每日竞品动态简报" onclick="event.preventDefault()"></span>
+        <span><span class="row__title" style="display:block">每日竞品动态简报</span><span class="row__sub">汇总竞品官网、博客与更新日志的变化，输出 300 字以内简报</span></span>
+        <span class="sched"><span>工作日 09:00</span><small>0 9 * * 1-5</small></span>
+        <span class="row__meta" style="color:var(--text-secondary)">明天 09:00</span>
+        <span class="c-last"><span class="status st-attention"><i data-icon="st-review"></i>待验收</span></span>
+        <span class="c-members av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span></span>
+        <span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-auto" aria-label="更多操作"><i data-icon="more"></i></span></span>
+      </a>
+      <a class="row auto-row" href="automation.html">
+        <span class="switch is-on" role="switch" aria-checked="true" aria-label="启用每周依赖安全巡检" onclick="event.preventDefault()"></span>
+        <span><span class="row__title" style="display:block">每周依赖安全巡检</span><span class="row__sub">检查 npm 依赖漏洞并给出升级建议</span></span>
+        <span class="sched"><span>每周一 10:30</span><small>30 10 * * 1</small></span>
+        <span class="row__meta" style="color:var(--text-secondary)">11月17日 10:30</span>
+        <span class="c-last"><span class="status st-done"><i data-icon="st-done"></i>已自动确认</span></span>
+        <span class="c-members av-stack"><span class="av av--20 violet">项</span><span class="av av--20 blue">K</span></span>
+        <span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-auto" aria-label="更多操作"><i data-icon="more"></i></span></span>
+      </a>
+      <a class="row auto-row" href="automation.html" style="color:var(--text-secondary)">
+        <span class="switch" role="switch" aria-checked="false" aria-label="启用月度账单对账" onclick="event.preventDefault()"></span>
+        <span><span class="row__title" style="display:block">月度账单对账</span><span class="row__sub">核对云服务账单与预算，标出异常增长项</span></span>
+        <span class="sched"><span>每月 1 日 08:00</span><small>0 8 1 * *</small></span>
+        <span class="row__meta">已停用</span>
+        <span class="c-last"><span class="status st-failed"><i data-icon="st-failed"></i>错误中断</span></span>
+        <span class="c-members av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">T</span></span>
+        <span class="row__actions"><span class="btn btn--ghost btn--icon btn--sm on-hover" data-menu="menu-auto" aria-label="更多操作"><i data-icon="more"></i></span></span>
+      </a>
+    </div>
+  </main>
+</div>
+
+<div class="menu" id="menu-auto" role="menu">
+  <button class="menu__item" type="button"><i data-icon="zap"></i>立即执行一次</button>
+  <button class="menu__item" type="button"><i data-icon="edit"></i>编辑</button>
+  <button class="menu__item" type="button"><i data-icon="copy"></i>复制为新自动化</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除自动化…</button>
+</div>
+
+<!-- 新建自动化：复用新建任务的内容优先结构，增加计划区块 -->
+<div class="overlay" id="dialog-new-automation" data-explicit-close>
+  <form class="dialog dialog--lg" role="dialog" aria-modal="true" aria-labelledby="new-auto-title" onsubmit="return false">
+    <div class="dialog__head"><h2 id="new-auto-title">新建自动化</h2><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+    <div class="dialog__body">
+      <input class="input input--title" placeholder="自动化名称" aria-label="自动化名称" value="每日竞品动态简报">
+      <textarea class="textarea textarea--read" style="min-height:96px;border:0;padding:4px 0;box-shadow:none;resize:none" aria-label="每轮要完成的内容">每个工作日 9:00 汇总竞品官网、博客与更新日志的变化，输出 300 字以内简报。</textarea>
+      <div class="sbox" style="padding:16px;margin:8px 0 18px">
+        <div class="field" style="margin-bottom:12px">
+          <span class="field__label">重复</span>
+          <div class="preset"><div class="seg"><button class="seg__item" type="button">每天</button><button class="seg__item is-active" type="button">工作日</button><button class="seg__item" type="button">每周</button><button class="seg__item" type="button">每月</button><button class="seg__item" type="button">自定义 Cron</button></div><input class="input" style="width:96px" value="09:00" aria-label="时间"></div>
+        </div>
+        <div class="field-row">
+          <div class="field" style="margin:0"><span class="field__label">Cron 表达式</span><input class="input mono" value="0 9 * * 1-5" aria-label="Cron 表达式"><span class="field__hint">时区：Asia/Shanghai（跟随系统）</span></div>
+          <div class="field" style="margin:0"><span class="field__label">接下来 5 次</span><ul class="next-runs"><li><span>11月12日 周三</span><span>09:00</span></li><li><span>11月13日 周四</span><span>09:00</span></li><li><span>11月14日 周五</span><span>09:00</span></li><li><span>11月17日 周一</span><span>09:00</span></li><li><span>11月18日 周二</span><span>09:00</span></li></ul></div>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><span class="field__label">成员<span class="req">*</span></span><div class="picker"><span class="token is-manager"><span class="av av--16 violet">项</span>★ 项目经理<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token"><span class="av av--16 cyan">N</span>Noah<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="添加团队或员工…" aria-label="添加成员"></div></div>
+        <div class="field"><span class="field__label">工作流<span class="opt">（选填）</span></span><select class="select" style="height:var(--control-h-lg)"><option>内容交付 · 3 个节点</option></select></div>
+      </div>
+    </div>
+    <div class="dialog__foot"><span class="hint">创建后默认启用，可随时停用</span><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--primary" type="submit">创建自动化</button></div>
+  </form>
+</div>
+</body>
+</html>

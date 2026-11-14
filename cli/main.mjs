@@ -2,6 +2,7 @@
 import {RUNTIME_IDS,RUNTIME_PROVIDERS} from "../client/runtime-providers.mjs";
 import { pathToFileURL } from 'node:url';
 import { realpath, open } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { resources, documentation, guide } from './commands.mjs';
 import { CliError, usage, createClient, readBounded, readInput, validateInput } from './client.mjs';
 import { formatOutput, formatError } from './output.mjs';
@@ -11,7 +12,7 @@ import { collaborationRecords } from '../client/console-projections.mjs';
 function parse(argv) {
   const args = [], flags = {};
   const switches = new Set(['help', 'yes', 'all', 'password-stdin', 'json', 'archived', 'start', 'refresh']);
-  const values = new Set(['file', 'session-file', 'username', 'page', 'search', 'endpoint-file', 'status', 'run', 'workflow', 'role']);
+  const values = new Set(['file', 'session-file', 'username', 'page', 'search', 'endpoint-file', 'status', 'run', 'workflow', 'role', 'usage', 'client-request-id']);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (!arg.startsWith('--')) { args.push(arg); continue; }
@@ -47,12 +48,14 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     if (group === 'runtimes' && operation === 'models') allowed.push('refresh');
     if (group === 'mcps' && operation === 'tools') allowed.push('refresh','search','page','all');
     if (operation === 'list') allowed.push('page', 'all', 'search');
+    if (['plugins','mcps'].includes(group) && operation === 'list') allowed.push('usage');
     if (group === 'agents' && operation === 'list') allowed.push('role');
     if (['delete', 'terminate', 'test'].includes(operation)) allowed.push('yes');
     if (group === 'automations' && ['list','triggers'].includes(operation)) allowed.push('status', 'page', 'all');
     if (group === 'tasks') {
       if (['create','update'].includes(operation)) allowed.push('start', 'workflow');
       if (['message', 'reply', 'members'].includes(operation)) allowed.push('file');
+      if (['message', 'reply'].includes(operation)) allowed.push('client-request-id');
       if (operation === 'list') allowed.push('status', 'archived', 'workflow');
       if (['progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'terminate', 'members'].includes(operation)) allowed.push('run');
       if (['collaboration', 'questions', 'artifacts'].includes(operation)) allowed.push('page', 'all');
@@ -124,7 +127,8 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     return result;
   }
   if (operation === 'list' && ['plugins','mcps'].includes(group)) {
-    const query = new URLSearchParams({page:String(page),search:flags.search || ''});
+    if(flags.usage && !['all','unused'].includes(flags.usage))throw usage('扩展使用筛选只能为 all 或 unused');
+    const query = new URLSearchParams({page:String(page),search:flags.search || '',usage:flags.usage || 'all'});
     const readPage = async () => {
       const result = await client.request(`${path}?${query}`);
       if (!Array.isArray(result[resource.key]) || !Number.isSafeInteger(result.totalPages)) throw new CliError('RESPONSE_UNCERTAIN','服务返回的目录分页无法确认','检查 CLI 与服务版本是否一致。',5);
@@ -225,6 +229,10 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
   let input;
   if (['message', 'reply'].includes(operation)) {
     input = await readInput(flags.file, stdin);
+    if (flags['client-request-id'] !== undefined) {
+      if (Object.hasOwn(input, 'clientRequestId') && input.clientRequestId !== flags['client-request-id']) throw usage('--client-request-id 与文件中的 clientRequestId 冲突');
+      input.clientRequestId = flags['client-request-id'];
+    }
     validateInput(input, resources.tasks.operationInputs[operation].schema);
     if (!input.content.trim() && !input.attachmentPaths?.length && !input.attachmentIds?.length) throw usage('协作内容不能为空');
     for (const key of ['recipientAgentId', 'replyToMessageId']) if (input[key] !== undefined && !/^[A-Za-z0-9_-]{1,128}$/.test(input[key])) throw usage(`${key} 需要精确ID`);
@@ -278,15 +286,35 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
   }
   const questions = workspace.pendingQuestions.filter(question => question.recipient?.type === 'human');
   if (input) {
-    if (operation === 'reply' && !questions.some(question => question.id === input.replyToMessageId)) throw new CliError('QUESTION_NOT_PENDING', '此问题不是所选执行的待答人类澄清', '先运行 tasks questions 任务ID，并按问题ID回复；过期问题不能重复作答。', 4);
+    if (operation === 'reply' && !input.clientRequestId && !questions.some(question => question.id === input.replyToMessageId)) throw new CliError('QUESTION_NOT_PENDING', '此问题不是所选执行的待答人类澄清', '先运行 tasks questions 任务ID，并按问题ID回复；过期问题不能重复作答。', 4);
     const paths = input.attachmentPaths || [], attachmentIds = [...(input.attachmentIds || [])];
     if (paths.length + attachmentIds.length > 10) throw usage('每条消息最多 10 个附件');
     delete input.attachmentPaths;
-    for (const path of paths) {
+    // A response may be lost after attachments were bound. Read bounded pages
+    // only for keyed local-file retries, then reuse the exact original IDs.
+    let previous;
+    if (input.clientRequestId && paths.length) {
+      const query = new URLSearchParams({ limit: '100' });
+      while (true) {
+        const page = await client.request(`/api/runs/${run.id}/collaboration?${query}`);
+        previous = page.items.find(item => item.clientRequestId === input.clientRequestId);
+        if (previous || !page.hasMore) break;
+        query.set('before', page.nextBefore);
+      }
+      if (previous && previous.attachments.length !== attachmentIds.length + paths.length) throw new CliError('CLIENT_REQUEST_CONFLICT', 'clientRequestId 对应的附件数量已改变', '编辑后的消息请使用新的 clientRequestId。', 4);
+    }
+    for (const [index, path] of paths.entries()) {
       const file=await open(path,'r');let stream;
       try {
         const info=await file.stat();if(!info.isFile()||info.size>20*1024*1024)throw usage('附件必须是单个普通文件且不超过 20 MiB');
         const name=path.split(/[\\/]/).at(-1);
+        if (previous) {
+          const attachment = previous.attachments[(input.attachmentIds?.length || 0) + index];
+          const sha256 = createHash('sha256').update(await file.readFile()).digest('hex');
+          if (attachment.name !== name || attachment.bytes !== info.size || attachment.sha256 !== sha256) throw new CliError('CLIENT_REQUEST_CONFLICT', 'clientRequestId 对应的本机附件内容已改变', '编辑后的消息请使用新的 clientRequestId。', 4);
+          attachmentIds.push(attachment.id);
+          continue;
+        }
         stream=file.createReadStream({autoClose:false});
         const uploaded=await client.request(`/api/runs/${run.id}/attachments?name=${encodeURIComponent(name)}`,{method:'POST',body:stream});attachmentIds.push(uploaded.attachment.id);
       }finally{stream?.destroy();await file.close();}
@@ -294,7 +322,7 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
     }
     if (attachmentIds.length) input.attachmentIds = attachmentIds;
     const result = await client.request(`/api/runs/${run.id}/messages`, { method: 'POST', body: input });
-    return { taskId: id, runId: run.id, message: { ...keyFields(result.message, ['id', 'kind', 'replyToMessageId', 'createdAt', 'attachments']), recipient: reference(result.message.recipient?.id, result.message.recipient?.name) }, ...keyFields(result, ['queued', 'resumed', 'interactionOnly']) };
+    return { taskId: id, runId: run.id, message: { ...keyFields(result.message, ['id', 'clientRequestId', 'kind', 'replyToMessageId', 'createdAt', 'attachments']), recipient: reference(result.message.recipient?.id, result.message.recipient?.name) }, ...keyFields(result, ['queued', 'resumed', 'interactionOnly', 'replayed']) };
   }
   if (['questions', 'artifacts', 'collaboration'].includes(operation)) {
     const items = operation === 'questions' ? questions.map(question => ({ ...keyFields(question, ['id', 'content', 'questionType', 'createdAt']), sender: reference(question.sender?.id, question.sender?.name), recipient: reference(question.recipient?.id, question.recipient?.name) })) : operation === 'artifacts' ? workspace.artifacts : collaborationRecords(workspace).reverse().map(({ tone, statusCode, ...record }) => record);

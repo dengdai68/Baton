@@ -7,10 +7,11 @@ document.querySelector("#toggle-password").addEventListener("click", event => {
   event.currentTarget.setAttribute("aria-label", show ? "隐藏密码" : "显示密码");
   event.currentTarget.setAttribute("aria-pressed", String(show));
 });
+form.addEventListener("input", () => { password.removeAttribute("aria-invalid"); confirmation.removeAttribute("aria-invalid"); error.textContent = ""; });
 form.addEventListener("submit", async event => {
   event.preventDefault(); if (submit.disabled) return;
   error.textContent = "";
-  if (password.value !== confirmation.value) { error.textContent = "两次输入的密码不一致。"; confirmation.focus(); return; }
+  if (password.value !== confirmation.value) { error.textContent = "两次输入的密码不一致。"; confirmation.setAttribute("aria-invalid", "true"); confirmation.focus(); return; }
   submit.disabled = true; submit.textContent = "正在创建…";
   try {
     const response = await fetch("/api/auth/bootstrap", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: form.username.value.trim(), password: password.value }) });

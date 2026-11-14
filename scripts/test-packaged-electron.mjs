@@ -354,7 +354,7 @@ async function runPackagedTask(page) {
   await page.waitForFunction((expected) => document.querySelector("#account-name")?.textContent === expected, username);
   await page.locator('[data-view="tasks"]').click();
   await page.locator("#tasks-view.active").waitFor();
-  await page.getByRole("button", { name: "＋ 新建任务", exact: true }).click();
+  await page.getByRole("button", { name: "新建任务", exact: true }).click();
   const form = page.locator("#task-form");
   await form.waitFor();
   await form.locator('[name="title"]').fill(title);
@@ -362,6 +362,7 @@ async function runPackagedTask(page) {
   await form.locator('.task-acceptance summary').click();
   await form.locator('[name="acceptanceCriteria"]').fill("生成可读取的 docs/packaged/report.md\n项目经理根据节点交接提交人类验收");
   await form.locator('[name="workflowTemplateId"]').selectOption(workflow.workflowTemplate.id);
+  await form.locator('#task-members').click();
   await form.locator('#task-members').fill(team.team.name);
   await form.locator(`[data-add-extension="${team.team.id}"]`).click();
   await form.locator(`[data-select-manager="${manager.agent.id}"]`).click();
@@ -382,10 +383,13 @@ async function runPackagedTask(page) {
   await activeRole.click();
   assert.notEqual(await activeRole.evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('[data-execution-state="idle"]').first().evaluate(el => getComputedStyle(el).backgroundColor));
   const semanticSurface = await activeRole.evaluate(el => {
-    const reference=document.createElement('i');reference.style.backgroundColor='var(--accent-soft)';el.append(reference);
+    const reference=document.createElement('i');reference.style.backgroundColor='var(--bg-active)';el.append(reference);
     const color=getComputedStyle(reference).backgroundColor;reference.remove();return color;
   });
-  assert.equal(await activeRole.evaluate(el=>getComputedStyle(el).backgroundColor), semanticSurface, 'selected running role retains the shared semantic blue surface');
+  assert.equal(await activeRole.evaluate(el=>getComputedStyle(el).backgroundColor), semanticSurface, 'selection uses the shared neutral active surface');
+  const runningDot=activeRole.locator('.member-running-dot[aria-label="正在执行"]');
+  assert.equal(await runningDot.isVisible(),true,'the selected employee retains a separate real running indicator');
+  assert.equal(await runningDot.evaluate(el=>{const reference=document.createElement('i');reference.style.backgroundColor='var(--live)';el.append(reference);const matches=getComputedStyle(el).backgroundColor===getComputedStyle(reference).backgroundColor;reference.remove();return matches;}),true,'running is expressed by the live green token, independent of selection');
   await page.screenshot({path:join(evidenceRoot,'packaged-running-role.png')});
   const workspace = await waitFor("打包 Agent 协作、Artifact 与经理复核", async () => {
     const current = await api(page, `/api/runs/${started.run.id}/workspace`);
@@ -426,7 +430,7 @@ async function runPackagedTask(page) {
   assert.equal(completed.run.confirmedBy, "human_operator");
   await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1320, 860));
   await page.screenshot({ path: join(evidenceRoot, "packaged-task-completed.png"), animations: "disabled" });
-  let currentFolders;
+  let currentFolders, currentRootSpacing;
   for (const tab of ["collaboration", "directory", "diff", "console"]) {
     await page.locator(tab === "directory" ? '#directory-mode' : `[data-ws-tab="${tab}"]`).click();
     if (tab === "directory") {
@@ -435,7 +439,9 @@ async function runPackagedTask(page) {
       }
       await page.locator('[data-select-working-file="docs/packaged/report.md"]').waitFor();
       currentFolders = (await page.locator('#working-directory-panel .explorer-folder > summary').allTextContents()).map(text=>text.replaceAll('›','').trim()).filter(text=>text!=='empty');
-      assert.deepEqual(await page.locator('.file-source-switch [data-ws-tab]').allTextContents(), ['当前文件', 'CHANGE']);
+      assert.deepEqual(await page.locator('.file-source-switch [data-ws-tab]').allTextContents(), ['当前文件', '变更']);
+      assert.equal(await page.locator('#working-directory-panel .artifact-files .file-source-switch').count(), 1, 'file sources stay in the tree header');
+      currentRootSpacing = await page.locator('#working-directory-panel .artifact-root').first().evaluate(root => { const style = getComputedStyle(root); return { marginBottom: style.marginBottom, paddingBottom: style.paddingBottom }; });
       assert.equal(await page.locator('[data-ws-tab="artifacts"], #artifact-snapshots-panel').count(), 0);
       const titleBox = await page.locator('.workspace-title h3').boundingBox(), backBox = await page.getByRole('button', { name: '返回任务列表', exact: true }).boundingBox();
       assert.ok(titleBox.x - backBox.x - backBox.width >= 10, 'back icon and title have deliberate spacing');
@@ -445,9 +451,9 @@ async function runPackagedTask(page) {
       assert.deepEqual((await page.locator('#working-diff-panel .explorer-folder > summary').allTextContents()).map(text=>text.replaceAll('›','').trim()), currentFolders);
       assert.equal(await page.locator('.source-control-group h4').count(), 0);
       assert.equal(await page.locator('#working-diff-panel .artifact-root').filter({ hasText: '没有更改' }).count(), 0, 'directory roots never repeat no-change messages');
-      assert.equal(await page.locator('#working-diff-panel .artifact-root').evaluateAll(roots => roots.every(root => {
-        const style = getComputedStyle(root); return style.marginBottom === '0px' && style.paddingBottom === '0px';
-      })), true, 'CHANGE root sections share the current-file no-reserved-space style');
+      assert.equal(await page.locator('#working-diff-panel .artifact-root').evaluateAll((roots, expected) => roots.every(root => {
+        const style = getComputedStyle(root); return style.marginBottom === expected.marginBottom && style.paddingBottom === expected.paddingBottom;
+      }), currentRootSpacing), true, 'file changes and current files share compact root spacing');
       await page.locator('[data-select-diff="docs/packaged/report.md"]').click();
       await page.locator('#working-diff-panel .source-diff-add').first().waitFor();
       await page.locator('#working-diff-panel [data-diff-directory="docs/packaged"] > summary').click();
@@ -486,6 +492,7 @@ async function runPackagedTask(page) {
       assert.equal(await page.locator('#trace-stream .tool-audit').count(), 0);
       assert.doesNotMatch(await page.locator('#trace-stream').innerText(), /result: Provider 已返回结构化结果|tool_progress: 模型已更新执行进展/);
       assert.equal(await page.locator('[data-execution-state="running"]').count(), 0, 'completed members return to neutral');
+      assert.equal(await page.locator('.role-nav .member-running-dot').count(),0,'completed members no longer expose a running dot');
       await page.locator(".log-row:not(:has(details)) [data-console-content]").first().scrollIntoViewIfNeeded();
       await page.locator('[data-execution-kind="text"]').first().waitFor();
       assert.match(await page.locator('[data-execution-kind="text"]').first().textContent(), /Packaged execution content fixture/);
@@ -522,8 +529,8 @@ async function runPackagedTask(page) {
       await page.screenshot({ path: join(evidenceRoot, 'packaged-console-tools-narrow.png') });
       await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1320, 860));
       console.log('PASS collapsed Bash/Read/Write summaries, grouped Read Done/error, literal Write content and narrow Console');
-      assert.equal(await page.locator('.workspace-mode-tabs [data-toggle-task-details]').count(), 1);
-      assert.equal(await page.locator(".log-row:has(.log-time)").first().evaluate((row) => row.querySelector(".log-time").getBoundingClientRect().right <= row.querySelector(".log-body").getBoundingClientRect().left), true, "console timestamp must not overlap the message");
+      assert.equal(await page.locator('.workspace-summary [data-toggle-task-details]').count(), 1);
+      assert.equal(await page.locator(".log-row:has(.log-time)").first().evaluate((row) => row.querySelector(".log-body").getBoundingClientRect().right <= row.querySelector(".log-time").getBoundingClientRect().left), true, "console timestamp remains right-aligned without overlapping the message");
       await page.locator('[data-console-latest]').click();
       await page.waitForFunction(() => !document.querySelector('.console-history-controls [role="status"]'));
       assert.equal(await page.locator('.log-row-trace-prompt').count(), 0, 'latest reloads the tail rather than retaining an earlier prompt');
@@ -574,8 +581,12 @@ async function runPackagedTask(page) {
   await page.locator('#toast.error').filter({ hasText: '下载失败' }).waitFor();
   assert.ok(page.url().endsWith(`/runs/${started.run.id}`), 'failed download stays on the task');
   await writeFile(reportPath, original);
+  // Restore the preview explicitly after the missing-file download fixture.
+  await page.locator('[data-select-working-file="docs/packaged/report.md"]').click();
+  await page.locator("#working-directory-panel .markdown-preview").waitFor();
   console.log('PASS selected-file download preserves bytes/name, streams binary beyond preview limit, enforces authentication/path boundaries and reports missing files in place');
   await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(800, 560));
+  await page.waitForFunction(() => innerWidth === 800 && innerHeight === 560);
   const reader = await page.locator("#working-directory-panel .markdown-preview").boundingBox();
   assert.ok(reader && reader.height >= 100, "short-window file reader retains usable height");
   assert.equal(await page.locator('[data-refresh-directory]').innerText(),'');
@@ -585,18 +596,19 @@ async function runPackagedTask(page) {
   assert.equal(await page.locator('#working-directory-panel > .directory-toolbar').count(),0);
   const refreshBox=await page.locator('[data-refresh-directory]').boundingBox(),toolbarBox=await page.locator('.file-source-switch').boundingBox();
   assert.ok(refreshBox && toolbarBox && Math.abs(toolbarBox.x+toolbarBox.width-refreshBox.x-refreshBox.width)<=20,'refresh stays at the tab row right edge');
-  assert.equal(await page.locator('.file-source-switch').evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px');
+  assert.equal(await page.locator('.file-source-switch').evaluate(el=>getComputedStyle(el).borderBottomWidth),'1px','the sticky tree header is separated from file rows by a light divider');
   await page.screenshot({ path: join(evidenceRoot, "packaged-file-short.png"), animations: "disabled" });
   await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1320, 860));
   await page.getByRole('button', { name: '返回任务列表', exact: true }).click();
   const search = page.locator('#task-search-form');
-  await search.locator('[name="name"]').fill(title);
-  await search.getByRole('button', { name: '搜索', exact: true }).click();
-  await page.locator(`[data-open-task="${started.task.id}"]`).click();
+  await Promise.all([page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/api/tasks' && url.searchParams.get('search')===title;}),search.locator('[name="name"]').fill(title)]);
+  await page.locator(`.task-title-link[data-open-task="${started.task.id}"]`).click();
   await page.getByRole('button', { name: '返回任务列表', exact: true }).click();
   assert.equal(await search.locator('[name="name"]').inputValue(), title, 'back preserves the task search');
-  await search.getByRole('button', { name: '重置', exact: true }).click();
-  await page.locator(`[data-archive-task="${started.task.id}"]`).click();
+  await Promise.all([page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname==='/api/tasks' && url.searchParams.get('search')==='';}),search.locator('[name="name"]').fill('')]);
+  const archiveMenu=page.locator('.action-menu').filter({has:page.locator(`[data-archive-task="${started.task.id}"]`)});
+  await archiveMenu.locator(':scope > summary').click();
+  await archiveMenu.locator(`[data-archive-task="${started.task.id}"]`).click();
   // Archiving confirms through the in-app confirmDialog (never a native dialog).
   const archiveConfirm = page.locator(".modal.confirm-dialog");
   await archiveConfirm.waitFor();
@@ -604,6 +616,8 @@ async function runPackagedTask(page) {
   await archiveConfirm.locator("[data-confirm-dialog-accept]").click();
   await page.getByText("任务已归档，交付记录已保留。", { exact: true }).waitFor();
   await page.locator('[data-task-center-page="archive"]').click();
+  const restoreMenu=page.locator('.action-menu').filter({has:page.locator(`[data-unarchive-task="${started.task.id}"]`)});
+  await restoreMenu.locator(':scope > summary').click();
   await page.locator(`[data-unarchive-task="${started.task.id}"]`).waitFor();
   await page.locator(`[data-unarchive-task="${started.task.id}"]`).click();
   await waitFor("Task restored from archive", async () => {
@@ -651,8 +665,11 @@ async function runResetAndUnread(page, proof) {
   await page.getByLabel("聊天记录", { exact: true }).getByText("Packaged unread fixture reply", { exact: true }).waitFor();
   const speakerColors = await page.locator('.communication-message header strong').evaluateAll(nodes => nodes.map(node=>getComputedStyle(node).color));
   assert.ok(new Set(speakerColors).size >= 2, 'human and employee names use distinguishable accents');
-  const alignment=await page.locator('.communication-message').evaluateAll(rows=>rows.map(node=>({human:node.classList.contains('from-human'),left:node.getBoundingClientRect().left})));
-  assert.ok(alignment.find(row=>row.human).left>alignment.find(row=>!row.human).left+15,'packaged human messages align right, employees left');
+  const alignment=await page.locator('.communication-message').evaluateAll(rows=>rows.map(node=>{ const row=node.getBoundingClientRect(),body=node.querySelector('.communication-body').getBoundingClientRect();return {human:node.classList.contains('from-human'),left:row.left,right:row.right,width:row.width,bodyLeft:body.left,bodyRight:body.right,bodyWidth:body.width}; }));
+  const humanAlignment=alignment.find(row=>row.human),employeeAlignment=alignment.find(row=>!row.human);
+  assert.ok(Math.abs(humanAlignment.left-employeeAlignment.left)<1,'message dividers span the same fluid record area');
+  assert.ok(Math.abs(humanAlignment.bodyRight-humanAlignment.right)<1 && humanAlignment.bodyWidth<=humanAlignment.width*.72+1,'human bubble aligns right and stays within 72% of the row');
+  assert.ok(humanAlignment.bodyLeft>employeeAlignment.bodyLeft+15,'packaged human bubbles align right, employee bodies left');
   await page.screenshot({path:join(evidenceRoot,'packaged-communication-colors.png')});
   await waitFor("visible conversation read acknowledgement", async () => (await api(page, "/api/notifications")).communicationUnreadCount === 0);
   const group = (await api(page, '/api/communications', {method:'POST', body:{kind:'group', name:'Packaged group colors', memberAgentIds:proof.team.memberAgentIds}})).conversation;
@@ -676,8 +693,9 @@ async function runResetAndUnread(page, proof) {
   await form.getByText("当前密码不正确", { exact: true }).waitFor();
   assert.equal((await api(page, "/api/bootstrap")).installationId, before.installationId);
   await form.locator('[name="password"]').fill(password);
-  await submit.click();
-  await page.locator("#account-name").waitFor();
+  // Reset replaces the document; do not inspect the still-visible old account.
+  await Promise.all([page.waitForEvent("domcontentloaded"), submit.click()]);
+  await page.waitForFunction(expected => document.querySelector("#account-name")?.textContent === expected, username);
   await waitFor('business reset completed',async()=>(await api(page,'/api/bootstrap')).installationId!==before.installationId);
   assert.equal(await page.evaluate(async () => (await fetch("/api/bootstrap")).status), 200);
   await assert.rejects(access(proof.runWorkspace), /ENOENT/);
@@ -874,7 +892,7 @@ try {
   if (process.platform === "darwin") {
     await page.goto(urlFor(page, "/settings/general"));
     await page.getByText("尚未设置；首次关闭窗口时会询问，取消不会保存选择。", { exact: true }).waitFor();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.agentforgeDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setCloseMode"]);
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.agentforgeDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode"]);
     await page.locator('[data-settings-page="cli"]').click();
     await assert.rejects(page.evaluate(() => window.agentforgeDesktop.getPreferences()), /仅允许/);
     const cliHome = join(evidenceRoot, 'installed-cli-home');
@@ -903,7 +921,9 @@ try {
       const confirmation = await confirmedWindow;
       await confirmation.waitForLoadState('domcontentloaded');
       await confirmation.locator('[data-choice="install"]').click();
-      await page.getByText('已安装。请新开终端运行 agentforge help；已有终端需重新打开。', { exact: true }).waitFor();
+      // The installed state is a status pill plus the follow-up instruction.
+      await page.locator('[data-cli-status] .status-pill').getByText('已安装', { exact: true }).waitFor();
+      await page.locator('[data-cli-status]').getByText('请新开终端运行 agentforge help；已有终端需重新打开。').waitFor();
       const installation = await page.evaluate(() => window.agentforgeDesktop.getCliInstallation());
       assert.equal(installation.installed, true);
       assert.ok(['zsh', 'bash'].includes(installation.shell));
@@ -946,18 +966,18 @@ try {
     await closingClosed;
     assert.equal(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true, 'cancel must keep the window visible');
     await assert.rejects(access(join(controlRoot, "desktop-preferences.json")), /ENOENT/);
-    await page.locator('input[name="closeMode"][value="tray"]').check();
     const blockedPreference = join(controlRoot, "desktop-preferences.json.tmp");
     await mkdir(blockedPreference);
     try {
-      await page.locator('[data-close-form] button[type="submit"]').click();
-      await page.getByText("保存失败，原设置未更改。请重试；详细原因见运行日志。", { exact: true }).waitFor();
-      assert.equal(await page.locator('input[name="closeMode"][value="tray"]').isChecked(), true);
+      // Immediate failure intentionally restores the unchecked state before Playwright check() completes.
+      await page.locator('input[name="closeMode"][value="tray"]').click();
+      await page.getByText("保存失败，已恢复原设置；请重新选择。", { exact: true }).waitFor();
+      assert.equal(await page.locator('input[name="closeMode"]:checked').count(), 0, 'failed immediate save restores the original unset preference');
       await assert.rejects(access(join(controlRoot, "desktop-preferences.json")), /ENOENT/);
       assert.equal(await desktop.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isVisible()), true);
     } finally { await rmdir(blockedPreference); }
-    await page.locator('[data-close-form] button[type="submit"]').click();
-    await page.getByText("已保存；后续关闭窗口按此设置执行。", { exact: true }).waitFor();
+    await page.locator('input[name="closeMode"][value="tray"]').check();
+    await page.getByText("✓ 已保存；后续关闭窗口按此设置执行。", { exact: true }).waitFor();
     await waitFor("saved tray preference", async () => JSON.parse(await readFile(join(controlRoot, "desktop-preferences.json"), "utf8")).closeMode === "tray");
     await page.screenshot({ path: join(evidenceRoot, "packaged-general-settings.png"), animations: "disabled" });
     assert.equal(await page.evaluate(async () => {
@@ -1043,8 +1063,7 @@ if (process.platform === "darwin") {
     }
     await reopenedPage.locator('input[name="closeMode"][value="tray"]:checked').waitFor();
     await reopenedPage.locator('input[name="closeMode"][value="quit"]').check();
-    await reopenedPage.locator('[data-close-form] button[type="submit"]').click();
-    await reopenedPage.getByText("已保存；后续关闭窗口按此设置执行。", { exact: true }).waitFor();
+    await reopenedPage.getByText("✓ 已保存；后续关闭窗口按此设置执行。", { exact: true }).waitFor();
     await waitFor("saved quit preference", async () => JSON.parse(await readFile(join(controlRoot, "desktop-preferences.json"), "utf8")).closeMode === "quit");
     const exited = new Promise(resolve => reopenedProcess.once("exit", resolve));
     await reopened.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close()).catch(error => { if (!/closed/i.test(error.message)) throw error; });

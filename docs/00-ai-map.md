@@ -1,5 +1,15 @@
 # 代码导航
 
+首屏与发送反馈（延迟/失败验收：`scripts/test-progressive-loading.mjs`）：`app.js` 拆开任务元信息/协作和目录/引用加载；`automations.mjs` 先显示当前页，再补计数与触发历史；`app.js`/`communication.js` 按Run/会话保留本地发送记录与真实确认。控制台保持点击后读取；任务消息由App/CLI共享可选`clientRequestId`，Store原子保存并去重，协作投影保留请求引用。工作流指定端口对齐与空心命中在编辑器/布局模块；共享CSS统一协作边距、Markdown与设置入口。
+
+目录抽屉外部点击关闭与团队编辑入口由 `web/app.js` 管理；分组缩进在 `web/styles.css`；工作流菱形与箭头在编辑器/只读图。回归见 `test-redesign`、`test-directory-headers`、`test-workflow-editor`；均复用既有业务命令。
+
+石墨逐页结构（视觉规范 .interface-design/system.md）：web/index.html 与 app.js 的页面动作槽负责共用 48px 标题栏（图标 + 标题 + 计数，计数由各视图的 data-title-count 提供）；目录、待办、设置和工作区分别约束自己的内容滚动。marketplace/automations通过headerActions连接顶栏；workflow-editor负责全视口编辑、画布内工具和属性浮层。图形/路由/设置保存仍走已有命令，详见docs/development/paper-alignment-review.md。
+
+沟通头像/天分隔与团队行列表/工作流节点链卡片：`web/communication.js`、`web/app.js`、`web/styles.css`；回归见 communication/smoke/electron tests 与 `scripts/test-directory-headers.mjs`、`scripts/test-workflow-editor.mjs`。保留全部命令，无 HTTP/CLI/Store 契约变化。
+
+石墨设计落地（2026-11-13 替代纸张）：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 仓库更名为 `dengdai68/AgentForge`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 面向超级个体介绍 AI Team OS，依次提供能力概览、任务主流程图、CLI 命令目录、macOS 安装和源码启动；首次体验见 docs/quickstart.md，详细开发入口见 CONTRIBUTING。首轮中文推广成稿见 docs/development/promotion-kit.md；不改变 App/CLI/HTTP/Store 契约。
 
 GitHub 发布入口：`.codex/skills/agentforge-release/SKILL.md`；默认 Beta、正式版补丁递增、仅正式版显式打 tag，以及版本标题/简洁说明规则由该 skill 定义。现有旧 CI 发布入口的差异在 skill 中列明。
@@ -12,7 +22,7 @@ GitHub 发布入口：`.codex/skills/agentforge-release/SKILL.md`；默认 Beta�
 
 发行回退：`.github/workflows/release-macos-beta.yml` 的 `draft_assets_only` 从冻结标签构建并只上传草稿完整附件；`tests/electron.test.mjs` 验证公开/未知状态拒绝上传，签名正式工作流保持独立。
 
-下拉定位：`web/floating-list.mjs` 以原生 Popover 顶层容器统一成员/扩展、Runtime 模型和 @ 列表的窗口定位与生命周期，避免弹框滚动裁剪；视觉与退出规则见 docs/06。沟通列表头像复用员工身份颜色，新建对话默认不聚焦选人；表单弹框仅显式退出，textarea 拖动不改变弹框顶部。
+下拉定位：`web/floating-list.mjs` 以原生 Popover 顶层容器统一成员/扩展、Runtime 模型和 @ 列表的窗口定位与生命周期，避免弹框滚动裁剪；视觉与退出规则见 docs/06。沟通列表头像复用员工身份颜色，新建对话默认不聚焦选人；居中表单弹框仅显式退出；目录详情与角色编辑抽屉点击外部或 Escape 关闭，内部候选菜单不触发退出，textarea 拖动不改变弹框顶部。
 
 任务成员与删除：`server/store.mjs` 负责独立 `memberAgentIds`、唯一经理、员工逻辑删除及冻结任务；契约见 [领域模型](03-domain-model.md)。`client/console-projections.mjs` 过滤当前员工 Tab，历史控制台仍可按 Trace 打开。
 
@@ -191,7 +201,7 @@ Store.updateRunMembers 管理当前成员并保留冻结历史；CLI tasks membe
 
 主目录控件统一：compact.css 让任务、自动化、团队、工作流、员工、角色、插件/MCP 市场共用32px搜索/筛选高度；styles.css 将角色页纳入44px目录工具栏。test-directory-headers 对比任务控件高度及员工/角色顶部、搜索和卡片坐标。无 CLI/API 变化。
 
-界面规范对齐：工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，表单仍仅显式关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。 现行尺寸及已处理冲突记录在 `.interface-design/system.md`；隔离验证扩展 `scripts/test-issue3-ui.mjs`。
+界面规范对齐：工作目录页签行移除下分隔线，当前文件/CHANGE 共用右侧无边框刷新图标；CHANGE 移除更改计数工具栏，对比布局/范围移入文件预览标题右侧，与当前文件保持同一标题结构。刷新忙碌/失败恢复及原文件选择语义不变。共享弹窗改用原生 dialog 维护键盘模态与焦点返回，居中表单仍仅显式关闭，目录编辑抽屉点击外部或 Escape 关闭；统一 Runtime 同行字段、设置选中态、主题预览和语义焦点 tokens，移除弹窗硬编码阴影并支持减少动画。桌面维持紧凑尺寸，粗指针操作使用 44px 点击区。仅界面/交互变化，无 App/CLI/HTTP/Store 契约变化。 现行尺寸及已处理冲突记录在 `.interface-design/system.md`；隔离验证扩展 `scripts/test-issue3-ui.mjs`。
 
 自动化任务标题统一为 `自动化名称#yyyy-MM-dd HH:mm:ss`（当地时区、24 小时制；定时取计划时刻，手动取触发时刻）。触发列表首列展示真实任务标题；HTTP/CLI 的触发回执、列表和 latestTrigger 返回 taskTitle，未生成任务为 null；不重写历史任务名称。
 
@@ -288,3 +298,14 @@ Runtime 扩展：portable-extensions.mjs 在既有市场完整性校验后物化
 Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedTools 拒绝目标，portable-extensions 保留字段；marketplace 的 detail/resolve 当前计算与 App/CLI 显式兼容性摘要刷新共用。tests/portable-extensions 覆盖旧安装刷新及源/投影保留；scripts/test-portable-extensions-real 使用含该字段的原生 Skill 验证会话续接。
 
 桌面通知：`server/store.mjs` 与 `server/communication-store.mjs` 发布提交后的临时元数据，`server/index.mjs` 沿自有 IPC 发给 `apps/electron/notifications.mjs`，main 完成认证/生命周期/原生显示和精确路由；无 renderer 通用桥或历史轮询。`web/toast.mjs` 管理始终在 dialog/Popover 之上的页面反馈。契约 docs/18、06、17；单测 `tests/desktop-notifications.test.mjs`，隔离界面/安装包验收 `scripts/test-desktop-notifications.mjs`。
+石墨设计系统：web/tokens.css 是唯一 Token 源（light-dark() 声明 + color-scheme 随 light/dark/system），compact.css 只定义宿主密度，styles.css 只引用 tokens；外观三档默认浅色，宿主经 setAppearance 桥同步原生窗口；侧栏填充选中、30% 圆角方形单字符头像、记录区 fluid 留白与细分隔线。同步 ai/module-registry.json（web.console/apps.electron 的 interface-graphite）、CHANGELOG.md、web/README.md、docs/06-design-system.md；隔离验证 scripts/test-redesign.mjs 与 scripts/test-brand-presentation/test-issue3-ui/test-directory-headers。
+
+任务中心分组行列表：web/app.js 的 taskMatchesChip/renderTasks 复用既有 HTTP 单状态分页，客户端先组合筛选再分页；web/styles.css 使用共享 tokens。验证 tests/smoke.test.mjs、scripts/test-directory-headers.mjs、scripts/test-redesign.mjs；归档表格与 CLI 契约不变。
+
+待我处理：web/app.js 的 inboxFacts/refreshInbox/renderInbox/renderInboxPreview/sendInboxAnswer 复用分页任务、compact workspace、协作分页与精确消息回复；状态行/预览和最近20条完成回看为客户端呈现，tests/settings.test.mjs 覆盖回复失败/下一项/停留与请求隔离。无 CLI/HTTP/Store 变化。
+
+任务空间协作焦点与浮层抽屉：web/app.js workspaceDetailsMarkup 读取现有冻结节点、workflowFocus 与交付 Trace，web/styles.css 管理状态与 8px 浮层/760px 全屏；tests/smoke.test.mjs 覆盖记录事实、失败重试和折叠，无协议或 CLI 变化。
+
+目录对齐（纸张期落地，现按石墨取值）：web/automations.mjs 复用 status 查询与 PUT enabled，web/app.js 角色整行编辑/独立删除菜单，web/marketplace.mjs 在既有分页和 usage 查询上做客户端 chips 与卡片摘要；MCP 配置只读推导类型、显式工具发现后保留本会话计数/错误，Git 更新仍复用全来源更新命令。登录/初始化共用 login.css 无卡片布局；验证 test-automations、test-roles-ui、test-market-catalog、test-directory-headers，协议不变。
+
+设计稿复核（纸张期，现以石墨为准）：侧栏命令/导航分组（web/index.html）、员工卡片（web/app.js）、协作消息与输入卡片（web/app.js、styles.css）、沟通成员（styles.css）；仅展示无CLI协议变化。验收 test-redesign、test-collaboration-flow；审查范围见 docs/development/paper-alignment-review.md。

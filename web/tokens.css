@@ -1,0 +1,103 @@
+/* AgentForge design tokens · Graphite (Linear-like: calm neutral grey, dense, thin rules).
+   Shared by every renderer page and native dialog; the language is .interface-design/system.md.
+   Components use semantic tokens (--bg-* --text-* --border-* --accent-* --st-*);
+   light-dark() lets one declaration serve light, dark and system appearance. */
+html:root, html:root[data-theme] {
+  color-scheme:light dark;
+  --desktop-density:compact;
+  --desktop-presentation:workbench;
+  --desktop-sidebar-width:232px;
+  /* Type, shape and rhythm are theme independent. */
+  --font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI",sans-serif;
+  --font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+  --fs-caption:11px; --fs-small:12px; --fs-body:13px; --fs-read:14px; --fs-title-sm:15px; --fs-title:20px; --fs-display:28px;
+  --lh-caption:16px; --lh-small:18px; --lh-body:20px; --lh-read:22px; --lh-title-sm:22px; --lh-title:28px; --lh-display:36px;
+  --fw-regular:400; --fw-medium:500; --fw-semibold:600;
+  --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-full:999px;
+  --control-h:28px; --control-h-sm:24px; --control-h-lg:32px; --row-h:38px; --nav-h:28px; --header-h:48px; --toolbar-h:44px;
+  --sp-0:0; --sp-1:2px; --sp-2:4px; --sp-3:6px; --sp-4:8px; --sp-5:12px; --sp-6:16px; --sp-7:20px; --sp-8:24px; --sp-9:32px; --sp-10:40px; --sp-11:48px;
+  --z-sticky:10; --z-dropdown:40; --z-drawer:60; --z-dialog:80; --z-palette:90; --z-toast:100;
+  --dur-fast:120ms; --dur-base:180ms; --dur-slow:240ms;
+  --ease:cubic-bezier(.2,0,0,1); --ease-out:cubic-bezier(.16,1,.3,1);
+  --inspector-w:320px; --reading-max:760px; --form-max:640px; --settings-max:720px; --av-radius:.3;
+  --pad-page:24px; --pad-record:clamp(16px,3vw,40px); --search-w:220px;
+  /* Identity colors are for avatars only and never express status. */
+  --av-violet:#7341b8; --av-cyan:#007d86; --av-blue:#2461c2; --av-orange:#ad5508; --av-green:#25803e; --av-system:#3f4a5e;
+  --on-solid:#fff; --on-solid-soft:rgba(255,255,255,.16); --on-solid-line:rgba(255,255,255,.24); --on-solid-text:rgba(255,255,255,.9);
+  --knob-shadow:0 1px 2px rgba(0,0,0,.22); --kbd-line-inverse:rgba(127,127,127,.45);
+  --ft-md:#4e7bd8; --ft-js:#c9a227; --ft-js-ink:#2b2200; --ft-test:#2f9b63; --ft-json:#8c6bc8; --ft-css:#2f86c9;
+  --syn-keyword:light-dark(#8239d9,#c79bff); --syn-string:light-dark(#0b7a4b,#7fd6a3);
+  --syn-func:light-dark(#2558d9,#8ea8ff); --syn-number:light-dark(#b5520b,#f2a65e);
+  /* Surfaces, borders and text: cool neutral greys. */
+  --bg-window:light-dark(#fff,#111215);
+  --bg-canvas:light-dark(#fff,#111215);
+  --bg-sidebar:light-dark(#f7f7f8,#0d0e10);
+  --bg-subtle:light-dark(#f8f8f9,#15161a);
+  --bg-raised:light-dark(#fff,#18191d);
+  --bg-hover:light-dark(#f2f2f4,#1e1f24);
+  --bg-active:light-dark(#eaeaed,#26272d);
+  --bg-selected:light-dark(#eef2fd,#1a2036);
+  --bg-input:light-dark(#fff,#141518);
+  --bg-overlay:light-dark(rgba(17,18,22,.28),rgba(0,0,0,.55));
+  --border-subtle:light-dark(#efeff2,#1c1d22);
+  --border:light-dark(#e4e4e9,#2a2b31);
+  --border-strong:light-dark(#d2d3da,#3a3b43);
+  --text:light-dark(#1b1c22,#edeef0);
+  --text-secondary:light-dark(#5c5f6a,#a3a6b0);
+  --text-tertiary:light-dark(#8a8d97,#73767f);
+  --text-disabled:light-dark(#b4b6be,#4e5059);
+  --text-on-accent:#fff;
+  --text-link:light-dark(#2350c4,#8ea8ff);
+  --accent:light-dark(#2558d9,#3d6bf0);
+  --accent-hover:light-dark(#1e46b7,#5079f2);
+  --accent-active:light-dark(#1a3c9c,#2f5ad8);
+  --accent-soft:light-dark(#eef3ff,rgba(80,121,242,.16));
+  --accent-soft-hover:light-dark(#e2eaff,rgba(80,121,242,.24));
+  --accent-text:light-dark(#2350c4,#8ea8ff);
+  --accent-border:light-dark(#c9d7fa,rgba(80,121,242,.45));
+  --focus:light-dark(rgba(37,88,217,.42),rgba(110,144,242,.55));
+  /* Status semantics: one hue per meaning, as text / background / border. */
+  --st-running:light-dark(#2558d9,#8ea8ff); --st-running-bg:light-dark(#eef3ff,rgba(80,121,242,.15)); --st-running-border:light-dark(#c9d7fa,rgba(80,121,242,.35));
+  --st-attention:light-dark(#a85f0a,#f0b25a); --st-attention-bg:light-dark(#fff5e6,rgba(240,178,90,.13)); --st-attention-border:light-dark(#f5d9ae,rgba(240,178,90,.32));
+  --st-done:light-dark(#0d7a68,#4cc4ac); --st-done-bg:light-dark(#e8f6f2,rgba(76,196,172,.13)); --st-done-border:light-dark(#bfe3d9,rgba(76,196,172,.3));
+  --st-failed:light-dark(#c53b36,#f08079); --st-failed-bg:light-dark(#fdefee,rgba(240,128,121,.13)); --st-failed-border:light-dark(#f4c9c6,rgba(240,128,121,.32));
+  --st-planning:light-dark(#6b4ec4,#b6a2f6); --st-planning-bg:light-dark(#f3efff,rgba(182,162,246,.13)); --st-planning-border:light-dark(#dcd2f7,rgba(182,162,246,.3));
+  --st-neutral:light-dark(#6b6e78,#a3a6b0); --st-neutral-bg:light-dark(#f2f2f4,rgba(255,255,255,.06)); --st-neutral-border:light-dark(#e4e4e9,rgba(255,255,255,.1));
+  /* The green dot only means "this member is executing now". */
+  --live:light-dark(#1f9d5c,#3ccb7f); --live-soft:light-dark(rgba(31,157,92,.12),rgba(60,203,127,.14));
+  --live-line:light-dark(rgba(31,157,92,.36),rgba(60,203,127,.38));
+  --code-bg:light-dark(#f8f8f9,#15161a);
+  --code-add:light-dark(#e9f7ef,rgba(46,160,90,.16)); --code-add-text:light-dark(#1a7f45,#6bd394);
+  --code-del:light-dark(#fdeeee,rgba(240,90,80,.15)); --code-del-text:light-dark(#b42f2a,#f59a93);
+  --shadow-xs:0 1px 2px light-dark(rgba(16,17,20,.05),rgba(0,0,0,.4));
+  --shadow-pop:0 0 0 1px light-dark(rgba(16,17,20,.06),rgba(255,255,255,.06)),0 8px 24px light-dark(rgba(16,17,20,.1),rgba(0,0,0,.55));
+  --shadow-dialog:0 0 0 1px light-dark(rgba(16,17,20,.06),rgba(255,255,255,.07)),0 24px 64px light-dark(rgba(16,17,20,.18),rgba(0,0,0,.6));
+  /* Component aliases share the semantic layer. */
+  --dark:light-dark(#2b2c33,#0d0e10);
+  --accent-line:var(--accent-border);
+  --accent-violet:var(--st-planning); --accent-violet-soft:var(--st-planning-bg);
+  --accent-cyan:var(--st-done); --accent-cyan-soft:var(--st-done-bg);
+  --violet:var(--av-violet); --cyan:var(--av-cyan); --blue:var(--av-blue); --green:var(--av-green); --amber:var(--st-attention);
+  --danger:var(--st-failed); --danger-ink:var(--st-failed); --danger-soft:var(--st-failed-bg);
+  --success:var(--live);
+  --record-info:var(--st-running); --record-info-soft:var(--st-running-bg);
+  --record-teal:var(--st-done); --record-teal-soft:var(--st-done-bg);
+  --record-violet:var(--st-planning); --record-violet-soft:var(--st-planning-bg);
+  --record-warning:var(--st-attention); --record-warning-soft:var(--st-attention-bg);
+  --control-focus-ring:var(--focus); --control-hover-border:var(--border-strong);
+  --shadow:none; --shadow-hover:none;
+  --desktop-action:var(--accent); --desktop-action-hover:var(--accent-hover);
+  --desktop-sidebar-bg:var(--bg-sidebar); --desktop-hover:var(--bg-hover);
+  --desktop-focus:var(--accent); --desktop-radius:var(--r-sm);
+}
+/* Unset means "follow the host": the desktop host mirrors the saved choice. */
+html:root[data-theme="light"] { color-scheme:light; }
+html:root[data-theme="dark"] { color-scheme:dark; }
+/* Keep responsive values beside their defaults so injected sheet order cannot
+   restore the desktop gutter in narrow windows. */
+@media (max-width:860px) {
+  html:root, html:root[data-theme] { --pad-page:16px; --search-w:150px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  html:root, html:root[data-theme] { --dur-fast:0ms; --dur-base:0ms; --dur-slow:0ms; }
+}

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数字员工 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  /* 页面私有：员工详情抽屉与编辑弹窗的版式 */
+  .profile { display: grid; grid-template-columns: 48px minmax(0, 1fr); column-gap: var(--sp-6); align-items: center; margin-bottom: var(--sp-7); }
+  .profile h3 { font-size: var(--fs-title-sm); font-weight: var(--fw-semibold); }
+  .prompt-block { padding: var(--sp-5) var(--sp-6); border-radius: var(--r-md); background: var(--bg-subtle); font-size: var(--fs-body); line-height: 1.7; color: var(--text); white-space: pre-wrap; }
+  .d-section + .d-section { margin-top: var(--sp-8); }
+  .edit-layout { display: grid; grid-template-columns: 168px minmax(0, 1fr); min-height: 0; flex: 1; }
+  .edit-nav { padding: var(--sp-6) var(--sp-4); border-right: 1px solid var(--border-subtle); background: var(--bg-subtle); }
+  .edit-nav .nav-item { font-size: var(--fs-small); }
+  .edit-body { overflow: auto; padding: var(--sp-7) var(--sp-8); }
+  .edit-body h3 { font-size: var(--fs-body); font-weight: var(--fw-semibold); margin: 0 0 var(--sp-5); }
+  .edit-body section + section { margin-top: var(--sp-8); padding-top: var(--sp-7); border-top: 1px solid var(--border-subtle); }
+  .agent-row { grid-template-columns: 28px minmax(0, 1fr) 200px 220px 90px 120px; }
+  @media (max-width: 860px) { .edit-layout { grid-template-columns: minmax(0, 1fr); } .edit-nav { display: none; } .agent-row { grid-template-columns: 28px minmax(0, 1fr) 90px 120px; } .agent-row .c-role, .agent-row .c-rt { display: none; } }
+</style>
+</head>
+<body data-page="agents">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main" data-view-scope>
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="bot"></i>数字员工<span class="tb-count">8</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions">
+        <div class="seg seg--icon" role="group" aria-label="视图"><button class="seg__item is-active" type="button" data-view="grid" title="卡片"><i data-icon="grid"></i></button><button class="seg__item" type="button" data-view="list" title="列表"><i data-icon="list"></i></button></div>
+        <button class="btn btn--primary" type="button" data-open="dialog-agent"><i data-icon="plus"></i>新建员工</button>
+      </div>
+    </header>
+    <div class="page-hero"><h1>数字员工</h1><p>配置每位成员的职责、提示词、运行时与工具。修改只影响之后开始的任务和沟通。</p></div>
+    <div class="toolbar">
+      <label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索姓名、职责或能力" aria-label="搜索数字员工"></label>
+      <button class="btn btn--ghost btn--sm" type="button">角色：全部<i data-icon="chevron-down" class="icon--sm"></i></button>
+      <button class="btn btn--ghost btn--sm" type="button">运行时：全部<i data-icon="chevron-down" class="icon--sm"></i></button>
+      <span class="spacer"></span>
+      <span class="faint hide-md" style="font-size:12px">7 位可用 · 1 位已停用</span>
+    </div>
+    <div class="scroll">
+      <div class="page" data-view-panel="grid">
+        <div class="grid">
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 violet">项<span class="av__badge" title="项目经理"><i data-icon="star"></i></span></span><div style="min-width:0"><div class="entity-card__title"><span>项目经理</span><span class="tag tag--violet">经理</span></div><div class="entity-card__sub">负责拆分、派工与推进</div></div><span></span></div>
+            <p class="entity-card__desc">理解任务目标后拆分职责，按工作流派工给合适成员；遇到阻塞及时向人类澄清。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code · opus</span><span title="插件"><i data-icon="plug"></i>1</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 cyan">N</span><div style="min-width:0"><div class="entity-card__title"><span>Noah · 需求分析师</span></div><div class="entity-card__sub">角色：中文写作风格</div></div><span></span></div>
+            <p class="entity-card__desc">把模糊需求整理为可验收的条目与边界条件，标注未覆盖的范围。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code · sonnet</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 orange">L</span><div style="min-width:0"><div class="entity-card__title"><span>Lena · 产品设计师</span></div><div class="entity-card__sub">未绑定角色</div></div><span></span></div>
+            <p class="entity-card__desc">负责交互方案与界面规范，输出可直接实现的布局说明和标注图。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Codex · gpt-5</span><span title="MCP"><i data-icon="mcp"></i>1</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 blue">K<span class="av__presence is-live" title="执行中"></span></span><div style="min-width:0"><div class="entity-card__title"><span>Kai · 研发工程师</span></div><div class="entity-card__sub">角色：代码评审规范、安全基线</div></div><span class="status status--text st-live"><span class="dot dot--pulse"></span>执行中</span></div>
+            <p class="entity-card__desc">负责前端与 Node 服务实现，提交前运行单元测试并附上测试输出。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code · sonnet · 高思考</span><span title="插件"><i data-icon="plug"></i>2</span><span title="MCP"><i data-icon="mcp"></i>1</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 green">S</span><div style="min-width:0"><div class="entity-card__title"><span>Sora · 测试工程师</span></div><div class="entity-card__sub">角色：代码评审规范</div></div><span></span></div>
+            <p class="entity-card__desc">编写并执行回归用例，在宽窄两种窗口下截图核对，输出缺陷清单。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code · sonnet</span><span title="插件"><i data-icon="plug"></i>1</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 violet">M</span><div style="min-width:0"><div class="entity-card__title"><span>Mira · 内容编辑</span></div><div class="entity-card__sub">角色：中文写作风格</div></div><span></span></div>
+            <p class="entity-card__desc">负责长文结构、事实核对与中文润色，标注所有未核实的事实。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>DeepSeek Harness</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 orange">I</span><div style="min-width:0"><div class="entity-card__title"><span>Iris · 增长运营</span></div><div class="entity-card__sub">未绑定角色</div></div><span></span></div>
+            <p class="entity-card__desc">设计增长实验，跟踪转化漏斗并撰写复盘。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Codex</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+          <article class="card card--interactive entity-card is-disabled" data-open="drawer-agent" tabindex="0">
+            <div class="entity-card__head"><span class="av av--36 cyan is-muted">T</span><div style="min-width:0"><div class="entity-card__title"><span>Theo · 数据分析师</span></div><div class="entity-card__sub">未绑定角色</div></div><span class="tag">已停用</span></div>
+            <p class="entity-card__desc">处理 CSV/SQL 数据，输出可复现的分析脚本与图表。</p>
+            <div class="entity-card__foot"><div class="entity-card__meta"><span><i data-icon="cpu"></i>Claude Code</span></div><div class="card__actions"><button class="btn btn--ghost btn--sm" type="button">启用</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></div></div>
+          </article>
+        </div>
+      </div>
+      <div data-view-panel="list" hidden>
+        <div class="row agent-row" style="min-height:34px;font-size:11px;color:var(--text-tertiary)"><span></span><span>姓名</span><span class="c-role">角色</span><span class="c-rt">运行时</span><span>状态</span><span></span></div>
+        <div class="row agent-row"><span class="av av--24 violet">项</span><span class="row__title">项目经理</span><span class="row__sub c-role">经理</span><span class="row__sub c-rt">Claude Code · opus</span><span class="row__sub">—</span><span class="row__actions"><button class="btn btn--ghost btn--sm" type="button">对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></span></div>
+        <div class="row agent-row"><span class="av av--24 cyan">N</span><span class="row__title">Noah · 需求分析师</span><span class="row__sub c-role">中文写作风格</span><span class="row__sub c-rt">Claude Code · sonnet</span><span class="row__sub">—</span><span class="row__actions"><button class="btn btn--ghost btn--sm" type="button">对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></span></div>
+        <div class="row agent-row"><span class="av av--24 blue">K<span class="av__presence is-live"></span></span><span class="row__title">Kai · 研发工程师</span><span class="row__sub c-role">代码评审规范、安全基线</span><span class="row__sub c-rt">Claude Code · sonnet · 高思考</span><span class="status status--text st-live"><span class="dot dot--pulse"></span>执行中</span><span class="row__actions"><button class="btn btn--ghost btn--sm" type="button">对话</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></span></div>
+        <div class="row agent-row"><span class="av av--24 cyan is-muted">T</span><span class="row__title" style="color:var(--text-secondary)">Theo · 数据分析师</span><span class="row__sub c-role">—</span><span class="row__sub c-rt">Claude Code</span><span class="tag">已停用</span><span class="row__actions"><button class="btn btn--ghost btn--sm" type="button">启用</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-menu="menu-agent" aria-label="更多操作"><i data-icon="more"></i></button></span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="menu" id="menu-agent" role="menu">
+  <button class="menu__item" type="button" data-open="dialog-agent"><i data-icon="edit"></i>编辑</button>
+  <button class="menu__item" type="button"><i data-icon="copy"></i>复制为新员工</button>
+  <button class="menu__item" type="button"><i data-icon="pause"></i>停用</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button"><i data-icon="trash"></i>删除员工…</button>
+</div>
+
+<!-- 员工详情：右侧抽屉，只读展开全部关键信息 -->
+<aside class="drawer" id="drawer-agent" aria-label="员工详情">
+  <div class="drawer__head"><strong style="flex:1">员工详情</strong><button class="btn btn--sm" type="button"><i data-icon="message" class="icon--sm"></i>对话</button><button class="btn btn--sm" type="button" data-open="dialog-agent"><i data-icon="edit" class="icon--sm"></i>编辑</button><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+  <div class="drawer__body">
+    <div class="profile"><span class="av av--48 violet">项<span class="av__badge"><i data-icon="star"></i></span></span><div><h3>项目经理</h3><div class="hstack" style="gap:8px;margin-top:4px"><span class="tag tag--violet">经理</span><span class="faint" style="font-size:12px">参与 2 个进行中任务</span></div></div></div>
+    <div class="d-section"><p class="section-title">简介</p><p class="muted">理解任务目标后拆分职责，按工作流派工给合适成员；遇到阻塞及时向人类澄清。</p></div>
+    <div class="d-section"><p class="section-title">工作提示词</p><div class="prompt-block">你是团队的项目经理。
+1. 先复述目标与验收标准，再拆分职责；
+2. 只把任务派给具备对应能力的成员；
+3. 信息不足时向人类提问，不要猜测。</div></div>
+    <div class="d-section"><p class="section-title">运行配置</p><dl class="kv"><dt>运行时</dt><dd>Claude Code</dd><dt>模型</dt><dd class="mono">opus</dd><dt>思考等级</dt><dd>High</dd></dl></div>
+    <div class="d-section"><p class="section-title">工具</p><div class="vstack" style="gap:6px;align-items:flex-start"><span class="file-chip"><span class="av av--16 green">C</span>code-review-kit<small>插件 · v1.2.0</small></span></div></div>
+  </div>
+</aside>
+
+<!-- 编辑员工：分区表单 + 左侧锚点；最重要的提示词放在核心位置 -->
+<div class="overlay" id="dialog-agent" data-explicit-close>
+  <form class="dialog dialog--xl" style="height:min(82vh,720px)" role="dialog" aria-modal="true" aria-labelledby="agent-edit-title" onsubmit="return false">
+    <div class="dialog__head" style="padding-bottom:16px;border-bottom:1px solid var(--border-subtle)"><span class="av av--28 blue">K</span><h2 id="agent-edit-title">编辑 Kai · 研发工程师</h2><button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button></div>
+    <div class="edit-layout">
+      <nav class="edit-nav" aria-label="表单分区">
+        <a class="nav-item is-active" href="#e-basic">基本信息</a>
+        <a class="nav-item" href="#e-prompt">职责与提示词</a>
+        <a class="nav-item" href="#e-runtime">运行配置</a>
+        <a class="nav-item" href="#e-tools">工具</a>
+      </nav>
+      <div class="edit-body">
+        <section id="e-basic">
+          <h3>基本信息</h3>
+          <div class="field-row"><div class="field"><span class="field__label">名称<span class="req">*</span></span><input class="input" value="Kai · 研发工程师"></div><div class="field"><span class="field__label">状态</span><div class="hstack" style="height:var(--control-h)"><span class="switch is-on" role="switch" aria-checked="true" aria-label="可用"></span><span>可用</span></div></div></div>
+          <div class="field"><span class="field__label">简介<span class="opt">（何时应咨询这位员工）</span></span><textarea class="textarea" rows="2">负责前端与 Node 服务实现，提交前运行单元测试并附上测试输出。</textarea></div>
+          <div class="field"><span class="field__label">能力标签</span><div class="picker"><span class="token">前端<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token">Node.js<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token">单元测试<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="输入后回车添加" aria-label="添加能力标签"></div></div>
+        </section>
+        <section id="e-prompt">
+          <h3>职责与提示词</h3>
+          <div class="field"><span class="field__label">绑定角色<span class="opt">（共用的系统提示词，可多选）</span></span><div class="picker"><span class="token">代码评审规范<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><span class="token">安全基线<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="搜索角色" aria-label="添加角色"></div></div>
+          <div class="field"><span class="field__label">工作提示词<span class="spacer"></span><span class="opt tnum">146 字</span></span><textarea class="textarea textarea--read mono" style="min-height:180px;font-size:13px" rows="8">你负责前端与 Node 服务实现。
+- 先阅读交接文件与验收标准；
+- 修改代码后必须运行相关测试，并在交接中附上命令与输出；
+- 不确定的范围先提问，不要自行扩大改动。</textarea></div>
+        </section>
+        <section id="e-runtime">
+          <h3>运行配置</h3>
+          <div class="field-row"><div class="field"><span class="field__label">运行时<span class="req">*</span></span><select class="select"><option>Claude Code</option><option>Codex</option><option>DeepSeek Harness</option></select></div><div class="field"><span class="field__label">模型</span><input class="input mono" value="sonnet" aria-label="模型"><span class="field__hint">留空使用 CLI 默认模型</span></div></div>
+          <div class="field"><span class="field__label">思考等级</span><div class="seg"><button class="seg__item" type="button">默认</button><button class="seg__item" type="button">Low</button><button class="seg__item" type="button">Medium</button><button class="seg__item is-active" type="button">High</button><button class="seg__item" type="button">Max</button></div></div>
+        </section>
+        <section id="e-tools">
+          <h3>工具</h3>
+          <div class="field"><span class="field__label">插件</span><div class="picker"><span class="token"><span class="av av--16 green">C</span>code-review-kit<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="搜索已安装插件" aria-label="添加插件"></div></div>
+          <div class="field"><span class="field__label">MCP</span><div class="picker"><span class="token"><span class="av av--16 blue">G</span>GitHub Issues<span class="x"><i data-icon="x" class="icon--sm"></i></span></span><input placeholder="搜索已安装 MCP" aria-label="添加 MCP"></div><span class="field__hint">只能选择与当前运行时兼容的扩展；不兼容项会说明原因。</span></div>
+        </section>
+      </div>
+    </div>
+    <div class="dialog__foot"><span class="hint">修改只影响之后开始的任务与沟通</span><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--primary" type="submit">保存</button></div>
+  </form>
+</div>
+</body>
+</html>

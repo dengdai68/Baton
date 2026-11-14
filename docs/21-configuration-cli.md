@@ -1,5 +1,9 @@
 # CLI 指南
 
+`tasks message TASK_ID --file message.json --client-request-id ID` 和 `tasks reply TASK_ID --file reply.json --client-request-id ID` 支持可选发送请求 ID，也可在 JSON 中提供 `clientRequestId`，两处同时指定必须一致。ID 为 8–100 位字母、数字、下划线或连字符，仅在所选 Run 内生效（重试应固定 `--run`）。原命令重试返回原 `message.id`、`message.clientRequestId` 和 `replayed=true`，不重复派工；正文、指定接收人、精确回复或附件变化须换新 ID，否则明确冲突。已回答/归档后的重试仍可确认已保存事实，不能借此发送新命令。附件路径重试只按现有协作分页查找同 ID，核对本机文件名、字节数和 SHA-256 后复用原附件 ID；文件已变化则拒绝，上传和发送仍是独立步骤。无 ID 时不自动重试。成功发送与 `tasks collaboration` 文本/JSON 都保留请求 ID；响应不确定时可以用原 ID 和原输入重试核验。
+
+纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 核心 App/CLI 对齐：tasks create --file input.json [--start] 支持 teamIds、memberAgentIds 混合选人，服务端展开去重；可只传其中之一，通过managerAgentId从成员中显式指定一位可用经理。acceptanceCriteria 可省略或 []，最多20条/每条500字符；不再使用任务优先级。--start 显式创建后启动，可能消耗模型额度；失败返回 TASK_CREATED_START_FAILED、taskId 与查询建议，不自动重试、不回滚已创建任务。先 progress 核实，再按状态决定是否 start，不能重复 create。员工搜索包含 capabilities；工作流交付定义可省略，依赖/交接来源独立；团队启停与 App 同步。tasks list 校验状态并按更新时间（归档按归档时间）降序分页。
 
 `agentforge tasks list --workflow ID_OR_NAME` 按工作流精确 ID 或唯一名称（当前或任务冻结名称）筛选；同名歧义明确拒绝，改用 ID。与 `--search`、`--status`、`--archived` 组合后分页；文本/JSON 摘要包含 `workflow: {id, name}`，name 为任务冻结名称。

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作流编辑器 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .editor { display: grid; grid-template-columns: minmax(0, 1fr) 312px; flex: 1; min-height: 0; }
+  .props { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border-subtle); background: var(--bg-canvas); }
+  .props__body { flex: 1; overflow: auto; padding: var(--sp-6); }
+  .props__foot { display: flex; padding: var(--sp-5) var(--sp-6); border-top: 1px solid var(--border-subtle); }
+  .desc-bar { display: flex; align-items: center; gap: var(--sp-4); min-height: 40px; padding: 0 var(--sp-6) 0 var(--pad-page); border-bottom: 1px solid var(--border-subtle); font-size: var(--fs-small); color: var(--text-secondary); }
+  .desc-bar span.text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name-input { field-sizing: content; min-width: 120px; max-width: min(360px, 32vw); height: 30px; padding: 0 var(--sp-4); border: 1px solid transparent; border-radius: var(--r-sm); background: transparent; font-size: var(--fs-title-sm); font-weight: var(--fw-semibold); color: var(--text); outline: none; }
+  .name-input:hover { border-color: var(--border); }
+  .name-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--bg-input); }
+  .stage { position: absolute; left: 0; top: 0; width: 760px; height: 520px; transform-origin: 0 0; }
+  @media (max-width: 1100px) { .editor { grid-template-columns: minmax(0, 1fr) 272px; } .stage { transform: scale(.82); } }
+  @media (max-width: 860px) { .editor { grid-template-columns: minmax(0, 1fr); } .props { display: none; } }
+</style>
+</head>
+<body data-page="workflows">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <a class="btn btn--ghost btn--icon btn--sm" href="workflows.html" aria-label="返回工作流"><i data-icon="chevron-left"></i></a>
+      <input class="name-input" value="软件交付" aria-label="工作流名称">
+      <span class="status st-attention" style="font-weight:400"><span class="dot"></span>有未保存的更改</span>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions">
+        <button class="btn btn--ghost btn--sm" type="button"><i data-icon="file" class="icon--sm"></i>文本预览</button>
+        <a class="btn btn--sm" href="workflows.html">放弃</a>
+        <button class="btn btn--primary btn--sm" type="button">保存<kbd class="kbd">⌘S</kbd></button>
+      </div>
+    </header>
+    <div class="desc-bar"><strong style="color:var(--text);font-weight:500">总体说明</strong><span class="text">需求、设计、开发、测试、缺陷修复与回归验证，适合有代码改动的任务。</span><button class="btn btn--ghost btn--sm" type="button"><i data-icon="edit" class="icon--sm"></i>编辑</button></div>
+    <div class="editor">
+      <div class="canvas" aria-label="工作流画布">
+        <div class="canvas__toolbar" role="toolbar" aria-label="画布工具">
+          <button class="btn btn--ghost btn--sm" type="button"><i data-icon="square" class="icon--sm"></i>流程节点</button>
+          <button class="btn btn--ghost btn--sm" type="button"><i data-icon="diamond" class="icon--sm"></i>条件节点</button>
+          <span class="vdivider"></span>
+          <button class="btn btn--ghost btn--sm" type="button" title="一键整理"><i data-icon="layout" class="icon--sm"></i>整理</button>
+        </div>
+        <div class="stage" style="left:40px;top:72px">
+          <svg class="edges" viewBox="0 0 760 520" aria-hidden="true">
+            <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9" fill="none" stroke="context-stroke" stroke-width="1.6"/></marker></defs>
+            <path d="M224 112 H286" marker-end="url(#arrow)"/>
+            <path class="is-active" d="M464 112 H526" marker-end="url(#arrow)"/>
+            <path class="is-active" d="M616 144 V228" marker-end="url(#arrow)"/>
+            <path d="M528 262 H466" marker-end="url(#arrow)"/>
+            <path d="M288 262 H226" marker-end="url(#arrow)"/>
+            <text x="248" y="254">是</text>
+            <path d="M136 294 V378" marker-end="url(#arrow)"/>
+            <text x="144" y="342">修复后</text>
+            <path d="M376 300 V412 H226" marker-end="url(#arrow)"/>
+            <text x="384" y="358">否</text>
+          </svg>
+          <div class="node" style="left:48px;top:80px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">需求与验收标准</div><div class="node__meta">交付 docs/requirements/</div><span class="port port--r"></span></div>
+          <div class="node" style="left:288px;top:80px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">方案与交互设计</div><div class="node__meta">交付 docs/design/</div></div>
+          <div class="node is-selected" style="left:528px;top:80px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">功能开发</div><div class="node__meta">交付 repos/app</div><span class="port port--t"></span><span class="port port--r"></span><span class="port port--b"></span><span class="port port--l"></span></div>
+          <div class="node" style="left:528px;top:230px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">质量验证与缺陷清单</div><div class="node__meta">交付 docs/testing/</div></div>
+          <div class="node node--cond" style="left:288px;top:230px"><div class="node__kind"><i data-icon="diamond" class="icon--sm"></i>条件</div><div class="node__title">发现缺陷？</div><div class="node__meta">2 个出口</div></div>
+          <div class="node" style="left:48px;top:230px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">缺陷修复</div><div class="node__meta">沿用开发负责人</div></div>
+          <div class="node" style="left:48px;top:380px"><div class="node__kind"><i data-icon="square" class="icon--sm"></i>流程</div><div class="node__title">回归验证</div><div class="node__meta">交付 docs/testing/</div></div>
+        </div>
+        <div class="canvas__zoom" role="group" aria-label="缩放">
+          <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="缩小"><i data-icon="minus" class="icon--sm"></i></button>
+          <button class="btn btn--ghost btn--sm tnum" type="button" title="恢复 100%">100%</button>
+          <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="放大"><i data-icon="plus" class="icon--sm"></i></button>
+          <span class="vdivider"></span>
+          <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="适应画布" title="适应画布"><i data-icon="fit" class="icon--sm"></i></button>
+        </div>
+        <div class="canvas__hint">拖动连接点创建连线 · <kbd class="kbd">Delete</kbd> 删除选中</div>
+      </div>
+      <aside class="props" aria-label="节点属性">
+        <div class="pane-head"><i data-icon="square" class="icon--sm faint"></i><strong style="font-size:13px">功能开发</strong><span class="tag">流程节点</span><span class="spacer"></span><span class="faint" style="font-size:11px">1 进 · 1 出</span></div>
+        <div class="props__body">
+          <div class="field"><span class="field__label">标题</span><input class="input" value="功能开发"></div>
+          <div class="field"><span class="field__label">提示词<span class="spacer"></span><span class="opt tnum">92 字</span></span><textarea class="textarea" style="min-height:220px;background:var(--bg-subtle)">依据验收标准实现功能：
+- 改动限定在任务描述的范围内；
+- 补齐对应单元测试并运行；
+- 交接时附上命令、输出与改动文件清单。</textarea><span class="field__hint">员工执行该节点时会收到这段说明。</span></div>
+        </div>
+        <div class="props__foot"><button class="btn btn--ghost btn--sm" type="button" style="color:var(--st-failed)"><i data-icon="trash" class="icon--sm"></i>删除节点</button></div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -5,10 +5,10 @@ import { createWorkflowEditor } from './workflow-editor.mjs';
 import { ByteCache } from "/client/byte-cache.mjs";
 import { createAutomationUI } from "./automations.mjs";
 import { disposeManualGraphs, disposeWorkflowGraphs, fitManualGraph, fitWorkflowGraph, formatWorkflowGraph, resetWorkflowGraph, zoomWorkflowGraph, mountManualGraph, mountWorkflowGraph, zoomManualGraph } from "./manual-graphs.mjs";
-import { insertComposerLineBreak, imageAttachment, attachmentControls, draftAttachments, messageAttachments, attachmentImageError, openAttachmentImage, downloadAttachment, createCommunicationUI, formatCommunicationContent, memberMentionMarkup, employeeDetailMarkup } from "./communication.js";
-import { applyPreferences, normalizePreferences, PREFERENCES_KEY, readPreferences, savePreferences } from "./preferences.mjs";
+import { insertComposerLineBreak, communicationDayLabel, imageAttachment, attachmentControls, draftAttachments, messageAttachments, outgoingMessageFeedback, outgoingAttachmentMarkup, attachmentImageError, openAttachmentImage, downloadAttachment, createCommunicationUI, formatCommunicationContent, memberMentionMarkup, employeeDetailMarkup } from "./communication.js";
+import { applyPreferences, NAVIGATION, normalizePreferences, PREFERENCES_KEY, readPreferences, savePreferences } from "./preferences.mjs";
 import { createSettingsUI } from "./settings.mjs";
-import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect } from "./marketplace.mjs";
+import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect, extensionAvatarColor } from "./marketplace.mjs";
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
@@ -28,15 +28,15 @@ function routeFromLocation() {
   const manualMatch = location.pathname.match(/^\/manual\/(data-model|system-architecture|task-flow)$/);
   if (manualMatch) return { view: "manual", runId: null, manualPage: manualMatch[1] };
   if (location.pathname === "/tasks/archive") return { view: "tasks", runId: null, taskArchiveView: true };
-  const view = location.pathname.replace(/^\//, "") || location.hash.slice(1) || "tasks";
-  return { view: ["overview", "tasks", "teams", "workflows", "agents", "roles", "manual", "marketplace", "mcp-marketplace"].includes(view) ? view : "tasks", runId: null, manualPage: "data-model" };
+  const view = location.pathname.replace(/^\//, "") || location.hash.slice(1) || "inbox";
+  return { view: ["inbox", "overview", "tasks", "teams", "workflows", "agents", "roles", "manual", "marketplace", "mcp-marketplace"].includes(view) ? view : "tasks", runId: null, manualPage: "data-model" };
 }
 const initialRoute = routeFromLocation();
 const state = {
   automationId: initialRoute.automationId || null,
   agents: [], teams: [], tasks: [], runs: [], events: [], workflowTemplates: [], roles: [],
   workspace: null, selectedRunId: initialRoute.runId, selectedAgentId: null,
-  taskSearch: { name: "", status: "all", workflow: "all" }, taskArchiveView: Boolean(initialRoute.taskArchiveView),
+  taskChip: "all", taskSearch: { name: "", status: "all", workflow: "all" }, taskArchiveView: Boolean(initialRoute.taskArchiveView),
   currentView: initialRoute.view, manualPage: initialRoute.manualPage || "data-model",
   settingsPage: initialRoute.settingsPage || "general",
   selectedChatId: initialRoute.chatId || null,
@@ -60,6 +60,8 @@ let consoleRenderTimer;
 let collaborationBodyObserver;
 let bootstrapPromise;
 let bootstrapView;
+let refreshRequest = 0;
+let catalogPromise;
 let resetRequestActive = false;
 function consolePage(runId, agentId) {
   const key = `${runId}:${agentId}`;
@@ -67,7 +69,7 @@ function consolePage(runId, agentId) {
   return consolePages.get(key);
 }
 function workspaceView(runId = state.selectedRunId) {
-  if (!workspaceViews.has(runId)) workspaceViews.set(runId, { draft: "", disclosures: {}, consoleViews: new Map(), collaborationFilter: "all", collaborationScroll: null, directory: null, directoryRequest: 0, fileRequest: 0, selectedPath: null, filePreview: null, directoryOpen: Object.create(null), directoryScroll: Object.create(null), changes: null, changesLoading: false, changesRequest: 0, diffRequest: 0, selectedDiffPath: null, diffPreview: null, tab: "collaboration" });
+  if (!workspaceViews.has(runId)) workspaceViews.set(runId, { draft: "", disclosures: {}, consoleViews: new Map(), collaborationScroll: null, directory: null, directoryRequest: 0, fileRequest: 0, selectedPath: null, filePreview: null, directoryOpen: Object.create(null), directoryScroll: Object.create(null), changes: null, changesLoading: false, changesRequest: 0, diffRequest: 0, selectedDiffPath: null, diffPreview: null, tab: "collaboration" });
   return workspaceViews.get(runId);
 }
 function retryableDispatches(workspace = {}) {
@@ -91,8 +93,8 @@ function failedRunMessage(workspace = {}) {
   const failure = workspace.run?.failure;
   if (failure?.message) { const active = (workspace.traces || []).filter(trace => trace.status === "running").length; return failure.message + (active ? `\n另有 ${active} 名员工正在收尾，结束后可重试。` : ""); }
   return failedRunRecovery(workspace)?.type === "node"
-    ? "已有失败的业务 Trace；请选择需要由原员工继续的职责。"
-    : "本轮没有完成；请查看保留的 Trace 与协作记录。";
+    ? "已有失败的业务调用；请选择需要由原员工继续的职责。"
+    : "本轮没有完成；请查看保留的调用记录 与协作记录。";
 }
 function acceptanceReview(workspace = {}, { history = false } = {}) {
   const run = workspace.run;
@@ -119,9 +121,27 @@ const $ = (selector) => document.querySelector(selector);
 const toast = createToast($('#toast'));
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const esc = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
-const pill = (status) => `<span class="status-pill ${esc(status)}">${statusText[status] || status}</span>`;
+const statusTone = status => ({ running:'running', planning:'planning', review:'planning', awaiting_human:'attention', awaiting_acceptance:'attention', blocked:'failed', failed:'failed', done:'done', completed:'done' })[status] || 'neutral';
+const statusShape = status => {
+  const shapes = {
+    running:'<path d="M14 8a6 6 0 1 1-6-6"/><path d="M8 2a6 6 0 0 1 6 6" stroke-dasharray="2 2"/>',
+    planning:'<path d="m8 2 6 6-6 6-6-6z"/>',
+    awaiting_human:'<circle cx="8" cy="8" r="6"/><path d="M6.5 6a1.5 1.5 0 0 1 3 .4c0 1-1.5 1.1-1.5 2.3M8 10.8v.2"/>',
+    awaiting_acceptance:'<rect x="4" y="2.5" width="8" height="11" rx="1"/><path d="m6 8 1.5 1.5L10 6.5"/>',
+    failed:'<circle cx="8" cy="8" r="6"/><path d="m6 6 4 4m0-4-4 4"/>',
+    blocked:'<path d="m8 2 6 11H2zM8 6v3m0 1.5v.5"/>',
+    paused:'<circle cx="8" cy="8" r="6"/><path d="M6.5 5.5v5m3-5v5"/>',
+    done:'<circle cx="8" cy="8" r="6"/><path d="m5 8 2 2 4-4"/>',
+    cancelled:'<circle cx="8" cy="8" r="6"/><path d="M5 8h6"/>',
+    backlog:'<circle cx="8" cy="8" r="6" stroke-dasharray="2 2"/>',
+  };
+  const key = status === 'completed' ? 'done' : status === 'review' ? 'planning' : status;
+  return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${shapes[key] || shapes.backlog}</svg>`;
+};
+const pill = status => `<span class="status-pill" data-status-tone="${statusTone(status)}"><span aria-hidden="true">${statusShape(status)}</span>${esc(statusText[status] || status)}</span>`;
 const roleColor = (agent) => `color-${agent?.color || "system"}`;
-const initialsOf = (agent) => agent?.name ? Array.from(agent.name).slice(0, 2).join("").toUpperCase() : agent?.initials || "?";
+/** Avatar glyph: one character (Han or uppercase Latin) so every avatar size stays legible. */
+const initialsOf = (agent) => (Array.from(agent?.name || agent?.initials || "?")[0] || "?").toLocaleUpperCase();
 const workspaceSummary = (task = {}) => task.workspaceKind === "managed" ? "系统受管目录" : "既有工作目录";
 
 // Frozen user requirements remain visible at human confirmation.
@@ -141,30 +161,59 @@ async function api(path, options = {}) {
 }
 const directoryResources={tasks:['tasks','tasks'],agents:['agents','agents'],teams:['teams','teams'],roles:['roles','roles'],workflows:['workflow-templates','workflowTemplates']};
 let directoryRequest=0, directoryTimer;
-async function refreshDirectory() {
+async function refreshDirectory({ paint = false } = {}) {
   const view=state.currentView, resource=directoryResources[view]; if(!resource)return;
   const key=view==='tasks'&&state.taskArchiveView?'archive':view;
-  const query=new URLSearchParams({page:String(state.listPages[key]||1)});
-  if(view==='tasks') {query.set('search',state.taskSearch.name);query.set('status',state.taskSearch.status);query.set('workflow',state.taskSearch.workflow);query.set('archived',String(state.taskArchiveView));}
+  const requestedPage=state.listPages[key]||1;
+  const query=new URLSearchParams({page:String(requestedPage)});
+  if(view==='tasks') {if(!state.taskArchiveView){query.set('page','1');query.set('pageSize','100');}query.set('search',state.taskSearch.name);query.set('status',state.taskSearch.status);query.set('workflow',state.taskSearch.workflow);query.set('archived',String(state.taskArchiveView));}
   else query.set('search',$(`#${view}-search`)?.value||'');
   if(view==='agents')query.set('role',$('#agents-role-filter')?.value||'');
   const request=++directoryRequest;
-  const result=await api(`/api/${resource[0]}?${query}`);
+  state.directoryStatus ||= {};
+  const status=state.directoryStatus[key]={loading:true,error:null};
+  if(paint)render();
+  try {
+  let result=await api(`/api/${resource[0]}?${query}`);
+  if (view === 'tasks' && !state.taskArchiveView) {
+    // The existing endpoint accepts one exact status. Read bounded pages before
+    // applying composite client views, so counts and pagination never omit matches.
+    const candidates = [...result.tasks];
+    while (result.page < result.totalPages) {
+      if (request !== directoryRequest || view !== state.currentView) return;
+      query.set('page', String(result.page + 1));
+      result = await api(`/api/tasks?${query}`);
+      candidates.push(...result.tasks);
+    }
+    if (request !== directoryRequest || view !== state.currentView) return;
+    state.taskCandidates = candidates;
+    const page = paginate(candidates.filter(task => taskMatchesChip(task.status, state.taskChip || 'all')).sort((left,right) => taskGroupOrder(left.status) - taskGroupOrder(right.status)), requestedPage);
+    result = { ...page, tasks: page.items };
+  }
   if(request!==directoryRequest||view!==state.currentView)return;
   const items=result[resource[1]];
   state.directoryPages ||= {};state.directoryPages[key]={...result,items};state.listPages[key]=result.page;
   // References stay lightweight; full edit data belongs only to the current page.
   state[resource[1]]=items;
   if(view==='tasks')state.runs=items.flatMap(task=>task.runs||[]);
+  } catch(error) {
+    if(request===directoryRequest && view===state.currentView)status.error=error.message;
+    throw error;
+  } finally {
+    if(request===directoryRequest && view===state.currentView){status.loading=false;if(paint)render();}
+  }
 }
-function queryDirectorySoon() {clearTimeout(directoryTimer);directoryTimer=setTimeout(()=>refreshDirectory().then(render).catch(error=>toast(error.message,true)),180);}
+function queryDirectorySoon() {++directoryRequest;clearTimeout(directoryTimer);directoryTimer=setTimeout(()=>refreshDirectory({paint:true}).catch(error=>toast(error.message,true)),180);}
 async function loadCatalogReferences() {
-  const result=await api('/api/catalog-references');
+  if(!catalogPromise){const pending=api('/api/catalog-references');catalogPromise=pending;void pending.finally(()=>{if(catalogPromise===pending)catalogPromise=null;}).catch(()=>{});}
+  const result=await catalogPromise;
   state.catalogReferences=result;
-  for(const [key,items] of Object.entries(result)) if(Array.isArray(items))state[key]=items;
+  // Reference responses must not replace a directory's already loaded full objects.
+  for(const [key,items] of Object.entries(result)) if(Array.isArray(items) && directoryResources[state.currentView]?.[1]!==key)state[key]=items;
   return result;
 }
 async function refresh({ quiet = false } = {}) {
+  const request=++refreshRequest, currentView=state.currentView;
   try {
     const view = ['settings','marketplace','mcp-marketplace','manual'].includes(state.currentView) ? 'connection' : 'shell';
     if (!bootstrapPromise || bootstrapView !== view) {
@@ -174,6 +223,7 @@ async function refresh({ quiet = false } = {}) {
       void pending.finally(() => { if (bootstrapPromise === pending) bootstrapPromise = null; }).catch(() => {});
     }
     const result = await bootstrapPromise;
+    if(request!==refreshRequest || currentView!==state.currentView)return false;
     try {
       const previous = localStorage.getItem("agentforge.installation");
       if (result.installationId && previous && previous !== result.installationId) { localStorage.removeItem(PREFERENCES_KEY); presentationPreferences = readPreferences(); applyPreferences(document, presentationPreferences); }
@@ -181,12 +231,20 @@ async function refresh({ quiet = false } = {}) {
     } catch { /* Storage may be unavailable in this container. */ }
     Object.assign(state, result);
     if (view === 'shell') { state.navigationNotifications = result; state.businessReady = true; }
-    if(['tasks','agents','communication','automations','overview'].includes(state.currentView))await loadCatalogReferences();
-    await refreshDirectory();
+    const directory=refreshDirectory({paint:true});
+    if(['tasks','agents','roles','communication','automations','overview'].includes(currentView))void loadCatalogReferences().then(()=>{
+      if(request!==refreshRequest || currentView!==state.currentView)return;
+      render();if(currentView==='automations')automationUI.refreshCatalog();
+    }).catch(error=>{if(request===refreshRequest && !quiet)toast(`关联资料读取失败：${error.message}`,true);});
+    await directory;
+    if(request!==refreshRequest || currentView!==state.currentView)return false;
+    if(state.currentView==='inbox')await refreshInbox();
     if(state.currentView==='overview')Object.assign(state,await api('/api/overview'));
     render();
     return true;
   } catch (error) {
+    if(request!==refreshRequest || currentView!==state.currentView)return false;
+    if(currentView==='tasks') {const key=state.taskArchiveView?'archive':'tasks';state.directoryStatus ||= {};state.directoryStatus[key]={loading:false,error:error.message};renderTasks();}
     if (!quiet) toast(error.message, true);
     return false;
   }
@@ -205,8 +263,8 @@ const communicationUI = createCommunicationUI({ api, notify: toast,
 });
 let presentationPreferences = readPreferences();
 applyPreferences(document, presentationPreferences);
-const mcpMarketplaceUI = createMcpMarketplaceUI({api, esc, openModal, closeModal, confirmDialog, toast});
-const marketplaceUI = createMarketplaceUI({api, esc, openModal, closeModal, confirmDialog, toast});
+const mcpMarketplaceUI = createMcpMarketplaceUI({api, esc, openModal, closeModal, confirmDialog, toast, actionMenu, headerActions:$('#mcp-marketplace-header-actions')});
+const marketplaceUI = createMarketplaceUI({api, esc, openModal, closeModal, confirmDialog, toast, actionMenu, headerActions:$('#marketplace-header-actions')});
 const settingsUI = createSettingsUI({
   api, notify: toast, clearInvalid, setInvalid,
   openModal, closeModal, confirmDialog,
@@ -230,13 +288,13 @@ window.addEventListener("storage", (event) => {
 });
 
 /* ---------- 反馈 ---------- */
-function openModal(content) {
+function openModal(content, {drawer = false} = {}) {
   const backdrop = $("#modal-backdrop");
-  if (!backdrop.open) modalReturnFocus = document.activeElement;
+  if (!backdrop.open || !backdrop.contains(document.activeElement)) modalReturnFocus = document.activeElement;
   modalCancel?.(); modalCancel = null;
   disposeWorkflowGraphs("details");
   closeFloatingLists($("#modal-content"));
-  $("#modal-content").closest(".modal")?.classList.remove("workflow-detail-modal", "workflow-editor-modal", "team-config-modal", "employee-config-modal", "employee-detail-modal", "extension-detail-modal", "task-create-modal", "automation-create-modal", "confirm-dialog");
+  $("#modal-content").closest(".modal")?.classList.remove("workflow-detail-modal", "workflow-editor-modal", "team-config-modal", "role-config-modal", "employee-config-modal", "employee-detail-modal", "extension-detail-modal", "task-create-modal", "automation-create-modal", "confirm-dialog", "detail-drawer", "command-dialog");
   $("#modal-content").innerHTML = content;
   // Shared semantic grouping; Web keeps display:contents, desktop bounds body scrolling.
   const host = $("#modal-content"), container = host.querySelector(":scope > form") || host;
@@ -253,10 +311,15 @@ function openModal(content) {
   if (title) { title.id = 'shared-modal-title'; backdrop.setAttribute('aria-labelledby', title.id); }
   else { backdrop.removeAttribute('aria-labelledby'); backdrop.setAttribute('aria-label', '详情'); }
   const formOpen = backdrop.classList.contains('form-modal-open');
-  $("#modal-close").title = formOpen ? '关闭' : '关闭（Esc）';
+  $("#modal-close").title = formOpen && !drawer ? '关闭' : '关闭（Esc）';
   $("#modal-backdrop").classList.add("open");
-  if (!backdrop.open) backdrop.showModal();
-  document.body.classList.add('modal-open');
+  // Drawers keep the directory interactive; centered dialogs retain modal focus.
+  if (backdrop.open) backdrop.close();
+  if (drawer) {
+    host.closest('.modal').classList.add('detail-drawer');
+    backdrop.show();
+  } else backdrop.showModal();
+  document.body.classList.toggle('modal-open', !drawer);
   $("#modal-backdrop").setAttribute("aria-hidden", "false");
   $("#modal-backdrop").scrollTop = 0;
   $("#modal-content").closest(".modal").scrollTop = 0;
@@ -266,14 +329,20 @@ function closeModal() {
   if (resetRequestActive) return;
   disposeWorkflowGraphs("details");
   closeFloatingLists($("#modal-content"));
-  $("#modal-content").closest(".modal")?.classList.remove("workflow-detail-modal", "workflow-editor-modal", "team-config-modal", "employee-config-modal", "employee-detail-modal", "extension-detail-modal", "task-create-modal", "automation-create-modal", "confirm-dialog");
+  $("#modal-content").closest(".modal")?.classList.remove("workflow-detail-modal", "workflow-editor-modal", "team-config-modal", "role-config-modal", "employee-config-modal", "employee-detail-modal", "extension-detail-modal", "task-create-modal", "automation-create-modal", "confirm-dialog", "detail-drawer", "command-dialog");
   $("#modal-backdrop").classList.remove("open");
   $("#modal-backdrop").classList.remove('form-modal-open');
   $("#modal-backdrop").setAttribute("aria-hidden", "true");
   $("#modal-content").replaceChildren();
   $("#modal-backdrop").close();
   document.body.classList.remove('modal-open');
-  const target = modalReturnFocus;
+  let target = modalReturnFocus;
+  if (target && !target.isConnected) {
+    for (const attribute of ['data-agent-detail', 'data-extension-detail', 'data-edit-role']) {
+      const id = target.getAttribute(attribute);
+      if (id) { target = document.querySelector(`[${attribute}="${CSS.escape(id)}"]`); break; }
+    }
+  }
   modalReturnFocus = null;
   if (target?.isConnected && target.getClientRects().length) target.focus({ preventScroll: true });
   else document.querySelector('.nav-item.active')?.focus({ preventScroll: true });
@@ -283,9 +352,13 @@ function closeModal() {
 // Promise-style in-app confirmation; short content only, no scrolling body.
 // Escape, backdrop click and the close button all resolve as cancelled.
 let modalCancel = null, modalReturnFocus = null;
+function modalAllowsLightDismiss() {
+  const backdrop = $("#modal-backdrop");
+  return !backdrop.classList.contains('form-modal-open') || Boolean(backdrop.querySelector('.detail-drawer'));
+}
 function confirmDialog({ title, message, confirmLabel = "确认", danger = false }) {
   return new Promise((resolve) => {
-    openModal(`<h2>${esc(title)}</h2><p class="modal-intro confirm-dialog-message">${esc(message)}</p><div class="confirm-dialog-actions"><button class="ghost-button" type="button" data-confirm-dialog-cancel>取消</button><button class="${danger ? "small-button danger" : "primary-button"}" type="button" data-confirm-dialog-accept>${esc(confirmLabel)}</button></div>`);
+    openModal(`<h2>${esc(title)}</h2><p class="modal-intro confirm-dialog-message">${esc(message)}</p><div class="confirm-dialog-actions"><button class="ghost-button" type="button" data-confirm-dialog-cancel>取消</button><button class="${danger ? "danger-button danger-solid" : "primary-button"}" type="button" data-confirm-dialog-accept>${esc(confirmLabel)}</button></div>`);
     $("#modal-content").closest(".modal")?.classList.add("confirm-dialog");
     let settled = false;
     const finish = (accepted) => {
@@ -330,21 +403,33 @@ function clearInvalid(form) {
 
 /* ---------- 壳层 ---------- */
 function renderShell() {
+  $$('[data-header-view]').forEach(host => { host.hidden = host.dataset.headerView !== state.currentView; });
   const attentionRuns = state.runs.filter((run) => !run.task?.archivedAt && taskNeedsAttention(run.status));
   const count = state.navigationNotifications?.taskAttentionCount ?? new Set(attentionRuns.map(run => run.taskId)).size;
-  $("#nav-task-count").textContent = count;
-  $("#nav-task-count").hidden = !count;
-  $("#nav-task-count").setAttribute("aria-label", `${count} 项待你处理`);
+  // The attention count appears once, on 待我处理; 任务中心 no longer duplicates it.
+  const inboxCount = $("#nav-inbox-count"); inboxCount.textContent = count; inboxCount.hidden = !count; inboxCount.setAttribute('aria-label', `${count} 项待你处理`);
   const unread = state.navigationNotifications?.communicationUnreadCount ?? state.communicationUnreadCount ?? 0;
   $("#nav-communication-count").textContent = unread;
   $("#nav-communication-count").hidden = !unread;
   $("#nav-communication-count").setAttribute("aria-label", `${unread} 条未读消息`);
-  const taskHint = $("#nav-ws-hint");
-  taskHint.style.display = count ? "" : "none";
-  taskHint.textContent = "待你处理";
-  const names = { overview: "总览", tasks: "任务中心", automations: "自动化", teams: "团队", workflows: "工作流", agents: "数字员工", roles: "角色", manual: "开发手册", workspace: "任务空间", settings: "设置", marketplace: "插件市场", "mcp-marketplace": "MCP 市场" };
+  const names = { inbox: "待我处理", overview: "总览", tasks: "任务", automations: "自动化", teams: "团队", workflows: "工作流", agents: "数字员工", roles: "角色", manual: "开发手册", workspace: "任务空间", settings: "设置", marketplace: "插件", "mcp-marketplace": "MCP" };
   $("#breadcrumb-current").textContent = state.currentView === "communication" ? "沟通"
     : state.currentView === "tasks" && state.taskArchiveView ? "归档历史" : names[state.currentView];
+  const icon = $("#topbar-icon");
+  if (icon?.dataset) icon.dataset.viewIcon = state.currentView;
+  renderTitleCount();
+}
+/** Show the active view's item count beside the titlebar title (Graphite frame). */
+function renderTitleCount() {
+  const count = $(".view.active")?.dataset?.titleCount, node = $("#topbar-count");
+  if (!node) return;
+  node.textContent = count ?? "";
+  node.hidden = count === undefined || count === "";
+}
+/** Record a view's item count; modules may also set data-title-count on their view directly. */
+function setTitleCount(view, count) {
+  const host = $(`#${view}-view`);
+  if (host) host.dataset.titleCount = Number.isFinite(count) ? String(count) : "";
 }
 
 let navigationRequest = null;
@@ -353,12 +438,14 @@ async function refreshNavigation() {
   if (resetRequestActive || document.visibilityState === "hidden" || navigationRequest) return;
   const connectionOnly = !state.businessReady;
   navigationRequest = api(connectionOnly ? '/api/bootstrap?view=connection' : '/api/notifications');
-  try { const result = await navigationRequest; if(connectionOnly)state.businessReady = result.businessReady;else state.navigationNotifications = result; renderShell(); }
+  try { const result = await navigationRequest; if(connectionOnly)state.businessReady = result.businessReady;else state.navigationNotifications = result; renderShell(); if(state.currentView==='inbox' && !$('#modal-backdrop').open && await refreshInbox())renderInbox(); }
   catch { /* Keep the last confirmed count until the next visible poll. */ }
   finally { navigationRequest = null; }
 }
 
 function setView(view, { replace = false, taskArchiveView = state.taskArchiveView } = {}) {
+  ++refreshRequest;++directoryRequest;clearTimeout(directoryTimer);
+  closeFloatingLists(document);
   if(view!=='workspace' && state.currentView==='workspace'){
     $('#working-directory-panel video')?.pause();const reading=workspaceView();rememberDirectoryReading(reading);delete reading.pendingVideoPreview;
   }
@@ -368,6 +455,7 @@ function setView(view, { replace = false, taskArchiveView = state.taskArchiveVie
   if (view !== "mcp-marketplace") mcpMarketplaceUI.unmount();
   if (view !== "marketplace") marketplaceUI.unmount();
   if (view !== "workspace") {
+    if(state.selectedRunId){const reading=workspaceView();reading.collaborationRequest=(reading.collaborationRequest||0)+1;reading.collaborationPending=null;reading.collaborationLoading=false;}
     state.eventSource?.close(); state.eventSource = null;
     clearTimeout(workspaceRefreshTimer); clearTimeout(consoleRenderTimer);
     workspaceRefreshTimer = null; consoleRenderTimer = null;
@@ -379,6 +467,7 @@ function setView(view, { replace = false, taskArchiveView = state.taskArchiveVie
   if(view!=='workspace'){consolePages.clear();consoleContentCache.clear();promptSnapshotCache.clear();}
   state.currentView = view;
   if (view === "tasks") state.taskArchiveView = Boolean(taskArchiveView);
+  if(view==='tasks'){const key=state.taskArchiveView?'archive':'tasks';state.directoryStatus ||= {};state.directoryStatus[key]={loading:true,error:null};}
   const path = view === "workspace" && state.selectedRunId ? `/runs/${encodeURIComponent(state.selectedRunId)}`
     : view === "automations" ? "/automations" + (state.automationId ? "/" + encodeURIComponent(state.automationId) : "")
     : view === "communication" ? "/communication" + (state.selectedChatId ? "/" + encodeURIComponent(state.selectedChatId) : "")
@@ -387,11 +476,237 @@ function setView(view, { replace = false, taskArchiveView = state.taskArchiveVie
     : view === "manual" ? `/manual/${state.manualPage}` : `/${view}`;
   if (location.pathname !== path) history[replace ? "replaceState" : "pushState"]({}, "", path);
   const navFor = view === "workspace" ? (state.workspace?.run.task.kind === "automation" ? "automations" : "tasks") : view; /* 任务空间从任务中心进入，高亮任务中心 */
-  $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === navFor));
+  $$(".nav-item").forEach((item) => {
+    const active = item.dataset.view === navFor;
+    item.classList.toggle("active", active);
+    if (active) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  });
   $$(".view").forEach((item) => item.classList.toggle("active", item.id === `${view}-view`));
   render();
   if (view !== "workspace" && view !== "communication") refresh({ quiet: true });
   window.scrollTo({ top: 0 });
+}
+
+/* Shared action menus keep secondary actions reachable without widening rows. */
+function actionMenu(content, label) {
+  return content ? `<details class="action-menu"><summary aria-label="${esc(label)}" title="${esc(label)}">⋯</summary><div class="action-menu-list" role="menu">${content}</div></details>` : '';
+}
+document.addEventListener('toggle', event => {
+  const menu = event.target;
+  if (!menu.matches?.('.action-menu')) return;
+  const summary = menu.querySelector('summary'), list = menu.querySelector('.action-menu-list');
+  const popup = createFloatingList(summary, list, { minWidth:200, onClose:() => { menu.open = false; summary.setAttribute('aria-expanded', 'false'); } });
+  summary.setAttribute('aria-expanded', String(menu.open));
+  if (menu.open) { list.querySelectorAll('button').forEach(button => button.setAttribute('role','menuitem')); popup.open(); if(menu.dataset.focusIndex!==undefined){list.querySelectorAll('button:not(:disabled)')[Number(menu.dataset.focusIndex)]?.focus();delete menu.dataset.focusIndex;} } else popup.close();
+}, true);
+document.addEventListener('keydown', event => {
+  const menu = event.target.closest('.action-menu');
+  if (!menu) return;
+  const items = [...menu.querySelectorAll('button:not(:disabled)')], index = items.indexOf(document.activeElement);
+  if (['ArrowDown','ArrowUp','Home','End'].includes(event.key)) {
+    event.preventDefault();
+    const next=event.key==='Home'?0:event.key==='End'?items.length-1:index<0?(event.key==='ArrowDown'?0:items.length-1):(index+(event.key==='ArrowDown'?1:-1)+items.length)%items.length;
+    if(menu.open)items[next]?.focus();else{menu.dataset.focusIndex=String(next);menu.open=true;}
+  }
+  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); menu.open = false; menu.querySelector('summary').focus(); }
+});
+document.addEventListener('click', event => { const menu = event.target.closest('.action-menu'); if (event.target.closest('.action-menu-list button')) { menu.open = false; closeFloatingLists(menu); } }, true);
+
+function openCommandPalette() {
+  const commands = [
+    {label:'新建任务',group:'快速操作',run:()=>newTaskModal()}, {label:'新建自动化',group:'快速操作',run:()=>newTaskModal({automation:true})},
+    {label:'发起沟通',group:'快速操作',run:()=>{setView('communication');communicationUI.newConversation();}},
+    {label:'创建数字员工',group:'快速操作',run:()=>newAgentModal()}, {label:'创建团队',group:'快速操作',run:()=>newTeamModal()}, {label:'新建工作流',group:'快速操作',run:()=>workflowModal()},
+    ...NAVIGATION.filter(item=>!['manual'].includes(item.id)).map(item=>({label:item.label, group:'跳转', view:item.id, run:()=>setView(item.id)})),
+    {label:'设置',group:'跳转',view:'settings',run:()=>setView('settings')}];
+  commands.push({label:document.documentElement.hasAttribute('data-sidebar-collapsed')?'展开侧栏':'收起侧栏',group:'显示',run:toggleSidebar});
+  openModal('<h2>搜索或执行命令</h2><div class="command-query-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="command-query" type="search" aria-label="搜索命令" placeholder="输入页面或操作名称…" autocomplete="off"></div><div id="command-results" role="listbox" aria-label="命令"></div><p class="field-hint"><kbd>↑</kbd><kbd>↓</kbd> 选择 · <kbd>Enter</kbd> 打开 · <kbd>Esc</kbd> 关闭</p>');
+  $('#modal-content').closest('.modal').classList.add('command-dialog');
+  const input = $('#command-query'), results = $('#command-results');
+  const hints = { '新建任务':'C', '新建自动化':'⇧C', '发起沟通':'M', '待我处理':'G I', '任务':'G T', '数字员工':'G E', '设置':'⌘,' };
+  const hintMarkup = label => { const hint = hints[label]; return hint ? hint.split(' ').map(key => `<kbd>${esc(key)}</kbd>`).join('') : ''; };
+  let matches = commands, index = 0;
+  function paint() { results.innerHTML=matches.length ? matches.map((item,i)=>`${i === 0 || matches[i-1].group !== item.group ? `<p class="command-group">${esc(item.group)}</p>` : ''}<button type="button" role="option" aria-selected="${i===index}" data-command-index="${i}"><span class="command-icon ${item.view ? 'nav-icon' : ''}" ${item.view ? `data-view="${item.view}"` : ''} aria-hidden="true">${item.view ? '' : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M5 12h14"/></svg>'}</span><span>${esc(item.label)}</span><small>${hintMarkup(item.label) || esc(item.group)}</small></button>`).join('') : '<p class="field-hint">没有匹配的命令</p>'; }
+  const run = i => {const command=matches[i]; if(command){closeModal();command.run();}};
+  input.oninput=()=>{matches=commands.filter(item=>item.label.toLowerCase().includes(input.value.trim().toLowerCase())); index=0; paint();};
+  input.onkeydown=event=>{if(['ArrowDown','ArrowUp'].includes(event.key)){event.preventDefault();index=(index+(event.key==='ArrowDown'?1:-1)+matches.length)%Math.max(matches.length,1);paint();results.querySelector('[aria-selected=true]')?.scrollIntoView({block:'nearest'});} if(event.key==='Enter'){event.preventDefault();run(index);}};
+  results.onclick=event=>{const button=event.target.closest('[data-command-index]');if(button)run(Number(button.dataset.commandIndex));};
+  paint(); input.focus();
+}
+function toggleSidebar() {
+  const collapsed = document.documentElement.toggleAttribute('data-sidebar-collapsed');
+  const button = $('[data-toggle-sidebar]');
+  button.setAttribute('aria-label',collapsed ? '展开侧栏' : '收起侧栏');
+  button.title = `${collapsed ? '展开' : '收起'}侧栏 ⌘\\`;
+}
+
+const inboxGroups = [['awaiting_human','等待你的澄清'],['awaiting_acceptance','待你验收'],['failed','执行中断'],['paused','已暂停'],['blocked','等待恢复']];
+let inboxRequest = 0, inboxPreviewRequest = 0;
+const inboxDrafts = new Map(), inboxAnswered = new Map();
+function inboxVisibleGroups() { return state.inboxView === 'recent' ? [['done','最近已处理']] : inboxGroups; }
+function inboxTasks() { return inboxVisibleGroups().flatMap(([status]) => state.inboxResults?.[status]?.tasks || []); }
+function inboxFacts(task, workspace = state.inboxDetails?.[task.id]) {
+  const run = workspace?.run, question = workspace?.pendingQuestions?.find(item => item.recipient?.type === 'human');
+  const agent = run?.participants?.find(item => item.id === question?.sender?.id) || question?.sender;
+  const failedTrace = workspace?.traces?.filter(item => item.status === 'failed').at(-1);
+  const failedAgent = run?.participants?.find(item => item.id === failedTrace?.agentId);
+  const error = run?.failure?.message || failedTrace?.error?.message || failedTrace?.error || '';
+  const reason = run?.blockedReason || run?.pauseReason || '';
+  const description = task.inboxAnsweredAt ? '你已回答' : ({
+    awaiting_human: question ? `${agent?.name || '任务成员'} 向你提问` : '等待你的澄清',
+    awaiting_acceptance: `${run?.manager?.name || '项目经理'} 提交了验收`,
+    failed: failedAgent ? `${failedAgent.name} 执行失败` : '执行失败',
+    paused: reason || '任务已暂停', blocked: reason || '等待恢复', done: '你确认了完成',
+  })[task.status] || statusText[task.status];
+  const summary = task.inboxAnsweredAt ? task.inboxAnswer : question?.content || error || run?.acceptanceRequest?.summary || reason || task.objective || '';
+  return {run, question, agent, error, reason, description, summary};
+}
+async function refreshInbox() {
+  const request = ++inboxRequest, view = state.inboxView || 'pending', groups = inboxVisibleGroups();
+  state.inboxLoading = !state.inboxResults || state.inboxLoadedView !== view;
+  if (state.inboxLoading) renderInbox();
+  const previous = JSON.stringify([state.inboxResults,state.inboxErrors,state.inboxDetails]);
+  const results = await Promise.allSettled(groups.map(async ([status]) => [status, await api('/api/tasks?' + new URLSearchParams({status,archived:'false',page:String(status === 'done' ? 1 : state.inboxPages?.[status] || 1),pageSize:'20'}))]));
+  if (request !== inboxRequest || state.currentView !== 'inbox' || (state.inboxView || 'pending') !== view) return;
+  const next = {}, errors = {}, details = {};
+  results.forEach((result,index) => { if (result.status === 'fulfilled') next[result.value[0]] = result.value[1]; else errors[groups[index][0]] = result.reason.message; });
+  if (view === 'recent' && next.done) {
+    // No date filter exists in the task directory: retain its latest 20 completed tasks.
+    const answered = [...inboxAnswered.values()].filter(task => new Date(task.inboxAnsweredAt).toDateString() === new Date().toDateString());
+    const tasks = [...answered, ...next.done.tasks.filter(task => !answered.some(item => item.id === task.id))]
+      .sort((a,b) => new Date(b.inboxAnsweredAt || b.updatedAt) - new Date(a.inboxAnsweredAt || a.updatedAt)).slice(0,20);
+    next.done = {...next.done,tasks,total:tasks.length,totalPages:1};
+  }
+  // Bound parallel detail reads to the visible directory pages; never expand execution history for rows.
+  const queue = Object.values(next).flatMap(result => result.tasks);
+  await Promise.all(Array.from({length:Math.min(4,queue.length)}, async () => {
+    while (queue.length && request === inboxRequest) {
+      const task = queue.shift(), run = task.runs?.[0];
+      if (!run) continue;
+      try { details[task.id] = await api(`/api/runs/${encodeURIComponent(run.id)}/workspace?view=compact`); }
+      catch (error) { details[task.id] = {error:error.message}; }
+    }
+  }));
+  if (request !== inboxRequest || state.currentView !== 'inbox' || (state.inboxView || 'pending') !== view) return;
+  state.inboxResults = next; state.inboxErrors = errors; state.inboxDetails = details;
+  state.inboxLoading = false; state.inboxLoadedView = view;
+  return previous !== JSON.stringify([next,errors,details]);
+}
+function inboxStatusIcon(status) {
+  return `<span class="task-state-icon" data-status-tone="${statusTone(status)}" aria-hidden="true">${statusShape(status)}</span>`;
+}
+function renderInbox() {
+  const host = $('#inbox-content'), focusedId = document.activeElement?.dataset.inboxSelect;
+  const chips = `<div class="inbox-chips" role="group" aria-label="待办视图">${[['pending','待处理'],['recent','最近已处理']].map(([id,label]) => `<button class="inbox-chip" data-inbox-view="${id}" aria-pressed="${(state.inboxView || 'pending') === id}">${label}</button>`).join('')}</div>`;
+  const header = $('#inbox-header-actions');
+  if (header.innerHTML !== chips) header.innerHTML = chips;
+  if (state.inboxLoading || !state.inboxResults) { host.innerHTML = '<div class="directory-empty" role="status">正在读取事项…</div>'; return; }
+  const tasks = inboxTasks();
+  const totalCount = $('#inbox-total-count');
+  if (totalCount) { totalCount.textContent = String(tasks.length); totalCount.hidden = !tasks.length; }
+  setTitleCount('inbox', tasks.length);
+  if (!state.inboxReceipt && !tasks.some(task => task.id === state.inboxSelection)) state.inboxSelection = tasks[0]?.id;
+  const list = inboxVisibleGroups().map(([status,label]) => {
+    const result = state.inboxResults[status];
+    if (state.inboxErrors[status]) return `<section><h3>${inboxStatusIcon(status)}${label}</h3><p role="alert">${esc(state.inboxErrors[status])}</p><button class="small-button" data-inbox-retry>重试</button></section>`;
+    if (!result?.tasks.length) return '';
+    return `<section><h3>${inboxStatusIcon(status)}${label}<span class="inbox-group-count">${result.total}</span></h3>${result.tasks.map(task => {
+      const facts = inboxFacts(task), agent = facts.agent;
+      return `<button class="inbox-item ${state.inboxSelection === task.id ? 'selected' : ''}" data-inbox-select="${esc(task.id)}" aria-pressed="${state.inboxSelection === task.id}">${inboxStatusIcon(task.inboxAnsweredAt ? 'done' : task.status)}<strong>${esc(task.title)}</strong><time title="${esc(exactTime(task.inboxAnsweredAt || task.updatedAt))}">${timeAgo(task.inboxAnsweredAt || task.updatedAt)}</time><span class="inbox-item-description">${agent ? `<span class="stack-avatar ${esc(roleColor(agent))}" aria-hidden="true">${esc(initialsOf(agent))}</span>` : ''}${esc(facts.description)}</span><span class="inbox-item-summary">${esc(facts.summary)}</span></button>`;
+    }).join('')}${result.totalPages > 1 ? `<div class="inbox-pagination"><button class="small-button" data-inbox-status="${status}" data-inbox-page="${result.page-1}" ${result.page === 1 ? 'disabled' : ''}>上一页</button><span>${result.page} / ${result.totalPages}</span><button class="small-button" data-inbox-status="${status}" data-inbox-page="${result.page+1}" ${result.page >= result.totalPages ? 'disabled' : ''}>下一页</button></div>` : ''}</section>`;
+  }).join('');
+  if (!list && !state.inboxReceipt) {
+    ++inboxPreviewRequest;
+    host.innerHTML = `<div class="directory-empty"><strong>${state.inboxView === 'recent' ? '暂无最近处理记录' : '暂时没有待处理事项'}</strong><span>${state.inboxView === 'recent' ? '完成确认或回答问题后，可在这里回看。' : '需要你回答、验收或恢复时，任务会出现在这里。'}</span></div>`;
+    return;
+  }
+  // Preserve the live composer DOM during polling, including IME, focus, selection and scroll.
+  if (!host.querySelector('.inbox-layout')) host.innerHTML = '<div class="inbox-layout"><div class="inbox-list"></div><section class="inbox-preview" aria-label="事项详情"><div id="inbox-preview-content"></div></section></div>';
+  host.querySelector('.inbox-list').innerHTML = list;
+  if (focusedId) host.querySelector(`[data-inbox-select="${CSS.escape(focusedId)}"]`)?.focus({preventScroll:true});
+  const task = state.inboxReceipt || tasks.find(item => item.id === state.inboxSelection);
+  const key = JSON.stringify([task,state.inboxDetails?.[task?.id]]), target = $('#inbox-preview-content');
+  if (task && target.dataset.key !== key) { target.dataset.key = key; void renderInboxPreview(task); }
+  else if (!task) { ++inboxPreviewRequest; target.innerHTML = ''; }
+}
+async function renderInboxPreview(task) {
+  const request = ++inboxPreviewRequest, target = $('#inbox-preview-content');
+  const valid = () => request === inboxPreviewRequest && target.isConnected && state.currentView === 'inbox';
+  try {
+    const cached = state.inboxDetails?.[task.id];
+    if (cached?.error) throw new Error(cached.error);
+    const workspace = cached || (task.runs?.[0] ? await api(`/api/runs/${encodeURIComponent(task.runs[0].id)}/workspace?view=compact`) : {});
+    if (!valid()) return;
+    const {run,question,agent,error} = inboxFacts(task,workspace), answered = Boolean(task.inboxAnsweredAt);
+    let body = '', answerMarkup = '', collaboration, headline = task.title;
+    if (run && question && !answered) {
+      collaboration = await api(`/api/runs/${encodeURIComponent(run.id)}/collaboration?limit=100`);
+      if (!valid()) return;
+    }
+    if (task.status === 'awaiting_human' && question && !answered) {
+      const trace = workspace.traces?.find(item => item.id === question.traceId);
+      const dispatch = workspace.dispatches?.find(item => item.waitingMessageId === question.id);
+      const contextId = question.startMessageId || trace?.inputMessageId || dispatch?.sourceMessageId;
+      const context = collaboration?.items?.find(item => item.id === contextId);
+      const name = agent?.name || '任务成员', draftKey = `${run.id}:${question.id}`;
+      headline = `${name} 需要你的澄清`;
+      const workflowNode = run.task?.workflowSnapshot?.nodes?.find(item => item.id === question.workflowNodeId);
+      const node = workflowNode?.title || workflowNode?.name || question.workflowNodeId || '';
+      body = `<div class="inbox-breadcrumb"><span>${esc(task.title)}</span><span>${esc(node)}</span><time title="${esc(exactTime(question.createdAt))}">${timeAgo(question.createdAt)}</time></div><blockquote class="inbox-context"><strong>上下文${context?.from ? ` · ${esc(context.from)} 的交接` : ''}</strong><p>${esc(context?.content || '当前分页中没有该问题的原始上文，请打开任务工作区查看完整记录。')}</p></blockquote><div class="inbox-question"><span class="agent-card-avatar ${esc(roleColor(agent))}" aria-hidden="true">${esc(initialsOf(agent))}</span><div><strong>${esc(name)}</strong><span class="field-hint"> 向你提问</span><p>${esc(question.content)}</p></div></div>`;
+      answerMarkup = `<form class="inbox-answer" data-inbox-answer data-run-id="${esc(run.id)}" data-question-id="${esc(question.id)}" data-task-id="${esc(task.id)}"><label class="sr-only" for="inbox-answer-text">回答 ${esc(name)} 的问题</label><textarea id="inbox-answer-text" name="content" rows="3" required placeholder="输入回答，发送后 ${esc(name.split(' · ')[0])} 会继续执行">${esc(inboxDrafts.get(draftKey) || '')}</textarea><div class="inbox-answer-actions"><span class="field-hint">Enter 发送 · Shift + Enter 换行</span><button type="submit" class="small-button" value="stay">发送回答</button><button type="submit" class="primary-button" value="next">发送并处理下一项</button></div><p role="alert" data-inbox-answer-error hidden></p></form>`;
+    } else if (task.status === 'awaiting_acceptance') {
+      const acceptance = acceptanceReview(workspace);
+      let files = '', fileError = '';
+      if (run?.artifactCount) {
+        try { const artifacts = await api(`/api/runs/${encodeURIComponent(run.id)}/artifacts?limit=20`); files = (artifacts.items || []).filter(item=>item.name).map(item=>`<button class="inbox-file-chip" data-inbox-artifact="${esc(item.id)}" data-run-id="${esc(run.id)}" title="查看已保存的交付快照"><span class="file-kind">${esc((item.name.split('.').at(-1) || 'FILE').slice(0,4).toUpperCase())}</span>${esc(item.name)}</button>`).join(''); if(artifacts.hasMore)files += `<button class="text-action" data-open-run="${esc(run.id)}">在任务工作区查看其余记录</button>`; }
+        catch(error) { fileError = `<p role="alert">交付文件读取失败：${esc(error.message)}</p>`; }
+      }
+      body = `<div class="inbox-summary"><strong>经理总结</strong><p>${esc(run?.acceptanceRequest?.summary || '请核对交付文件与原任务要求。')}</p></div><h3>${run?.artifactCount ?? 0} 项交付文件</h3><div class="inbox-files">${files}${fileError}</div><details class="inbox-criteria"><summary>验收标准</summary>${acceptanceCriteriaMarkup(acceptance || {criteria:[]})}</details>${run ? `<div class="inbox-review-actions">${acceptance?.verified ? `<button class="primary-button" data-inbox-confirm="${esc(run.id)}">确认完成</button>` : ''}<button class="ghost-button" data-open-run="${esc(run.id)}">继续咨询</button></div>` : ''}`;
+    } else if (task.status === 'failed') {
+      body = `<h3>执行中断</h3><pre class="inbox-error">${esc(error || '没有记录错误原文，请查看任务控制台。')}</pre>${run ? `<button class="primary-button" data-open-run="${esc(run.id)}">查看恢复选项</button>` : ''}`;
+    } else if (['paused','blocked'].includes(task.status)) {
+      const timeline = run ? await api(`/api/runs/${encodeURIComponent(run.id)}/timeline`) : {};
+      const reason = timeline.events?.filter(item => ['run.paused','run.blocked'].includes(item.type)).at(-1)?.data?.reason;
+      body = `<h3>${task.status === 'paused' ? '暂停原因' : '等待恢复'}</h3><p>${esc(reason || inboxFacts(task,workspace).reason || '请查看任务中的暂停或阻塞记录。')}</p>${run ? `<button class="primary-button" data-open-run="${esc(run.id)}">查看并继续</button>` : ''}`;
+    } else body = `<h3>${answered ? '你已回答' : '你确认了完成'}</h3><p>${esc(task.inboxAnswer || task.objective || '')}</p>`;
+    if (!valid()) return;
+    const activeDraft = target.querySelector('#inbox-answer-text');
+    if (task.status === 'awaiting_human' && !answered && activeDraft && target.querySelector('[data-question-id]')?.dataset.questionId === question?.id) return;
+    target.innerHTML = `<div class="inbox-preview-reading">${pill(answered ? 'done' : task.status)}<h2>${esc(headline)}</h2>${body}</div>${answerMarkup}<footer class="inbox-preview-footer">${run ? `<button class="small-button" data-open-run="${esc(run.id)}">打开任务工作区</button>` : '<button class="small-button" data-goto="tasks">前往任务中心</button>'}</footer>`;
+    const form = target.querySelector('[data-inbox-answer]');
+    if (form) {
+      const input = form.querySelector('textarea'), key = `${run.id}:${question.id}`;
+      input.oninput = () => inboxDrafts.set(key,input.value);
+      input.onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); form.requestSubmit(form.querySelector('[value=next]')); } };
+      form.onsubmit = sendInboxAnswer;
+    }
+  } catch (error) { if (valid()) { delete target.dataset.key; target.innerHTML = `<p role="alert">${esc(error.message)}</p><button class="small-button" data-inbox-retry>重试</button>`; } }
+}
+async function sendInboxAnswer(event) {
+  event.preventDefault();
+  const form = event.currentTarget, input = form.querySelector('textarea'), content = input.value.trim();
+  if (!content || form.dataset.sending) return;
+  const {runId,questionId,taskId} = form.dataset, task = inboxTasks().find(item => item.id === taskId);
+  const pending = inboxTasks(), index = pending.findIndex(item => item.id === taskId);
+  const nextId = [...pending.slice(index+1),...pending.slice(0,index)].find(item => item.status === 'awaiting_human')?.id;
+  form.dataset.sending = 'true'; input.readOnly = true; form.querySelectorAll('button').forEach(button => button.disabled = true);
+  const errorBox = form.querySelector('[data-inbox-answer-error]'); errorBox.hidden = true;
+  try {
+    await api(`/api/runs/${encodeURIComponent(runId)}/messages`, {method:'POST',body:JSON.stringify({recipientAgentId:null,replyToMessageId:questionId,content,attachmentIds:[]})});
+    inboxDrafts.delete(`${runId}:${questionId}`);
+    if (task) inboxAnswered.set(taskId,{...task,inboxAnsweredAt:new Date().toISOString(),inboxAnswer:content});
+    toast('回答已发送');
+    if (state.currentView !== 'inbox' || state.inboxSelection !== taskId || state.inboxView === 'recent') return;
+    // Stay shows a sent receipt even after the task leaves the pending query.
+    const stay = event.submitter?.value === 'stay';
+    if (stay) state.inboxReceipt = inboxAnswered.get(taskId);
+    await refreshInbox();
+    if (state.currentView !== 'inbox') return;
+    if (!stay && state.inboxSelection === taskId && nextId && inboxTasks().some(item => item.id === nextId)) state.inboxSelection = nextId;
+    renderInbox();
+  } catch (error) { if (form.isConnected) { errorBox.textContent = error.message; errorBox.hidden = false; } }
+  finally { delete form.dataset.sending; input.readOnly = false; form.querySelectorAll('button').forEach(button => button.disabled = false); }
 }
 
 /* ---------- 总览 ---------- */
@@ -463,29 +778,61 @@ function renderOverview() {
 }
 
 /* ---------- 任务中心 ---------- */
-function taskMatchesSearch(task, { name = "", status = "all", workflow = "all" } = {}) {
-  return String(task.title || "").toLocaleLowerCase().includes(name.trim().toLocaleLowerCase())
-    && (status === "all" || task.status === status)
-    && (workflow === "all" || task.workflowTemplateId === workflow);
+function taskMatchesChip(status, chip) {
+  if (chip === 'attention') return taskNeedsAttention(status);
+  if (chip === 'active') return ['planning', 'running', 'review'].includes(status);
+  if (chip === 'done') return ['done', 'completed'].includes(status);
+  return chip === 'all' || status === chip;
+}
+
+function taskGroupOrder(status) {
+  if (status === 'paused') return 2;
+  if (taskNeedsAttention(status)) return 0;
+  if (['planning','running','review'].includes(status)) return 1;
+  return status === 'backlog' ? 3 : 4;
+}
+
+function taskRowStatus(task, run) {
+  const labels = { awaiting_human:'等待你的澄清', awaiting_acceptance:'待你验收', failed:'错误中断', blocked:'错误中断', backlog:'尚未开始', done:'你已确认完成', completed:'你已确认完成' };
+  const label = labels[task.status] || statusText[task.status] || task.status;
+  // Directory Run summaries may contain only IDs/status. Never invent details.
+  const detail = task.status === 'awaiting_acceptance' && Number.isInteger(run?.artifactCount) ? `${run.artifactCount} 个文件`
+    : ['failed', 'blocked'].includes(task.status) ? run?.failure?.message : '';
+  return `<span>${esc(label)}</span>${detail ? `<span class="task-step-detail"> · ${esc(detail)}</span>` : ''}`;
 }
 
 function renderTasks() {
-  const activeTasks = state.tasks.filter((task) => !task.archivedAt);
-  const archivedTasks = state.tasks.filter((task) => task.archivedAt);
+  closeFloatingLists($("#tasks-table"));
   const archiveView = state.taskArchiveView;
+  const pageKey = archiveView ? "archive" : "tasks", loading = state.directoryStatus?.[pageKey];
+  const directoryReady = Boolean(state.directoryPages?.[pageKey]);
+  const candidates = state.taskCandidates || state.tasks.filter(task => !task.archivedAt);
   $("#tasks-heading").innerHTML = archiveView
-    ? `<h2>归档历史</h2>` : `<h2>任务中心</h2>`;
-  // Keep the form mounted so live refreshes preserve unsubmitted input and focus.
+    ? `<div><h2>归档历史</h2><p>归档的任务保留完整记录，可以恢复到任务中心或删除。</p></div>`
+    : `<div><h2>任务<span class="tb-count">${candidates.length}</span></h2><p>创建任务、跟进协作与交接，并在这里确认交付。需要你处理的事项始终排在最前。</p></div>`;
+  // Keep the form mounted so live refreshes preserve input, selection and focus.
   const mountSearch = !$("#task-search-form");
   if (mountSearch) {
     const search = state.taskSearch || {};
     $("#task-filter-bar").innerHTML = `<form id="task-search-form" class="task-search-form" role="search" aria-label="搜索任务">
-      <label class="task-search-name"><span class="sr-only">任务名称</span><input type="search" name="name" placeholder="任务名称" value="${esc(search.name || "")}" /></label>
-      <label><span class="sr-only">任务状态</span><select name="status"><option value="all">全部状态</option>${["backlog", "planning", "running", "awaiting_human", "review", "awaiting_acceptance", "paused", "blocked", "failed", "done", "cancelled"].map((id) => `<option value="${id}" ${search.status === id ? "selected" : ""}>${statusText[id]}</option>`).join("")}</select></label>
-      <label class="task-search-workflow"><span class="sr-only">工作流</span><select name="workflow"><option value="all">全部工作流</option></select></label>
-      <button type="submit" class="primary-button">搜索</button><button type="reset" class="ghost-button">重置</button>
-      <span class="task-directory-actions"></span>
+      <div class="task-chips" role="group" aria-label="任务快捷视图"></div>
+      <label class="task-search-name"><span class="sr-only">任务名称</span><input type="search" name="name" placeholder="筛选任务名称" value="${esc(search.name || "")}" /><kbd aria-hidden="true">/</kbd></label>
+      <div class="task-filter-control"><button type="button" class="ghost-button" data-task-filters aria-expanded="false" aria-controls="task-filter-panel"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>筛选</button>
+        <div id="task-filter-panel" class="task-filter-panel" hidden>
+          <label>任务状态<select name="status"><option value="all">全部状态</option>${["backlog", "planning", "running", "awaiting_human", "review", "awaiting_acceptance", "paused", "blocked", "failed", "done", "cancelled"].map(id => `<option value="${id}" ${search.status === id ? 'selected' : ''}>${statusText[id]}</option>`).join('')}</select></label>
+          <label>工作流<select name="workflow"><option value="all">全部工作流</option></select></label>
+        </div>
+      </div>
     </form>`;
+  }
+  const chips = [['all','全部'], ['attention','待我处理'], ['active','进行中'], ['backlog','草稿'], ['done','已完成']];
+  const chipMarkup = chips.map(([id,label]) => `<button type="button" class="task-chip" data-task-chip="${id}" aria-pressed="${!archiveView && (state.taskChip || 'all') === id}">${label} <span class="task-chip-count">${!directoryReady && loading ? '—' : candidates.filter(task => taskMatchesChip(task.status,id)).length}</span></button>`).join('')
+    + `<button type="button" class="task-chip" data-task-center-page="${archiveView ? 'current' : 'archive'}" aria-pressed="${Boolean(archiveView)}">${archiveView ? '返回任务' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v10h14V9M10 13h4"/></svg> 归档'}</button>`;
+  const chipHost = $('#task-search-form .task-chips');
+  if (chipHost.innerHTML !== chipMarkup) {
+    const focusedChip = $('#task-search-form .task-chip:focus')?.dataset.taskChip;
+    chipHost.innerHTML = chipMarkup;
+    if (focusedChip) $(`[data-task-chip="${focusedChip}"]`)?.focus();
   }
   const workflowSelect = $("#task-search-form select[name=workflow]");
   const workflowNames = new Map([...(state.catalogReferences?.workflowTemplates||state.workflowTemplates),...(state.catalogReferences?.taskWorkflows||[])].map(item => [item.id, item.name]));
@@ -498,19 +845,53 @@ function renderTasks() {
     workflowSelect.innerHTML = workflowOptions;
     workflowSelect.value = workflowNames.has(selection) ? selection : "all";
   }
-  const actionMarkup = archiveView
-    ? `<button type="button" class="ghost-button" data-task-center-page="current">返回任务中心</button>`
-    : `<button type="button" class="ghost-button" data-task-center-page="archive">归档历史</button><button type="button" class="primary-button" data-action="new-task">＋ 新建任务</button>`;
-  const actionHost = $("#task-search-form .task-directory-actions");
-  if (actionHost.innerHTML !== actionMarkup) actionHost.innerHTML = actionMarkup;
-  const rows = (archiveView ? archivedTasks : activeTasks).filter((task) => taskMatchesSearch(task, state.taskSearch)).sort((left, right) => archiveView ? new Date(right.archivedAt) - new Date(left.archivedAt) : new Date(right.updatedAt) - new Date(left.updatedAt));
-  if (!(state.directoryPages?.[archiveView?"archive":"tasks"]?.items.length)) {
-    $("#tasks-table").innerHTML = `<div class="directory-empty" role="status"><strong>没有匹配的任务</strong>请调整搜索条件，或点击重置查看全部${archiveView ? "归档" : ""}任务。</div>`;
+  const actionMarkup = `<div class="task-layout-switch" role="group" aria-label="任务布局"><button type="button" class="small-button" data-task-layout="list" aria-label="列表" title="列表" aria-pressed="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></button><button type="button" class="small-button" data-task-layout="board" aria-label="看板" title="看板" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="12" rx="1"/></svg></button></div><button type="button" class="primary-button" data-action="new-task"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>新建任务</button>`;
+  const actionHost = $('#task-header-actions');
+  if (!actionHost.innerHTML) actionHost.innerHTML = actionMarkup;
+  const page = state.directoryPages?.[pageKey] || paginate([],1);
+  if(!directoryReady && loading) {
+    setTitleCount('tasks',NaN);
+    $('#tasks-table').innerHTML=loading.error ? `<div class="directory-empty" role="alert"><strong>任务读取失败</strong>${esc(loading.error)}<button class="small-button" data-retry-directory>重试</button></div>` : '<div class="directory-empty is-loading" role="status" aria-busy="true"><strong>正在读取任务</strong>任务状态与列表正在加载。</div>';
     return;
   }
-  const pageKey = archiveView ? "archive" : "tasks";
-  const page = state.directoryPages?.[pageKey] || paginate([],1);
   state.listPages[pageKey] = page.page;
+  setTitleCount('tasks', archiveView ? page.total : candidates.length);
+ const layout = state.taskLayout || 'list';
+ $$('.task-layout-switch button').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.taskLayout===layout)));
+ if (!page.items.length) {
+   $('#tasks-table').innerHTML = `<div class="directory-empty" role="status"><strong>没有匹配的任务</strong>请调整筛选条件，或清空任务名称查看${archiveView ? '归档' : '全部'}任务。</div>`;
+   return;
+ }
+ if(!archiveView && layout==='board') {
+   const groups=[['草稿','backlog',task=>task.status==='backlog'],['进行中','running',task=>['planning','running','review','paused'].includes(task.status)],['待我处理','awaiting_human',task=>task.status!=='paused'&&taskNeedsAttention(task.status)],['已完成','done',task=>['done','completed','cancelled'].includes(task.status)]];
+   $('#tasks-table').innerHTML=`<div class="task-board">${groups.map(([label,status,match])=>`<section><h3>${inboxStatusIcon(status)}${label} <small>${page.items.filter(match).length}</small></h3>${page.items.filter(match).map(task=>{
+     const members = (task.memberAgentIds || []).slice(0,4).map(id => task.memberSnapshots?.find(agent => agent.id === id) || (state.catalogReferences?.agents || state.agents || []).find(agent => agent.id === id)).filter(Boolean);
+     return `<article class="board-task" data-board-task="${esc(task.id)}"><span class="task-workflow">${esc(task.workflowSnapshot?.name || '默认协作')}</span><h4><button class="text-action" ${task.status==='backlog'?`data-edit-task="${esc(task.id)}"`:`data-open-task="${esc(task.id)}"`}>${esc(task.title)}</button></h4><div class="board-task-footer">${['backlog','done','completed'].includes(task.status) ? `<span class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</span>` : `<span class="board-task-status" data-status-tone="${statusTone(task.status)}">${inboxStatusIcon(task.status)}${esc(statusText[task.status] || task.status)}</span>`}<time title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time></div></article>`;
+   }).join('') || '<p class="field-hint">本页暂无任务</p>'}</section>`).join('')}</div>${paginationMarkup(page,pageKey)}`;
+   return;
+ }
+ if (!archiveView) {
+   const groups = [
+     ['attention','待我处理','awaiting_human',task => task.status !== 'paused' && taskNeedsAttention(task.status)],
+     ['active','进行中','running',task => ['planning','running','review'].includes(task.status)],
+     ['paused','已暂停','paused',task => task.status === 'paused'],
+     ['backlog','草稿','backlog',task => task.status === 'backlog'],
+     ['done','已完成','done',task => ['done','completed','cancelled'].includes(task.status)],
+   ];
+   $('#tasks-table').innerHTML = `<div class="task-list">${groups.map(([id,label,status,match]) => {
+     const tasks = page.items.filter(match);
+     if (!tasks.length) return '';
+     return `<section class="task-list-group" aria-label="${label}" data-task-group="${id}"><h3 class="task-group-heading"><span class="task-state-icon" data-status-tone="${statusTone(status)}" aria-hidden="true">${statusShape(status)}</span>${label}<span class="task-group-count">${tasks.length}</span>${id === 'attention' ? '<span class="task-group-hint">回答澄清、验收交付或处理中断</span>' : ''}</h3>${tasks.map(task => {
+       const run = runOfTask(task.id), editable = task.status === 'backlog' && !run;
+       const title = `<button class="task-title-link" ${editable ? `data-edit-task="${esc(task.id)}"` : `data-open-task="${esc(task.id)}"`} title="${esc(task.title)}">${esc(task.title)}</button>`;
+       const menu = `${editable ? `<button class="small-button" data-edit-task="${esc(task.id)}">编辑</button>` : ''}${task.status === 'done' ? `<button class="small-button" data-archive-task="${esc(task.id)}">归档</button>` : ''}${task.deletionBlockedBy === null ? `<button class="small-button danger" data-delete-task="${esc(task.id)}">删除任务</button>` : ''}`;
+       const next = task.status === 'backlog' ? `<button class="small-button on-hover" data-run-task="${esc(task.id)}">启动</button>` : task.status === 'done' ? `<button class="small-button on-hover" data-archive-task="${esc(task.id)}">归档</button>` : run ? `<button class="small-button ${taskNeedsAttention(task.status) && task.status !== 'paused' ? '' : 'on-hover'}" data-open-task="${esc(task.id)}">${taskActionLabel(task.status)}</button>` : '';
+       const members = (task.memberAgentIds || []).slice(0,5).map(id => task.memberSnapshots?.find(agent => agent.id === id) || (state.catalogReferences?.agents || state.agents || []).find(agent => agent.id === id)).filter(Boolean);
+       return `<article class="task-row" data-task-id="${esc(task.id)}"><span class="task-state-icon" data-status-tone="${statusTone(task.status)}" title="${esc(statusText[task.status] || task.status)}" aria-hidden="true">${statusShape(task.status)}</span><div class="task-row-title">${title}<span class="task-workflow">${esc(task.workflowSnapshot?.name || task.workflowTemplateId || '—')}</span></div><div class="task-row-step" data-status-tone="${statusTone(task.status)}">${taskRowStatus(task,run)}</div><div class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</div><time class="task-row-time" title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time><div class="task-row-actions" data-status-tone="${statusTone(task.status)}">${next}${task.deletionBlockedBy === 'active_inquiries' ? '<span class="task-deletion-notice" title="请等待当前答疑完成后重试删除。">答疑进行中</span>' : ''}${actionMenu(menu,'任务更多操作')}</div></article>`;
+     }).join('')}</section>`;
+   }).join('')}</div>${paginationMarkup(page,pageKey)}`;
+   return;
+ }
  $("#tasks-table").innerHTML = `<table class="table task-inventory"><colgroup><col class="col-task" /><col class="col-workflow" /><col class="col-status" /><col class="col-updated" /><col class="col-actions" /></colgroup><thead><tr>
       <th>任务名称</th><th>工作流</th><th>状态</th><th>${archiveView ? "归档时间" : "更新"}</th><th style="text-align:right">操作</th>
     </tr></thead><tbody>
@@ -526,12 +907,13 @@ function renderTasks() {
       const secondary = archiveView
         ? `<button class="small-button" data-unarchive-task="${task.id}">恢复任务</button>${deleteAction}`
         : `${task.status === "done" ? `<button class="small-button" data-archive-task="${task.id}">归档</button>` : ""}${deleteAction}`;
-      const action = `${editAction}${openAction}${deletionNotice}${secondary}`;
+      const nextAction = openAction || (run ? `<button class="small-button" data-open-task="${task.id}">${taskActionLabel(task.status)}</button>` : '');
+      const action = `${nextAction}${deletionNotice}${actionMenu(`${editAction}${secondary}`, '任务更多操作')}`;
       return `<tr>
         <td>${run ? `<button class="table-title task-title-link" data-open-task="${task.id}" title="${esc(task.title)}">${esc(task.title)}</button>` : editable ? `<button class="table-title task-title-link" data-edit-task="${task.id}" title="${esc(task.title)}">${esc(task.title)}</button>` : `<span class="table-title">${esc(task.title)}</span>`}</td>
         <td class="task-workflow">${esc(task.workflowSnapshot?.name || task.workflowTemplateId || "—")}</td>
         <td>${pill(task.status)}</td>
-        <td style="white-space:nowrap" title="${esc(archiveView ? exactTime(task.archivedAt) : exactTime(task.updatedAt))}">${archiveView ? exactTime(task.archivedAt) : timeAgo(task.updatedAt)}</td>
+        <td class="task-updated" title="${esc(archiveView ? exactTime(task.archivedAt) : exactTime(task.updatedAt))}">${archiveView ? exactTime(task.archivedAt) : timeAgo(task.updatedAt)}</td>
         <td><div class="table-actions">${action}</div></td>
       </tr>`;
     }).join("")}</tbody></table>${paginationMarkup(page, pageKey)}`;
@@ -548,17 +930,19 @@ function renderListPager(key, page) {
 
 /* ---------- 团队 ---------- */
 function renderTeams() {
+  closeFloatingLists($("#teams-grid"));
   const query = ($("#teams-search")?.value || "").trim().toLocaleLowerCase();
   const rows = state.teams.filter(team => `${team.name} ${team.mission || ""}`.toLocaleLowerCase().includes(query));
   const page = state.directoryPages?.teams || paginate([],1); state.listPages.teams = page.page;
+  setTitleCount('teams', page.total);
   $("#teams-grid").innerHTML = page.items.map((team) => `
-    <div class="team-card">
-      <div class="team-card-header"><h3>${esc(team.name)}</h3><div class="directory-card-actions"><button class="small-button primary" data-chat-team="${team.id}">群聊</button><button class="small-button" data-edit-team="${team.id}">编辑</button><button class="small-button danger" data-delete-team="${team.id}">删除</button></div></div>
-      <p>${esc(team.mission || "（未填写使命）")}</p>
-      <div class="team-member-stack">${team.members.map((agent) => `<span class="stack-avatar ${roleColor(agent)}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join("")}</div>
-      <div class="team-roles">${team.members.map((agent) => `<span class="capability">${esc(agent.name)}</span>`).join("")}</div>
-      <div class="team-footer"><span>${team.members.length} 名数字员工</span>${pill(team.status)}</div>
-    </div>`).join("") || (query ? `<div class="directory-empty" role="status"><strong>没有匹配的团队</strong>请调整搜索条件。</div>` : `<div class="directory-empty" role="status"><strong>还没有团队</strong>点击右上角「创建团队」添加。</div>`);
+    <article class="team-directory-row">
+      <span class="agent-card-avatar ${roleColor({ color: extensionAvatarColor(team.name) })}" aria-hidden="true">${esc(Array.from(team.name)[0] || '')}</span>
+      <div class="team-row-copy"><h3><button type="button" class="team-row-open" title="${esc(team.name)}" data-edit-team="${esc(team.id)}" aria-label="编辑团队 ${esc(team.name)}">${esc(team.name)}</button></h3><p title="${esc(team.mission || '')}">${esc(team.mission || "（未填写使命）")}</p></div>
+      <div class="team-row-members"><div class="team-member-stack" aria-hidden="true">${team.members.slice(0, 5).map((agent) => `<span class="stack-avatar ${roleColor(agent)}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join("")}${team.members.length > 5 ? `<span class="stack-avatar team-member-overflow">+${team.members.length - 5}</span>` : ''}</div><p title="${esc(team.members.map(agent => agent.name).join(', '))}">${esc(team.members.map(agent => agent.name).join(', ') || '暂无成员')}</p></div>
+      <span class="team-row-status" data-status="${team.status === 'active' ? 'active' : 'disabled'}">${team.status === 'active' ? '启用' : '停用'}</span>
+      <div class="team-row-actions"><button class="small-button" data-chat-team="${esc(team.id)}">群聊</button>${actionMenu(`<button class="small-button" data-edit-team="${esc(team.id)}">编辑团队</button><button class="small-button" data-new-team-task="${esc(team.id)}"${team.status==='active'?'':' disabled title="请先启用团队"'}>用此团队新建任务</button><button class="small-button danger" data-delete-team="${esc(team.id)}">删除团队</button>`, '团队更多操作')}</div>
+    </article>`).join("") || (query ? `<div class="directory-empty" role="status"><strong>没有匹配的团队</strong>请调整搜索条件。</div>` : `<div class="directory-empty" role="status"><strong>还没有团队</strong>点击右上角「创建团队」添加。</div>`);
   renderListPager("teams", page);
 }
 
@@ -566,15 +950,24 @@ function renderTeams() {
 function renderWorkflows() {
   disposeWorkflowGraphs("templates");
   const host = $("#workflows-grid");
+  closeFloatingLists(host);
   const query = ($("#workflows-search")?.value || "").trim().toLocaleLowerCase();
   const page = state.directoryPages?.workflows || paginate([],1); state.listPages.workflows = page.page;
+  setTitleCount('workflows', page.total);
   host.innerHTML = page.items.map((template) => {
     const referenceCount = template.referenceCount || 0;
+    const connections = workflowConnections(template);
+    const conditionCount = template.nodes.filter(node => node.type === 'condition').length;
+    const usage = `${template.nodes.length} 个节点${conditionCount ? ` · ${conditionCount} 个条件` : ''}${referenceCount ? ` · 被 ${referenceCount} 个任务使用` : ' · 未被使用'}`;
+    const updatedAt = template.updatedAt || template.createdAt;
+    const updated = updatedAt ? new Date(updatedAt).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }) + '更新' : '未记录更新时间';
     const deleteAction = !referenceCount ? `<button class="small-button danger" data-delete-workflow="${esc(template.id)}">删除</button>` : "";
     return `
-    <article class="workflow-list-row">
-      <div class="workflow-list-brief"><div><button class="workflow-title-button" data-workflow-details="${esc(template.id)}">${esc(template.name)}</button></div><p>${esc(template.description || "尚未填写说明")}</p><small>${template.nodes.length} 个节点 · ${workflowConnections(template).length} 条连线${referenceCount ? ` · 已被 ${referenceCount} 个任务引用` : ""}</small></div>
-      <div class="workflow-actions"><button class="small-button" data-workflow-details="${esc(template.id)}">查看详情</button><button class="small-button" data-edit-workflow="${esc(template.id)}">编辑</button>${deleteAction}</div>
+    <article class="workflow-directory-card">
+      <header><h3><button class="workflow-title-button" title="${esc(template.name)}" data-edit-workflow="${esc(template.id)}" aria-label="编辑工作流：${esc(template.name)}">${esc(template.name)}</button></h3>${template.system ? '<span class="workflow-builtin">内置</span>' : ''}${actionMenu(`<button class="small-button" data-workflow-details="${esc(template.id)}">查看详情</button><button class="small-button" data-edit-workflow="${esc(template.id)}">编辑</button>${deleteAction}`, '工作流更多操作')}</header>
+      <p class="workflow-card-description">${esc(template.description || "尚未填写说明")}</p>
+      <div class="flow-mini" aria-label="节点预览；完整分支请查看详情">${template.nodes.map((node, index) => `${index ? `<span class="flow-mini-link" data-connected="${connections.some(edge => edge.source === template.nodes[index - 1].id && edge.target === node.id)}" aria-hidden="true"></span>` : ''}<span class="flow-mini-node" data-type="${node.type === 'condition' ? 'condition' : 'process'}" title="${esc(node.title)}">${node.type === 'condition' ? '<span aria-hidden="true">◇ </span>' : ''}${esc(node.title)}</span>`).join('')}</div>
+      <footer><span class="workflow-card-usage" aria-label="${esc(usage)}"><span>${template.nodes.length} 个节点${conditionCount ? ` · ${conditionCount} 个条件` : ''}</span><span>${referenceCount ? `被 ${referenceCount} 个任务使用` : '未被使用'}</span></span><time${updatedAt ? ` datetime="${esc(updatedAt)}" title="${esc(exactTime(updatedAt))}"` : ''}>${esc(updated)}</time></footer>
    </article>`;
   }).join("") || (query ? `<div class="directory-empty" role="status"><strong>没有匹配的工作流</strong>请调整搜索条件。</div>` : `<div class="directory-empty" role="status"><strong>还没有工作流</strong>创建一个工作流，再把它用于新任务。</div>`);
   renderListPager("workflows", page);
@@ -609,25 +1002,42 @@ function workflowDetails(template, { frozen = false } = {}) {
 
 /* ---------- 数字员工 ---------- */
 function renderAgents() {
+  closeFloatingLists($("#agents-grid"));
+  const header=$('#agents-header-actions');
+  if(header && !header.querySelector('.employee-layout-switch'))header.insertAdjacentHTML('afterbegin','<div class="employee-layout-switch" role="group" aria-label="员工展示方式"><button type="button" class="small-button" data-employee-layout="grid" aria-label="卡片视图" title="卡片视图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button><button type="button" class="small-button" data-employee-layout="list" aria-label="列表视图" title="列表视图"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M8 5h13M8 12h13M8 19h13M3 5h1m-1 7h1m-1 7h1"/></svg></button></div>');
+  header?.querySelectorAll('[data-employee-layout]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.employeeLayout===(state.employeeLayout || 'grid'))));
+  $('#agents-grid').classList.toggle('employee-list-layout',state.employeeLayout==='list');
+  const toolbar=$('#agents-view .directory-toolbar');
+  if(toolbar && !toolbar.querySelector('.employee-directory-summary'))toolbar.insertAdjacentHTML('beforeend','<span class="employee-directory-summary"></span>');
+  if(toolbar){const employees=state.catalogReferences?.agents;toolbar.querySelector('.employee-directory-summary').textContent=employees?`${employees.filter(agent=>agent.status==='active').length} 位可用 · ${employees.filter(agent=>agent.status==='inactive').length} 位已停用`:'';}
   const query = ($("#agents-search").value || "").trim().toLowerCase();
   const roleSelect = $("#agents-role-filter"), selectedRole = roleSelect.value;
   roleSelect.innerHTML = '<option value="">全部角色</option>' + state.roles.map(role=>`<option value="${esc(role.id)}">${esc(role.name)}</option>`).join('');
   roleSelect.value = state.roles.some(role=>role.id===selectedRole) ? selectedRole : '';
   const filtered = state.agents.filter(agent => (!roleSelect.value || agent.roleIds?.includes(roleSelect.value)) && `${agent.name} ${agent.description || ""} ${(agent.capabilities || []).join(" ")}`.toLowerCase().includes(query));
   const page = state.directoryPages?.agents || paginate([],1); state.listPages.agents = page.page;
-  $("#agents-grid").innerHTML = page.items.map((agent) => `
-    <div class="agent-card employee-card">
+  setTitleCount('agents', page.total);
+  const cardIcon = paths => `<svg class="employee-card-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
+  const listHead = state.employeeLayout === 'list' ? `<div class="employee-list-head" aria-hidden="true"><span></span><span>姓名</span><span>角色</span><span>运行时</span><span>状态</span><span>操作</span></div>` : '';
+  $("#agents-grid").innerHTML = listHead + page.items.map((agent) => {
+    const roles = (agent.roleIds || []).map(id => state.roles.find(role => role.id === id)?.name || "（角色不存在）").join("、");
+    const runtime = `${providerLabel(agent)}${agent.runtime?.model ? " · " + agent.runtime.model : ""}${agent.runtime?.profile ? " · profile: " + agent.runtime.profile : ""}`;
+    const pluginCount = new Set([...(agent.runtime?.extensionSelection?.pluginIds || []), ...(agent.inheritedExtensionSelection?.pluginIds || [])]).size;
+    const mcpCount = new Set([...(agent.runtime?.extensionSelection?.mcpIds || []), ...(agent.inheritedExtensionSelection?.mcpIds || [])]).size;
+    return `
+    <div class="agent-card employee-card${agent.status === 'active' ? '' : ' is-disabled'}">
       <div class="agent-card-top">
         <div class="agent-card-avatar ${roleColor(agent)}">${esc(initialsOf(agent))}</div>
-        <div class="agent-card-identity"><h3>${esc(agent.name)}</h3></div>
-        <div class="employee-card-badges"><span class="agent-status" data-status="${esc(agent.status)}">● ${agent.status === "active" ? "可用" : "已停用"}</span></div>
+        <div class="agent-card-identity"><h3><button class="text-action" data-agent-detail="${agent.id}" title="${esc(agent.name)}">${esc(agent.name)}</button></h3><div class="role" title="${esc(roles || '未绑定角色')}">${roles ? `角色：${esc(roles)}` : '未绑定角色'}</div></div>
+        <div class="employee-card-badges">${agent.status === "active" ? "" : `<span class="agent-status" data-status="inactive">已停用</span>`}</div>
       </div>
-      <p>${esc(agent.description || "（未填写简介）")}</p>
-      <div class="capabilities">${(agent.capabilities || []).map((capability) => `<span class="capability">${esc(capability)}</span>`).join("")}</div>
-      <div class="agent-runtime employee-runtime-summary"><span>${providerLabel(agent)}${agent.runtime?.model ? " · " + esc(agent.runtime.model) : ""}${agent.runtime?.profile ? " · profile: " + esc(agent.runtime.profile) : ""}</span><span>插件 ${new Set([...(agent.runtime?.extensionSelection?.pluginIds || []),...(agent.inheritedExtensionSelection?.pluginIds || [])]).size} · MCP ${new Set([...(agent.runtime?.extensionSelection?.mcpIds || []),...(agent.inheritedExtensionSelection?.mcpIds || [])]).size}</span></div>
-      ${agent.roleIds?.length ? `<div class="agent-runtime"><span>角色：${agent.roleIds.map(id=>esc(state.roles.find(role=>role.id===id)?.name || "（角色不存在）")).join("、")}</span></div>` : ""}
-      <div class="directory-card-actions"><button class="small-button primary" data-chat-agent="${agent.id}">对话</button><button class="small-button" data-edit-agent="${agent.id}">编辑</button><button class="small-button danger" data-delete-agent="${agent.id}">删除</button></div>
-    </div>`).join("") || (query || roleSelect.value ? `<div class="directory-empty" role="status"><strong>没有匹配的数字员工</strong>请调整搜索条件。</div>` : `<div class="directory-empty" role="status"><strong>还没有数字员工</strong>点击右上角「创建数字员工」添加。</div>`);
+      <p title="${esc([agent.description, ...(agent.capabilities || [])].filter(Boolean).join('\n'))}">${esc(agent.description || "（未填写简介）")}</p>
+      <div class="employee-card-footer">
+        <div class="agent-runtime employee-runtime-summary"><span title="${esc(runtime)}">${cardIcon('<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3m6-3v3M9 18v3m6-3v3M3 9h3m-3 6h3m12-6h3m-3 6h3"/>')}<span>${esc(runtime)}</span></span>${pluginCount ? `<span title="插件 ${pluginCount}" aria-label="插件 ${pluginCount}">${cardIcon('<path d="M8 3v5m8-5v5M6 8h12v3a6 6 0 0 1-12 0V8m6 9v4"/>')}${pluginCount}</span>` : ''}${mcpCount ? `<span title="MCP ${mcpCount}" aria-label="MCP ${mcpCount}">${cardIcon('<circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><path d="M9 6h6M7.5 9l3 6m6-6-3 6"/>')}${mcpCount}</span>` : ''}</div>
+        <div class="directory-card-actions">${agent.status==='active'?`<button class="small-button primary" data-chat-agent="${agent.id}">${cardIcon('<path d="M5 4h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9l-5 4v-4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z"/>')}对话</button>`:`<button class="small-button primary" data-agent-status="${esc(agent.id)}" data-status="active">启用</button>`}${actionMenu(`<button class="small-button" data-edit-agent="${agent.id}">编辑</button><button class="small-button" data-clone-agent="${agent.id}">复制为新员工</button><button class="small-button" data-agent-status="${esc(agent.id)}" data-status="${agent.status==='active'?'inactive':'active'}">${agent.status==='active'?'停用':'启用'}</button><button class="small-button danger" data-delete-agent="${agent.id}">删除</button>`, "员工更多操作")}</div>
+      </div>
+    </div>`;
+  }).join("") || (query || roleSelect.value ? `<div class="directory-empty" role="status"><strong>没有匹配的数字员工</strong>请调整搜索条件。</div>` : `<div class="directory-empty" role="status"><strong>还没有数字员工</strong>点击右上角「创建数字员工」添加。</div>`);
   renderListPager("agents", page);
 }
 
@@ -636,36 +1046,45 @@ function renderRoles() {
   const query = ($("#roles-search").value || "").trim().toLowerCase();
   const filtered = state.roles.filter(role => `${role.name} ${role.prompt || ""}`.toLowerCase().includes(query));
   const page = state.directoryPages?.roles || paginate([],1); state.listPages.roles = page.page;
-  $("#roles-grid").innerHTML = page.items.map((role) => `
-    <div class="agent-card">
-      <div class="agent-card-top">
-        <div class="agent-card-avatar color-system">${esc(role.name.slice(0, 1))}</div>
-        <div class="agent-card-identity"><h3>${esc(role.name)}</h3></div>
-      </div>
-      <p>${esc(role.prompt.length > 200 ? role.prompt.slice(0, 200) + "…" : role.prompt)}</p>
-      <div class="directory-card-actions"><button class="small-button" data-edit-role="${role.id}">编辑</button><button class="small-button danger" data-delete-role="${role.id}">删除</button></div>
-    </div>`).join("");
+  setTitleCount('roles', page.total);
+  $("#roles-grid").innerHTML = page.items.map(role => {
+    const employees = (state.catalogReferences?.agents || []).filter(agent=>agent.roleIds?.includes(role.id));
+    const timestamp = role.updatedAt || role.createdAt;
+    return `<article class="role-directory-row"><button type="button" class="role-row-open" data-edit-role="${esc(role.id)}" aria-label="编辑角色 ${esc(role.name)}">
+      <span class="agent-card-avatar color-system" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M6 16v-1a3 3 0 0 1 6 0v1m3-7h3m-3 4h3"/></svg></span>
+      <span class="agent-card-identity" title="${esc(role.name)}"><strong>${esc(role.name)}</strong></span>
+      <span class="role-row-prompt" title="${esc(role.prompt)}">${esc(role.prompt)}</span>
+      <span class="directory-avatar-stack" aria-label="${esc(employees.length ? '绑定员工：'+employees.map(agent=>agent.name).join('、') : '未绑定员工')}">${employees.slice(0,5).map(agent=>`<span class="agent-card-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}${employees.length>5?`<span class="directory-avatar-overflow">+${employees.length-5}</span>`:''}</span>
+      <time title="${esc((role.updatedAt?'更新于 ':'创建于 ')+exactTime(timestamp))}">${timestamp ? timeAgo(timestamp) : '—'}</time>
+    </button>${actionMenu(`<button class="small-button" data-edit-role="${esc(role.id)}">编辑</button><button class="small-button" data-clone-role="${esc(role.id)}">复制角色</button><button class="small-button danger" data-delete-role="${esc(role.id)}">删除</button>`, '角色更多操作')}</article>`;
+  }).join("");
   $("#roles-grid").hidden = !page.items.length;
   $("#roles-empty").hidden = Boolean(page.items.length);
   $("#roles-empty").innerHTML = query ? "<strong>没有匹配的角色</strong>请调整搜索条件。" : "<strong>还没有角色</strong>创建角色后，可在员工中绑定。";
   renderListPager("roles", page);
 }
 
-function roleModal(existing = null) {
+function roleModal(existing = null, {draft = null} = {}) {
+  const initial=existing || draft;
+  const employees=(state.catalogReferences?.agents || []).filter(agent=>agent.roleIds?.includes(existing?.id));
   openModal(`
-    <h2>${existing ? "编辑角色" : "创建角色"}</h2>
-    <p class="modal-intro">角色提供共用提示词、插件和 MCP。员工绑定角色后自动继承；不改变员工类型或权限。编辑只影响之后创建的任务和后续沟通投递，不改写已冻结的任务记录。</p>
+    <header class="directory-detail-header"><h2>${existing ? "编辑角色" : "创建角色"}</h2><button type="button" class="ghost-button" data-close-modal aria-label="关闭角色编辑">×</button></header>
     <form id="role-form" novalidate>
-      <div class="form-field full"><label>名称 <b>*</b></label><input name="name" maxlength="80" value="${esc(existing?.name || "")}" placeholder="例如：事实核查员" /><div class="field-error"></div></div>
-      <div class="form-field full"><label>共用系统提示词 <b>*</b></label><textarea name="prompt" rows="8" placeholder="绑定此角色的员工，在沟通与任务执行中都会把这段文字并入应用系统指令">${esc(existing?.prompt || "")}</textarea><div class="field-error"></div></div>
+      <div class="form-field full"><label>名称 <b>*</b></label><input name="name" maxlength="80" value="${esc(initial?.name || "")}" placeholder="例如：事实核查员" /><div class="field-error"></div></div>
+      <div class="form-field full"><label>共用系统提示词 <b>*</b> <span class="role-prompt-count" aria-live="polite"></span></label><textarea name="prompt" rows="12" placeholder="绑定此角色的员工，在沟通与任务执行中都会把这段文字并入应用系统指令">${esc(initial?.prompt || "")}</textarea><div class="field-error"></div></div>
       <div id="role-market-selection"></div>
+      <section class="role-usage-note"><strong><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 10v6m0-9v.01"/></svg>${employees.length ? `${employees.length} 位员工绑定此角色` : '尚无员工绑定此角色'}</strong>${employees.length?`<div class="directory-person-chips">${employees.map(agent=>`<span><span class="agent-card-avatar ${esc(roleColor(agent))}">${esc(initialsOf(agent))}</span>${esc(agent.name)}</span>`).join('')}</div>`:''}<p>员工继承角色的提示词、插件和 MCP。修改只影响新任务与后续沟通，已冻结的任务记录保持不变。</p></section>
       <div class="form-actions">
+        ${existing?`<button type="button" class="ghost-button danger role-delete" data-delete-role="${esc(existing.id)}">删除角色</button>`:''}
         <button type="button" class="ghost-button" data-close-modal>取消</button>
         <button type="submit" class="primary-button">${existing ? "保存修改" : "创建角色"}</button>
       </div>
-    </form>`);
+    </form>`, {drawer:true});
   const form = $("#role-form");
-  const extensions=marketplaceUI.select($("#role-market-selection"),existing || {},null);
+  form.closest('.modal').classList.add('role-config-modal','detail-drawer');
+  const updateCount=()=>{form.querySelector('.role-prompt-count').textContent=`${Array.from(form.prompt.value).length} 字`;};
+  form.prompt.addEventListener('input',updateCount);updateCount();
+  const extensions=marketplaceUI.select($("#role-market-selection"),initial || {},null);
   form.querySelectorAll(".form-field").forEach((field, index) => {
     const input = field.querySelector("input,textarea"), label = field.querySelector("label");
     if (input && label && !label.htmlFor) { input.id ||= `role-field-${index}`; label.htmlFor = input.id; }
@@ -938,15 +1357,31 @@ function workspaceDirectoryDetails(task) {
   const absolute = task.workspacePath || "";
   const taskRoot = (task.taskWorkspacePath || "").replace(/\/+$/, "");
   const relative = taskRoot && absolute.startsWith(`${taskRoot}/`)
-    ? `${taskRoot.split("/").at(-1)}/${absolute.slice(taskRoot.length + 1)}`
+    ? `…/${absolute.slice(taskRoot.length + 1)}`
     : absolute.replace(/\/+$/, "").split("/").at(-1) || ".";
-  return `<h5>工作目录</h5><div class="workspace-path"><span>${esc(relative)}</span><button class="text-action" data-copy="${esc(absolute)}">复制</button><button class="text-action" data-open-workspace-directory>打开</button></div>`;
+  return `<h5>工作目录</h5><div class="workspace-path"><span title="${esc(absolute)}">${esc(relative)}</span><button class="text-action" data-copy="${esc(absolute)}">复制</button><button class="text-action" data-open-workspace-directory>打开</button></div>`;
 }
 
-async function showEmployeeDetail(member) {
+async function showEmployeeDetail(member, {drawer = false} = {}) {
   await Promise.all([loadVendor("marked"),loadVendor("dompurify")]).catch(() => {});
-  openModal(`${employeeDetailMarkup(member,{renderContent:markdownContent,renderAvatar:agent=>`<span class="agent-card-avatar ${esc(roleColor(agent))}">${esc(initialsOf(agent))}</span>`})}<div class="form-actions"><button class="ghost-button" data-close-modal>关闭</button></div>`);
+  const profileMarkup=employee=>employeeDetailMarkup(employee,{renderContent:markdownContent,renderAvatar:agent=>`<span class="agent-card-avatar ${esc(roleColor(agent))}">${esc(initialsOf(agent))}</span>`});
+  openModal(drawer ? `<header class="directory-detail-header"><h2>员工详情</h2><button type="button" class="small-button" data-profile-chat>对话</button><button type="button" class="small-button" data-edit-agent="${esc(member.id)}">编辑</button><button type="button" class="ghost-button" data-close-modal aria-label="关闭员工详情">×</button></header><div class="directory-detail-body"><div data-employee-profile>${profileMarkup(member)}</div><section class="employee-profile-section" data-employee-runtime><h4>运行配置</h4><p class="field-hint" role="status">正在读取…</p></section><section class="employee-profile-section" data-employee-tools><h4>工具</h4><p class="field-hint" role="status">正在读取…</p></section></div>` : `${profileMarkup(member)}<div class="form-actions"><button class="ghost-button" data-close-modal>关闭</button></div>`, {drawer});
   $('#modal-content').closest('.modal').classList.add('employee-detail-modal');
+  if(!drawer)return;
+  $('#modal-content').closest('.modal').classList.add('detail-drawer');
+  const host=$('[data-employee-profile]'),runtimeHost=$('[data-employee-runtime]'),toolsHost=$('[data-employee-tools]');
+  $('[data-profile-chat]').onclick=()=>{closeModal();communicationUI.open('agent',member.id);};
+  const tools=['pluginIds','mcpIds'].flatMap((key,index)=>[...new Set([...(member.runtime?.extensionSelection?.[key] || []),...(member.inheritedExtensionSelection?.[key] || [])])].map(id=>({id,kind:index?'MCP':'插件',path:index?'mcp-marketplace':'marketplace'})));
+  const [profiles,roles,extensions]=await Promise.all([
+    api('/api/settings/runtime-profiles').then(result=>result.profiles).catch(()=>null),
+    Promise.allSettled((member.roleIds || []).map(id=>api(`/api/roles/${encodeURIComponent(id)}`).then(result=>result.role))),
+    Promise.allSettled(tools.map(tool=>api(`/api/runtime/${tool.path}/${encodeURIComponent(tool.id)}`)))
+  ]);
+  if(!host.isConnected)return;
+  host.innerHTML=profileMarkup({...member,roles:roles.map((result,index)=>result.status==='fulfilled'?result.value:{name:state.roles.find(role=>role.id===member.roleIds[index])?.name || '角色',prompt:'角色提示词读取失败'})});
+  const profile=profiles?.find(profile=>profile.id===member.runtime?.profileId);
+  runtimeHost.innerHTML=`<h4>运行配置</h4>${profile?`<dl class="employee-runtime-details"><dt>运行时</dt><dd>${esc(runtimeLabel(profile.provider))}</dd><dt>模型</dt><dd>${esc(profile.model || 'CLI 默认模型')}</dd><dt>思考等级</dt><dd>${esc(profile.effort || '默认')}</dd></dl>`:`<p class="field-hint" role="${profiles?'status':'alert'}">${profiles?'当前 Runtime 配置不可用':'运行配置读取失败，请重新打开详情。'}</p>`}`;
+  toolsHost.innerHTML=`<h4>工具</h4>${tools.length?`<div class="directory-person-chips">${tools.map((tool,index)=>`<span><span class="agent-card-avatar color-${extensionAvatarColor(tool.id)}">${esc((extensions[index].status==='fulfilled'?extensions[index].value.name:tool.kind).slice(0,1))}</span>${esc(extensions[index].status==='fulfilled'?extensions[index].value.name:tool.id)}<small>${esc(tool.kind)}${extensions[index].status==='rejected'?' · 读取失败':''}</small></span>`).join('')}</div>`:'<p class="field-hint">未选择插件或 MCP。</p>'}`;
 }
 
 function taskDescriptionMarkup(task, view) {
@@ -958,17 +1393,41 @@ function taskDescriptionMarkup(task, view) {
 }
 
 function workspaceDetailsMarkup(workspace, { agents, currentFocusNode, view, artifactCount }) {
-  const { run } = workspace;
+  const { run, traces = [] } = workspace;
+  const focus = workflowFocus(run, traces);
+  // Read the latest delivery attempt per node; manager/consultation turns do
+  // not establish a node handoff. A completed Trace is a recorded handoff,
+  // never a platform judgment of workflow completion.
+  const nodeTraces = new Map();
+  for (const trace of traces) {
+    if (!trace.workflowNodeId || trace.agentId === run.manager?.id || (trace.type && trace.type !== "node")) continue;
+    const previous = nodeTraces.get(trace.workflowNodeId);
+    if (!previous || (Date.parse(trace.startedAt) || 0) >= (Date.parse(previous.startedAt) || 0)) nodeTraces.set(trace.workflowNodeId, trace);
+  }
+  const focusRows = (run.task.workflowSnapshot.nodes || []).map(node => {
+    const trace = nodeTraces.get(node.id);
+    const current = run.currentFocus?.nodeId === node.id;
+    const waiting = ["waiting_human", "waiting_agent"].includes(focus[node.id]);
+    const status = trace?.status === "failed" ? "failed" : trace?.status === "running" ? "running" : waiting ? "waiting" : current ? "current" : trace?.status === "completed" ? "done" : trace ? "recorded" : "pending";
+    const label = { failed: "交付失败", running: "执行中", waiting: focus[node.id] === "waiting_human" ? "等待澄清" : "等待答复", current: "当前焦点", done: "已交接", recorded: trace?.status === "cancelled" ? "已取消" : "已记录", pending: "未派工" }[status];
+    const executor = trace && (agents.find(agent => agent.id === trace.agentId)?.name || trace.agent?.name || trace.agentId);
+    const icon = status === "done" ? '<circle cx="8" cy="8" r="6"/><path d="m5 8 2 2 4-4"/>' : status === "failed" ? '<circle cx="8" cy="8" r="6"/><path d="M8 4.5v4M8 11h.01"/>' : ["running", "current", "waiting"].includes(status) ? '<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2" fill="currentColor"/>' : '<circle cx="8" cy="8" r="6"/>';
+    return `<li class="workflow-focus-row" data-focus-state="${status}"${current ? ' aria-current="step"' : ""}><svg class="workflow-focus-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">${icon}</svg><span class="workflow-focus-title">${esc(node.title)}</span><small${executor ? ` title="${esc(`${executor} · ${label}`)}"` : ""}>${esc(executor ? `${executor} · ${label}` : status === "pending" ? "—" : label)}</small></li>`;
+  }).join("");
   return `<aside id="workspace-details" class="workspace-details" aria-label="任务详情" ${view.detailsOpen ? "" : "hidden"}>
-      <h4>任务详情</h4>
+      <h4>概要</h4>
       <dl class="workspace-properties">
+        <div><dt>状态</dt><dd>${pill(run.status)}</dd></div>
+        <div><dt>经理</dt><dd>${esc(run.manager?.name || "—")}</dd></div>
+        <div><dt>开始</dt><dd><time title="${esc((run.startedAt || run.createdAt ? exactTime(run.startedAt || run.createdAt) : "—"))}">${esc((run.startedAt || run.createdAt ? exactTime(run.startedAt || run.createdAt) : "—"))}</time></dd></div>
         <div><dt>工作流</dt><dd><button class="text-action task-workflow-link" data-task-workflow-details>${esc(run.task.workflowSnapshot.name || "当前工作流")} ↗</button></dd></div>
         <div><dt>当前执行</dt><dd>${esc((workspace.traces || []).filter(trace=>trace.status==="running").map(trace=>agents.find(agent=>agent.id===trace.agentId)?.name || trace.agentId).join("、") || "暂无执行成员")}</dd></div>
         <div><dt>数字员工</dt><dd>${agents.length} 位</dd></div>
-        <div><dt>交付快照</dt><dd>${artifactCount} 项</dd></div>
+        <div><dt>文件</dt><dd><button class="text-action" data-ws-tab="directory">打开工作目录 ↗</button><small> · ${artifactCount} 项交付快照</small></dd></div>
         ${run.task.kind === 'automation' ? `<div><dt>任务来源</dt><dd>自动化 · 配置 v${esc(run.task.automationVersion)}</dd></div>${run.confirmedBy ? `<div><dt>完成方式</dt><dd>${run.confirmedBy === 'automation' ? '自动确认' : '手动确认'} · ${exactTime(run.confirmedAt)}</dd></div>` : run.status === 'awaiting_acceptance' ? '<div><dt>验收安排</dt><dd>下一轮开始前自动确认，也可提前确认完成。</dd></div>' : ''}` : ''}
       </dl>
-      <section class="task-member-section"><header><h5>成员 · ${agents.length}</h5>${!run.task.archivedAt && !["completed","cancelled"].includes(run.status) ? '<button class="text-action member-console-icon" data-edit-task-members aria-label="编辑任务成员" title="添加或移除成员"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}</header><div class="task-member-list">${agents.map(agent=>`<div class="task-member-row"><button class="text-action task-member-identity" data-task-member-detail="${esc(agent.id)}" title="${esc(agent.name)}"><span class="role-avatar ${roleColor(agent)}">${esc(initialsOf(agent))}</span><span>${agent.id===run.manager.id ? '<span class="task-manager-star" aria-label="本次经理">★</span> ' : ''}${esc(agent.name)}</span></button>${roleExecutionStatus(run,workspace.traces,agent.id).active?'<span class="member-running-dot" role="status" aria-label="正在运行" title="正在运行"></span>':''}<button class="text-action member-console-icon" data-task-member-console="${esc(agent.id)}" aria-label="查看 ${esc(agent.name)} 的控制台" aria-pressed="${view.tab==='console'&&state.selectedAgentId===agent.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></button></div>`).join('')}</div></section>
+      <details class="workspace-workflow-focus" data-workspace-disclosure="workflow-focus" ${view.disclosures?.["workflow-focus"] === false ? "" : "open"}><summary>协作焦点</summary><ol class="workflow-focus-list">${focusRows || '<li class="workflow-focus-empty">暂无工作流节点</li>'}</ol><p class="workflow-focus-note">依据交接记录与经理当前焦点呈现，不代表平台判定完成度。</p></details>
+      <section class="task-member-section"><header><h5>成员<span>${agents.length}</span></h5>${!run.task.archivedAt && !["completed","cancelled"].includes(run.status) ? '<button class="text-action member-console-icon" data-edit-task-members aria-label="编辑任务成员" title="添加或移除成员"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>' : ''}</header><div class="task-member-list">${agents.map(agent=>`<div class="task-member-row"><button class="text-action task-member-identity" data-task-member-detail="${esc(agent.id)}" title="${esc(agent.name)}"><span class="role-avatar ${roleColor(agent)}">${esc(initialsOf(agent))}${agent.id===run.manager.id ? '<span class="task-manager-star avatar-manager-mark" aria-label="本次经理">★</span>' : ''}${roleExecutionStatus(run,workspace.traces,agent.id).active?'<span class="member-running-dot" role="status" aria-label="正在运行" title="正在运行"></span>':''}</span><span>${esc(agent.name)}</span></button>${roleExecutionStatus(run,workspace.traces,agent.id).state === "error" ? '<small class="task-member-error">执行失败</small>' : (workspace.pendingQuestions || []).some(question => question.sender?.id === agent.id && question.recipient?.type === "human") ? '<small class="task-member-waiting">待回答</small>' : ''}<button class="text-action member-console-icon" data-task-member-console="${esc(agent.id)}" aria-label="查看 ${esc(agent.name)} 的控制台" aria-pressed="${view.tab==='console'&&state.selectedAgentId===agent.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></button></div>`).join('')}</div></section>
       <section class="workspace-context">${taskDescriptionMarkup(run.task, view)}</section>
       <section class="workspace-directory-details" id="workspace-directory-details">${workspaceDirectoryDetails(run.task)}</section>
     </aside>`;
@@ -1012,7 +1471,7 @@ function renderWorkspace() {
   const { run, artifacts, messages, events, traces = [] } = workspace;
   const view = workspaceView(run.id);
   view.detailsByTab ||= {};
-  view.detailsOpen = view.detailsByTab[view.tab] ?? view.tab === "collaboration";
+  view.detailsOpen = view.detailsByTab[view.tab] ?? (view.tab === "collaboration" && !window.matchMedia("(max-width: 1180px)").matches);
   const oldStream = box.querySelector("#trace-stream");
   if (box.dataset.runId === run.id) {
     rememberDirectoryReading(view);
@@ -1038,7 +1497,7 @@ function renderWorkspace() {
   const consoleAgents = tab === 'console' ? workspaceAgents(workspace, state.agents, { includeDeleted: true }) : agents;
   if (!consoleAgents.some((agent) => agent.id === state.selectedAgentId)) state.selectedAgentId = tab === 'console' ? latestExecutedAgentId(agents,traces) : null;
   const selected = consoleAgents.find((agent) => agent.id === state.selectedAgentId);
-  const businessArtifacts = artifacts;
+  const artifactCount = Number.isInteger(run.artifactCount) ? run.artifactCount : null;
   const currentFocusNode = run.currentFocus?.nodeId ? run.task.workflowSnapshot.nodes.find((node) => node.id === run.currentFocus.nodeId) : null;
   const activeStatus = ["planning", "running", "awaiting_human", "review"].includes(run.status);
   const scheduledRetries = retryableDispatches(workspace);
@@ -1050,56 +1509,56 @@ function renderWorkspace() {
     <div class="workspace-summary">
       <div class="workspace-title">
         <button class="workspace-back" data-back-to-tasks aria-label="${run.task.kind === 'automation' ? '返回触发记录' : '返回任务列表'}" title="${run.task.kind === 'automation' ? '返回触发记录' : '返回任务列表'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
-        <h3>${esc(run.task.title)}</h3>
+        <span class="workspace-crumb">任务 /</span><h3 title="${esc(run.task.title)}">${esc(run.task.title)}</h3>
+        ${run.task.kind === "automation" && run.status === "awaiting_acceptance" ? '<span class="status-pill awaiting_acceptance">待验收</span>' : pill(run.status)}
       </div>
       <div class="workspace-summary-meta">
-        ${run.task.kind === "automation" && run.status === "awaiting_acceptance" ? '<span class="status-pill awaiting_acceptance">待验收</span>' : pill(run.status)}
         ${acceptance?.verified ? `<button class="primary-button compact" data-open-completion-confirm="${esc(run.id)}">确认完成</button>` : ""}
         ${scheduledRetries.length ? `<button class="small-button amber" data-retry-scheduled="${run.id}" title="立即启动等待退避的调用；失败 Trace 与原投递会保留。">立即重试 ${scheduledRetries.length} 项调用</button>` : ""}
         ${failedRecovery?.type === "orchestration" ? `<button class="small-button amber" data-retry-orchestration="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} title="重新准备运行环境，继续原失败投递或待执行队列。">修复后重新尝试</button>` : ""}
         ${failedRecovery?.type === "node" ? failedRecovery.nodeIds.map((nodeId) => {
           const node = run.task.workflowSnapshot.nodes.find((item) => item.id === nodeId);
-          return `<button class="small-button amber" data-retry-failed-node="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} data-workflow-node-id="${esc(nodeId)}" title="由原员工继续失败投递；原会话、历史 Trace 与产物会保留。">从「${esc(node?.title || nodeId)}」恢复</button>`;
+          return `<button class="small-button amber" data-retry-failed-node="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} data-workflow-node-id="${esc(nodeId)}" title="由原员工继续失败投递；原会话、历史调用记录 与产物会保留。">从「${esc(node?.title || nodeId)}」恢复</button>`;
         }).join("") : ""}
-        ${activeStatus ? `<button class="small-button amber" data-pause-run="${run.id}">Ⅱ 暂停</button><button class="danger-button" data-terminate-run="${run.id}">■ 终止 Run</button>` : run.status === "paused" ? `<button class="small-button primary" data-resume-run="${run.id}">▶ 继续 Run</button><button class="danger-button" data-terminate-run="${run.id}">■ 终止 Run</button>` : ["awaiting_acceptance", "failed"].includes(run.status) ? `<button class="danger-button" data-terminate-run="${run.id}">■ 终止 Run</button>` : ""}
+        ${activeStatus ? `<button class="ghost-button" data-pause-run="${run.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5" width="3.2" height="14" rx="1"/><rect x="13.8" y="5" width="3.2" height="14" rx="1"/></svg>暂停</button>` : run.status === "paused" ? `<button class="primary-button" data-resume-run="${run.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>继续执行</button>` : ""}
+        ${actionMenu(`${!run.task.archivedAt && !["completed", "cancelled"].includes(run.status) ? '<button data-edit-task-members>编辑成员</button>' : ''}<button data-open-workspace-directory>打开工作目录</button>${activeStatus || ["paused", "awaiting_acceptance", "failed"].includes(run.status) ? `<button class="danger-button" data-terminate-run="${run.id}">终止执行</button>` : ''}`, '更多任务操作')}
+        <button class="text-action workspace-details-toggle" data-toggle-task-details aria-expanded="${Boolean(view.detailsOpen)}" aria-controls="workspace-details" aria-label="任务详情" title="任务详情（⌘I）"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></svg></button>
       </div>
+    </div>
+    <div class="ws-tabs workspace-mode-tabs" role="tablist" aria-label="任务工作区">
+      <button id="collaboration-mode" class="ws-tab ${tab === "collaboration" ? "active" : ""}" data-ws-tab="collaboration" role="tab" aria-controls="collaboration-panel" aria-selected="${tab === "collaboration"}">协作${workspace.pendingQuestions?.some((item) => item.recipient.type === "human") ? `<span class="collaboration-unread" aria-label="${workspace.pendingQuestions.filter((item) => item.recipient.type === "human").length} 条待你回复">${workspace.pendingQuestions.filter((item) => item.recipient.type === "human").length}</span>` : ""}</button>
+      <button id="directory-mode" class="ws-tab ${["directory", "diff"].includes(tab) ? "active" : ""}" data-ws-tab="directory" role="tab" aria-controls="working-directory-panel working-diff-panel" aria-selected="${["directory", "diff"].includes(tab)}">文件${artifactCount===null?'':`<span class="tab-count" title="${artifactCount} 项已记录交付快照">${artifactCount}</span>`}</button>
+      <button id="console-mode" class="ws-tab ${tab === "console" ? "active" : ""}" data-ws-tab="console" role="tab" aria-controls="console-panel" aria-selected="${tab === "console"}">控制台</button>
     </div>
     <div class="workspace-body ${view.detailsOpen ? "details-open" : ""}">
     <div class="workspace-main">
-    ${failureMessage ? `<div class="workspace-failure" role="alert"><strong>本轮未完成</strong><span>${esc(failureMessage)}</span><small>${run.failure?.phase === "workspace_baseline_missing" ? "旧 Run、Trace 和 Artifact 保留供核对；此 Run 无法安全重试。" : failedRecovery ? "修复原因后可重试原员工的失败投递；原会话、历史 Trace、产物和消息都会保留。" : "任务已归档，不能重新启动。"}</small>${run.failure?.phase === "workspace_baseline_missing" ? (run.task.kind === 'automation' ? '<button class="small-button" data-goto="automations">查看自动化配置</button>' : '<button class="small-button" data-action="new-task">新建任务</button>') : ""}</div>` : ""}
-    <div class="ws-tabs workspace-mode-tabs" role="tablist" aria-label="任务工作区">
-      <button id="collaboration-mode" class="ws-tab ${tab === "collaboration" ? "active" : ""}" data-ws-tab="collaboration" role="tab" aria-controls="collaboration-panel" aria-selected="${tab === "collaboration"}">协作记录${workspace.pendingQuestions?.some((item) => item.recipient.type === "human") ? `<span class="collaboration-unread">${workspace.pendingQuestions.filter((item) => item.recipient.type === "human").length} 待你回复</span>` : ""}</button>
-      <button id="directory-mode" class="ws-tab ${["directory", "diff"].includes(tab) ? "active" : ""}" data-ws-tab="directory" role="tab" aria-controls="working-directory-panel working-diff-panel" aria-selected="${["directory", "diff"].includes(tab)}">工作目录</button>
-      <button id="console-mode" class="ws-tab ${tab === "console" ? "active" : ""}" data-ws-tab="console" role="tab" aria-controls="console-panel" aria-selected="${tab === "console"}">控制台</button>
-      <button class="text-action workspace-details-toggle" data-toggle-task-details aria-expanded="${Boolean(view.detailsOpen)}" aria-controls="workspace-details">任务详情 ${view.detailsOpen ? "‹" : "›"}</button>
-    </div>
+    ${failureMessage && tab === "collaboration" ? `<div class="workspace-failure" role="alert"><strong>本轮未完成</strong><span>${esc(failureMessage)}</span><small>${run.failure?.phase === "workspace_baseline_missing" ? "历史执行、调用记录和交付文件 保留供核对；此 Run 无法安全重试。" : failedRecovery ? "修复原因后可重试原员工的失败投递；原会话、历史调用记录、产物和消息都会保留。" : "任务已归档，不能重新启动。"}</small>${run.failure?.phase === "workspace_baseline_missing" ? (run.task.kind === 'automation' ? '<button class="small-button" data-goto="automations">查看自动化配置</button>' : '<button class="small-button" data-action="new-task">新建任务</button>') : ""}${failedRecovery ? `<div class="workspace-failure-actions">${scheduledRetries.length ? `<button class="small-button amber" data-retry-scheduled="${run.id}">重试</button>` : ""}${failedRecovery.type === "orchestration" ? `<button class="small-button amber" data-retry-orchestration="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""}>修复后重新尝试</button>` : ""}${failedRecovery.type === "node" ? `<button class="small-button amber" data-retry-failed-node="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} data-workflow-node-id="${esc(failedRecovery.nodeIds[0])}">从失败节点恢复</button>` : ""}<button class="small-button" data-ws-tab="console">查看控制台日志</button></div>` : ""}</div>` : ""}
     <div class="workspace-grid" id="console-panel" role="tabpanel" aria-labelledby="console-mode" ${tab !== "console" ? "hidden" : ""}>
       <nav class="role-nav" aria-label="角色与执行">
-        <div class="role-list">
+        <div class="console-members-heading">成员 <span>${agents.length}</span></div><div class="role-list">
           ${agents.map((agent) => {
             const execution = roleExecutionStatus(run, traces, agent.id);
-            return `<button class="role-card ${agent.id === selected?.id ? "selected" : ""}" data-execution-state="${execution.state}" data-select-agent="${agent.id}" aria-pressed="${agent.id === selected?.id}">
+            return `<button class="role-card ${agent.id === selected?.id ? "selected" : ""}" data-execution-state="${execution.state}" data-select-agent="${agent.id}" aria-pressed="${agent.id === selected?.id}" aria-label="查看 ${esc(agent.name)} 的控制台，${esc(execution.label)}">
               <span class="role-avatar ${roleColor(agent)}">${esc(initialsOf(agent))}</span>
-              <span><strong title="${esc(agent.name)}">${esc(agent.name)}</strong><small>${providerLabel(agent)}</small></span>
-              <em class="agent-runtime-status ${execution.active ? "active" : execution.failed ? "error" : ""}">${esc(execution.label)}</em>
+              <span><strong title="${esc(agent.name)}">${esc(agent.name)}</strong><small>${providerLabel(agent)} · ${esc(execution.label)}</small></span>
+              <span class="role-console-affordance">${execution.active ? `<span class="member-running-dot" aria-label="正在执行"></span>` : ""}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></span>
             </button>`;
           }).join("")}
         </div>
       </nav>
       <div class="console-main">
-        ${selected ? `<div class="console-heading"><div><strong>${esc(selected.name)}</strong><span>${providerLabel(selected)} · ${traces.filter((trace) => trace.agentId === selected.id).length} 次执行</span></div><button class="small-button" data-console-latest>↓ 回到最新</button></div>
+        ${selected ? `<div class="console-heading"><div><strong>${esc(selected.name)}</strong><span>${providerLabel(selected)}${selected.runtime?.model ? ` · ${esc(selected.runtime.model)}` : ""} · ${traces.filter((trace) => trace.agentId === selected.id).length} 次执行</span></div><button class="small-button" data-console-latest>↓ 回到最新</button></div>
         ` : '<div class="chat-empty">请选择一位员工查看控制台。</div>'}
         <div id="tab-console">
           <div class="chat-stream" id="trace-stream" aria-live="polite" tabindex="0" aria-label="控制台"></div>
         </div>
       </div>
     </div>
-    ${["directory", "diff"].includes(tab) ? `<nav class="file-source-switch" aria-label="文件来源"><button class="text-action" data-ws-tab="directory" aria-pressed="${tab === "directory"}">当前文件</button><button class="text-action" data-ws-tab="diff" aria-pressed="${tab === "diff"}">CHANGE</button>${workingRefreshMarkup(view)}</nav>` : ""}
     <section id="working-directory-panel" class="working-directory-panel" role="tabpanel" aria-labelledby="directory-mode" ${tab !== "directory" ? "hidden" : ""}></section>
     <section id="working-diff-panel" class="working-diff-panel" role="tabpanel" aria-labelledby="directory-mode" ${tab !== "diff" ? "hidden" : ""}></section>
     <section class="collaboration-panel" id="collaboration-panel" role="tabpanel" aria-labelledby="collaboration-mode" ${tab !== "collaboration" ? "hidden" : ""}></section>
     </div>
-    ${view.detailsOpen ? workspaceDetailsMarkup(workspace, { agents, currentFocusNode, view, artifactCount: workspace.run.artifactCount ?? businessArtifacts.length }) : ""}
+    ${view.detailsOpen ? `<button class="workspace-details-backdrop" data-close-task-details aria-label="关闭任务详情"></button>` + workspaceDetailsMarkup(workspace, { agents, currentFocusNode, view, artifactCount: artifactCount ?? '—' }) : ""}
     </div>`, tab === "console" && box.dataset.runId === run.id && box.dataset.agentId === selected?.id && !box.querySelector("#console-panel")?.hidden);
   box.dataset.runId = run.id;
   box.dataset.agentId = selected?.id || "";
@@ -1184,12 +1643,15 @@ async function openCollaborationTurn(traceId, startMessageId) {
   const prompt = document.querySelector(`[data-turn-message-id="${CSS.escape(key)}"]`);
   if (!prompt) return toast("本轮提示词定位失败，请重试。", true);
   prompt.open = true;
+  if (prompt.closest(".console-execution")) prompt.closest(".console-execution").open = true;
   consolePage(runId, trace.agentId).browsingHistory = true;
+  await hydratePromptSnapshots([...prompt.querySelectorAll("[data-prompt-snapshot]")]);
   prompt.scrollIntoView({ block: "start" });
   prompt.querySelector("summary")?.focus({ preventScroll: true });
 }
 
 async function loadConsolePage(runId, agentId, { older = false, reset = false, traceId } = {}) {
+  if(state.currentView!=='workspace' || state.selectedRunId!==runId || workspaceView(runId).tab!=='console')return;
   const page = consolePage(runId, agentId);
   if (page.loading && !reset) return;
   if (reset) { page.events = []; page.loaded = false; page.hasMore = false; page.nextBefore = null; page.browsingHistory = false; }
@@ -1204,8 +1666,8 @@ async function loadConsolePage(runId, agentId, { older = false, reset = false, t
   if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage();
   try {
     const result = await api(`/api/runs/${encodeURIComponent(runId)}/console?${query}`);
-    if(state.workspace?.run.id===runId)state.workspace.traces=[...new Map([...state.workspace.traces,...(result.traces||[])].map(item=>[item.id,item])).values()].slice(-300);
     if (request !== page.request) return;
+    if(state.currentView==='workspace' && state.workspace?.run.id===runId && state.selectedRunId===runId)state.workspace.traces=[...new Map([...state.workspace.traces,...(result.traces||[])].map(item=>[item.id,item])).values()].slice(-300);
     const received = [...new Map([...result.events, ...arriving.values()].map(event => [event.id, event])).values()];
     page.events = consoleEventWindow(older ? page.events : [], received, { older }).events;
     page.loaded = true; page.hasMore = result.hasMore; page.nextBefore = result.nextBefore;
@@ -1220,7 +1682,7 @@ function isCurrentRuntimeAudit(event) {
 
 function runtimeAuditText(event) {
   if (event?.type === "runtime.event" && !isCurrentRuntimeAudit(event)) return "历史运行记录已按当前审计边界隐藏原始内容。";
-  if (event?.type === "trace.failed" && event.data?.auditVersion !== 2) return "历史 Trace 失败原因已按当前审计边界隐藏原始内容。";
+  if (event?.type === "trace.failed" && event.data?.auditVersion !== 2) return "历史调用记录 失败原因已按当前审计边界隐藏原始内容。";
   return displayText(event) || "收到运行时事件";
 }
 
@@ -1337,36 +1799,84 @@ function renderChatEvent(event, trace, agent) {
 }
 
 /* 初次进入跟随最新；后续由 Run 的本地阅读状态决定是否跟随。 */
-function updateConsoleRows(stream, rows, identity) {
+function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
   if (stream.dataset.consoleIdentity !== identity) { stream.replaceChildren(); stream.dataset.consoleIdentity = identity; }
   const following = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
-  if (!rows.length) rows.push({ key: "empty", html: '<div class="chat-empty">尚无执行内容。<br />正文、思考、工具调用和异常将在这里显示。</div>' });
-  const existing = new Map([...stream.children].filter(node => node.dataset.consoleRow).map(node => [node.dataset.consoleRow, node]));
-  let previous = stream.querySelector(".console-history-controls");
-  for (const row of rows) {
-    let node = existing.get(row.key);
-    if (!node || node.consoleSource !== row.html) {
-      const template = document.createElement("template"); template.innerHTML = row.html;
-      const fresh = template.content.firstElementChild;
-      if (node) {
-        // Tool completion/group growth must not refetch unchanged content.
-        for (const content of node.querySelectorAll("[data-console-content], [data-console-summary], [data-prompt-snapshot]")) {
-          const attr = content.hasAttribute("data-console-content") ? "data-console-content" : content.hasAttribute("data-console-summary") ? "data-console-summary" : "data-prompt-snapshot";
-          const replacement = [...fresh.querySelectorAll(`[${attr}]`)].find(item => item.getAttribute(attr) === content.getAttribute(attr) && item.dataset.contentRun === content.dataset.contentRun);
-          if (replacement) replacement.replaceWith(content);
-        }
-        for (const details of fresh.querySelectorAll("details[data-console-key]")) {
-          const old = [...node.querySelectorAll("details[data-console-key]")].find(item => item.dataset.consoleKey === details.dataset.consoleKey);
-          if (old) details.open = old.open;
-        }
-        node.replaceWith(fresh);
-      }
-      node = fresh; node.dataset.consoleRow = row.key; node.consoleSource = row.html;
+  // An empty console is a plain centered state, not an execution card.
+  if (!rows.length) {
+    if (stream.dataset.consoleEmpty !== "1") {
+      stream.querySelectorAll(':scope > .console-execution').forEach(node => node.remove());
+      stream.insertAdjacentHTML("beforeend", '<div class="directory-empty console-empty-state" role="status"><strong>尚无执行内容</strong><span>正文、思考、工具调用和异常将在这里显示。</span></div>');
+      stream.dataset.consoleEmpty = "1";
     }
-    if (node !== (previous ? previous.nextSibling : stream.firstChild)) stream.insertBefore(node, previous ? previous.nextSibling : stream.firstChild);
-    previous = node; existing.delete(row.key);
+    return;
+  }
+  if (stream.dataset.consoleEmpty === "1") { stream.querySelector(':scope > .console-empty-state')?.remove(); delete stream.dataset.consoleEmpty; }
+  const existing = new Map([...stream.querySelectorAll('[data-console-row]')].map(node => [node.dataset.consoleRow, node]));
+  const existingGroups = new Map([...stream.children].filter(node => node.dataset.consoleExecution).map(node => [node.dataset.consoleExecution, node]));
+  const groups = [], occurrences = new Map();
+  for (const row of rows) {
+    // Keep chronological order, even if two invocations interleave. A later
+    // contiguous segment gets its own card, not a reordered or synthetic Trace.
+    let group = groups.at(-1);
+    if (!group || group.traceId !== row.traceId) {
+      const id = row.traceId || 'unlinked', occurrence = occurrences.get(id) || 0;
+      occurrences.set(id, occurrence + 1);
+      group = {key:`${id}:${occurrence}`, traceId:row.traceId, rows:[]}; groups.push(group);
+    }
+    group.rows.push(row);
+  }
+  let previousGroup = stream.querySelector('.console-history-controls');
+  for (const group of groups) {
+    let card = existingGroups.get(group.key);
+    if (!card) {
+      card = document.createElement('details'); card.className = 'console-execution';
+      card.dataset.consoleExecution = group.key; card.dataset.consoleKey = `execution:${group.key}`;
+      card.dataset.defaultOpen = ''; card.open = true;
+      card.innerHTML = '<summary class="console-execution-heading"></summary><div class="console-execution-rows"></div>';
+    }
+    const trace = traceById.get(group.traceId), start = trace?.startedAt || trace?.createdAt;
+    const status = trace?.status ? ({running:'执行中',completed:'已结束',failed:'失败',cancelled:'已取消'}[trace.status] || trace.status) : '';
+    const header = `<span class="console-tool-chevron">▶</span><strong>${group.traceId ? '执行' : '记录'}</strong>${trace?.workflowNodeId ? `<span class="console-execution-node">${esc(state.workspace?.run?.task.workflowSnapshot?.nodes?.find(node=>node.id===trace.workflowNodeId)?.title || trace.workflowNodeId)}</span>` : ''}${start ? `<time title="${esc(exactTime(start))}">${esc(exactTime(start))}</time>` : ''}<small>当前已加载 ${group.rows.filter(row=>!row.prompt && row.key !== 'empty').length} 条</small>${status ? `<span class="console-execution-status" data-status="${esc(trace.status)}">${esc(status)}</span>` : ''}`;
+    const heading = card.querySelector(':scope > summary');
+    if (heading.innerHTML !== header) heading.innerHTML = header;
+    if (card !== (previousGroup ? previousGroup.nextSibling : stream.firstChild)) stream.insertBefore(card, previousGroup ? previousGroup.nextSibling : stream.firstChild);
+    previousGroup = card; existingGroups.delete(group.key);
+    const container = card.querySelector(':scope > .console-execution-rows');
+    let previous = null;
+    for (const row of group.rows) {
+      let node = existing.get(row.key);
+      if (!node || node.consoleSource !== row.html) {
+        const template = document.createElement('template'); template.innerHTML = row.html;
+        const fresh = template.content.firstElementChild;
+        // Log metadata keeps the full timestamp as an accessible tooltip while
+        // the row uses the design's right-aligned clock and a small type glyph.
+        const meta = fresh.querySelector(':scope > .log-meta'), body = fresh.querySelector(':scope > .log-body');
+        if (meta && body) {
+          const time = meta.querySelector('time'), level = meta.querySelector('.log-level');
+          if (time) { time.title = time.textContent; time.textContent = time.textContent.split(' ').at(-1); fresh.append(time); }
+          if (level) { const kind = level.textContent; level.title = kind; level.setAttribute('aria-label',kind); level.textContent = level.classList.contains('tool') ? '⌘' : level.classList.contains('error') ? '!' : level.classList.contains('thinking') ? '◌' : '·'; }
+        }
+        if (node) {
+          for (const content of node.querySelectorAll('[data-console-content], [data-console-summary], [data-prompt-snapshot]')) {
+            const attr = content.hasAttribute('data-console-content') ? 'data-console-content' : content.hasAttribute('data-console-summary') ? 'data-console-summary' : 'data-prompt-snapshot';
+            const replacement = [...fresh.querySelectorAll(`[${attr}]`)].find(item => item.getAttribute(attr) === content.getAttribute(attr) && item.dataset.contentRun === content.dataset.contentRun);
+            if (replacement) replacement.replaceWith(content);
+          }
+          for (const details of fresh.querySelectorAll('details[data-console-key]')) {
+            const old = [...node.querySelectorAll('details[data-console-key]')].find(item => item.dataset.consoleKey === details.dataset.consoleKey);
+            if (old) details.open = old.open;
+          }
+          node.replaceWith(fresh);
+        }
+        node = fresh; node.dataset.consoleRow = row.key; node.consoleSource = row.html;
+      }
+      if (node !== (previous ? previous.nextSibling : container.firstChild)) container.insertBefore(node, previous ? previous.nextSibling : container.firstChild);
+      previous = node; existing.delete(row.key);
+    }
   }
   for (const node of existing.values()) node.remove();
+  for (const node of existingGroups.values()) node.remove();
   if (following) stream.scrollTop = stream.scrollHeight;
 }
 
@@ -1394,7 +1904,7 @@ function renderChatStream(events, agent, { traceId = null, hasMore = false, stre
     const firstEvent = entry.type === "tool-group" ? entry.tools[0].event : entry.event;
     const callId = firstEvent?.data?.toolUseId || firstEvent?.data?.toolResultId;
     const key = callId ? `tool:${currentTraceId}:${callId}` : firstEvent?.id || `historical:${currentTraceId}:${entryTime(entry)}`;
-    rows.push({ key, time: entryTime(entry), html: entry.type === "historical-audit-summary" ? renderHistoricalAuditSummary(entry) : entry.type === "tool" ? renderToolEntry(entry) : entry.type === "tool-group" ? renderToolGroup(entry) : renderChatEvent(entry.event, traceById.get(currentTraceId), agent) });
+    rows.push({ key, traceId: currentTraceId, time: entryTime(entry), html: entry.type === "historical-audit-summary" ? renderHistoricalAuditSummary(entry) : entry.type === "tool" ? renderToolEntry(entry) : entry.type === "tool-group" ? renderToolGroup(entry) : renderChatEvent(entry.event, traceById.get(currentTraceId), agent) });
   }
   const candidates = new Set([...encountered.keys(), ...workspaceTraces.filter((trace) => trace.agentId === agent.id).map((trace) => trace.id)]);
   for (const id of candidates) {
@@ -1402,10 +1912,10 @@ function renderChatStream(events, agent, { traceId = null, hasMore = false, stre
     const trace = traceById.get(id);
     const time = timestamp(trace?.startedAt) ?? encountered.get(id) ?? null;
     if (!traceId && hasMore && (time === null || (windowStart !== null && time < windowStart))) continue;
-    rows.push({ key: `prompt:${id}`, time, prompt: true, html: trace ? tracePromptMarkup(trace, runId, agent) : tracePromptFallbackMarkup(id) });
+    rows.push({ key: `prompt:${id}`, traceId: id, time, prompt: true, html: trace ? tracePromptMarkup(trace, runId, agent) : tracePromptFallbackMarkup(id) });
   }
   rows.sort((a, b) => (a.time ?? Infinity) - (b.time ?? Infinity) || Number(Boolean(b.prompt)) - Number(Boolean(a.prompt)));
-  updateConsoleRows(stream, rows, `${runId}:${agent.id}:${traceId || ""}`);
+  updateConsoleRows(stream, rows, `${runId}:${agent.id}:${traceId || ""}`, traceById);
   queueMicrotask(() => observeConsoleContent(stream));
 }
 
@@ -1643,6 +2153,10 @@ function syncWorkingRefresh(runId) {
   button.setAttribute('aria-busy', String(Boolean(busy)));
 }
 
+function workingFileSources(view) {
+  return `<nav class="file-source-switch" aria-label="文件来源"><button class="text-action" data-ws-tab="directory" aria-pressed="${view.tab === "directory"}">当前文件</button><button class="text-action" data-ws-tab="diff" aria-pressed="${view.tab === "diff"}">变更</button>${workingRefreshMarkup(view)}</nav>`;
+}
+
 function renderWorkingDirectory(runId) {
   if (state.selectedRunId !== runId) return;
   const host = $("#working-directory-panel"), view = workspaceView(runId);
@@ -1665,7 +2179,7 @@ function renderWorkingDirectory(runId) {
   }
   const existingVideo=view.pendingVideoPreview || (view.previewPath===view.selectedPath?host.querySelector('.working-video-preview'):null);
   host.innerHTML = `${view.directoryError ? `<p role="alert">${esc(view.directoryError)}</p>` : ""}${Object.entries(view.directoryPages || {}).filter(([,page])=>page.error).map(([path,page])=>`<p role="alert">${esc(path)}：${esc(page.error)}</p>`).join("")}
-    <div class="artifact-layout"><div class="artifact-files"><section class="artifact-root">${directoryPageMarkup('',view,theme)}</section></div><div class="artifact-viewer document"><div class="artifact-viewer-head"><div class="working-file-identity"><strong>${esc(view.selectedPath || "文件预览")}</strong><small>当前工作文件 ${preview?.modifiedAt ? "· " + esc(preview.modifiedAt) : ""}</small></div><div class="directory-actions"><button class="ghost-button" data-download-working-file ${!view.selectedPath || view.downloadingPath ? "disabled" : ""} ${view.downloadingPath ? 'aria-busy="true"' : ""}>${view.downloadingPath ? "下载中…" : "下载"}</button></div></div>${content}</div></div>`;
+    <div class="artifact-layout"><div class="artifact-files">${workingFileSources(view)}<section class="artifact-root">${directoryPageMarkup('',view,theme)}</section></div><div class="artifact-viewer document"><div class="artifact-viewer-head"><div class="working-file-identity"><strong>${esc(view.selectedPath || "文件预览")}</strong><small>当前工作文件 ${preview?.modifiedAt ? "· " + esc(preview.modifiedAt) : ""}</small></div><div class="directory-actions"><button class="ghost-button icon-only" data-copy="${esc(view.selectedPath || '')}" ${!view.selectedPath ? "disabled" : ""} aria-label="复制路径" title="复制路径"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/></svg></button><button class="secondary-button small" data-download-working-file ${!view.selectedPath || view.downloadingPath ? "disabled" : ""} ${view.downloadingPath ? 'aria-busy="true"' : ""}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>${view.downloadingPath ? "下载中…" : "下载"}</button></div></div>${content}</div></div>`;
   host.querySelector(".artifact-files").scrollTop = view.directoryScroll.tree || 0;
   const reader = host.querySelector(".markdown-preview, .artifact-preview");
   const video=host.querySelector('.working-video-preview');
@@ -1796,7 +2310,7 @@ function renderWorkingChanges(runId) {
   const rawRepositories = view.changes?.repositories || [];
   const repositories = rawRepositories;
   syncWorkingRefresh(runId);
-  host.innerHTML = `${view.changesError ? `<p role="alert">${esc(view.changesError)}</p>` : ""}${repositories.filter(repo=>repo.error).map(repo=>`<p role="alert">${esc(repo.path || "工作目录")}：${esc(repo.error)}</p>`).join("")}<div class="artifact-layout"><div class="artifact-files source-control-files"><section class="artifact-root">${workingChangesTree({changes:repositories.flatMap(repo=>repo.changes)},view,theme)}</section></div><div class="artifact-viewer document"><div class="artifact-viewer-head"><div class="working-file-identity"><strong>${esc(view.selectedDiffPath || "修改内容")}</strong><small>${view.diffPreview?.submodule ? "HEAD → 当前子模块提交" : `${esc(view.diffPreview?.baseLabel || "比较版本")} → 当前文件`}</small></div><div class="diff-view-controls"><div role="group" aria-label="CHANGE 布局"><button class="diff-icon-button" data-diff-layout="unified" aria-pressed="${view.diffLayout !== 'split'}" aria-label="行内" title="行内"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/></svg></button><button class="diff-icon-button" data-diff-layout="split" aria-pressed="${view.diffLayout === 'split'}" aria-label="左右对比" title="左右对比"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M6 9h3M15 9h3M6 14h3M15 14h3"/></svg></button></div><div role="group" aria-label="CHANGE 范围"><button class="diff-icon-button" data-diff-scope="changes" aria-pressed="${!view.diffFull}" aria-label="仅差异" title="仅差异"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h6M7 4v6M4 17h6M14 7h6M14 17h6"/><path d="M14 12h6" opacity=".4"/></svg></button><button class="diff-icon-button" data-diff-scope="full" aria-pressed="${Boolean(view.diffFull)}" aria-label="完整文件" title="完整文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 12h8M8 16h8"/></svg></button></div></div></div>${workingDiffMarkup(view.diffPreview, view.diffLayout)}</div></div>`;
+  host.innerHTML = `${view.changesError ? `<p role="alert">${esc(view.changesError)}</p>` : ""}${repositories.filter(repo=>repo.error).map(repo=>`<p role="alert">${esc(repo.path || "工作目录")}：${esc(repo.error)}</p>`).join("")}<div class="artifact-layout"><div class="artifact-files source-control-files">${workingFileSources(view)}<section class="artifact-root">${workingChangesTree({changes:repositories.flatMap(repo=>repo.changes)},view,theme) || `<div class="directory-empty" role="status">${view.changesLoading?"正在读取文件变更…":view.changesError?"读取失败，请使用上方刷新重试。":"暂无文件变更"}</div>`}</section></div><div class="artifact-viewer document"><div class="artifact-viewer-head"><div class="working-file-identity"><strong>${esc(view.selectedDiffPath || "修改内容")}</strong><small>${view.diffPreview?.submodule ? "HEAD → 当前子模块提交" : `${esc(view.diffPreview?.baseLabel || "比较版本")} → 当前文件`}</small></div><div class="diff-view-controls"><div role="group" aria-label="CHANGE 布局"><button class="diff-icon-button" data-diff-layout="unified" aria-pressed="${view.diffLayout !== 'split'}" aria-label="行内" title="行内"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8M8 16h8"/></svg></button><button class="diff-icon-button" data-diff-layout="split" aria-pressed="${view.diffLayout === 'split'}" aria-label="左右对比" title="左右对比"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16M6 9h3M15 9h3M6 14h3M15 14h3"/></svg></button></div><div role="group" aria-label="CHANGE 范围"><button class="diff-icon-button" data-diff-scope="changes" aria-pressed="${!view.diffFull}" aria-label="仅差异" title="仅差异"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h6M7 4v6M4 17h6M14 7h6M14 17h6"/><path d="M14 12h6" opacity=".4"/></svg><span>仅差异</span></button><button class="diff-icon-button" data-diff-scope="full" aria-pressed="${Boolean(view.diffFull)}" aria-label="完整文件" title="完整文件"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M8 12h8M8 16h8"/></svg><span>完整文件</span></button></div></div></div>${workingDiffMarkup(view.diffPreview, view.diffLayout)}</div></div>`;
   host.querySelector(".artifact-files").scrollTop = treeScroll;
 }
 
@@ -1868,13 +2382,25 @@ function bindTaskAttachments(dock, view, workspace, agents, messagingBlocked) {
     const remove = event.target.closest('[data-remove-task-attachment]');
     if (remove && !view.sending && !messagingBlocked) {
       const item = view.attachments.find(item => item.id === remove.dataset.removeTaskAttachment);
-      if (item?.previewURL) URL.revokeObjectURL(item.previewURL);
+      if (item?.previewURL) { URL.revokeObjectURL(item.previewURL); item.previewURL=null; }
       view.attachments = view.attachments.filter(item => item.id !== remove.dataset.removeTaskAttachment);
       renderCollaboration(workspace, agents); $("#instruction-text")?.focus({preventScroll:true}); return;
     }
     const link = event.target.closest('[data-attachment-download]');
     if (link) { event.preventDefault(); try { await downloadAttachment(link); } catch (error) { toast(error.message, true); } }
   };
+}
+
+function confirmTaskOutgoing(view, entry, {message, record} = {}) {
+  if(message)entry.message=message;
+  if(record)entry.record=record;
+  entry.status='confirmed';
+  if(entry.settled)return;
+  entry.settled=true;
+  view.attachments=(view.attachments || []).filter(item=>!entry.attachments.includes(item));
+  for(const item of entry.attachments)if(item.previewURL){URL.revokeObjectURL(item.previewURL);item.previewURL=null;}
+  if(view.draft===entry.draft && (view.draftRevision || 0)===entry.draftRevision)view.draft='';
+  if(view.sendRequest?.id===entry.id)view.sendRequest=null;
 }
 
 function renderCollaboration(workspace, agents) {
@@ -1885,16 +2411,29 @@ function renderCollaboration(workspace, agents) {
     selection: [previousInput.selectionStart, previousInput.selectionEnd, previousInput.selectionDirection],
   } : null;
   const previousList = dock.querySelector('.human-message-list');
-  if (previousList?.clientHeight) view.collaborationScroll = {
+  if(view.collaborationRestore){view.collaborationScroll=view.collaborationRestore;view.collaborationRestore=null;view.jumpLatest=false;}
+  else if (previousList?.clientHeight) view.collaborationScroll = {
     top: previousList.scrollTop,
     following: previousList.scrollHeight - previousList.scrollTop - previousList.clientHeight < 48,
   };
   const reading = view.jumpLatest ? null : view.collaborationScroll;
   view.disclosures ||= {};
   view.attachments ||= [];
-  const questions = (state.workspace?.pendingQuestions || []).filter(message => message.recipient.type === "human");
-  if (view.replyToMessageId === undefined || !questions.some(item => item.id === view.replyToMessageId)) view.replyToMessageId = questions[0]?.id || "";
-  const records = view.collaborationItems || [];
+  view.outbox ||= new Map();
+  const records = [...(view.collaborationItems || [])];
+  const savedById=new Map(records.map(item=>[item.id,item])), savedByRequest=new Map(records.filter(item=>item.clientRequestId).map(item=>[item.clientRequestId,item]));
+  for(const [id,entry] of view.outbox){
+    const saved=savedByRequest.get(id) || savedById.get(entry.message?.id);
+    if(saved){confirmTaskOutgoing(view,entry,{record:saved});view.outbox.delete(id);continue;}
+    if(entry.message)records.push(...collaborationRecords({run,messages:[entry.message]}));
+    else if(entry.record)records.push(entry.record);
+    else records.push({id:entry.id,timestamp:entry.createdAt,senderType:'human',from:'你',to:entry.recipientName,title:entry.replyToMessageId?'回复':'消息',content:entry.content,tone:'info',statusCode:'local',outgoing:entry});
+  }
+  const questions = (workspace.pendingQuestions || []).filter(message => message.recipient.type === "human");
+  const awaitingReply=[...view.outbox.values()].find(entry=>entry.status!=='confirmed' && entry.replyToMessageId===view.replyToMessageId);
+  if (view.replyToMessageId === undefined || (view.replyToMessageId && !questions.some(item => item.id === view.replyToMessageId) && !awaitingReply)) view.replyToMessageId = questions[0]?.id || "";
+  const replyQuestion=questions.find(item=>item.id===view.replyToMessageId) || awaitingReply?.replyQuestion;
+  records.sort((a,b)=>Date.parse(a.timestamp)-Date.parse(b.timestamp));
   const autonomous = run.task.kind === "automation";
   const messagingBlocked = Boolean(autonomous || run.task.archivedAt || run.status === "failed");
   const visibleRecords = records;
@@ -1903,36 +2442,62 @@ function renderCollaboration(workspace, agents) {
     return `<div class="collaboration-body ${expanded ? "is-expanded" : ""}" data-collaboration-body="${esc(key)}"><div class="collaboration-body-content" id="${esc(id)}">${collaborationMessageMarkup(content, agents.map(agent => agent.name))}</div><button type="button" class="text-action collaboration-expand" data-expand-collaboration-body aria-expanded="${expanded}" aria-controls="${esc(id)}" hidden>${expanded ? "收起" : "展开全文"}</button></div>`;
   };
   dock.innerHTML = `
-    <div class="collaboration-toolbar"><div><strong>团队协作</strong></div><div class="collaboration-filters">${(autonomous ? [] : [["all", "全部"], ["human", "涉及人类"]]).map(([value, label]) => `<button class="small-button ${view.collaborationFilter === value ? "primary" : ""}" data-collaboration-filter="${value}" aria-pressed="${view.collaborationFilter === value}">${label}</button>`).join("")}<button class="small-button" data-collaboration-latest>↓ 最新</button></div></div>
-    ${questions.length ? `<div class="await-banner"><strong>${questions.length} 个问题待你回答</strong>回答后恢复对应成员的协作；也可以选择追加新指令。${run.status === "paused" ? "任务已暂停，回复不会启动执行。" : ""}</div>` : ""}
+    <div class="collaboration-toolbar"><button class="small-button" data-collaboration-latest>↓ 最新</button></div>
+
     <div class="human-message-list">
+      ${view.collaborationError ? `<div class="collaboration-read-error" role="alert">${esc(view.collaborationError)}<button type="button" class="text-action" data-retry-collaboration>重试</button></div>` : ''}
       ${view.collaborationHasMore ? '<button class="small-button" data-collaboration-older>加载更早协作记录</button>' : ""}
-      ${records.length ? visibleRecords.map(item => `<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}" data-tone="${esc(item.tone)}" data-record-status="${esc(item.statusCode)}"><time>${exactTime(item.timestamp)}</time><div>
-        <header><span class="collaboration-kind">${esc(item.title)}</span><strong>${esc(item.from)}${item.to ? ` <span aria-label="交给">→</span> ${esc(item.to)}` : ""}</strong>${item.status ? `<span class="collaboration-status">${esc(item.status)}</span>` : ""}</header>
+      ${records.length ? visibleRecords.map((item, index) => {
+        // A saved Trace supplies identity; unlinked messages keep a neutral avatar.
+        const trace = workspace.traces?.find(trace => trace.id === item.traceId);
+        const sender = agents.find(agent => agent.id === trace?.agentId) || { name: item.from };
+        const day = new Date(item.timestamp).toDateString();
+        const divider = !index || new Date(visibleRecords[index - 1].timestamp).toDateString() !== day ? `<div class="communication-day-divider"><time datetime="${esc(item.timestamp)}">${esc(communicationDayLabel(item.timestamp))}</time></div>` : "";
+        return `${divider}<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}"${item.outgoing ? ` data-outgoing-state="${esc(item.outgoing.status)}"` : ''} data-tone="${esc(item.tone)}" data-record-status="${esc(item.statusCode)}">
+        ${item.senderType === "human" ? "" : `<span class="agent-card-avatar collaboration-avatar ${esc(roleColor(sender))}" aria-hidden="true">${esc(initialsOf(sender))}</span>`}<div class="collaboration-message-main">
+        <header><strong>${esc(item.from)}</strong><span class="collaboration-kind">${esc(item.title)}${item.to ? ` <span aria-label="交给">→</span> ${esc(item.to)}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(new Date(item.timestamp).toLocaleTimeString("zh-CN", {hour:"2-digit", minute:"2-digit", hour12:false}))}</time>${item.status ? `<span class="collaboration-status">${esc(item.status)}</span>` : ""}</header>
         <div class="collaboration-content">
-          ${body(item.content, item.id)}${messageAttachments(item.attachments || [], run.id, "runs")}
+          ${item.canReply ? '<div class="collaboration-question-heading">需要你回答</div>' : ""}${body(item.content, item.id)}${item.outgoing ? outgoingAttachmentMarkup(item.outgoing) : messageAttachments(item.attachments || [], run.id, "runs")}
           ${item.reason ? `<p>${esc(item.reason)}</p>` : ""}
           ${item.canReply ? `<button class="small-button primary" data-answer-message="${esc(item.replyId)}">回复此问题</button>` : ""}
           ${item.traceId || item.executionTraceId ? `<button class="text-action trace-link" data-open-collaboration-trace="${esc(item.traceId || item.executionTraceId)}" data-start-message-id="${esc(item.startMessageId)}" title="定位本轮对话开始时的提示词">本轮控制台 ↗</button>` : ""}
-        </div></div></article>`).join("") : `<div class="human-empty"><strong>暂无协作消息</strong><p>角色之间的沟通会按时间出现在这里；执行细节请查看控制台。</p></div>`}
+        </div>${outgoingMessageFeedback(item.outgoing,'task')}</div></article>`; }).join("") : view.collaborationError ? '' : !view.collaborationItems || view.collaborationLoading ? '<div class="human-empty" role="status">正在读取协作记录…</div>' : `<div class="human-empty"><strong>暂无协作消息</strong><p>角色之间的沟通会按时间出现在这里；执行细节请查看控制台。</p></div>`}
     </div>
     ${autonomous ? '' : `<form class="instruction-form" id="instruction-form">
-      ${questions.length ? `<label for="reply-question">消息用途</label><select id="reply-question" name="replyToMessageId">${questions.map(item => `<option value="${item.id}" ${view.replyToMessageId === item.id ? "selected" : ""}>回复 ${esc(item.sender.name)}：${esc(item.content.slice(0, 70))}</option>`).join("")}</select>` : ""}
-      <label for="instruction-text">消息内容</label><div class="message-composer-card"><div class="mention-wrap"><div class="message-composer-input"><div class="communication-draft-attachments" data-task-attachments>${draftAttachments(view.attachments, "task", view.sending || messagingBlocked)}</div><textarea id="instruction-text" name="content" placeholder="输入消息…"></textarea></div><div class="mention-list" id="mention-list"></div></div>
+      <input type="hidden" name="replyToMessageId" value="${esc(view.replyToMessageId || '')}">
+      <label class="sr-only" for="instruction-text">消息内容</label><div class="message-composer-card">
+      ${view.replyToMessageId ? `<div class="reply-context"><span title="${esc(replyQuestion?.content || '')}">回复 <strong>${esc(replyQuestion?.sender.name || '')}</strong>：${esc(replyQuestion?.content || '')}</span><button type="button" class="text-action" data-clear-reply aria-label="取消当前回复">×</button></div>` : ''}
+      <div class="mention-wrap"><div class="message-composer-input"><div class="communication-draft-attachments" data-task-attachments>${draftAttachments(view.attachments, "task", view.sending || messagingBlocked)}</div><textarea id="instruction-text" name="content" rows="2" placeholder="输入消息…"></textarea></div><div class="mention-list" id="mention-list"></div></div>
       <input type="file" multiple data-task-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-task-image-file hidden>
-      <div class="communication-composer-actions">${attachmentControls("task", messagingBlocked || view.sending)}<button class="primary-button compact" type="submit" data-send-instruction ${messagingBlocked || view.sending ? 'disabled' : ''}>${view.sending ? '发送中…' : '发送'}</button></div></div>
-      <p class="directive-note">${run.task.archivedAt ? "任务已归档，协作记录只读。" : run.status === "failed" ? "任务因错误中断，请先点击重试继续失败员工；当前不能发送消息或 @ 其他成员。" : questions.length ? "请先回复待澄清的问题。Enter 发送，Shift / Cmd / Alt + Enter 换行。" : ["completed", "cancelled", "paused"].includes(run.status) ? "可继续咨询；仅答疑，不恢复业务流程。Enter 发送，Shift / Cmd / Alt + Enter 换行。" : "新指令入队，不打断当前成员。Enter 发送，Shift / Cmd / Alt + Enter 换行。"}</p>
+      <div class="communication-composer-actions">${attachmentControls("task", messagingBlocked || view.sending)}<button type="button" class="composer-icon-button" data-task-mention aria-label="提及成员" title="提及成员" ${messagingBlocked || view.sending ? "disabled" : ""}>@</button><span class="composer-hint">Enter 发送 · Shift + Enter 换行</span><button class="primary-button" type="submit" data-send-instruction ${messagingBlocked || view.sending ? 'disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>${view.sending ? '发送中…' : '发送'}</button></div></div>
+      <p class="directive-note">${run.task.archivedAt ? "任务已归档，协作记录只读。" : run.status === "failed" ? "任务因错误中断，请先点击重试继续失败员工；当前不能发送消息或 @ 其他成员。" : questions.length ? "请先回复待澄清的问题。" : ["completed", "cancelled", "paused"].includes(run.status) ? "可继续咨询；仅答疑，不恢复业务流程。" : "新指令入队，不打断当前成员。"}</p>
     </form>`}`;
   $("#instruction-form")?.addEventListener("submit", sendInstruction);
   $("#reply-question")?.addEventListener("change", event => { view.replyToMessageId = event.target.value; });
-  if ($("#instruction-text")) { $("#instruction-text").value = view.draft; $("#instruction-text").disabled = messagingBlocked; }
+  if ($("#instruction-text")) { $("#instruction-text").value = view.draft; $("#instruction-text").disabled = messagingBlocked; $("#instruction-text").addEventListener('input',()=>{view.draftRevision=(view.draftRevision || 0)+1;view.sendRequest=null;}); }
   bindTaskAttachments(dock, view, workspace, agents, messagingBlocked);
+  dock.querySelectorAll('[data-recover-task-message]').forEach(button=>button.onclick=()=>{
+    const entry=view.outbox.get(button.dataset.recoverTaskMessage);if(!entry || view.sending)return;
+    if(view.draft && view.draft!==entry.content){toast('输入框已有新草稿，请先保存或清空，再恢复这条消息。',true);return;}
+    if(view.attachments.some(item=>!entry.attachments.includes(item))){toast('输入框已有新附件，请先保存或移除，再恢复这条消息。',true);return;}
+    view.draft=entry.content;view.draftRevision=(view.draftRevision || 0)+1;view.replyToMessageId=entry.replyToMessageId || '';
+    entry.draft=view.draft;entry.draftRevision=view.draftRevision;
+    entry.attachments.forEach(item=>{if(!item.previewURL && imageAttachment(item.file.name))item.previewURL=URL.createObjectURL(item.file);});
+    view.attachments=[...entry.attachments];view.sendRequest={id:entry.id,signature:entry.signature};
+    renderCollaboration(workspace,agents);$('#instruction-text')?.focus({preventScroll:true});
+  });
   refreshCollaborationBodies(dock);
   // Sending also renders this panel directly, outside renderWorkspace. Restore
   // reading state here so every replacement of the list follows the same rule.
   const messageList = dock.querySelector('.human-message-list');
+  const readingRevision=view.collaborationReadingRevision || 0;
+  const readingIntent=()=>{view.collaborationReadingRevision=(view.collaborationReadingRevision || 0)+1;view.jumpLatest=false;};
+  for(const type of ['wheel','touchmove','pointerdown'])messageList?.addEventListener(type,readingIntent,{passive:true});
+  messageList?.addEventListener('keydown',event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))readingIntent();});
+  dock.querySelector('[data-collaboration-latest]')?.addEventListener('click',readingIntent);
+  dock.querySelector('[data-collaboration-older]')?.addEventListener('click',readingIntent);
   const restoreReading = () => {
-    if (messageList?.isConnected && messageList.clientHeight) messageList.scrollTop = !reading || reading.following ? messageList.scrollHeight : reading.top;
+    if (messageList?.isConnected && messageList.clientHeight && (view.collaborationReadingRevision || 0)===readingRevision) messageList.scrollTop = !reading || reading.following ? messageList.scrollHeight : reading.top;
   };
   restoreReading();
   requestAnimationFrame(restoreReading);
@@ -1945,17 +2510,36 @@ function renderCollaboration(workspace, agents) {
 }
 
 /* ---------- 任务空间数据与动作 ---------- */
-async function loadCollaboration(runId=state.selectedRunId,{older=false,render:paint=true}={}) {
-  const view=workspaceView(runId), query=new URLSearchParams({limit:'30',human:String(view.collaborationFilter==='human')});
+async function loadCollaboration(runId=state.selectedRunId,{older=false,latest=false,render:paint=true}={}) {
+  if(!runId || state.currentView!=='workspace' || state.selectedRunId!==runId)return;
+  const view=workspaceView(runId);
+  if(latest){view.collaborationRequest=(view.collaborationRequest||0)+1;view.collaborationPending=null;view.collaborationRefreshQueued=false;view.collaborationBrowsing=false;}
+  if(view.collaborationPending){if(!older)view.collaborationRefreshQueued=true;return view.collaborationPending;}
+  const query=new URLSearchParams({limit:'30',human:'false'});
   if(older&&view.collaborationBefore)query.set('before',view.collaborationBefore);
   const token=(view.collaborationRequest||0)+1;view.collaborationRequest=token;
-  const result=await api(`/api/runs/${runId}/collaboration?${query}`);
-  if(state.selectedRunId!==runId||token!==view.collaborationRequest)return;
-  // A historical page is a bounded window. Live updates never replace it while reading.
-  if(!older && view.collaborationBrowsing && view.collaborationItems?.length)return;
-  view.collaborationItems=result.items;
-  view.collaborationHasMore=result.hasMore;view.collaborationBefore=result.nextBefore;view.collaborationBrowsing=older;
+  view.collaborationLoading=true;view.collaborationError=null;
+  const current=()=>state.currentView==='workspace' && state.selectedRunId===runId && token===view.collaborationRequest;
+  const pending=(async()=>{
+    try {
+      const result=await api(`/api/runs/${runId}/collaboration?${query}`);
+      if(!current())return;
+      // A historical page is a bounded window. Live updates never replace it while reading.
+      if(!older && view.collaborationBrowsing && view.collaborationItems?.length)return;
+      view.collaborationItems=result.items;view.collaborationLoaded=true;
+      view.collaborationHasMore=result.hasMore;view.collaborationBefore=result.nextBefore;view.collaborationBrowsing=older;
+    } catch(error) {if(current())view.collaborationError=error.message;}
+    finally {
+      if(token===view.collaborationRequest){
+        view.collaborationLoading=false;view.collaborationPending=null;
+        if(current() && paint)renderWorkspace();
+        if(view.collaborationRefreshQueued){view.collaborationRefreshQueued=false;if(current() && view.tab==='collaboration')void loadCollaboration(runId);}
+      }
+    }
+  })();
+  view.collaborationPending=pending;
   if(paint)renderWorkspace();
+  return pending;
 }
 async function loadWorkspace(runId = state.selectedRunId, { quiet = false } = {}) {
   if (!runId) { renderWorkspace(); return; }
@@ -1968,17 +2552,17 @@ async function loadWorkspace(runId = state.selectedRunId, { quiet = false } = {}
     const workspace = await api(`/api/runs/${runId}/workspace?view=compact`);
     if (request !== workspaceRequest || state.selectedRunId !== runId || state.currentView !== "workspace") return;
     state.workspace = workspace;
-    if(workspaceView(runId).tab==='collaboration')await loadCollaboration(runId,{render:false});
     if(workspace.run.task.kind === "automation") state.automationId=workspace.run.task.automationId;
     $$(".nav-item").forEach(item=>item.classList.toggle("active", item.dataset.view === (workspace.run.task.kind === "automation" ? "automations" : "tasks")));
     const task = state.tasks.find((item) => item.id === workspace.run.taskId);
     if (task) { task.status = workspace.run.task.status; task.archivedAt = workspace.run.task.archivedAt; task.deletionBlockedBy = workspace.run.task.deletionBlockedBy; task.updatedAt = workspace.run.task.updatedAt; }
     const run = state.runs.find((item) => item.id === runId);
-    if (run) { run.status = workspace.run.status; run.traceCount = workspace.traces.length; run.artifactCount = workspace.artifacts.length; }
+    if (run) { run.status = workspace.run.status; run.traceCount = workspace.run.traceCount; run.artifactCount = workspace.run.artifactCount; }
     if (state.currentView === "workspace" && location.pathname !== `/runs/${encodeURIComponent(runId)}`) history.replaceState({}, "", `/runs/${encodeURIComponent(runId)}`);
     render();
+    if(workspaceView(runId).tab==='collaboration')void loadCollaboration(runId);
   } catch (error) {
-    if (request !== workspaceRequest || state.selectedRunId !== runId) return;
+    if (request !== workspaceRequest || state.selectedRunId !== runId || state.currentView !== 'workspace') return;
     state.workspaceError = error.message;
     if (!state.workspace || state.workspace.run.id !== runId) renderWorkspace();
     if (!quiet) toast(error.message, true);
@@ -2084,15 +2668,26 @@ async function sendInstruction(event) {
   /* 未 @ 成员交由 Store 路由给经理；精确回复由问题 ID 决定接收人。 */
   const agents = state.workspace ? workspaceAgents(state.workspace, state.agents) : [];
   const replyToMessageId = form.get("replyToMessageId") || null;
+  if (!replyToMessageId && state.workspace.pendingQuestions?.some(item=>item.recipient.type==='human')) { toast("请在待答问题上点击「回复此问题」，再发送回答。", true); return; }
   const targets = agents.filter((agent) => new RegExp(`@${agent.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|\\s|[，,。.!！?？:：;；])`).test(content));
   if (!replyToMessageId && targets.length > 1) { toast("一条消息只能 @ 一位当前任务成员", true); return; }
   const target = targets[0];
   const runId = state.selectedRunId;
   const view = workspaceView(runId);
   if (view.sending || state.workspace?.run.task.archivedAt) return;
-  const draft = view.draft;
+  const draft = view.draft, draftRevision=view.draftRevision || 0;
+  const readingList=globalThis.document?.querySelector('#collaboration-panel .human-message-list');
+  const readingBefore=readingList?.clientHeight ? {top:readingList.scrollTop,following:readingList.scrollHeight-readingList.scrollTop-readingList.clientHeight<48} : view.collaborationScroll;
+  const readingRevision=view.collaborationReadingRevision || 0;
   view.sending = true;
   const attachments = [...(view.attachments || [])];
+  view.outbox ||= new Map();
+  const signature=JSON.stringify({content,recipientAgentId:replyToMessageId ? null : target?.id ?? null,replyToMessageId,attachments:attachments.map(item=>item.id)});
+  if(view.sendRequest?.signature!==signature)view.sendRequest={id:crypto.randomUUID(),signature};
+  const replyQuestion=state.workspace.pendingQuestions?.find(item=>item.id===replyToMessageId) || view.outbox.get(view.sendRequest.id)?.replyQuestion;
+  const outgoing={id:view.sendRequest.id,signature,content,draft,draftRevision,createdAt:new Date().toISOString(),status:'sending',attachments,replyToMessageId,replyQuestion,recipientName:replyToMessageId ? replyQuestion?.sender.name : (target || state.workspace.run.manager)?.name};
+  view.outbox.set(outgoing.id,outgoing);
+  view.jumpLatest=true;
   renderCollaboration(state.workspace, agents);
   try {
     for (const item of attachments) if (!item.uploaded) {
@@ -2101,20 +2696,24 @@ async function sendInstruction(event) {
     }
     const result = await api(`/api/runs/${runId}/messages`, {
       method: "POST",
-      body: JSON.stringify({ recipientAgentId: replyToMessageId ? null : target?.id ?? null, replyToMessageId, content, attachmentIds:attachments.map(item => item.uploaded.id) }),
+      body: JSON.stringify({ clientRequestId:outgoing.id, recipientAgentId: replyToMessageId ? null : target?.id ?? null, replyToMessageId, content, attachmentIds:attachments.map(item => item.uploaded.id) }),
     });
+    confirmTaskOutgoing(view,outgoing,{message:result.message});
     toast(result.interactionOnly ? "问题已发送，仅答疑，不恢复业务流程" : result.resumed ? "澄清已发送，对应协作将继续" : "消息已入队，不打断正在执行的成员");
-    view.attachments = (view.attachments || []).filter(item => !attachments.includes(item));
-    for (const item of attachments) if (item.previewURL) URL.revokeObjectURL(item.previewURL);
-    if (workspaceView(runId).draft === draft) workspaceView(runId).draft = "";
     view.collaborationBrowsing = false;
     view.jumpLatest = true;
-    if (state.selectedRunId === runId) await loadWorkspace(runId);
-  } catch (error) { toast(error.message, true); }
-  finally { view.sending = false; if (state.workspace?.run.id === runId) renderCollaboration(state.workspace, workspaceAgents(state.workspace, state.agents)); }
+    void loadCollaboration(runId,{latest:true});
+    // The POST receipt is already a persisted message. Display it now, then
+    // refresh metadata/history independently; a read failure is not a send failure.
+    if (state.selectedRunId === runId && state.currentView==='workspace') void loadWorkspace(runId).catch(error=>toast(`消息已保存，记录刷新失败：${error.message}`,true));
+  } catch (error) { if(outgoing.status!=='confirmed'){
+    outgoing.status='unconfirmed';outgoing.error=error.message;
+    if(readingBefore && (view.collaborationReadingRevision || 0)===readingRevision)view.collaborationRestore=readingBefore;
+    toast(error.message, true);
+  } }
+  finally { view.sending = false; if (state.currentView==='workspace' && state.workspace?.run.id === runId && view.tab==='collaboration') renderCollaboration(state.workspace, workspaceAgents(state.workspace, state.agents)); }
 }
-function openCompletionModal(runId) {
-  const workspace = state.workspace?.run?.id === runId ? state.workspace : null;
+function openCompletionModal(runId, workspace = state.workspace?.run?.id === runId ? state.workspace : null) {
   const acceptance = acceptanceReview(workspace || {});
   if (!acceptance?.verified) return toast("当前任务尚未提交人类验收。", true);
   const findings = acceptance.findings.map((finding) => `<li>${esc(finding)}</li>`).join("");
@@ -2140,7 +2739,8 @@ function openCompletionModal(runId) {
       await api(`/api/runs/${runId}/confirm-completion`, { method: "POST", body: "{}" });
       closeModal();
       await refresh({ quiet: true });
-      await loadWorkspace(runId);
+      if (state.currentView === 'inbox') { await refreshInbox(); renderInbox(); }
+      else await loadWorkspace(runId);
       toast("已由你确认任务完成");
     } catch (error) {
       button.disabled = false;
@@ -2212,7 +2812,7 @@ function openTerminateModal(runId) {
   const run = state.workspace?.run?.id === runId ? state.workspace.run : state.runs.find((item) => item.id === runId);
   const title = run?.task?.title || runId;
   openModal(`
-    <h2>终止 Run</h2>
+    <h2>终止执行</h2>
     <p class="modal-intro">「${esc(title)}」正在被终止。这是一个不可恢复的破坏性操作：</p>
     <ul class="confirm-list">
       <li>立即终止正在运行的本机 Agent 进程</li>
@@ -2261,9 +2861,15 @@ async function resumeWorkspaceRun(runId) {
 /* ---------- 创建弹窗 ---------- */
 const pathList = (value) => String(value || "").split("\n").map((item) => item.trim()).filter(Boolean);
 
-async function newTaskModal({ automation = false, existing = null } = {}) {
-  await loadCatalogReferences();
-  if (!state.agents.some(agent => agent.status === "active")) { toast("请先创建或启用数字员工。", true); return; }
+async function newTaskModal({ automation = false, existing = null, teamId = null, draft = null } = {}) {
+  openModal(`<h2>${automation?'读取自动化配置':'读取任务配置'}</h2><div data-task-catalog-loading class="directory-empty is-loading" role="status" aria-busy="true"><strong>正在读取成员与工作流</strong>读取完成后可继续编辑。</div><div class="form-actions"><button type="button" class="ghost-button" data-close-modal>取消</button></div>`);
+  const loading=$('[data-task-catalog-loading]');
+  let catalog;
+  try {catalog=await loadCatalogReferences();}
+  catch(error){if(loading.isConnected){loading.classList.remove('is-loading');loading.setAttribute('role','alert');loading.setAttribute('aria-busy','false');loading.innerHTML=`<strong>配置读取失败</strong>${esc(error.message)}<button type="button" class="small-button" data-retry-task-catalog>重试</button>`;loading.querySelector('[data-retry-task-catalog]').onclick=()=>newTaskModal({automation,existing,teamId,draft});}return;}
+  if(!loading.isConnected)return;
+  const source = existing || draft;
+  if (!catalog.agents.some(agent => agent.status === "active")) { closeModal();toast("请先创建或启用数字员工。", true); return; }
   openModal(`
     <h2>${automation ? existing ? "编辑自动化" : "新建自动化" : existing ? "编辑任务草稿" : "新建任务"}</h2>
     <form id="task-form" novalidate>
@@ -2275,37 +2881,40 @@ async function newTaskModal({ automation = false, existing = null } = {}) {
         <div class="form-field"><label for="task-acceptance">验收标准（每行一条）</label>
           <textarea id="task-acceptance" name="acceptanceCriteria" rows="3" placeholder="每行填写一条，可留空"></textarea><div class="field-error"></div></div>
       </details>
-      ${automation ? `<div class="automation-schedule-fields"><div class="form-grid"><div class="form-field"><label for="automation-frequency">重复规则</label><select id="automation-frequency"><option value="weekdays">每个工作日</option><option value="daily">每天</option><option value="weekly">每周一</option><option value="custom">自定义 Cron</option></select></div><div class="form-field"><label for="automation-time">执行时间</label><input id="automation-time" type="time" value="09:00"></div></div><div class="form-field"><label for="automation-cron">Cron · 分 时 日 月 周 <b>*</b></label><div class="automation-cron-row"><input id="automation-cron" name="cron" value="${esc(existing?.cron || '0 9 * * 1-5')}" placeholder="0 9 * * 1-5"><div class="automation-preview" aria-live="polite"></div></div><div class="field-error"></div></div><div class="field-hint">全自动协作；下一轮开始前自动确认上一轮待验收记录。</div></div>` : ''}
+      ${automation ? `<div class="automation-schedule-fields"><h3>执行计划</h3><div class="automation-schedule-top"><div class="automation-frequency-presets" role="group" aria-label="重复规则">${[['daily','每天'],['weekdays','工作日'],['weekly','每周一'],['monthly','每月'],['custom','自定义']].map(([value,label])=>`<button type="button" class="ghost-button" data-automation-frequency="${value}" aria-pressed="false">${label}</button>`).join('')}</div><select id="automation-frequency" aria-label="重复规则" hidden><option value="weekdays">每个工作日</option><option value="daily">每天</option><option value="weekly">每周一</option><option value="monthly">每月</option><option value="custom">自定义 Cron</option></select><label class="automation-time-control" for="automation-time">执行时间<input id="automation-time" type="time" value="09:00"></label></div><div class="automation-cron-row"><div class="form-field"><label for="automation-cron">Cron · 分 时 日 月 周 <b>*</b></label><input id="automation-cron" name="cron" value="${esc(source?.cron || '0 9 * * 1-5')}" placeholder="0 9 * * 1-5"><div class="field-error"></div><p class="field-hint">按服务所在本机的时区执行。</p></div><div class="automation-next-runs"><strong>未来 5 次执行</strong><div class="automation-preview" aria-live="polite"></div></div></div><p class="field-hint">全自动协作；下一轮开始前自动确认上一轮待验收记录。</p></div>` : ''}
         <div class="form-grid task-selectors">
           <div class="form-field"><div id="task-members-picker"></div><div class="field-error"></div></div>
           <div class="form-field"><label for="task-workflow">流程模板（选填）</label>
-            <select id="task-workflow" name="workflowTemplateId"><option value="">默认协作</option>${existing?.workflowTemplateId && !state.workflowTemplates.some(template=>template.id===existing.workflowTemplateId) ? `<option value="${esc(existing.workflowTemplateId)}">${esc(existing.workflowSnapshot?.name || '原流程模板')}（已删除，请重新选择）</option>` : ''}${state.workflowTemplates.map((template) => `<option value="${template.id}">${esc(template.name)}</option>`).join("")}</select></div>
+            <select id="task-workflow" name="workflowTemplateId"><option value="">默认协作</option>${source?.workflowTemplateId && !catalog.workflowTemplates.some(template=>template.id===source.workflowTemplateId) ? `<option value="${esc(source.workflowTemplateId)}">${esc(source.workflowSnapshot?.name || '原流程模板')}（已删除，请重新选择）</option>` : ''}${catalog.workflowTemplates.map((template) => `<option value="${template.id}">${esc(template.name)}</option>`).join("")}</select></div>
         </div>
-        <small class="task-workspace-hint">系统工作根目录 ${esc(state.settings?.workspaceRoot || "/tmp/AgentForge")}/tasks/任务ID/RunID</small>
-      <div class="form-actions task-form-footer">
-        <div class="task-submit-actions"><button type="button" class="ghost-button" data-close-modal>取消</button>${automation && !existing ? '<button type="submit" class="ghost-button" value="disabled">保存为停用</button>' : !automation ? `<button type="submit" class="ghost-button" value="draft">${existing ? '保存修改' : '保存草稿'}</button>` : ''}<button type="submit" class="primary-button" value="start">${automation ? existing ? "保存修改" : "创建并启用" : "保存并开始"}</button></div>
+        ${automation ? '' : `<small class="task-workspace-hint">系统工作根目录 ${esc(state.settings?.workspaceRoot || "/tmp/AgentForge")}/tasks/任务ID/RunID</small>`}
+      <div class="form-actions task-form-footer">${automation ? `<span class="automation-create-note">${existing ? existing.enabled ? '已启用' : '已停用' : '创建后默认启用'}</span>` : ''}
+        <div class="task-submit-actions"><button type="button" class="ghost-button" data-close-modal>取消</button>${automation && !existing ? '<button type="submit" class="ghost-button" value="disabled">保存为停用</button>' : !automation ? `<button type="submit" class="secondary-button" value="draft">${existing ? '保存修改' : '保存草稿'}</button>` : ''}<button type="submit" class="primary-button" value="start">${automation ? existing ? "保存修改" : "创建并启用" : "保存并开始"}</button></div>
       </div>
     </form>`);
   $("#modal-content").closest(".modal").classList.add("task-create-modal");
   if(automation) $("#modal-content").closest(".modal").classList.add("automation-create-modal");
   const form = $("#task-form");
-  const candidates = state.agents.filter(agent => agent.status === "active");
-  const savedMembers = [...(existing?.memberSnapshots || []),existing?.managerSnapshot].filter(Boolean);
-  const unavailable = (existing?.memberAgentIds || []).filter(id=>!candidates.some(agent=>agent.id===id)).map(id=>({...state.agents.find(agent=>agent.id===id) || savedMembers.find(agent=>agent.id===id) || {id,name:'已删除员工 '+id.slice(0,8)},status:'inactive'}));
-  const teams = state.teams.filter(team => team.status === "active").map(team => ({ ...team, description: `${team.memberAgentIds.length} 位员工 · 团队`, selectionKind: "team" }));
-  let selectedMembers = existing?.memberAgentIds || [];
+  const candidates = catalog.agents.filter(agent => agent.status === "active");
+  const savedMembers = [...(source?.memberSnapshots || []),source?.managerSnapshot].filter(Boolean);
+  const unavailable = (source?.memberAgentIds || []).filter(id=>!candidates.some(agent=>agent.id===id)).map(id=>({...catalog.agents.find(agent=>agent.id===id) || savedMembers.find(agent=>agent.id===id) || {id,name:'已删除员工 '+id.slice(0,8)},status:'inactive'}));
+  const teams = catalog.teams.filter(team => team.status === "active").map(team => ({ ...team, description: `${team.memberAgentIds.length} 位员工 · 团队`, selectionKind: "team" }));
   const expandMembers = item => item.selectionKind === 'team' ? item.memberAgentIds.filter(value => candidates.some(agent => agent.id === value)) : [item.id];
-  const memberSelection = createEmployeeMultiSelect($('#task-members-picker'), { selectedIds:selectedMembers, managerId:existing?.managerAgentId || null, onManagerChange:()=>clearInvalidField($('#task-members')), id: 'task-members', label:'任务成员 *', placeholder:'添加团队或数字员工', esc, items:[...teams,...candidates,...unavailable], available:item=>item.selectionKind==='team'||item.status==='active', hideUnavailable:true, unavailableLabel:'不可用', detail:item=>`<small>${esc(item.description || '数字员工')}</small>`, expand:expandMembers, onChange:values=>{selectedMembers=values;clearInvalidField($('#task-members'));} });
-  if (existing) { form.elements.title.value=existing.title; form.elements.objective.value=existing.objective; form.elements.acceptanceCriteria.value=existing.acceptanceCriteria.join("\n"); form.elements.workflowTemplateId.value=existing.workflowTemplateId || ""; }
-  if (existing?.acceptanceCriteria?.length) form.querySelector('.task-acceptance').open = true;
+  const presetTeam = teamId ? teams.find(team => team.id === teamId) : null;
+  let selectedMembers = source?.memberAgentIds || (presetTeam ? expandMembers(presetTeam) : []);
+  const memberSelection = createEmployeeMultiSelect($('#task-members-picker'), { selectedIds:selectedMembers, managerId:source?.managerAgentId || null, onManagerChange:()=>clearInvalidField($('#task-members')), id: 'task-members', label:'任务成员 *', placeholder:'添加团队或数字员工', esc, items:[...teams,...candidates,...unavailable], available:item=>item.selectionKind==='team'||item.status==='active', hideUnavailable:true, unavailableLabel:'不可用', detail:item=>`<small>${esc(item.description || '数字员工')}</small>`, expand:expandMembers, onChange:values=>{selectedMembers=values;clearInvalidField($('#task-members'));} });
+  if (source) { form.elements.title.value=source.title; form.elements.objective.value=source.objective; form.elements.acceptanceCriteria.value=source.acceptanceCriteria.join("\n"); form.elements.workflowTemplateId.value=source.workflowTemplateId || ""; }
+  if (source?.acceptanceCriteria?.length) form.querySelector('.task-acceptance').open = true;
   let previewTicket=0, previewTimer;
   if (automation) {
     const frequency=form.querySelector('#automation-frequency'),time=form.querySelector('#automation-time');
-    const infer=()=>{const fields=form.elements.cron.value.trim().split(/\s+/);const simple=/^\d+$/.test(fields[0]||'')&&/^\d+$/.test(fields[1]||'')&&fields[2]==='*'&&fields[3]==='*';frequency.value=simple?({'1-5':'weekdays','*':'daily','1':'weekly'}[fields[4]]||'custom'):'custom';if(simple)time.value=fields[1].padStart(2,'0')+':'+fields[0].padStart(2,'0');time.disabled=frequency.value==='custom';};
+    const syncFrequency=()=>form.querySelectorAll('[data-automation-frequency]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.automationFrequency===frequency.value)));
+    const infer=()=>{const fields=form.elements.cron.value.trim().split(/\s+/);const numeric=/^\d+$/.test(fields[0]||'')&&/^\d+$/.test(fields[1]||'');const monthly=numeric&&/^\d+$/.test(fields[2]||'')&&(fields[3]||'')==='*'&&(fields[4]||'*')==='*';const weekly=numeric&&(fields[2]||'')==='*'&&(fields[3]||'')==='*';frequency.value=monthly?'monthly':weekly?({'1-5':'weekdays','*':'daily','1':'weekly'}[fields[4]]||'custom'):'custom';if(frequency.value!=='custom')time.value=fields[1].padStart(2,'0')+':'+fields[0].padStart(2,'0');time.disabled=frequency.value==='custom';syncFrequency();};
     infer();
-    const applyPreset=()=>{time.disabled=frequency.value==='custom';if(time.disabled)return;const [hour,minute]=(time.value||'09:00').split(':').map(Number);form.elements.cron.value=`${minute} ${hour} * * ${{weekdays:'1-5',daily:'*',weekly:'1'}[frequency.value]}`;form.elements.cron.dispatchEvent(new Event('input'));};
+    const applyPreset=()=>{syncFrequency();time.disabled=frequency.value==='custom';if(time.disabled)return;const [hour,minute]=(time.value||'09:00').split(':').map(Number);form.elements.cron.value=`${minute} ${hour} ${{monthly:'1'}[frequency.value]||'*'} * ${{weekdays:'1-5',weekly:'1'}[frequency.value]||'*'}`;form.elements.cron.dispatchEvent(new Event('input'));};
+    form.querySelectorAll('[data-automation-frequency]').forEach(button=>button.onclick=()=>{frequency.value=button.dataset.automationFrequency;applyPreset();});
     frequency.addEventListener('change',applyPreset);time.addEventListener('change',applyPreset);form.elements.cron.addEventListener('change',infer);
-    const preview=async()=>{ const ticket=++previewTicket; const target=form.querySelector('.automation-preview'); try { const data=await api('/api/automations/preview',{method:'POST',body:JSON.stringify({cron:form.elements.cron.value})}); if(ticket===previewTicket && form.isConnected)target.textContent='下次执行：'+data.times.slice(0,1).map(value=>new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value))).join(' · '); } catch(error) { if(ticket===previewTicket && form.isConnected)target.textContent=error.message; } };
+    const preview=async()=>{ const ticket=++previewTicket; const target=form.querySelector('.automation-preview'); try { const data=await api('/api/automations/preview',{method:'POST',body:JSON.stringify({cron:form.elements.cron.value})}); if(ticket===previewTicket && form.isConnected)target.innerHTML='<span class="visually-hidden">下次执行：</span><ol>'+data.times.slice(0,5).map(value=>`<li><time datetime="${esc(value)}" title="${esc(exactTime(value))}">${esc(new Intl.DateTimeFormat('zh-CN',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(value)))}</time></li>`).join('')+'</ol>'; } catch(error) { if(ticket===previewTicket && form.isConnected)target.textContent=error.message; } };
     for(const name of ['cron'])form.elements[name].addEventListener('input',()=>{++previewTicket;clearTimeout(previewTimer);previewTimer=setTimeout(preview,300);});
     void preview();
   }
@@ -2343,6 +2952,7 @@ async function newTaskModal({ automation = false, existing = null } = {}) {
         // Saving a Task does not create a Run; keep the saved draft visible
         // even when the list previously had a search or status filter.
         state.tasks = [created.task, ...state.tasks.filter(task => task.id !== created.task.id)];
+        state.taskChip = "all";
         state.taskSearch = { name: "", status: "all", workflow: "all" };
         state.listPages.tasks = 1;
         $("#task-search-form")?.remove();
@@ -2357,12 +2967,13 @@ async function newTaskModal({ automation = false, existing = null } = {}) {
 }
 
 function workflowModal(template = null) {
-  openModal(`<h2 class="workflow-editor-heading" aria-label="${template ? '编辑工作流' : '新建工作流'}"><input id="workflow-name" name="workflowName" form="workflow-form" aria-label="工作流名称" aria-required="true" value="${esc(template?.name || '')}" placeholder="新建工作流" /></h2>
-    <form id="workflow-form" novalidate><div id="workflow-canvas-editor"></div>
-    <div class="form-actions"><button type="button" class="ghost-button" data-close-modal>取消</button><button type="submit" class="primary-button">${template ? '保存工作流' : '创建工作流'}</button></div></form>`);
+  openModal(`<form id="workflow-form" novalidate><header class="workflow-editor-topbar"><button type="button" class="ghost-button workflow-back" data-close-modal aria-label="返回工作流"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button><h2 class="workflow-editor-heading" aria-label="${template ? '编辑工作流' : '新建工作流'}"><input id="workflow-name" name="workflowName" aria-label="工作流名称" aria-required="true" value="${esc(template?.name || '')}" placeholder="新建工作流" /></h2><span class="workflow-save-state" role="status">${template?'已保存':'新工作流'}</span><div class="workflow-editor-top-actions"><button type="button" class="ghost-button" data-flow-action="preview" aria-pressed="false">文本预览</button><button type="button" class="small-button" data-close-modal>放弃</button><button type="submit" class="primary-button" aria-label="${template ? '保存工作流' : '创建工作流'}">保存 <kbd>⌘S</kbd></button></div></header><div id="workflow-canvas-editor"></div></form>`);
   const form = $('#workflow-form');
   form.closest('.modal').classList.add('workflow-editor-modal');
-  const editor = createWorkflowEditor($('#workflow-canvas-editor'), {workflow:template || {},loadVendor,esc,nameInput:$('#workflow-name')});
+  form.closest('.modal').toggleAttribute('data-native-chrome', Boolean(window.agentforgeDesktop));
+  const editor = createWorkflowEditor($('#workflow-canvas-editor'), {workflow:template || {},loadVendor,esc,nameInput:$('#workflow-name'),onChange:dirty=>{const status=form.querySelector('.workflow-save-state');status.textContent=dirty?'有未保存的更改':template?'已保存':'新工作流';status.classList.toggle('is-dirty',dirty);}});
+  form.querySelector('[data-flow-action=preview]').onclick = () => editor.togglePreview();
+  form.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') { event.preventDefault(); form.requestSubmit(form.querySelector('[type=submit]')); } });
   modalCancel = () => editor.dispose();
   form.addEventListener('submit', async event => {
     event.preventDefault();
@@ -2381,41 +2992,59 @@ function workflowModal(template = null) {
   });
 }
 
-async function agentModal(existing = null) {
+async function agentModal(existing = null, {draft = null} = {}) {
   let profiles, roles;
   try { [profiles, roles] = await Promise.all([api('/api/settings/runtime-profiles').then(result => result.profiles), api('/api/roles').then(result => result.roles)]); }
   catch (error) { toast(`配置读取失败：${error.message}`, true); return; }
   if (!profiles.length) { toast("Runtime 配置不可用，请在设置中检查。", true); return; }
-  const runtime = existing?.runtime || {};
+  const initial=existing || draft;
+  const runtime = initial?.runtime || {};
 
   openModal(`
     <h2>${existing ? "编辑数字员工" : "创建数字员工"}</h2>
     <p class="modal-intro">数字员工可加入团队并承担工作流节点；修改仅影响后续新任务和沟通。</p>
     <form id="agent-form" novalidate>
-      <div class="employee-identity-row"><div class="form-field"><label>名称 <b>*</b></label><input name="name" value="${esc(existing?.name || "")}" placeholder="例如：周航" /><div class="field-error"></div></div><fieldset class="employee-status-choice"><legend>状态</legend><label><input type="radio" name="status" value="active" ${!existing || existing.status==='active'?'checked':''}>可用</label><label><input type="radio" name="status" value="inactive" ${existing?.status==='inactive'?'checked':''}>停用</label></fieldset></div>
+      <div class="employee-identity-row"><div class="form-field"><label>名称 <b>*</b></label><input name="name" value="${esc(initial?.name || "")}" placeholder="例如：周航" /><div class="field-error"></div></div><fieldset class="employee-status-choice"><legend>状态</legend><label class="directory-enabled-control"><input type="checkbox" data-enabled-toggle ${!initial || initial.status==='active'?'checked':''}>可用</label><input type="hidden" name="status" value="${initial?.status==='inactive'?'inactive':'active'}"></fieldset></div>
       <div class="employee-properties-row"><div class="form-field"><label for="employee-runtime-profile">Runtime 配置 <b>*</b></label><select id="employee-runtime-profile" name="runtimeProfileId">${profiles.map(item => `<option value="${esc(item.id)}" ${!item.enabled && item.id !== runtime.profileId ? 'disabled' : ''} ${item.id === runtime.profileId ? 'selected' : ''}>${runtimeLabel(item.provider)}${item.enabled ? '' : '（已停用）'}</option>`).join('')}</select></div></div>
       <p class="field-hint">Runtime 在设置中管理和测试；停用不改写冻结任务与沟通。插件和 MCP 按员工独立选择。</p>
       <div class="form-field full" id="employee-role-selection"></div>
-      <div class="form-field full"><label>系统提示词（职责与协作边界）</label><textarea name="systemPrompt" rows="8">${esc(existing?.systemPrompt || "")}</textarea></div>
-      <div class="form-field full"><label>简介</label><textarea name="description" placeholder="擅长什么、能解决哪些问题、何时应咨询这位员工">${esc(existing?.description || "")}</textarea></div>
-      <div class="form-field full"><label>能力标签（每行一条）</label><textarea name="capabilities" rows="3">${esc((existing?.capabilities || []).join("\n"))}</textarea></div>
+      <div class="form-field full"><label>系统提示词（职责与协作边界）</label><textarea name="systemPrompt" rows="8">${esc(initial?.systemPrompt || "")}</textarea></div>
+      <div class="form-field full"><label>简介</label><textarea name="description" placeholder="擅长什么、能解决哪些问题、何时应咨询这位员工">${esc(initial?.description || "")}</textarea></div>
+      <div class="form-field full"><label>能力标签（每行一条）</label><textarea name="capabilities" rows="3">${esc((initial?.capabilities || []).join("\n"))}</textarea></div>
       <div class="form-field full" id="employee-market-selection"></div>
       <div class="form-actions">
         <button type="button" class="ghost-button" data-close-modal>取消</button>
         <button type="submit" class="primary-button">${existing ? "保存修改" : "创建数字员工"}</button>
       </div>
     </form>`);
-  const roleSelection=createEmployeeMultiSelect($('#employee-role-selection'),{id:'employee-role',label:'绑定角色（可多选）',placeholder:'搜索并添加角色',esc,items:roles,selectedIds:existing?.roleIds || [],detail:role=>`<small>${esc(role.id)}</small>`});
+  const roleSelection=createEmployeeMultiSelect($('#employee-role-selection'),{id:'employee-role',label:'绑定角色（可多选）',placeholder:'搜索并添加角色',esc,items:roles,selectedIds:initial?.roleIds || [],detail:role=>`<small>${esc(role.id)}</small>`});
   const form = $("#agent-form");
+  form.querySelector('[data-enabled-toggle]').onchange=event=>{form.elements.status.value=event.target.checked?'active':'inactive';};
+  const capabilityField=form.capabilities.closest('.form-field'),capabilityInput=document.createElement('input'),capabilityPicker=document.createElement('div');
+  capabilityPicker.className='employee-capability-picker';capabilityInput.id='employee-capability-input';capabilityInput.placeholder='输入后回车添加';capabilityInput.setAttribute('aria-label','添加能力标签');form.capabilities.hidden=true;capabilityField.querySelector('label').htmlFor=capabilityInput.id;capabilityField.querySelector('label').textContent='能力标签';capabilityField.append(capabilityPicker);
+  const renderCapabilities=()=>{capabilityPicker.innerHTML=form.capabilities.value.split(/\r?\n/).filter(Boolean).map((value,index)=>`<span>${esc(value)}<button type="button" data-remove-capability="${index}" aria-label="移除能力 ${esc(value)}">×</button></span>`).join('');capabilityPicker.append(capabilityInput);};
+  const addCapability=()=>{const value=capabilityInput.value.trim();if(value){const values=form.capabilities.value.split(/\r?\n/).filter(Boolean);if(!values.includes(value))values.push(value);form.capabilities.value=values.join('\n');capabilityInput.value='';renderCapabilities();}};
+  capabilityInput.onkeydown=event=>{if(event.key==='Enter' && !event.isComposing){event.preventDefault();addCapability();}};
+  capabilityPicker.onclick=event=>{const button=event.target.closest('[data-remove-capability]');if(button){const values=form.capabilities.value.split(/\r?\n/).filter(Boolean);values.splice(Number(button.dataset.removeCapability),1);form.capabilities.value=values.join('\n');renderCapabilities();capabilityInput.focus();}};form.addEventListener('submit',addCapability,true);renderCapabilities();
+  const body=form.querySelector('.modal-scroll'),main=document.createElement('div');main.className='employee-edit-main';
+  const sections=[['identity','基本信息',[form.querySelector('.employee-identity-row'),form.description.closest('.form-field'),form.capabilities.closest('.form-field')]],['responsibility','职责与提示词',[form.querySelector('#employee-role-selection'),form.systemPrompt.closest('.form-field')]],['runtime','运行配置',[form.querySelector('.employee-properties-row'),form.querySelector('.employee-properties-row + .field-hint')]],['tools','工具',[form.querySelector('#employee-market-selection')]]];
+  for(const [id,label,nodes] of sections){const section=document.createElement('section');section.id='employee-section-'+id;section.innerHTML=`<h3 class="employee-section-title">${label}</h3>`;nodes.forEach(node=>section.append(node));main.append(section);}
+  const nav=document.createElement('nav');nav.className='employee-section-nav';nav.setAttribute('aria-label','员工配置分区');nav.innerHTML=sections.map(([id,label],index)=>`<button type="button" class="text-action" data-form-section="employee-section-${id}" aria-current="${index===0?'location':'false'}">${label}</button>`).join('');
+  body.classList.add('employee-edit-layout');body.append(nav,main);
+  nav.onclick=event=>{const button=event.target.closest('[data-form-section]');if(button){document.getElementById(button.dataset.formSection)?.scrollIntoView({block:'start',behavior:'instant'});nav.querySelectorAll('button').forEach(item=>item.setAttribute('aria-current',item===button?'location':'false'));}};
+  main.onscroll=()=>{const current=[...main.children].reverse().find(section=>section.offsetTop<=main.scrollTop+main.offsetTop+24) || main.firstElementChild;nav.querySelectorAll('button').forEach(button=>button.setAttribute('aria-current',button.dataset.formSection===current.id?'location':'false'));};
   form.closest(".modal").classList.add("employee-config-modal");
   form.querySelectorAll(".form-field").forEach((field, index) => {
     const input = field.querySelector("input,textarea,select"), label = field.querySelector("label");
     if (input && label && !label.htmlFor) { input.id ||= `employee-field-${index}`; label.htmlFor = input.id; }
   });
   let provider = profiles.find(item => item.id === form.elements.runtimeProfileId.value).provider;
+  const runtimeSummary=document.createElement('dl');runtimeSummary.className='employee-runtime-details';form.querySelector('.employee-properties-row').after(runtimeSummary);
+  const showRuntimeSummary=()=>{const profile=profiles.find(item=>item.id===form.elements.runtimeProfileId.value);runtimeSummary.innerHTML=`<dt>模型</dt><dd>${esc(profile.model || 'CLI 默认模型')}</dd><dt>思考等级</dt><dd>${esc(profile.effort || '默认')}</dd>`;};showRuntimeSummary();
   const selection = marketplaceUI.select($("#employee-market-selection"), runtime, provider);
   form.elements.runtimeProfileId.addEventListener("change", () => {
     provider = profiles.find(item => item.id === form.elements.runtimeProfileId.value).provider;
+    showRuntimeSummary();
     selection.provider(provider);
   });
   form.addEventListener("submit", async (event) => {
@@ -2431,6 +3060,7 @@ async function agentModal(existing = null) {
     const data = new FormData(form);
     const input = Object.fromEntries(data);
     input.capabilities = String(data.get("capabilities") || "").split(/\r?\n/).map(value => value.trim()).filter(Boolean);
+    if(draft?.kind)input.kind=draft.kind;
     input.roleIds = roleSelection.value();
     input.runtime = {
       profileId: data.get("runtimeProfileId"),
@@ -2529,12 +3159,14 @@ async function teamModal(existing = null) {
   openModal(`
     <h2>${existing ? "编辑团队" : "创建团队"}</h2>
     <form id="team-form" novalidate>
-      <div class="employee-identity-row"><div class="form-field"><label for="team-name">团队名称 <b>*</b></label><input id="team-name" name="name" value="${esc(existing?.name || "")}" placeholder="例如：产品交付组" /><div class="field-error"></div></div><fieldset class="employee-status-choice"><legend>状态</legend><label><input type="radio" name="status" value="active" ${!existing || existing.status==='active'?'checked':''}>可用</label><label><input type="radio" name="status" value="inactive" ${existing?.status==='inactive'?'checked':''}>停用</label></fieldset></div>
-      <div class="form-field"><label>团队使命</label><textarea name="mission">${esc(existing?.mission || "")}</textarea></div>
+      <div class="form-field"><label for="team-name">团队名称 <b>*</b></label><input id="team-name" name="name" value="${esc(existing?.name || "")}" placeholder="例如：产品交付组" /><div class="field-error"></div></div>
+      <div class="form-field"><label for="team-mission">团队使命</label><textarea id="team-mission" name="mission" rows="2">${esc(existing?.mission || "")}</textarea></div>
       <div class="form-field"><div id="team-members-picker"></div><div class="field-error"></div></div>
+      <label class="directory-enabled-control team-enabled-control"><input type="checkbox" data-enabled-toggle ${!existing || existing.status==='active'?'checked':''}><span><strong>启用此团队</strong><small>停用后不在新任务的团队列表中显示</small></span></label><input type="hidden" name="status" value="${existing?.status==='inactive'?'inactive':'active'}">
       <div class="form-actions"><button type="button" class="ghost-button" data-close-modal>取消</button><button type="submit" class="primary-button">${existing ? "保存修改" : "创建团队"}</button></div>
     </form>`);
   const form = $("#team-form"); form.closest('.modal').classList.add('team-config-modal');
+  form.querySelector('[data-enabled-toggle]').onchange=event=>{form.elements.status.value=event.target.checked?'active':'inactive';};
   const selection = createEmployeeMultiSelect($('#team-members-picker'), { id:'team-members', label:'团队员工', placeholder:'搜索并添加员工', esc, items:state.agents, selectedIds:existing?.memberAgentIds || [], detail: agent => `<small>${esc(agent.description || '数字员工')}</small>` });
   form.addEventListener('submit', async event => {
     event.preventDefault(); clearInvalid(form);
@@ -2548,8 +3180,8 @@ async function teamModal(existing = null) {
 
 const newTeamModal = () => teamModal();
 
-const automationUI = createAutomationUI({ api, esc, pill, exactTime, toast, catalog: () => state, showWorkflow: workflowDetails,
-  edit: existing => newTaskModal({automation:true,existing}),
+const automationUI = createAutomationUI({ api, esc, pill, exactTime, toast, catalog: () => state, showWorkflow: workflowDetails, headerActions:$('#automations-header-actions'),
+  edit: (existing, { draft } = {}) => newTaskModal({ automation: true, existing, draft }),
   navigate: id => { state.automationId=id; setView("automations"); },
   openRun: runId => { state.selectedRunId=runId; state.workspace=null; setView("workspace"); void loadWorkspace(runId); },
   confirmDelete: (item, remove) => { openModal(`<h2>删除自动化</h2><p>永久删除「${esc(item.title)}」及全部触发记录和对应任务？正在执行的任务会先终止，此操作无法撤销。</p><div class="form-actions"><button class="ghost-button" data-close-modal>取消</button><button class="danger-button" id="confirm-auto-delete">删除</button></div>`); $('#confirm-auto-delete').onclick=async event=>{event.currentTarget.disabled=true;try{await remove();closeModal();}catch(error){toast(error.message,true);if($('#confirm-auto-delete'))$('#confirm-auto-delete').disabled=false;}}; }
@@ -2568,7 +3200,7 @@ document.addEventListener("toggle", event => {
 
 function render() {
   renderShell();
-  const views = { overview: renderOverview, tasks: renderTasks, teams: renderTeams, workflows: renderWorkflows, agents: renderAgents, roles: renderRoles, manual: renderManual, workspace: renderWorkspace };
+  const views = { inbox: renderInbox, overview: renderOverview, tasks: renderTasks, teams: renderTeams, workflows: renderWorkflows, agents: renderAgents, roles: renderRoles, manual: renderManual, workspace: renderWorkspace };
   if (state.currentView === "automations") automationUI.mount($("#automations-root"),state.automationId);
   if (state.currentView === "communication") communicationUI.mount($("#communication-root"), state, state.selectedChatId);
   if (state.currentView === "settings") settingsUI.mount($("#settings-root"), state.settingsPage);
@@ -2577,6 +3209,9 @@ function render() {
   views[state.currentView]?.();
 }
 
+// Modules (marketplace, automations) publish counts on their view; keep the titlebar in step.
+const titleCountObserver = new MutationObserver(renderTitleCount);
+for (const view of document.querySelectorAll("main.main-content > .view")) titleCountObserver.observe(view, { attributes: true, attributeFilter: ["data-title-count", "class"] });
 $("#agents-role-filter").addEventListener("change", () => { state.listPages.agents = 1; queryDirectorySoon(); });
 $("#agents-search").addEventListener("input", () => {
   state.listPages.agents = 1;
@@ -2586,31 +3221,71 @@ for (const [key, render] of [["teams", renderTeams], ["workflows", renderWorkflo
   state.listPages[key] = 1;
   queryDirectorySoon();
 });
-document.addEventListener("submit", (event) => {
-  if (event.target.id !== "task-search-form") return;
-  event.preventDefault();
-  const fields = new FormData(event.target);
-  state.taskSearch = { name: String(fields.get("name") || ""), status: String(fields.get("status") || "all"), workflow: String(fields.get("workflow") || "all") };
-  state.listPages[state.taskArchiveView ? "archive" : "tasks"] = 1;
-  refreshDirectory().then(render).catch(error=>toast(error.message,true));
+function queryTaskDirectory() {
+  const fields = new FormData($('#task-search-form'));
+  state.taskSearch = { name:String(fields.get('name') || ''), status:String(fields.get('status') || 'all'), workflow:String(fields.get('workflow') || 'all') };
+  state.listPages[state.taskArchiveView ? 'archive' : 'tasks'] = 1;
+  queryDirectorySoon();
+}
+document.addEventListener('input', event => {
+  if (event.target.matches('#task-search-form input[name=name]')) queryTaskDirectory();
 });
-document.addEventListener("reset", (event) => {
-  if (event.target.id !== "task-search-form") return;
-  event.preventDefault();
-  state.taskSearch = { name: "", status: "all", workflow: "all" };
-  state.listPages[state.taskArchiveView ? "archive" : "tasks"] = 1;
-  event.target.elements.name.value = "";
-  event.target.elements.status.value = "all";
-  event.target.elements.workflow.value = "all";
-  refreshDirectory().then(render).catch(error=>toast(error.message,true));
+document.addEventListener('change', event => {
+  if (event.target.matches('#task-search-form select')) { state.taskChip = 'all'; queryTaskDirectory(); }
+});
+document.addEventListener('submit', event => {
+  if (event.target.id === 'task-search-form') { event.preventDefault(); queryTaskDirectory(); }
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && event.target.closest('.task-filter-control')) {
+    event.preventDefault(); event.stopPropagation();
+    closeFloatingLists(event.target.closest('.task-filter-control'));
+    $('[data-task-filters]').focus();
+  }
 });
 
+// Drawers are non-modal, so their outside clicks target the directory, not the
+// dialog backdrop. Keep nested top-layer popovers inside the drawer's DOM scope.
+document.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || !$("#modal-backdrop").open) return;
+  const drawer = $("#modal-backdrop .detail-drawer");
+  if (drawer && !drawer.contains(event.target)) closeModal();
+}, {capture:true});
 document.addEventListener("click", (event) => {
   const el = (selector) => event.target.closest(selector);
   let target;
-  if ((target = el("[data-pagination] [data-page]"))) { const key = target.closest("[data-pagination]").dataset.pagination; state.listPages[key] = Number(target.dataset.page); if(directoryResources[key]||key==="archive")refreshDirectory().then(render).catch(error=>toast(error.message,true)); return; }
+  const taskCard = event.target.closest('#tasks-table .task-row, #tasks-table .board-task');
+  if (taskCard && !event.target.closest('button,a,input,summary,details')) { taskCard.querySelector('.task-title-link,h4 button')?.click(); return; }
+  if ((target = el('[data-task-filters]'))) {
+    const list = $('#task-filter-panel');
+    const popup = createFloatingList(target,list,{minWidth:240,onClose:()=>target.setAttribute('aria-expanded','false')});
+    if (target.getAttribute('aria-expanded') === 'true') popup.close();
+    else { target.setAttribute('aria-expanded','true'); popup.open(); list.querySelector('select').focus(); }
+    return;
+  }
+  if ((target = el('[data-task-chip]'))) {
+    state.taskChip = target.dataset.taskChip; state.taskSearch.status = 'all';
+    $('#task-search-form select[name=status]').value = 'all'; state.listPages.tasks = 1;
+    return setView('tasks', {taskArchiveView:false});
+  }
+  if ((target = el('[data-task-layout]'))) { state.taskLayout=target.dataset.taskLayout; renderTasks(); return; }
+  if ((target = el('[data-command-palette]'))) return openCommandPalette();
+  if ((target = el('[data-sidebar-new-task]'))) return newTaskModal();
+  if ((target = el('[data-toggle-sidebar]'))) return toggleSidebar();
+  if ((target = el('[data-inbox-view]'))) { state.inboxReceipt = null; state.inboxView = target.dataset.inboxView; state.inboxSelection = null; void refreshInbox().then(renderInbox); return; }
+  if ((target = el('[data-inbox-page]'))) { state.inboxPages ||= {}; state.inboxPages[target.dataset.inboxStatus] = Number(target.dataset.inboxPage); void refreshInbox().then(renderInbox); return; }
+  if ((target = el('[data-inbox-select]'))) { state.inboxReceipt = null; state.inboxSelection = target.dataset.inboxSelect; renderInbox(); return; }
+  if ((target = el('[data-inbox-retry]'))) { void refreshInbox().then(renderInbox); return; }
+  if ((target = el('[data-inbox-confirm]'))) { const runId=target.dataset.inboxConfirm; target.disabled=true; void api(`/api/runs/${encodeURIComponent(runId)}/workspace?view=compact`).then(workspace=>{if(target.isConnected && state.currentView==='inbox' && !$('#modal-backdrop').open)openCompletionModal(runId,workspace);}).catch(error=>toast(error.message,true)).finally(()=>{if(target.isConnected)target.disabled=false;}); return; }
+  if ((target = el('[data-inbox-artifact]'))) { const {runId,inboxArtifact}=target.dataset; target.disabled=true; void api(`/api/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(inboxArtifact)}/content`).then(file=>{if(target.isConnected && state.currentView==='inbox' && !$('#modal-backdrop').open)openModal(`<h2>${esc(file.artifact.name)}</h2><p class="modal-intro">已保存的交付快照</p><pre class="inbox-artifact-content">${esc(file.content || '该文件没有可显示的文本内容。')}</pre>`);}).catch(error=>toast(error.message,true)).finally(()=>{if(target.isConnected)target.disabled=false;}); return; }
+  if ((target = el('[data-agent-detail]'))) { const agent = state.agents.find(item => item.id === target.dataset.agentDetail); if(agent)void showEmployeeDetail(agent,{drawer:true}); return; }
+  if ((target = el('[data-employee-layout]'))) { state.employeeLayout=target.dataset.employeeLayout;renderAgents();return; }
+  if ((target = el('[data-agent-status]'))) { const button=target;button.disabled=true;void api(`/api/agents/${encodeURIComponent(button.dataset.agentStatus)}`,{method:'PUT',body:JSON.stringify({status:button.dataset.status})}).then(async()=>{toast(button.dataset.status==='active'?'员工已启用。':'员工已停用。');await refresh();}).catch(error=>toast(error.message,true)).finally(()=>{if(button.isConnected)button.disabled=false;});return; }
+  if ((target = el('[data-retry-directory]'))) return refresh({quiet:false});
+  if ((target = el("[data-pagination] [data-page]"))) { const key = target.closest("[data-pagination]").dataset.pagination; state.listPages[key] = Number(target.dataset.page); if(directoryResources[key]||key==="archive")refreshDirectory({paint:true}).catch(error=>toast(error.message,true)); return; }
   if ((target = el("[data-chat-agent]"))) return communicationUI.open("agent", target.dataset.chatAgent);
   if ((target = el("[data-chat-team]"))) return communicationUI.open("team", target.dataset.chatTeam);
+  if ((target = el('[data-new-team-task]'))) return newTaskModal({teamId:target.dataset.newTeamTask});
   if ((target = el("#logout-button"))) {
     target.disabled = true; target.textContent = "退出中…";
     api("/api/auth/logout", { method: "POST", body: "{}" }).then(() => location.replace("/login")).catch(error => { toast(error.message, true); target.disabled = false; target.textContent = "退出登录"; });
@@ -2654,11 +3329,13 @@ document.addEventListener("click", (event) => {
     const role = state.directoryPages?.roles?.items.find((item) => item.id === target.dataset.editRole);
     return role ? roleModal(role) : toast("角色不存在，请刷新列表。", true);
   }
+  if ((target = el('[data-clone-role]'))) { const role=state.directoryPages?.roles?.items.find(item=>item.id===target.dataset.cloneRole);return role?roleModal(null,{draft:{...role,name:role.name+' 副本'}}):toast('角色不存在，请刷新列表。',true); }
   if ((target = el("[data-delete-role]"))) return configurationDeletionModal("role", target.dataset.deleteRole);
   if ((target = el("[data-edit-agent]"))) {
     const agent = state.directoryPages?.agents?.items.find((item) => item.id === target.dataset.editAgent);
     return agent ? agentModal(agent) : toast("数字员工不存在。", true);
   }
+  if ((target = el('[data-clone-agent]'))) { const agent=state.directoryPages?.agents?.items.find(item=>item.id===target.dataset.cloneAgent);return agent?agentModal(null,{draft:{...agent,name:agent.name+' 副本'}}):toast('数字员工不存在，请刷新列表。',true); }
   if ((target = el("[data-edit-team]"))) {
     const team = state.directoryPages?.teams?.items.find((item) => item.id === target.dataset.editTeam);
     return team ? teamModal(team) : toast("团队不存在。", true);
@@ -2681,9 +3358,9 @@ document.addEventListener("click", (event) => {
       .then((accepted) => accepted ? api(`/api/workflow-templates/${workflow.id}`, { method: "DELETE" }).then(async () => { toast("工作流已删除。"); await refresh(); }).catch((error) => toast(error.message, true)) : undefined);
   }
   if ((target = el("[data-close-modal]")) || event.target.id === "modal-close") return closeModal();
-  if (event.target.id === "modal-backdrop" && !$("#modal-backdrop").classList.contains('form-modal-open')) return closeModal();
+  if (event.target.id === "modal-backdrop" && modalAllowsLightDismiss()) return closeModal();
   if (event.target.id === "notify-button") return toast("通知中心即将支持。");
-  if ((target = el("#live-indicator"))) return toast(state.eventSource ? "SSE 事件流已连接当前 Run。" : "尚未订阅 Run 事件流。");
+  if ((target = el("#live-indicator"))) return toast(state.eventSource ? "当前任务已连接实时同步。" : "尚未连接任务实时同步。");
   if ((target = el("[data-open-run]"))) {
     state.selectedAgentId = null;
     state.selectedRunId = target.dataset.openRun;
@@ -2708,6 +3385,8 @@ document.addEventListener("click", (event) => {
   }
   if ((target = el("[data-unarchive-task]"))) return api(`/api/tasks/${target.dataset.unarchiveTask}/unarchive`, { method: "POST", body: "{}" }).then(async () => { toast("任务已恢复到任务中心。"); await refresh(); }).catch((error) => toast(error.message, true));
   if ((target = el("[data-delete-task]"))) return openDeleteTaskModal(target.dataset.deleteTask);
+  if ((target = el("[data-task-mention]"))) { const input = $("#instruction-text"); input.focus(); input.setRangeText("@", input.selectionStart, input.selectionEnd, "end"); input.dispatchEvent(new Event("input", {bubbles:true})); return; }
+  if ((target = el("[data-close-task-details]"))) { workspaceView().detailsByTab ||= {}; workspaceView().detailsByTab[workspaceView().tab] = false; renderWorkspace(); $("[data-toggle-task-details]")?.focus(); return; }
   if ((target = el("[data-toggle-task-details]"))) { workspaceView().detailsByTab ||= {}; workspaceView().detailsByTab[workspaceView().tab] = !workspaceView().detailsOpen; return renderWorkspace(); }
   if ((target = el("[data-toggle-task-description]"))) { workspaceView().descriptionExpanded = !workspaceView().descriptionExpanded; return renderWorkspace(); }
   if ((target = el("[data-edit-task-members]"))) return editTaskMembers();
@@ -2716,6 +3395,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-task-workflow-details]"))) return workflowDetails(state.workspace.run.task.workflowSnapshot, { frozen: true });
   if ((target = el("[data-ws-tab]"))) { workspaceView().jumpLatest = true; workspaceView().tab = target.dataset.wsTab; renderWorkspace(); if(target.dataset.wsTab==='collaboration')return loadCollaboration().catch(error=>toast(error.message,true)); if (target.dataset.wsTab === "diff" && workspaceView().changes && !workspaceView().changesLoading) return loadWorkingChanges(state.selectedRunId); if (target.dataset.wsTab === "directory" && workspaceView().directory && !workspaceView().directoryLoading) return loadWorkingDirectory(state.selectedRunId); return; }
   if ((target = el("[data-reload-workspace]"))) return loadWorkspace();
+  if ((target = el('[data-retry-collaboration]'))) return loadCollaboration();
   if ((target = el("[data-load-directory]"))) return loadWorkingDirectory(state.selectedRunId,{path:target.dataset.loadDirectory});
   if ((target = el("[data-load-more-directory]"))) return loadWorkingDirectory(state.selectedRunId,{path:target.dataset.loadMoreDirectory,more:true});
   if ((target = el("[data-console-older]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { older: true });
@@ -2737,9 +3417,9 @@ document.addEventListener("click", (event) => {
     workspaceView().disclosures["body:" + body.dataset.collaborationBody] = expanded;
     return;
   }
-  if ((target = el("[data-collaboration-filter]"))) { workspaceView().collaborationFilter = target.dataset.collaborationFilter; workspaceView().collaborationScroll = null; workspaceView().collaborationBrowsing=false;return loadCollaboration().catch(error=>toast(error.message,true)); }
-  if ((target = el("[data-collaboration-latest]"))) { workspaceView().collaborationBrowsing=false;workspaceView().jumpLatest=true;return loadCollaboration().catch(error=>toast(error.message,true)); }
-  if ((target = el("[data-answer-message]"))) { workspaceView().replyToMessageId = target.dataset.answerMessage; renderWorkspace(); $("#instruction-text").focus({ preventScroll: true }); return; }
+  if ((target = el("[data-collaboration-latest]"))) { workspaceView().jumpLatest=true;return loadCollaboration(undefined,{latest:true}).catch(error=>toast(error.message,true)); }
+  if ((target = el('[data-clear-reply]'))) { workspaceView().replyToMessageId='';workspaceView().sendRequest=null; renderWorkspace(); $('#instruction-text')?.focus({preventScroll:true}); return; }
+  if ((target = el("[data-answer-message]"))) { workspaceView().replyToMessageId = target.dataset.answerMessage;workspaceView().sendRequest=null; renderWorkspace(); $("#instruction-text").focus({ preventScroll: true }); return; }
   if ((target = el("[data-open-collaboration-trace]"))) { void openCollaborationTurn(target.dataset.openCollaborationTrace, target.dataset.startMessageId); return; }
   if ((target = el("[data-open-acceptance-review]"))) { const trace = state.workspace?.traces.find((item) => item.id === target.dataset.openAcceptanceReview); if (!trace) return toast("经理交接记录在当前 Run 中不可读取。", true); state.selectedAgentId = trace.agentId; workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, trace.agentId, { reset: true, traceId: trace.id }); renderWorkspace(); return; }
   if ((target = el("[data-console-latest]"))) { workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null }); renderWorkspace(); const stream = $("#trace-stream"); stream.scrollTop = stream.scrollHeight; return; }
@@ -2753,6 +3433,7 @@ document.addEventListener("click", (event) => {
     textarea.value = prefix + textarea.value.slice(textarea.selectionStart);
     textarea.setSelectionRange(prefix.length, prefix.length);
     workspaceView().draft = textarea.value;
+    workspaceView().draftRevision=(workspaceView().draftRevision || 0)+1;workspaceView().sendRequest=null;
     textarea.focus();
     $("#mention-list")?.classList.remove("show");
     closeFloatingList($("#mention-list"));
@@ -2812,9 +3493,23 @@ document.addEventListener("input", (event) => {
 
 $("#modal-backdrop").addEventListener('cancel', event => {
   event.preventDefault();
-  if (!event.currentTarget.classList.contains('form-modal-open')) closeModal();
+  if (modalAllowsLightDismiss()) closeModal();
 });
+let navigationPrefixAt = 0;
 document.addEventListener("keydown", (event) => {
+  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !event.isComposing && event.target.closest('#task-form')) { event.preventDefault(); const button=$('#task-form button[value=start]');if(button && !button.disabled)button.click();return; }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k' && !event.isComposing) { event.preventDefault(); if (!$('#modal-backdrop').open) openCommandPalette(); return; }
+  if ((event.metaKey || event.ctrlKey) && event.key === '\\' && !event.isComposing && !$('#modal-backdrop').open) { event.preventDefault(); toggleSidebar(); return; }
+  if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'i' && state.currentView === 'workspace' && !$('#modal-backdrop').open) { event.preventDefault(); $('[data-toggle-task-details]')?.click(); return; }
+  if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.isComposing && !event.target.closest('input,textarea,select,[contenteditable=true]') && !$('#modal-backdrop').open) {
+    if(event.key==='/'){const input=$('.view.active input[type=search]');if(input){event.preventDefault();input.focus();}return;}
+    if (event.key.toLowerCase() === 'g') { navigationPrefixAt = Date.now(); return; }
+    if (navigationPrefixAt && Date.now() - navigationPrefixAt < 1200) { navigationPrefixAt=0; const view = {i:'inbox',t:'tasks',e:'agents'}[event.key.toLowerCase()]; if(view){event.preventDefault();setView(view);return;} }
+    if(event.key.toLowerCase()==='c'){event.preventDefault();newTaskModal(event.shiftKey?{automation:true}:{});return;}
+    if(event.key.toLowerCase()==='m'){event.preventDefault();setView('communication');communicationUI.newConversation();return;}
+    if(state.currentView==='workspace' && ['1','2','3'].includes(event.key)){event.preventDefault();$(['[data-ws-tab="collaboration"]','#directory-mode','#console-mode'][Number(event.key)-1])?.click();return;}
+    if(['j','k'].includes(event.key)){const rows=$$('.view.active .task-title-link,.view.active [data-inbox-select],.view.active .employee-card h3 button');const index=rows.indexOf(document.activeElement);if(rows.length){event.preventDefault();rows[(index+(event.key==='j'?1:-1)+rows.length)%rows.length].focus();}return;}
+  }
   if (event.target.id === "instruction-text" && !event.isComposing && event.keyCode !== 229) {
     const list = $("#mention-list");
     const items = list?.classList.contains("show") ? [...list.querySelectorAll("[data-mention-insert]")] : [];
@@ -2833,10 +3528,12 @@ document.addEventListener("keydown", (event) => {
     }
   }
   if (event.key !== "Escape") return;
+  if (state.currentView === "workspace" && workspaceView().detailsOpen && !$("#modal-backdrop").open && !$("#mention-list")?.classList.contains("show")) { $("[data-close-task-details]")?.click(); return; }
   if ($("#mention-list")?.classList.contains("show")) { $("#mention-list").classList.remove("show"); closeFloatingList($("#mention-list")); return; }
   $("#mention-list")?.classList.remove("show");
-  if ($("#modal-backdrop").classList.contains("open") && !$("#modal-backdrop").classList.contains('form-modal-open')) closeModal();
+  if ($("#modal-backdrop").classList.contains("open") && modalAllowsLightDismiss()) closeModal();
 });
+window.matchMedia("(max-width: 1180px)").addEventListener("change", () => { if (state.currentView === "workspace" && state.workspace) renderWorkspace(); });
 window.addEventListener("popstate", () => {
   const route = routeFromLocation();
   state.automationId = route.automationId || null;
@@ -2853,8 +3550,8 @@ window.addEventListener("popstate", () => {
 /* ---------- 初始化：骨架屏 → bootstrap → 渲染 ---------- */
 async function init() {
   if (location.pathname === "/settings") history.replaceState({}, "", "/settings/general");
-  if (location.pathname === "/" && state.currentView === "tasks") history.replaceState({}, "", "/tasks");
-  api("/api/auth/session").then(account => { $("#account-name").textContent = account.username; }).catch(() => {});
+  if (location.pathname === "/") history.replaceState({}, "", "/inbox");
+  api("/api/auth/session").then(account => { $("#account-name").textContent = account.username; $(".user-card .user-avatar").textContent = initialsOf({ name: account.username }); }).catch(() => {});
   setInterval(() => { if (!resetRequestActive) api("/api/auth/session").catch(() => {}); }, 60000);
   window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
   const days = ["日", "一", "二", "三", "四", "五", "六"];
@@ -2864,6 +3561,8 @@ async function init() {
     '<div class="stat-card"><div class="skeleton" style="width:60px;height:10px">·</div><div class="skeleton" style="width:44px;height:26px;margin-top:10px">·</div><div class="skeleton" style="width:110px;height:9px;margin-top:9px">·</div></div>').join("");
   $$(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === (state.currentView === "workspace" ? "tasks" : state.currentView)));
   $$(".view").forEach((item) => item.classList.toggle("active", item.id === `${state.currentView}-view`));
+  if(state.currentView==='tasks'){const key=state.taskArchiveView?'archive':'tasks';state.directoryStatus={[key]:{loading:true,error:null}};}
+  render();
   const initialData = refresh();
   setInterval(refreshNavigation, 5000);
   if (state.currentView === "workspace" && state.selectedRunId) await Promise.all([initialData, loadWorkspace(state.selectedRunId, { quiet: true })]);

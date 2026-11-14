@@ -1,5 +1,7 @@
 # 工程脚本
 
+`test-redesign.mjs` 按逐页源码复核后的结构断言验证当前石墨设计：标题栏/侧栏/文档标题尺寸、主操作所在区域、搜索宽度和卡片内部几何，覆盖浅/深色 × 1440/760；实际操作四类目录抽屉的外部点击/Escape关闭、内部候选选择、角色草稿不自动保存和居中表单防误关，以及设置导航28px高度、无额外顶边线和图标/文字垂直居中，命令面板、侧栏快捷键、菜单焦点、任务看板、待办交付快照与人类确认（含失败重试）、回复上下文、抽屉、窄屏会话列表关闭和即时保存。截图仅作留证；必需夹具缺失、未捕获交互失败和页面错误都会使验收失败。可设 `AGENTFORGE_REDESIGN_APP=/Applications/AgentForge.app` 可选择安装包；`AGENTFORGE_REDESIGN_INTERACTION_ONLY=1` 只跑交互。使用隔离 HOME/Store 夹具与禁用 Provider 的测试命令，截图和日志只写 .data。相关既有 UI 脚本同步 light/dark 模式，废弃 warm/minimal 主题。
+
 test-workflow-editor.mjs 同时核对两种节点在两主题、宽窄窗口的端口默认隐藏、悬停显示、键盘焦点和拖动期间显示、松开恢复；保留原有鼠标/键盘四边连线验收，不调用真实模型即可核对视觉变化。
 
 性能改造验收：`test-task-creation.mjs` 验证服务端分页后的 App/CLI 管理功能；`test-communication-workbench.mjs` 检查有界历史、附件和窄屏控制台（保留标题，隐藏消息正文）。`test-packaged-electron.mjs` 在隔离 HOME 中额外验证真实 ASAR 的 sharp 原生缩略图解码与诊断 Worker 写入；`AGENTFORGE_PACKAGED_APP` 可指向临时构建包，不安装到操作者实例。`AGENTFORGE_TASK_PARALLEL_REAL=1 node scripts/test-task-parallel-real.mjs` 验证真实并行、续接与人类验收。合成基准结果和逐项闭环见性能审查报告及 docs/28。
@@ -82,7 +84,7 @@ CHANGE 回归确认目录根下无重复「没有更改」，整体空态及错�
 
 test-marketplace-edit.mjs 同时验收角色宽窄空态与 MCP 一致、重复插件/MCP UI/CLI/API 导入覆盖、插件拆分 MCP 和停用员工绑定、并发创建与不兼容整批回滚；AGENTFORGE_MCP_EDIT_APP 可验证打包应用。
 
-`node scripts/test-collaboration-flow.mjs` 用隔离 HOME/数据库/认证启动真实 Electron，验证经理派工、员工交接、成员咨询/答复、人类消息、平台协调与重试事实、分页、涉及人类筛选、Markdown 安全和宽窄布局，并经真实 HTTP/CLI 核对同一投影。执行数据为终态的 Store 场景，不调用 Provider；证据写入忽略的 `.data/collaboration-flow-*`。
+`node scripts/test-collaboration-flow.mjs` 用隔离 HOME/数据库/认证启动真实 Electron，验证经理派工、员工交接、成员咨询/答复、人类消息、平台协调与重试事实、分页、无冗余筛选、Markdown 安全和宽窄布局，并经真实 HTTP/CLI 核对同一投影。执行数据为终态的 Store 场景，不调用 Provider；证据写入忽略的 `.data/collaboration-flow-*`。
 
 `AGENTFORGE_COLLABORATION_APP=/absolute/path/AgentForge.app node scripts/test-collaboration-flow.mjs` 对指定构建/安装包运行同一套隔离协作验收，不访问原实例数据。
 
@@ -181,15 +183,15 @@ test-roles-ui 验证角色扩展选择及多选控件固定高度；test-automat
 
 `node scripts/test-workflow-editor.mjs`：隔离Electron/真实认证HTTP和CLI，实际拖线、节点拖动/正文、失败保存保留、双主题1320/760、模板编辑不改冻结任务、CLI创建/编辑/删除与App回读。`AGENTFORGE_WORKFLOW_EDITOR_REAL=1` 另运行真实Claude完整任务，经理读取仅文件包含的随机连线标记，员工交付并核对文件，最终由测试操作者在UI确认完成；使用既有Claude原生配置，不输出或改写凭据。所有证据在忽略的.data/workflow-editor-*。
 
-工作流分支：nodes.type=process/condition，edges.condition为自然语言条件（最多2000字符），默认流程/空条件；App/CLI同协议并冻结。条件节点菱形、经理选择满足条件的一条分支；预览返回保留画布有效尺寸。test-workflow-editor覆盖反复切换、宽窄布局、类型切换与分支保存回读。
+工作流分支：nodes.type=process/condition，edges.condition为自然语言条件（最多2000字符），默认流程/空条件；App/CLI同协议并冻结。编辑画布的条件节点为紫色虚线圆角卡片，只读完整图仍为菱形；经理选择满足条件的一条分支。test-workflow-editor覆盖预览反复切换、宽窄布局、类型切换与分支保存回读。
 
 `AGENTFORGE_WORKFLOW_EDITOR_APP=/absolute/path/AgentForge.app node scripts/test-workflow-editor.mjs` 对构建包运行同一工作流验收；packaged数据放隔离HOME的.agentforge/desktop，并隔离旧Chromium目录。覆盖标题位置、两字段属性栏、2/3节点、连续添加不移动旧图/不重叠、画布删除、键盘连线、隐藏补充字段不丢失、文本预览和CLI回读。
 
-`test-workflow-editor.mjs`核对工作流标题输入480px上限、两主题与1320/760窗口画布交互；REAL模式通过CLI tasks create --workflow NAME --start执行真实条件分支，并在客户端验收。
+`test-workflow-editor.mjs`核对全视口编辑器、标题输入360px上限、176×80px节点、220px提示词区、顶栏保存/放弃、两主题与1320/760窗口画布交互；REAL模式通过CLI tasks create --workflow NAME --start执行真实条件分支，并在客户端验收。
 
 test-task-creation增加任务/自动化★单选经理、业务员工协调、删除后重选和编辑回读，并以真实stdio MCP验证详情工具查询、搜索、schema及刷新；两主题宽窄布局。test-workflow-editor的REAL验收从CLI显式指定kind=business员工为经理，真实执行条件分支后客户端验收。
 
-test-task-creation验证连接配置不可折叠且位于工具之前、23项全部显示且无搜索/分页/schema控件及刷新，员工卡片移除默认模型/思考摘要；test-workflow-editor核对两主题宽窄下32px标题输入与焦点环完整可见。纯呈现变化，无CLI/API契约变化。
+test-task-creation验证连接配置不可折叠且位于工具之前、23项全部显示且无搜索/分页/schema控件及刷新，员工卡片移除默认模型/思考摘要；test-workflow-editor核对两主题宽窄下30px/15px标题输入与焦点环完整可见。纯呈现变化，无CLI/API契约变化。
 
 test-task-creation补充11名已选员工及长姓名的换行、完整可见、经理切换与移除后保存验证，自动化新建/编辑同样支持多行；MCP连接配置必须是静态section且无summary。
 
@@ -229,6 +231,8 @@ test-portable-runtimes 支持 AGENTFORGE_PORTABLE_EFFORT，真实模式先经 CL
 
 `AGENTFORGE_PACKAGED_APP=/path/AgentForge.app node scripts/test-startup-loading.mjs` 在临时 HOME 验证首次设置前无业务库、设置/市场只发连接与配置查询、偏好身份保留，以及进入任务中心后业务就绪。独立于操作者资料，不调用真实模型。
 
+`node scripts/test-progressive-loading.mjs` 使用隔离数据与真实 Electron，延迟或拒绝关联资料、协作记录和自动化附属请求，核对元信息/当前页先显示、控制台未点击不读取、切页不被旧响应覆盖、错误恢复及快速新建依赖。可设 `AGENTFORGE_PACKAGED_APP` 验证打包版本；不调用 Provider。
+
 `node scripts/test-task-drafts.mjs` 使用临时 HOME、真实隔离 Electron/HTTP/CLI 验证草稿编辑、回填/取消、两主题宽窄布局、错误/重复提交、双端回读和启动拒绝保留修改。`AGENTFORGE_TASK_DRAFTS_REAL=1` 另调用真实 Claude，从编辑后的同一 Task 启动、读取产出核验并在客户端确认完成。`AGENTFORGE_TASK_DRAFTS_APP=/path/AgentForge.app` 可验证打包版；所有资料保存在系统临时目录，不改真实实例。
 
 `node scripts/test-bare-skills.mjs`：隔离 Electron 的裸 Skill Git/本地导入、App/CLI 详情/搜索/分页/重导入、Git 更新与员工/角色换绑、冻结版本保留、失败保留和宽窄主题验收；`AGENTFORGE_BARE_SKILLS_REAL=1` 加真实 Claude 原生 Skill 读取支持文件至客户端人类验收，`AGENTFORGE_BARE_SKILLS_APP=/path/AgentForge.app` 使用安装包及包内 CLI，`AGENTFORGE_BARE_SKILLS_REFERENCE=/path/wecom-unified` 额外核验参考仓库原文与资源。均不调用企业微信业务、不写操作者数据。
@@ -236,3 +240,5 @@ test-portable-runtimes 支持 AGENTFORGE_PORTABLE_EFFORT，真实模式先经 CL
 裸 Skill 与 portable-extensions-real 验收源均包含可选 allowed-tools，验证不会因该字段阻止加载。`AGENTFORGE_PORTABLE_EXTENSIONS_REAL=1 AGENTFORGE_PORTABLE_PROVIDERS=opencode node scripts/test-portable-extensions-real.mjs` 核验 OpenCode 原生 Skill、支持文件、MCP 实际调用与原生会话续接，不执行企业微信业务。
 
 `node scripts/test-desktop-notifications.mjs`：隔离 HOME/配置/工作目录验证两主题宽窄窗口 toast 覆盖原生 dialog、晚开模态/Popover、保留编辑与焦点；真实 HTTP/受控 Provider 产生任务待验收/完成和私聊/后台群聊通知，验证精确跳转和不回放历史。设 `AGENTFORGE_NOTIFICATIONS_APP` 指定安装包，`AGENTFORGE_NOTIFICATIONS_NATIVE=1` 验证真实 OS show 事件，`AGENTFORGE_NOTIFICATIONS_REAL=1` 使用当前已授权 Claude 认证完成真实任务及沟通；受控协议输出不是真实模型证据。截图/诊断只保存到系统临时目录。
+
+纸张最终目录回归：test-automations 核对状态 chips、原生启停/行导航；test-roles-ui 与 test-directory-headers 核对全宽角色行和独立删除菜单；test-market-catalog 覆盖1440/760浅深主题登录无卡片、插件/MCP来源与页脚、跨页使用筛选及真实工具命令的失败/重试呈现（工具响应夹具不代表 Provider 验证）。

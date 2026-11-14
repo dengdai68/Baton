@@ -25,6 +25,7 @@ const operations = { trigger: '立即执行自动化', triggers: '分页查询�
 Object.assign(operations, {updates:'查询插件更新状态','check-updates':'立即检查Git插件更新','auto-update':'设置自动更新开关与周期'});
 const labels = { startMessageId: '本轮输入消息 ID', dispatchId: '投递 ID', sourceMessageId: '来源消息 ID', recipientAgentId: '接手成员 ID', workflowNodeId: '节点 ID', workflowNodeName: '节点', executionTraceId: '接手执行 Trace ID', attempts: '尝试次数', nextRetryAt: '下次重试', error: '失败原因', relatedDispatchIds: '关联投递 ID', eventType: '协作事件', senderType: '发起者类型', purpose: '投递用途', replacements: '覆盖版本', id: 'ID', name: '名称', description: '说明', kind: '类型', status: '状态', provider: 'Provider', enabled: '可用', model: '模型', executable: 'CLI 路径', profile: 'Codex profile', profileId: 'Runtime 配置 ID', runtime: '执行配置', systemPrompt: '执行与协作提示词', roleIds: '绑定角色 ID', prompt: '共用系统提示词', capabilities: '能力', memberAgentIds: '员工 ID', managerAgentId: '项目经理 ID', mission: '团队目标', nodes: '工作流节点', staffingGuidance: '人员需求', dependsOn: '前置节点', handoffFrom: '交接来源', deliverable: '交付要求', artifactPaths: '建议交付位置', inheritedExtensionSelection: '角色继承扩展', extensionSelection: '直接扩展选择', pluginIds: '整插件版本 ID', mcpIds: 'MCP 版本 ID', username: '管理员', expiresAt: '会话到期时间', sessionFile: '私有会话文件', system: '系统配置', createdAt: '创建时间', updatedAt: '更新时间', logPath: '本机日志', testId: '连接测试 ID', unsupported: '未加载组件', plugins: '插件', skills: '技能', entries: '组件', effort: '思考等级', levels: '可选档位', models: '模型', notes: '来源说明', source: '来源', current: '当前生效', resolvedTo: '解析到模型', supportedInApi: 'API 可用', default: '默认档位' };
 Object.assign(labels, { deleted: '已删除', historyRetained: '历史文件保留' });
+Object.assign(labels, { clientRequestId: '发送请求 ID', replayed: '返回已保存回执' });
 Object.assign(labels, { installed: '本机已安装' });
 Object.assign(labels, { previousId: '更新前 ID', employees: '已更新的员工引用' });
 Object.assign(labels, {enabled:'自动更新',intervalMinutes:'检查周期（分钟）',intervalMs:'检查间隔（毫秒）',running:'正在检查',lastCheckedAt:'最近检查',nextCheckAt:'下次检查',lastResult:'最近结果',checkedSources:'已检查来源',updatedPlugins:'已更新插件数',updates:'更新记录',errors:'未应用的来源',message:'说明'});
@@ -89,6 +90,7 @@ function applicableFlags(group, ops) {
     ...(ops.some(op => ['list', 'collaboration', 'questions', 'artifacts'].includes(op)) ? ['--page N | --all：默认每页20项；--all 显式读取全部，不可与 --page 混用。协作记录最新在前。'] : []),
     ...(ops.some(op => ['progress', 'collaboration', 'questions', 'artifacts', 'message', 'reply', 'terminate', 'members'].includes(op)) ? ['--run RUN_ID：可选，选择同一任务的指定执行；默认最新执行，输出回显所选 runId。'] : [])
   ];
+  if(['plugins','mcps'].includes(group) && ops.includes('list')) return ['--usage all|unused：默认 all；unused 为未被当前员工或角色使用，与搜索组合后分页。', ...guide.flags.filter(([flag])=>['--help','--json','--search TEXT','--page N | --all','--session-file PATH','--endpoint-file PATH'].includes(flag)).map(([flag,description])=>`${flag}：${description}`)];
   return guide.flags.filter(([flag]) => {
     if(group==='storage')return ['--help','--json'].includes(flag)||flag.startsWith('--file')&&ops.includes('update')||flag.startsWith('--session-file')||flag.startsWith('--endpoint-file');
     if (flag.startsWith('--file')) return ops.some(op => ['create', 'update', 'import', 'auto-update'].includes(op));

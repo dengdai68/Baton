@@ -2,26 +2,32 @@ import { workflowConnections } from '/client/workflow-description.mjs';
 import {routeGraphEdge,formatWorkflowLayout,attachWorkflowViewport} from './workflow-layout.mjs';
 /* 开发手册只读图：X6 负责端口、视口与小地图；ELK 为动态工作流计算布局与折线路径。领域语义仍由 docs/ 与服务端模块定义。 */
 const instances = new Map();
+// Canvas grid images need resolved colors; SVG shapes inherit the same tokens.
+function graphColor(container, token) {
+  const probe = document.createElement('span'); probe.hidden = true; container.append(probe);
+  probe.style.color = `var(${token})`; const color = getComputedStyle(probe).color;
+  probe.remove(); return color;
+}
 const palette = {
-  default: { fill: "#ffffff", stroke: "#dde3d8" }, agent: { fill: "#f1f7e7", stroke: "#d2e3b2" },
-  task: { fill: "#edf5fa", stroke: "#c9e0eb" }, flow: { fill: "#f2f0fc", stroke: "#ddd7f2" },
-  warm: { fill: "#fff5e8", stroke: "#f0d9b2" }, danger: { fill: "#fdefea", stroke: "#efd0c3" }, storage: { fill: "#eff6f0", stroke: "#cde3d0" }, dark: { fill: "#202720", stroke: "#202720" },
+  default: { fill: "var(--bg-raised)", stroke: "var(--border)" }, agent: { fill: "var(--accent-soft)", stroke: "var(--accent-border)" },
+  task: { fill: "var(--accent-soft)", stroke: "var(--accent-border)" }, flow: { fill: "var(--bg-raised)", stroke: "var(--border)" },
+  warm: { fill: "var(--st-attention-bg)", stroke: "var(--st-attention-border)" }, danger: { fill: "var(--st-failed-bg)", stroke: "var(--st-failed-border)" }, storage: { fill: "var(--st-done-bg)", stroke: "var(--st-done-border)" }, dark: { fill: "var(--bg-active)", stroke: "var(--bg-active)" },
 };
-const portGroups = ["top", "right", "bottom", "left"].reduce((groups, side) => ({ ...groups, [side]: { position: side, attrs: { circle: { r: 3.5, magnet: true, stroke: "#93a384", strokeWidth: 1.5, fill: "#fbfcf8" } } } }), {});
+const portGroups = ["top", "right", "bottom", "left"].reduce((groups, side) => ({ ...groups, [side]: { position: side, attrs: { circle: { r: 3.5, magnet: true, stroke: "var(--border-strong)", strokeWidth: 1.5, fill: "var(--bg-subtle)" } } } }), {});
 const ports = { groups: portGroups, items: ["top", "right", "bottom", "left"].map((id) => ({ id, group: id })) };
 
 function card(id, x, y, width, height, title, lines, tone = "default") {
   const colors = palette[tone] || palette.default;
-  return { id, shape: "rect", x, y, width, height, ports, attrs: { body: { rx: 16, ry: 16, fill: colors.fill, stroke: colors.stroke, strokeWidth: 1.2 }, label: { text: [title, ...lines].join("\n"), fill: tone === "dark" ? "#e3efe0" : "#344031", fontSize: 12, fontWeight: 500, textAnchor: "middle", textVerticalAnchor: "middle", lineHeight: 20 } } };
+  return { id, shape: "rect", x, y, width, height, ports, attrs: { body: { rx: 8, ry: 8, fill: colors.fill, stroke: colors.stroke, strokeWidth: 1.2 }, label: { text: [title, ...lines].join("\n"), fill: tone === "dark" ? "var(--text)" : "var(--text)", fontSize: 12, fontWeight: 500, textAnchor: "middle", textVerticalAnchor: "middle", lineHeight: 20 } } };
 }
-function boundary(id, x, y, width, height, title, subtitle, tone = "#f7f8f1") {
-  return { id, shape: "rect", x, y, width, height, zIndex: 0, attrs: { body: { rx: 22, ry: 22, fill: tone, fillOpacity: .72, stroke: "#e1e7dc", strokeWidth: 1.2 }, label: { text: `${title}\n${subtitle}`, fill: "#798573", fontSize: 11, fontWeight: 600, textAnchor: "start", textVerticalAnchor: "top", refX: 18, refY: 15, lineHeight: 17 } } };
+function boundary(id, x, y, width, height, title, subtitle, tone = "var(--bg-subtle)") {
+  return { id, shape: "rect", x, y, width, height, zIndex: 0, attrs: { body: { rx: 22, ry: 22, fill: tone, fillOpacity: .72, stroke: "var(--border-subtle)", strokeWidth: 1.2 }, label: { text: `${title}\n${subtitle}`, fill: "var(--text-tertiary)", fontSize: 11, fontWeight: 600, textAnchor: "start", textVerticalAnchor: "top", refX: 18, refY: 15, lineHeight: 17 } } };
 }
 function edge(source, sourcePort, target, targetPort, label, options = {}) {
   const router = options.router === "normal"
     ? { name: "normal" }
     : { name: "manhattan", args: { padding: 20, step: 12, startDirections: [sourcePort], endDirections: [targetPort] } };
-  return { source: { cell: source, port: sourcePort }, target: { cell: target, port: targetPort }, router, vertices: options.vertices || [], connector: { name: "rounded", args: { radius: 8 } }, attrs: { line: { stroke: options.dashed ? "#9ba99a" : "#849579", strokeWidth: 1.6, strokeDasharray: options.dashed ? "6 5" : "", targetMarker: { name: "block", width: 8, height: 6 } } }, labels: label ? [{ position: options.position ?? .5, attrs: { label: { text: label, fill: "#64735f", fontSize: 10 }, body: { fill: "#fbfcf8", stroke: "#dce4d6", strokeWidth: 1, rx: 4, ry: 4, ref: "label", refWidth: "140%", refHeight: "150%", refX: "-20%", refY: "-25%" } } }] : [] };
+  return { source: { cell: source, port: sourcePort }, target: { cell: target, port: targetPort }, router, vertices: options.vertices || [], connector: { name: "rounded", args: { radius: 8 } }, attrs: { line: { stroke: options.dashed ? "var(--border-strong)" : "var(--text-tertiary)", strokeWidth: 1.6, strokeDasharray: options.dashed ? "6 5" : "", targetMarker: { name: "block", width: options.markerWidth || 8, height: options.markerHeight || 6, ...(options.markerRefX === undefined ? {} : {refX:options.markerRefX}) } } }, labels: label ? [{ position: options.position ?? .5, attrs: { label: { text: label, fill: "var(--text-secondary)", fontSize: 11 }, body: { fill: "var(--bg-subtle)", stroke: "var(--border)", strokeWidth: 1, rx: 4, ry: 4, ref: "label", refWidth: "140%", refHeight: "150%", refX: "-20%", refY: "-25%" } } }] : [] };
 }
 
 /* 工作流优先保留已保存的节点坐标和四边端口。缺少坐标时先提供稳定布局，
@@ -75,11 +81,11 @@ function workflowDefinition(workflow, { focus = {}, assignments = {}, agentsById
       const labels = { active: "正在处理", current: "项目经理当前重心", waiting_human: "等待澄清", waiting_agent: "等待协作", attention: "需要关注", recent: "最近交付" };
       const result=card(node.id, position.x, position.y, positioned ? 140 : nodeWidth, positioned ? (node.type==='condition'?76:52) : nodeHeight, node.title || node.id, positioned ? [] : [node.type==='condition'?'条件判断':node.id, state ? `${owner} · ${labels[state]}` : owner], toneFor(node));
       if(positioned)result.attrs.label={...result.attrs.label,fontSize:12,lineHeight:16,textWrap:{width:node.type==='condition'?80:116,height:36,ellipsis:true}};
-      if(node.type==='condition'){result.shape='polygon';result.attrs.body.refPoints='0,50 50,0 100,50 50,100';result.attrs.label.fontSize=compact?10:12;}
+      if(node.type==='condition'){result.attrs.body.fill='var(--st-planning-bg)';result.attrs.body.stroke='var(--st-planning-border)';result.shape='polygon';result.attrs.body.refPoints='0,50 50,0 100,50 50,100';result.attrs.label.fontSize=compact?11:12;}
       return result;
     }),
     edges: workflowConnections(workflow).filter(link => byId.has(link.source) && byId.has(link.target)).map(link =>
-      ({...edge(link.source, link.sourcePort || 'right', link.target, link.targetPort || 'left', (link.condition || link.description || (link.dependency ? '前置依赖' : '交接')).replace(/\s+/g,' ').slice(0,24), {position:.5}),data:{workflowEdge:link}})),
+      ({...edge(link.source, link.sourcePort || 'right', link.target, link.targetPort || 'left', (link.condition || link.description || (link.dependency ? '前置依赖' : '交接')).replace(/\s+/g,' ').slice(0,24), {position:.5,markerWidth:10,markerHeight:8,markerRefX:-1.6}),data:{workflowEdge:link}})),
   };
 }
 
@@ -109,9 +115,9 @@ const graphs = {
   },
   "system-architecture": {
     nodes: [
-      boundary("browser-boundary", 24, 32, 178, 356, "① Browser boundary", "读模型 · HTTP 命令 · SSE", "#f4f7ed"),
-      boundary("control-boundary", 222, 32, 460, 356, "② AgentForge Node.js boundary", "传输 · 状态 · 编排 · 本机 Runtime", "#f7f6ed"),
-      boundary("persistence-boundary", 702, 32, 228, 356, "③ Local persistence boundary", "metadata 与 Run 文件分离", "#f2f7f2"),
+      boundary("browser-boundary", 24, 32, 178, 356, "① Browser boundary", "读模型 · HTTP 命令 · SSE", "var(--bg-subtle)"),
+      boundary("control-boundary", 222, 32, 460, 356, "② AgentForge Node.js boundary", "传输 · 状态 · 编排 · 本机 Runtime", "var(--bg-subtle)"),
+      boundary("persistence-boundary", 702, 32, 228, 356, "③ Local persistence boundary", "metadata 与 Run 文件分离", "var(--bg-subtle)"),
       card("web", 43, 184, 140, 78, "web/ Console", ["路由 · 渲染 · 命令", "不写领域状态"], "agent"),
       card("http", 246, 104, 170, 78, "server/index.mjs", ["auth.guard → HTTP / SSE", "登录鉴权 · 协议边界"], "task"),
       card("store", 246, 266, 170, 82, "server/store.mjs", ["状态机 · ID · Event", "唯一状态写入"], "flow"),
@@ -133,8 +139,8 @@ const graphs = {
   },
   "task-flow": {
     nodes: [
-      boundary("control-lane", 24, 32, 1042, 132, "① 创建、调度与交付主路径", "项目经理从全部职责中选择当前最需要的协作；Trace 是唯一执行记录", "#f4f7ed"),
-      boundary("exception-lane", 24, 194, 1042, 258, "② 回路与质量收束", "澄清答复与临时错误恢复原投递；后续协作由项目经理选择职责", "#f2f7f2"),
+      boundary("control-lane", 24, 32, 1042, 132, "① 创建、调度与交付主路径", "项目经理从全部职责中选择当前最需要的协作；Trace 是唯一执行记录", "var(--bg-subtle)"),
+      boundary("exception-lane", 24, 194, 1042, 258, "② 回路与质量收束", "澄清答复与临时错误恢复原投递；后续协作由项目经理选择职责", "var(--bg-subtle)"),
       card("task", 48, 78, 145, 58, "创建 Task", ["冻结流程与分配"], "task"),
       card("eligible", 250, 78, 162, 58, "职责定义", ["交接提示 · 不存节点状态"], "flow"),
       card("manager", 470, 78, 162, 58, "项目经理 Trace", ["选择 nextNodeId"], "agent"),
@@ -257,10 +263,10 @@ function mountGraph(key, definition, container, minimap, onViewport, { elkLayout
   if (!definition || !container) return null;
   try {
     const { Graph, MiniMap } = requireX6();
-    const graph = new Graph({ container, width: container.clientWidth, height: container.clientHeight, panning: { enabled: !fixed, eventTypes: ["leftMouseDown"] }, mousewheel: { enabled: false }, interacting: { magnetConnectable:false, nodeMovable: false, edgeMovable: false, edgeLabelMovable: false, arrowheadMovable: false, vertexMovable: false }, background: { color: "#fbfcf8" }, grid: { visible: !fixed, type: "dot", args: { color: "#e6ebdf", thickness: 1 } } });
+    const graph = new Graph({ container, width: container.clientWidth, height: container.clientHeight, panning: { enabled: !fixed, eventTypes: ["leftMouseDown"] }, mousewheel: { enabled: false }, interacting: { magnetConnectable:false, nodeMovable: false, edgeMovable: false, edgeLabelMovable: false, arrowheadMovable: false, vertexMovable: false }, connecting: { connectionPoint: "anchor" }, background: { color: graphColor(container, "--bg-subtle") }, grid: { visible: !fixed, type: "dot", args: { color: graphColor(container, "--border"), thickness: 1 } } });
     // 手册图的面积较大，保留小地图；线性工作流已有完整主路径与缩放控制，
     // 不额外占用一行高度来重复展示同一条链。
-    if (minimap) graph.use(new MiniMap({ container: minimap, width: 156, height: 102, padding: 8, scalable: true, graphOptions: { background: { color: "#f7f8f2" } } }));
+    if (minimap) graph.use(new MiniMap({ container: minimap, width: 156, height: 102, padding: 8, scalable: true, graphOptions: { background: { color: graphColor(container, "--bg-subtle") } } }));
     definition.nodes.forEach((node) => graph.addNode(node)); definition.edges.forEach((item) => graph.addEdge(item));
     const viewport = container.closest(".diagram-viewport") || container;
     const observer = new ResizeObserver(() => { graph.resize(viewport.clientWidth, viewport.clientHeight); if (fixed && !workflowView && viewport.clientWidth && viewport.clientHeight) fitGraph(graph, key, onViewport); });

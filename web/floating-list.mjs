@@ -1,7 +1,7 @@
 // Keep dropdowns in their component DOM while escaping ancestor scroll clips.
 const lists = new WeakMap();
 
-export function createFloatingList(anchor, list, { maxHeight = 240, gap = 4, onClose = () => {} } = {}) {
+export function createFloatingList(anchor, list, { maxHeight = 240, minWidth = 0, gap = 4, onClose = () => {} } = {}) {
   if (lists.has(list)) return lists.get(list);
   const document = anchor.ownerDocument, window = document.defaultView;
   const surface = document.createElement('div');
@@ -24,7 +24,7 @@ export function createFloatingList(anchor, list, { maxHeight = 240, gap = 4, onC
     if (!opened) return;
     const box = anchor.getBoundingClientRect(), width = window.innerWidth, height = window.innerHeight, edge = 8;
     if (!anchor.isConnected || list.hidden || !box.width || box.bottom <= 0 || box.top >= height) { close(); return; }
-    const popupWidth = Math.min(box.width, width - edge * 2);
+    const popupWidth = Math.min(Math.max(box.width, minWidth), width - edge * 2);
     surface.style.width = `${popupWidth}px`;
     Object.assign(list.style, { position:'static', inset:'auto', margin:'0', width:'100%', boxSizing:'border-box', display:'block' });
     const style = window.getComputedStyle(list);

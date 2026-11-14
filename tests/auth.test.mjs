@@ -18,7 +18,7 @@ for (const corrupt of [false,true]) test(`login and configuration do not depend 
   const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env:{...process.env,HOME:root,AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:token,AGENTFORGE_DESKTOP_CONTROL_ROOT:controlRoot,AGENTFORGE_DB_PATH:databasePath,AGENTFORGE_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'records'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work')}});
   let stderr='';child.stderr.on('data',chunk=>{stderr+=chunk});
   t.after(async()=>{if(child.exitCode===null){const exited=new Promise(resolve=>child.once('exit',resolve));child.kill();await exited;}await rm(root,{recursive:true,force:true});});
-  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),30000);child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
   const origin='http://127.0.0.1:'+ready.port;
   assert.equal((await fetch(origin+'/api/health')).status,200);
   assert.equal((await fetch(origin+'/api/tasks?page=1')).status,401);
@@ -310,4 +310,44 @@ test('CLI delegation requires a real parent login and ends on parent logout, res
   assert.equal((await request('/api/auth/session',second.cookie)).status,401,'ephemeral child does not survive restart');
   const third = await issue(); await auth.setAdministrator('delegate-user','Synthetic-reset-password');
   assert.equal((await request('/api/auth/session',third.cookie)).status,401);
+});
+
+test('task message request IDs survive real authenticated HTTP and CLI retries without duplicate work', async t => {
+  const {fork,spawn}=await import('node:child_process'),{randomBytes}=await import('node:crypto');
+  const {createFixtureStore}=await import('./fixture-store.mjs');
+  const root=await mkdtemp(join(tmpdir(),'af-http-message-id-')),controlRoot=join(root,'control'),databasePath=join(root,'state.sqlite');
+  const store=createFixtureStore({databasePath,configurationDirectory:controlRoot,workspaceRoot:join(root,'work')});
+  const run=store.createRun(store.listTasks()[0].id);
+  for(const recipientAgentId of ['agent_analyst','agent_designer','agent_tester'])store.enqueueDispatch(run.id,{recipientAgentId,workflowNodeId:'requirements',purpose:'node',messageIds:[]});
+  const claims=Array.from({length:3},()=>store.claimDispatch(run.id));
+  const questions=claims.map((delivery,index)=>store.askQuestion(delivery.id,{audience:'human',question:`隔离问题 ${index}`}));
+  store.close();
+  const token=randomBytes(32).toString('hex'),env={...process.env,HOME:root,AGENTFORGE_DESKTOP_PORT:'0',AGENTFORGE_BOOTSTRAP_TOKEN:token,AGENTFORGE_DESKTOP_CONTROL_ROOT:controlRoot,AGENTFORGE_DB_PATH:databasePath,AGENTFORGE_AUTH_DB_PATH:join(controlRoot,'auth.sqlite'),AGENTFORGE_RUN_FILES_ROOT:join(root,'records'),AGENTFORGE_RUNTIME_CONFIG_ROOT:join(controlRoot,'runtime'),AGENTFORGE_WORKSPACE_ROOT:join(root,'work')};
+  const child=fork(new URL('../server/index.mjs',import.meta.url),[],{stdio:['ignore','ignore','pipe','ipc'],env});let stderr='';child.stderr.on('data',chunk=>stderr+=chunk);
+  t.after(async()=>{if(child.exitCode===null){const exited=new Promise(resolve=>child.once('exit',resolve));child.kill();await exited;}await rm(root,{recursive:true,force:true});});
+  const ready=await new Promise((resolve,reject)=>{const timer=setTimeout(()=>reject(Error('startup timeout '+stderr)),Number(process.env.AGENTFORGE_TEST_STARTUP_TIMEOUT_MS||30000));child.once('message',value=>{clearTimeout(timer);resolve(value)});child.once('exit',code=>{clearTimeout(timer);reject(Error('exit '+code+' '+stderr))});});
+  const origin='http://127.0.0.1:'+ready.port;
+  assert.equal((await fetch(origin+'/api/health')).status,200);
+  const endpoint=join(root,'endpoint.json'),session=join(root,'cli-session.json');await writeFile(endpoint,JSON.stringify({origin,instanceId:ready.instanceId}),{mode:0o600});
+  const setup=await fetch(origin+'/setup',{redirect:'manual',headers:{'X-AgentForge-Bootstrap':token}});
+  const bootstrap=await fetch(origin+'/api/auth/bootstrap',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:setup.headers.get('set-cookie').split(';')[0]},body:JSON.stringify({username:'fixture-admin',password:'Disposable-message-test-519'})});assert.equal(bootstrap.status,201);
+  const cookie=bootstrap.headers.get('set-cookie').split(';')[0];
+  const request=(path,body)=>fetch(origin+path,{method:body===undefined?'GET':'POST',headers:{Origin:origin,Cookie:cookie,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+  const path=`/api/runs/${run.id}/messages`,command={content:'精确回答',replyToMessageId:questions[0].id,clientRequestId:'request-http-original'};
+  assert.equal((await fetch(origin+path,{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify(command)})).status,401);
+  const firstResponse=await request(path,command);assert.equal(firstResponse.status,201,await firstResponse.clone().text());const first=await firstResponse.json();assert.equal(first.replayed,false);
+  const before=await (await request(`/api/runs/${run.id}/workspace?view=compact`)).json();
+  for(const response of await Promise.all([request(path,command),request(path,command)])){assert.equal(response.status,201);const replay=await response.json();assert.equal(replay.message.id,first.message.id);assert.equal(replay.replayed,true);}
+  assert.equal((await request(path,{...command,content:'不同回答'})).status,409);
+  assert.equal((await request(path,{...command,clientRequestId:'invalid/id'})).status,400);
+  const after=await (await request(`/api/runs/${run.id}/workspace?view=compact`)).json();assert.deepEqual(after.dispatches,before.dispatches);assert.equal(after.pendingQuestions.length,2);assert.equal(after.traces.length,0,'waiting questions prevent any Provider call');
+  const page=await (await request(`/api/runs/${run.id}/collaboration?limit=100`)).json();assert.equal(page.items.filter(item=>item.clientRequestId===command.clientRequestId).length,1);
+  const cli=async(args,value)=>{const process=spawn(globalThis.process.execPath,[new URL('../cli/main.mjs',import.meta.url).pathname,...args,'--endpoint-file',endpoint,'--session-file',session,'--json'],{env,stdio:['pipe','pipe','pipe']});let stdout='',errors='';process.stdout.on('data',chunk=>stdout+=chunk);process.stderr.on('data',chunk=>errors+=chunk);process.stdin.end(value);const code=await new Promise(resolve=>process.once('exit',resolve));return {code,value:JSON.parse(stdout),errors};};
+  const login=await cli(['auth','login','--username','fixture-admin','--password-stdin'],'Disposable-message-test-519\n');assert.equal(login.code,0,login.errors);
+  const args=['tasks','reply',run.taskId,'--run',run.id,'--file','-','--client-request-id','request-cli-original'];
+  const input=JSON.stringify({content:'CLI 精确回答',replyToMessageId:questions[1].id});
+  const sent=await cli(args,input);assert.equal(sent.code,0,JSON.stringify(sent.value));assert.equal(sent.value.data.replayed,false);
+  const retried=await cli(args,input);assert.equal(retried.code,0,JSON.stringify(retried.value));assert.equal(retried.value.data.replayed,true);assert.equal(retried.value.data.message.id,sent.value.data.message.id);
+  const conflict=await cli(args,JSON.stringify({content:'已修改',replyToMessageId:questions[1].id}));assert.equal(conflict.code,4);assert.equal(conflict.value.ok,false);
+  const final=await (await request(`/api/runs/${run.id}/workspace?view=compact`)).json();assert.equal(final.pendingQuestions.length,1);assert.equal(final.traces.length,0);
 });

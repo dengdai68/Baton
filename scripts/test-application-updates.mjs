@@ -100,7 +100,7 @@ try{
   await desktop.evaluate(()=>{globalThis.agentforgeUpdateFixture.mode='stable';});await check();
   await page.locator('[data-app-update-status]').filter({hasText:'发现正式版 1.0.0'}).waitFor();
   assert.equal(await page.locator('.app-update-notice').count(),0,'available update is displayed only in update settings');
-  await page.getByRole('button',{name:'任务中心',exact:true}).click();
+  await page.getByRole('button',{name:'任务',exact:true}).click();
   await desktop.evaluate(()=>globalThis.agentforgeUpdateFixture.controller.check());
   assert.equal(await page.locator('.app-update-notice').count(),0,'background check never inserts a notification card');
   await page.getByRole('button',{name:'设置',exact:true}).click();

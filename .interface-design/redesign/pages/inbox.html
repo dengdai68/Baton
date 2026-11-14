@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>待我处理 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .inbox { --split-w: 400px; }
+  .inbox .split__side { background: var(--bg-canvas); }
+  .inbox-item { display: grid; grid-template-columns: 18px minmax(0, 1fr); column-gap: var(--sp-4); padding: var(--sp-5) var(--sp-6) var(--sp-5) var(--sp-6); border-bottom: 1px solid var(--border-subtle); }
+  .inbox-item:hover { background: var(--bg-hover); }
+  .inbox-item.is-selected { background: var(--bg-selected); }
+  .inbox-item.is-done { opacity: .62; }
+  .inbox-item__top { display: flex; align-items: center; gap: var(--sp-4); min-width: 0; }
+  .inbox-item__title { flex: 1; min-width: 0; font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .inbox-item__time { font-size: var(--fs-small); color: var(--text-tertiary); white-space: nowrap; }
+  .inbox-item__what { margin-top: 2px; font-size: var(--fs-small); }
+  .inbox-item__preview { margin-top: var(--sp-2); font-size: var(--fs-small); color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .detail { max-width: 720px; margin: 0 auto; padding: var(--sp-8) var(--sp-9) var(--sp-10); }
+  .detail h2 { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: var(--fw-semibold); margin: var(--sp-3) 0 var(--sp-2); }
+  .quote { margin: var(--sp-6) 0; padding: var(--sp-4) var(--sp-6); border-left: 2px solid var(--border-strong); color: var(--text-secondary); font-size: var(--fs-body); }
+  @media (max-width: 1100px) { .inbox { --split-w: 340px; } }
+</style>
+</head>
+<body data-page="inbox">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main" data-view-scope>
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="inbox"></i>待我处理<span class="tb-count">3</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><div class="seg" role="group" aria-label="范围"><button class="seg__item is-active" type="button">待处理</button><button class="seg__item" type="button">最近已处理</button></div></div>
+    </header>
+    <div class="page-hero"><h1>待我处理</h1><p>所有需要你回答、验收或修复的事项集中在这里，处理后自动移出。</p></div>
+
+    <div class="split inbox">
+      <div class="split__side" role="listbox" aria-label="待处理事项">
+        <div class="group-head st-attention" style="padding-left:24px"><i data-icon="question" class="st st-attention"></i>等待你的澄清<span class="count">1</span></div>
+        <div class="inbox-item is-selected" data-selectable data-select-target="ask" role="option" aria-selected="true">
+          <i data-icon="st-attention" class="st st-attention"></i>
+          <div><div class="inbox-item__top"><span class="inbox-item__title">重构登录页并补齐单元测试</span><span class="inbox-item__time">12 分钟前</span></div>
+          <div class="inbox-item__what"><span class="av av--16 blue">K</span> Kai · 研发工程师 向你提问</div>
+          <div class="inbox-item__preview">第三方登录（GitHub / 企业微信）按钮是否也要按新布局调整？如果要，需要提供企业微信的品牌规范。</div></div>
+        </div>
+        <div class="group-head st-attention" style="padding-left:24px"><i data-icon="clipboard" class="st st-attention"></i>待你验收<span class="count">1</span></div>
+        <div class="inbox-item" data-selectable data-select-target="accept" role="option">
+          <i data-icon="st-review" class="st st-attention"></i>
+          <div><div class="inbox-item__top"><span class="inbox-item__title">Q4 竞品调研报告</span><span class="inbox-item__time">40 分钟前</span></div>
+          <div class="inbox-item__what"><span class="av av--16 violet">项</span> 项目经理 提交了验收</div>
+          <div class="inbox-item__preview">报告与对比数据表已交付；定价数据截至 11 月 8 日，其中 2 家未公开企业版价格。</div></div>
+        </div>
+        <div class="group-head st-failed" style="padding-left:24px"><i data-icon="alert" class="st st-failed"></i>执行中断<span class="count">1</span></div>
+        <div class="inbox-item" data-selectable data-select-target="failed" role="option">
+          <i data-icon="st-failed" class="st st-failed"></i>
+          <div><div class="inbox-item__top"><span class="inbox-item__title">修复导出 CSV 编码问题</span><span class="inbox-item__time">1 小时前</span></div>
+          <div class="inbox-item__what"><span class="av av--16 blue">K</span> Kai · 研发工程师 执行失败</div>
+          <div class="inbox-item__preview">Claude Code 进程退出（code 127）：未找到可执行文件。</div></div>
+        </div>
+        <div class="group-head" style="padding-left:24px;color:var(--text-tertiary)"><i data-icon="check" class="icon--sm"></i>今天已处理<span class="count">1</span></div>
+        <div class="inbox-item is-done" role="option">
+          <i data-icon="st-done" class="st st-done"></i>
+          <div><div class="inbox-item__top"><span class="inbox-item__title">官网博客：多 Agent 协作实践</span><span class="inbox-item__time">09:12</span></div>
+          <div class="inbox-item__what faint">你确认了完成</div></div>
+        </div>
+      </div>
+
+      <div class="split__main">
+        <div class="scroll" data-select-panel="ask">
+          <div class="detail">
+            <span class="status status--pill st-attention"><i data-icon="st-attention"></i>等待你的澄清 · 已等待 12 分钟</span>
+            <h2>Kai 想确认第三方登录的范围</h2>
+            <div class="hstack faint" style="font-size:12px"><a href="task.html">重构登录页并补齐单元测试</a><span>·</span><span>功能开发</span><span>·</span><span>10:24</span></div>
+            <div class="quote"><strong style="color:var(--text);font-weight:600">上下文 · Noah 的交接</strong><br>未覆盖：第三方登录按钮的样式，需要人类确认是否在范围内。</div>
+            <article class="msg" style="margin:0">
+              <span class="av av--28 blue">K</span>
+              <div><div class="msg__head"><span class="msg__name">Kai · 研发工程师</span><span class="msg__type"><i data-icon="question"></i>向你提问</span></div>
+              <div class="msg__body">第三方登录（GitHub / 企业微信）按钮是否也要按新布局调整？如果要，需要提供企业微信的品牌规范。</div></div>
+            </article>
+            <form class="composer" style="margin-top:20px" onsubmit="return false">
+              <textarea rows="3" placeholder="输入回答，发送后 Kai 会继续执行" aria-label="回答内容"></textarea>
+              <div class="composer__bar"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加文件"><i data-icon="paperclip"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加图片"><i data-icon="image"></i></button><span class="composer__hint">⌘↵ 发送并处理下一项</span><button class="btn btn--primary btn--sm" type="submit">发送回答</button></div>
+            </form>
+            <div class="hstack" style="margin-top:16px"><a class="btn btn--sm" href="task.html"><i data-icon="external" class="icon--sm"></i>打开任务工作区</a><span class="spacer"></span><span class="faint" style="font-size:12px"><kbd class="kbd">J</kbd> <kbd class="kbd">K</kbd> 上下切换</span></div>
+          </div>
+        </div>
+        <div class="scroll" data-select-panel="accept" hidden>
+          <div class="detail">
+            <span class="status status--pill st-attention"><i data-icon="st-review"></i>待你验收</span>
+            <h2>Q4 竞品调研报告</h2>
+            <div class="hstack faint" style="font-size:12px"><a href="task.html">打开任务</a><span>·</span><span>软件交付</span><span>·</span><span>项目经理 40 分钟前提交</span></div>
+            <div class="callout" style="margin:20px 0"><i data-icon="info"></i><div class="callout__body"><div class="callout__title">经理总结</div><div class="callout__text">已对比 5 款多 Agent 协作工具的定价、协作模型与交付证据。定价数据截至 11 月 8 日；其中 2 家未公开企业版价格，报告中已标注“未公开”。</div></div></div>
+            <p class="section-title">交付文件 <span class="count">2</span></p>
+            <div class="vstack" style="gap:8px;align-items:flex-start"><a class="file-chip" href="#"><span class="ft ft--md">MD</span>q4-competitor-report.md<small>docs/report</small></a><a class="file-chip" href="#"><span class="ft ft--json">CSV</span>pricing-matrix.csv<small>docs/report</small></a></div>
+            <div class="hstack" style="margin-top:28px"><button class="btn btn--primary" type="button"><i data-icon="check"></i>确认完成</button><button class="btn" type="button"><i data-icon="message"></i>继续咨询</button><span class="spacer"></span><span class="faint" style="font-size:12px">确认后任务移入已完成</span></div>
+          </div>
+        </div>
+        <div class="scroll" data-select-panel="failed" hidden>
+          <div class="detail">
+            <span class="status status--pill st-failed"><i data-icon="st-failed"></i>错误中断</span>
+            <h2>修复导出 CSV 编码问题</h2>
+            <div class="hstack faint" style="font-size:12px"><a href="task.html?state=failed">打开任务</a><span>·</span><span>缺陷修复 · 修复实现</span><span>·</span><span>1 小时前</span></div>
+            <div class="callout st-failed" style="margin:20px 0"><i data-icon="x-circle"></i><div class="callout__body"><div class="callout__title">Kai · 研发工程师 的执行已中断</div><div class="callout__text">Claude Code 进程退出（code 127）：未找到可执行文件。请在设置 → 运行时检查 Claude Code 是否已安装。</div></div></div>
+            <div class="hstack"><button class="btn btn--primary" type="button"><i data-icon="refresh"></i>重试</button><a class="btn" href="settings.html?tab=runtime">打开运行时设置</a><a class="btn btn--ghost" href="task.html?state=failed&amp;tab=console">查看日志</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

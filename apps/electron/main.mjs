@@ -1,5 +1,5 @@
 import { createDesktopNotifications } from './notifications.mjs';
-import { app, BrowserWindow, Menu, Tray, nativeImage, shell, session, screen, ipcMain, clipboard, net, Notification } from "electron";
+import { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, shell, session, screen, ipcMain, clipboard, net, Notification } from "electron";
 import { fork, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
@@ -15,7 +15,7 @@ import {relocateStorage,finishStorageRelocation} from './storage-relocation.mjs'
 import { diagnostic, diagnostics, installProcessDiagnostics } from "../../server/diagnostics.mjs";
 import { legacyDataRequiresMigration, migrationGuidance } from "../../server/data-home.mjs";
 import { createInterface } from "node:readline";
-import { closeModes, readCloseMode, saveCloseMode } from "./preferences.mjs";
+import { closeModes, normalizeAppearance, readAppearance, readCloseMode, saveAppearance, saveCloseMode } from "./preferences.mjs";
 import { loadLoginShellEnvironment } from "./login-shell-env.mjs";
 import { confirmCliInstallation } from "./cli-confirmation.mjs";
 import { createCliInstallation } from "./cli-installation.mjs";
@@ -28,10 +28,12 @@ function workAreaHeight() {
   const display = window && !window.isDestroyed() ? screen.getDisplayMatching(window.getBounds()) : screen.getPrimaryDisplay();
   return display.workAreaSize.height;
 }
-const appDialog = (options) => showAppDialog({ BrowserWindow, workAreaHeight, ...options });
+// Native windows paint the saved appearance before their content loads.
+const appearanceBackground = () => nativeTheme.shouldUseDarkColors ? "#111215" : "#ffffff";
+const appDialog = (options) => showAppDialog({ BrowserWindow, workAreaHeight, backgroundColor: appearanceBackground(), ...options });
 
 const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
-let window, child, tray, childBootstrapToken = null, controlOrigin = null, childInstanceId = null, connecting = false, quitting = false, closeMode = null, savingCloseMode = false, closingPrompt = false;
+let window, child, tray, childBootstrapToken = null, controlOrigin = null, childInstanceId = null, connecting = false, quitting = false, closeMode = null, savingCloseMode = false, closingPrompt = false, appearance = "light";
 let shellEnvironment;
 let installingCli = false;
 let applicationUpdates = null, restartReservation = null;
@@ -260,6 +262,18 @@ async function changeCloseMode(mode) {
 }
 
 function desktopPreferences() { return { platform: process.platform, closeMode }; }
+
+/** Mirror the renderer's light/dark/system choice into native chrome and persist it for the next launch. */
+async function changeAppearance(value) {
+  const next = normalizeAppearance(value);
+  if (!next) throw new Error("外观无效");
+  if (next === appearance && nativeTheme.themeSource === next) return;
+  appearance = next;
+  nativeTheme.themeSource = next;
+  window?.setBackgroundColor(appearanceBackground());
+  try { await saveAppearance(preferencesFile, next); }
+  catch (error) { diagnostic("desktop.appearance_save_failed", { error }); }
+}
 function cliInstallation() {
   if (!app.isPackaged || process.platform !== 'darwin') return null;
   const launcher = join(dirname(app.getAppPath()), 'cli/agentforge');
@@ -416,8 +430,10 @@ async function start() {
     app.quit();
     return;
   }
-  try { closeMode = await readCloseMode(preferencesFile); }
+  try { closeMode = await readCloseMode(preferencesFile); appearance = await readAppearance(preferencesFile) ?? appearance; }
   catch (error) { diagnostic("desktop.preferences_read_failed", { error }); }
+  nativeTheme.themeSource = appearance;
+  nativeTheme.on("updated", () => { if (window && !window.isDestroyed()) window.setBackgroundColor(appearanceBackground()); });
   session.defaultSession.cookies.on('changed', (_event, cookie) => {
     if (cookie.name === 'agentforge_session' && cookie.domain === '127.0.0.1') void syncCliSession();
   });
@@ -425,7 +441,7 @@ async function start() {
   session.defaultSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(() => false);
   app.dock?.setIcon(join(sourceRoot, 'web/icons/application-dock.png'));
-  window = new BrowserWindow({ width: 1320, height: 860, minWidth: 760, minHeight: 560, title: "AgentForge", icon: join(sourceRoot, 'web/icons/application-dock.png'), backgroundColor: "#f7f9ff",
+  window = new BrowserWindow({ ...(process.platform === "darwin" ? { titleBarStyle:"hiddenInset", trafficLightPosition:{x:16,y:15} } : {}), width: 1320, height: 860, minWidth: 760, minHeight: 560, title: "AgentForge", icon: join(sourceRoot, 'web/icons/application-dock.png'), backgroundColor: appearanceBackground(),
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true, webviewTag: false, preload: fileURLToPath(new URL("./preload.cjs", import.meta.url)) }
   });
   const contents = window.webContents;
@@ -442,6 +458,10 @@ async function start() {
   ipcMain.handle("desktop:preferences:get", event => {
     if (!isPreferencesSender(event, contents, controlOrigin)) throw new Error("仅允许客户端常规设置访问");
     return desktopPreferences();
+  });
+  ipcMain.handle("desktop:appearance:set", (event, value) => {
+    if (event.sender !== contents || event.senderFrame !== contents.mainFrame || !isConsoleURL(event.senderFrame?.url, controlOrigin)) throw new Error("仅允许应用主窗口同步外观");
+    return changeAppearance(value);
   });
   ipcMain.handle("desktop:preferences:set", (event, mode) => {
     if (!isPreferencesSender(event, contents, controlOrigin) || process.platform !== "darwin") throw new Error("仅允许 Mac 客户端常规设置修改");
@@ -485,7 +505,7 @@ async function start() {
     try {
       const status = await installer.status();
       if (!status.canInstall) return status;
-      const accepted = await confirmCliInstallation({ BrowserWindow, parent: window, status, signal: shellEnvironmentAbort.signal });
+      const accepted = await confirmCliInstallation({ BrowserWindow, parent: window, status, signal: shellEnvironmentAbort.signal, backgroundColor: appearanceBackground() });
       if (!accepted || quitting || !isCliSender(event, contents, controlOrigin)) return { ...status, cancelled: true };
       const result = await installer.install(status.profilePaths);
       diagnostic('desktop.cli_installed', { installed: result.installed });

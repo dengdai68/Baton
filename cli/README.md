@@ -1,5 +1,9 @@
 # CLI
 
+任务 `message/reply` 支持 JSON `clientRequestId` 或 `--client-request-id`；同 Run 原命令重试返回原消息和 `replayed=true`，变更输入明确冲突。精确回复重试交 Store 判定已保存事实。带本机附件的重试按协作分页核对同请求原附件的名称/大小/摘要并复用 IDs，不下载完整工作区或重新上传已绑定文件。帮助/schema/文本和 JSON 保留该引用，详见 docs/21。
+
+纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
+
 核心管理能力与 App 对齐：员工搜索包含能力标签；团队支持启停；工作流依赖 dependsOn 与交接 handoffFrom 独立保存，交付定义为空时由 Store 补默认值。tasks create 接受 teamIds 与 memberAgentIds 并集，由 Store 展开可用团队中的 active 成员、去重并校验managerAgentId指向所选可用成员；不保存团队绑定。验收标准省略或 [] 均为空，最多20条/每条500字符；不再使用任务优先级。create --start 显式创建并启动，失败输出 TASK_CREATED_START_FAILED 与 taskId，先查询状态勿重复创建。任务列表按更新/归档时间降序，未知状态拒绝。
 
 `tasks list --workflow ID_OR_NAME` 支持精确 ID 或唯一的当前/任务冻结名称；歧义须用 ID，不存在明确报错。与 search/status/archived 组合后分页，摘要包含 workflow 的 ID 与任务冻结名称，不返回完整工作流配置。

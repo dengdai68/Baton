@@ -80,18 +80,18 @@ try {
   await page.goto(origin + '/communication/' + chat.id); await page.locator('.communication-heading').filter({ hasText: employee.name }).waitFor();
   const privateAvatar=page.locator(`[data-chat-id="${chat.id}"] .communication-avatar`);
   const selectedAvatar=await privateAvatar.evaluate(node=>({text:node.textContent,color:getComputedStyle(node).backgroundColor,width:node.getBoundingClientRect().width}));
-  assert.equal(selectedAvatar.text,employee.initials.slice(0,2));assert.ok(selectedAvatar.width>=36);
+  assert.equal(selectedAvatar.text,employee.initials.slice(0,1));assert.ok(selectedAvatar.width>=36);
   assert.ok((await privateAvatar.getAttribute('class')).includes('color-'+employee.color));
   assert.equal(await page.locator('.communication-roster').isVisible(),false,'private chat has no member sidebar');
   assert.equal(await page.locator('[data-toggle-chat-members]').isVisible(),false);
-  assert.equal(await page.locator('[data-toggle-communication-console]').innerText(),'','private Console uses an icon');
+  assert.equal(await page.locator('[data-toggle-communication-console]').innerText(),'控制台','private Console keeps the Graphite label and icon');
   assert.equal(await page.locator('[data-toggle-communication-console] svg').count(),1);
   assert.equal(await page.locator('label[for=communication-input]').count(), 0);
   assert.equal(await page.locator('.communication-contact i').count(), 0);
   const draft = page.locator('#communication-input'); await draft.fill('切换控制台时保留的草稿');
   const toggle = page.locator('[data-toggle-communication-console]'); await toggle.click();
   await page.locator('[data-communication-console]:not([hidden])').waitFor();
-  assert.equal(await toggle.evaluate(el=>{const probe=document.createElement('span');probe.style.color='var(--accent)';el.append(probe);const matches=getComputedStyle(el).color===getComputedStyle(probe).color;probe.remove();return matches;}),true);
+  assert.equal(await toggle.evaluate(el=>{const probe=document.createElement('span');probe.style.color='var(--text)';el.append(probe);const matches=getComputedStyle(el).color===getComputedStyle(probe).color;probe.remove();return matches;}),true);
   const widths = await page.locator('.communication-chat, .communication-console').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().width));
   assert.ok(Math.abs(widths[0] - widths[1]) < 2);
   const assertSplitHeaders = async p => {
@@ -103,7 +103,7 @@ try {
     assert.equal(await p.locator('.communication-console-header, [data-close-communication-console]').count(), 0);
     assert.deepEqual(await p.locator('.communication-console-toolbar button').allTextContents(), ['↓ 最新', '刷新', '×']);
     assert.equal(await p.locator('.communication-console-toolbar [data-communication-members], .communication-console-toolbar [data-communication-console-older]').count(), 0);
-    if(await p.evaluate(()=>innerWidth<=760)) { assert.equal(await p.locator('.communication-chat > .communication-header').isVisible(),true);assert.equal(await p.locator('.communication-messages').isVisible(),false);assert.equal(await p.locator('[data-close-chat-console]').isVisible(),true);return geometry; }
+    if(await p.evaluate(()=>innerWidth<=860)) { assert.equal(await p.locator('.communication-chat').isVisible(),false);assert.equal(await p.locator('.communication-messages').isVisible(),false);assert.equal(await p.locator('.communication-console-toolbar [data-chat-console-name]').isVisible(),true);assert.equal(await p.locator('[data-close-chat-console]').isVisible(),true);assert.ok(Math.abs(geometry.toolbar.y-geometry.console.y)<1,'narrow Console identity and actions stay at its top');return geometry; }
     assert.ok(Math.abs(geometry.left.y - geometry.console.y) < 1);
     assert.ok(Math.abs(geometry.toolbar.y - geometry.console.y) < 1);
     assert.ok(Math.abs(geometry.left.width - geometry.chat.width) < 2);
@@ -190,7 +190,7 @@ try {
     const row=button.parentElement, name=button.querySelector('.communication-member-name'), icon=row.querySelector('[data-chat-member-console]'), avatar=button.querySelector('.agent-card-avatar'), rect=node=>{const r=node.getBoundingClientRect();return{x:r.x,right:r.right,width:r.width,height:r.height};};
     return {row:rect(row),name:rect(name),icon:rect(icon),avatar:avatar.className,whiteSpace:getComputedStyle(name).whiteSpace,overflow:getComputedStyle(name).textOverflow,clipped:name.scrollWidth>name.clientWidth,roster:document.querySelector('.communication-roster').getBoundingClientRect().width};
   });
-  assert.ok(memberGeometry.roster>=250);assert.equal(memberGeometry.whiteSpace,'nowrap');assert.equal(memberGeometry.overflow,'ellipsis');assert.equal(memberGeometry.clipped,true);
+  assert.equal(memberGeometry.roster,248);assert.equal(memberGeometry.whiteSpace,'nowrap');assert.equal(memberGeometry.overflow,'ellipsis');assert.equal(memberGeometry.clipped,true);
   assert.ok(memberGeometry.name.right<=memberGeometry.icon.x);assert.ok(memberGeometry.icon.right<=memberGeometry.row.right+1);assert.ok(memberGeometry.icon.width>=30);assert.ok(memberGeometry.avatar.includes('color-'+employee.color));
   evidence.memberGeometry=memberGeometry;
   await page.locator(`[data-chat-member-console="${failedAgent.id}"]`).click();
@@ -271,7 +271,7 @@ try {
   await page.locator('[data-toggle-chat-members]').click();await page.locator('.communication-roster').waitFor();
   await page.screenshot({path:join(root,'group-members-narrow.png')});
   evidence.independentGroups={renamed:true,inlineRenameFailureAndPolling:true,singleSelectionPrivate:true,defaultNameFromMembers:true,teamDeletionDoesNotChangeMembers:true,inlineSelectedChips:true,newGroupsUnique:true,membershipEditable:true,employeeDetails:true,targetedConsole:true,explicitMention:true,deletedMemberHidden:true,footerClose:true,noAutomaticDropdown:true,identityAvatars:true};
-  for(const theme of ['minimal','warm']) {
+  for(const theme of ['light','dark']) {
     await page.goto(origin+'/settings/appearance');await page.locator(`[name="theme"][value="${theme}"]`).check();
     for(const [width,height] of [[1500,1000],[760,700]]) {
       await app.evaluate(({BrowserWindow},{origin,width,height})=>BrowserWindow.getAllWindows().find(window=>window.webContents.getURL().startsWith(origin)).setContentSize(width,height),{origin,width,height});await page.waitForFunction(width=>innerWidth===width,width);
@@ -282,7 +282,7 @@ try {
       if(width===760){await page.locator('[data-close-chat-members]').click();assert.equal(await page.locator('.communication-roster').isVisible(),false);await page.locator('[data-toggle-chat-members]').click();}
       await page.locator(`[data-chat-member-console="${employee.id}"]`).click();await page.locator('[data-chat-console-name]').filter({hasText:employee.name}).waitFor();
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-      const selected=page.locator(`[data-chat-member-console="${employee.id}"]`);assert.equal(await selected.getAttribute('aria-pressed'),'true');assert.equal(await selected.evaluate(el=>{const probe=document.createElement('span');probe.style.color='var(--accent)';el.append(probe);const matches=getComputedStyle(el).color===getComputedStyle(probe).color;probe.remove();return matches;}),true);
+      const selected=page.locator(`[data-chat-member-console="${employee.id}"]`);assert.equal(await selected.getAttribute('aria-pressed'),'true');assert.equal(await selected.evaluate(el=>{const probe=document.createElement('span');probe.style.color='var(--text)';el.append(probe);const matches=getComputedStyle(el).color===getComputedStyle(probe).color;probe.remove();return matches;}),true);
       await page.screenshot({path:join(root,`group-console-${theme}-${width}.png`)});await page.locator('[data-close-chat-console]').click();
     }
   }

@@ -9,12 +9,12 @@ description: 在 AgentForge App 仓库新增功能、修复界面或评审交互
 
 ## 界面从现有模式生长
 
-读 `docs/06-design-system.md` 与目标目录 README，再在现有页面找到同类交互。优先延展共享组件及 CSS，Electron 只在 `apps/electron/compact.css` 调整宿主密度；避免某页另定颜色和状态含义。生成头像为身份辨识使用高区分度实色，不限于品牌色；不要把所有头像变成同类浅色。
+读 `docs/06-design-system.md` 与目标目录 README，再在现有页面找到同类交互。优先延展共享组件及 CSS，所有 renderer 与原生弹窗共用 `web/tokens.css`；Electron 只在 `apps/electron/compact.css` 调整宿主密度；避免某页另定颜色和状态含义。生成头像为身份辨识使用高区分度实色，不限于品牌色；不要把所有头像变成同类浅色。
 
-- 主操作、选中、焦点使用 `--accent` 系列；辅助强调使用 `--accent-cyan`、`--accent-violet`。表面、边框、正文分别用 `--surface-soft`、`--line`、`--ink`/`--muted`。精确值由设计文档及样式维护，不在 skill 复制调色板。
-- 员工可用状态与 Runtime 支持标签使用共享语义样式。支持标签只表达静态兼容，不能暗示实际依赖或账号已验证；失败和待人类处理保留红/琥珀语义及文字。
+- 主操作、选中、焦点使用 `--accent` 系列；辅助强调使用 `--accent-cyan`、`--accent-violet`。表面、边框、正文分别用 `--bg-subtle`、`--border`、`--text`/`--text-secondary`。精确值由设计文档及样式维护，不在 skill 复制调色板。
+- 员工可用状态不显示徽章，绿点只表示真实执行；Runtime 支持标签使用共享语义样式。支持标签只表达静态兼容，不能暗示实际依赖或账号已验证；失败和待人类处理保留红/琥珀语义及文字。
 - 设置页先核对主/子标题字号递减；简单配置优先页内折叠，收起保留草稿。下拉输入与候选区必须连续可悬停，空间允许时展示六项；名称显示的大小写不能改变真实 ID 或提交值。
-- 新目录先看 `directory-toolbar`、共享卡片、过滤后分页、整行空态 `directory-empty`。任务、团队、员工、角色与市场共用同一空态样式，左右边缘对齐所属列表或整行卡片，背景、边框、圆角和内边距完全共用；加载、读取失败和空列表必须准确区分。
+- 视觉规范以 `.interface-design/system.md`（A · 石墨）为准。新目录先看石墨稿（`redesign/pages/*.html?style=graphite`）的 48px 标题栏（图标+标题+计数+主操作，视图用 `data-title-count` 提供计数）、44px `directory-toolbar`、共享卡片、过滤后分页与独立内容滚动；不显示文档大标题与页面说明。任务、团队、员工、角色与市场共用 `directory-empty` 居中图标/标题/说明，不重复创建入口；加载、读取失败和空列表必须准确区分。不要沿用旧搜索/创建同行和紧凑虚线空态。
 - 图标源是 `web/icons/application.png`，说明见 `web/icons/README.md`。替换时保留用户原图，重生成 ICNS 并核对侧栏、Dock/安装包留白与菜单栏原生单色模板；不要再画一份近似标志。导航图标同时检查共享 SVG 与桌面蒙版、`NAVIGATION` 外观偏好。
 
 ## 协作与控制台分工

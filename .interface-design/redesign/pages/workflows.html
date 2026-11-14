@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>工作流 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  .wf-card { display: flex; flex-direction: column; gap: var(--sp-5); padding: var(--sp-6); color: var(--text); text-decoration: none !important; }
+  .wf-card__head { display: flex; align-items: center; gap: var(--sp-4); }
+  .wf-card__head strong { flex: 1; min-width: 0; font-size: var(--fs-read); font-weight: var(--fw-semibold); }
+  .wf-card p { color: var(--text-secondary); min-height: calc(2 * var(--lh-body)); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .wf-preview { padding: var(--sp-5); border-radius: var(--r-sm); background: var(--bg-subtle); }
+  .wf-card__foot { display: flex; align-items: center; gap: var(--sp-5); font-size: var(--fs-small); color: var(--text-tertiary); }
+</style>
+</head>
+<body data-page="workflows">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="workflow"></i>工作流<span class="tb-count">3</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><a class="btn btn--primary" href="workflow-editor.html"><i data-icon="plus"></i>新建工作流</a></div>
+    </header>
+    <div class="page-hero"><h1>工作流</h1><p>定义职责节点、交付要求与交接关系。经理依据工作流推进，不被固定顺序替代。</p></div>
+    <div class="toolbar"><label class="search"><i data-icon="search"></i><input class="input" placeholder="搜索名称或说明" aria-label="搜索工作流"></label><span class="spacer"></span></div>
+    <div class="scroll">
+      <div class="page">
+        <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(min(360px,100%),1fr))">
+          <a class="card card--interactive wf-card" href="workflow-editor.html">
+            <div class="wf-card__head"><strong>软件交付</strong><span class="tag">内置</span></div>
+            <p>需求、设计、开发、测试、缺陷修复与回归验证，适合有代码改动的任务。</p>
+            <div class="wf-preview"><div class="flow-mini"><span>需求</span><i></i><span>设计</span><i></i><span>开发</span><i></i><span>测试</span><i></i><span>修复</span><i></i><span>回归</span></div></div>
+            <div class="wf-card__foot"><span>6 个节点</span><span>被 7 个任务使用</span><span class="spacer"></span><span>11月3日更新</span></div>
+          </a>
+          <a class="card card--interactive wf-card" href="workflow-editor.html">
+            <div class="wf-card__head"><strong>缺陷修复</strong><span class="tag">内置</span></div>
+            <p>复现、方案、修复与验证。测试失败时回到修复节点。</p>
+            <div class="wf-preview"><div class="flow-mini"><span>复现</span><i></i><span>方案</span><i></i><span>修复</span><i></i><span class="is-cond"><i data-icon="diamond" class="icon--sm"></i>通过？</span><i></i><span>验证</span></div></div>
+            <div class="wf-card__foot"><span>5 个节点 · 1 个条件</span><span>未被使用</span><span class="spacer"></span><span>10月30日更新</span></div>
+          </a>
+          <a class="card card--interactive wf-card" href="workflow-editor.html">
+            <div class="wf-card__head"><strong>内容交付</strong><span class="tag">内置</span></div>
+            <p>内容简报、创作编辑与独立审校，审校人与作者分离。</p>
+            <div class="wf-preview"><div class="flow-mini"><span>简报</span><i></i><span>创作编辑</span><i></i><span>独立审校</span></div></div>
+            <div class="wf-card__foot"><span>3 个节点</span><span>被 2 个任务、1 个自动化使用</span><span class="spacer"></span><span>10月29日更新</span></div>
+          </a>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

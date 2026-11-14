@@ -32,9 +32,9 @@ const initial = s.enqueueDispatch(run.id, { recipientAgentId: run.manager.id, wo
 s.claimDispatch(run.id);
 const trace = (dispatch, agent) => { const t = s.createTrace(run.id, { workflowNodeId: dispatch.workflowNodeId, agentId: agent.id, type: dispatch.purpose }); s.attachDispatchTrace(dispatch.id, t.id); return t; };
 const t0 = trace(initial, run.manager);
-const assignment = s.addMessage({ runId: run.id, traceId: t0.id, sender: actor(run.manager), kind: 'manager_decision', content: 'FLOW_ASSIGN：请需求分析明确角色管理的验收要求。' });
+const assignment = s.addMessage({ runId: run.id, traceId: t0.id, sender: actor(run.manager), recipientAgentId: analyst.id, kind: 'manager_decision', content: 'FLOW_ASSIGN：请需求分析明确角色管理的验收要求。' });
 s.completeTrace(t0.id); s.completeDispatch(initial.id);
-const work = s.enqueueDispatch(run.id, { recipientAgentId: analyst.id, workflowNodeId: 'requirements', purpose: 'node', dedupeKey: 'handoff:' + initial.id });
+const work = s.enqueueDispatch(run.id, { recipientAgentId: analyst.id, workflowNodeId: 'requirements', purpose: 'node', sourceMessageId: assignment.id, dedupeKey: 'handoff:' + initial.id });
 s.claimDispatch(run.id); const t1 = trace(work, analyst);
 assert.ok(run.workspacePath.startsWith(root + '/'));
 await mkdir(run.workspacePath, { recursive: true });
@@ -103,7 +103,7 @@ await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previ
 const app = await electron.launch({ ...(appBundle ? { executablePath: resolve(appBundle, 'Contents/MacOS/AgentForge'), args: [] } : { args: ['apps/electron/main.mjs'] }), env: { ...process.env, HOME: home, AGENTFORGE_DESKTOP_DATA_ROOT: data, AGENTFORGE_LOG_DIR: join(root, 'logs') }, timeout: 180000 });
 try {
   const page = await app.firstWindow({ timeout: 180000 });
-  await page.waitForURL(/^http:\/\/127\.0\.0\.1:/);
+  await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout:180000 });
   await page.addInitScript(() => {
     const original = EventSource.prototype.addEventListener;
     EventSource.prototype.addEventListener = function(type, listener, ...rest) {
@@ -121,7 +121,8 @@ try {
   await page.goto(origin + '/runs/' + run.id);
   await page.locator('.collaboration-row').first().waitFor();
   if (!process.env.AGENTFORGE_COLLABORATION_SCROLL_ONLY) {
-  await page.locator('[data-toggle-task-details]').click();
+  if (!await page.locator('#task-description-content').isVisible()) await page.locator('[data-toggle-task-details]').click();
+  await page.locator('#task-description-content p').waitFor();
   assert.equal(await page.locator('.quality-risk-panel').count(), 0);
   const typography=await page.evaluate(()=>({description:getComputedStyle(document.querySelector('#task-description-content p')).fontSize,path:getComputedStyle(document.querySelector('.workspace-path span')).fontSize,descriptionHeading:getComputedStyle(document.querySelector('#task-description-content').previousElementSibling).fontSize,pathHeading:getComputedStyle(document.querySelector('.workspace-directory-details h5')).fontSize}));
   assert.equal(typography.description,typography.path);assert.equal(typography.descriptionHeading,typography.pathHeading);
@@ -134,12 +135,12 @@ try {
   const delayDirectory=async route=>{await directoryWait;await route.continue();handledDirectory();};
   await page.route('**/working-directory?*',delayDirectory);await page.locator('#directory-mode').click();await page.locator('.directory-loading').first().waitFor();
   assert.doesNotMatch(await page.locator('#working-directory-panel').innerText(),/读取中|正在读取|加载中/);releaseDirectory();await directoryHandled;await page.unroute('**/working-directory?*',delayDirectory);await page.locator('[data-ws-tab="collaboration"]').click();
-  while (await page.locator('[data-collaboration-older]').count()) await page.locator('[data-collaboration-older]').click();
+  while (await page.locator('[data-collaboration-older]').count()) { const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before=')); await page.locator('[data-collaboration-older]').click(); await response; await page.waitForTimeout(150); }
   const rows = page.locator('.collaboration-row');
   const row = marker => rows.filter({ has: page.locator('.collaboration-markdown, .collaboration-plain').filter({ hasText: marker }) });
     assert.equal(await row('FLOW_ASSIGN').count(), 1, 'assignment body is not duplicated by its Dispatch');
-    assert.ok((await row('FLOW_ASSIGN').locator('header strong').textContent()).includes(analyst.name));
-    assert.ok((await row('FLOW_HANDOFF').locator('header strong').textContent()).includes(run.manager.name));
+    assert.ok((await row('FLOW_ASSIGN').locator('header strong').textContent()).includes(run.manager.name));
+    assert.ok((await row('FLOW_HANDOFF').locator('header strong').textContent()).includes(analyst.name));
     for (const marker of ['FLOW_QUESTION', 'FLOW_ANSWER', 'FLOW_HUMAN']) assert.equal(await row(marker).count(), 1, marker);
     assert.equal(await rows.locator('header strong').filter({ hasText: '全体团队' }).count(), 0);
     assert.equal(await page.locator('.collaboration-delivery').count(), 0, 'no delivery status block below messages');
@@ -153,10 +154,11 @@ try {
     await sourceLink.click();
     const startPrompt=page.locator(`[data-turn-message-id="${t0.inputMessageId}"]`);
     await startPrompt.waitFor();await page.waitForFunction(id=>document.querySelector(`[data-turn-message-id="${id}"]`)?.open,t0.inputMessageId);
-    await startPrompt.locator('.prompt-snapshot-text').waitFor();
+    assert.ok(await startPrompt.evaluate((node,id)=>{const card=node.closest('.console-execution');return card?.open && card.dataset.consoleExecution.startsWith(id+':');},t0.id),'precise reply opens the real Trace card as well as its prompt');
+    await startPrompt.locator('.prompt-snapshot-text').waitFor().catch(async error=>{console.error('Prompt fixture diagnostics:',await startPrompt.innerText());throw error;});
     assert.ok(await startPrompt.evaluate(e=>{const stream=e.closest('.chat-stream');return e.getBoundingClientRect().top>=stream.getBoundingClientRect().top && e.getBoundingClientRect().top<stream.getBoundingClientRect().top+140;}),'link targets the prompt even with paginated logs');
     await page.locator('#collaboration-mode').click();
-    while(await page.locator('[data-collaboration-older]').count())await page.locator('[data-collaboration-older]').click();
+    while(await page.locator('[data-collaboration-older]').count()){const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before='));await page.locator('[data-collaboration-older]').click();await response;await page.waitForTimeout(150);}
 
     await sourceLink.click();
     assert.equal(await page.locator('#console-mode').getAttribute('aria-selected'), 'true');
@@ -190,44 +192,52 @@ try {
     });
     const appendEvent = {id:'ui-append-probe',runId:run.id,timestamp:new Date(Date.now()+1000).toISOString(),type:'runtime.event',actor:{type:'agent',id:recovered.agentId,name:'工程师'},message:'APPEND_PROBE',data:{auditVersion:2,traceId:recovered.id,presentation:'text'}};
     await page.evaluate(event => window.flowRunListener({data:JSON.stringify(event)}),appendEvent);
-    await page.locator('#trace-stream').getByText('APPEND_PROBE',{exact:true}).waitFor();
+    await page.waitForTimeout(200);
+    assert.equal(await page.locator('#trace-stream').getByText('APPEND_PROBE',{exact:true}).count(),0,'reading history defers live events');
     assert.ok(await page.evaluate(() => document.querySelector('#trace-stream') === window.flowConsoleStream && window.flowConsoleRow.isConnected && window.flowConsoleBody.isConnected),'append retains stream and existing hydrated bodies');
     assert.ok(await page.evaluate(() => getSelection().toString() === window.flowSelectedText),'append keeps selected text');
     assert.equal(await page.locator('#trace-stream').evaluate(el=>el.scrollTop),0,'append does not pull reader away from history');
-    const summaryResponse = page.waitForResponse(r=>r.url().includes('/workspace?view=summary'));
+    const summaryResponse = page.waitForResponse(r=>r.url().includes('/workspace?view=compact'));
     await page.evaluate(event => window.flowRunListener({data:JSON.stringify({...event,id:'ui-summary-probe',type:'trace.completed'})}),appendEvent);
     await summaryResponse;
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     await page.waitForFunction(() => document.querySelector('#trace-stream') === window.flowConsoleStream && document.querySelector('.console-history-controls'));
     assert.ok(await page.evaluate(() => window.flowConsoleRow.isConnected && window.flowConsoleBody.isConnected && getSelection().toString() === window.flowSelectedText),'summary refresh preserves the reading DOM and selection');
+    await page.evaluate(()=>getSelection().removeAllRanges());
+    await page.locator('[data-console-latest]').click();
+    await page.locator('#trace-stream [data-execution-kind=thinking]').first().waitFor();
+    await page.locator('#trace-stream').evaluate(stream=>{window.flowConsoleRow=stream.querySelector('.log-row');window.flowConsoleBody=stream.querySelector('[data-execution-kind=thinking]');stream.scrollTop=stream.scrollHeight;});
+    const deliverLive = async event => {await page.locator('#trace-stream').evaluate(stream=>stream.scrollTop=stream.scrollHeight);await page.evaluate(event=>window.flowRunListener({data:JSON.stringify(event)}),event);};
     const toolEvent = (id, call, result=false) => ({...appendEvent,id,timestamp:new Date(Date.now()+2000).toISOString(),data:{auditVersion:2,traceId:recovered.id,presentation:result?'tool_result':'tool',toolName:'Bash',...(result?{toolResultId:call,status:'completed'}:{toolUseId:call})}});
-    await page.evaluate(event=>window.flowRunListener({data:JSON.stringify(event)}),toolEvent('ui-tool-one','ui-call-one'));
+    await deliverLive(toolEvent('ui-tool-one','ui-call-one'));
     await page.locator('[data-console-key="tool:ui-tool-one"]').waitFor();
     await page.locator('[data-console-key="tool:ui-tool-one"] > summary').click();
-    await page.evaluate(event=>window.flowRunListener({data:JSON.stringify(event)}),toolEvent('ui-tool-result','ui-call-one',true));
+    await deliverLive(toolEvent('ui-tool-result','ui-call-one',true));
     await page.locator('[data-console-key="tool:ui-tool-one"] .console-tool-lines').filter({hasText:'已完成'}).waitFor();
     assert.equal(await page.locator('[data-console-key="tool:ui-tool-one"]').getAttribute('open'),'','tool completion preserves open disclosure');
     assert.ok(await page.evaluate(()=>window.flowConsoleRow.isConnected && window.flowConsoleBody.isConnected),'tool update leaves unrelated content intact');
-    await page.evaluate(event=>window.flowRunListener({data:JSON.stringify(event)}),toolEvent('ui-tool-two','ui-call-two'));
+    await deliverLive(toolEvent('ui-tool-two','ui-call-two'));
     await page.locator('[data-console-key="group:ui-tool-one"]').waitFor();
     await page.locator('[data-console-key="group:ui-tool-one"] > summary').click();
-    await page.evaluate(event=>window.flowRunListener({data:JSON.stringify(event)}),toolEvent('ui-tool-three','ui-call-three'));
+    await deliverLive(toolEvent('ui-tool-three','ui-call-three'));
     await page.locator('[data-console-key="group:ui-tool-one"] .tool-group-count').filter({hasText:'×3'}).waitFor();
     assert.equal(await page.locator('[data-console-key="group:ui-tool-one"]').getAttribute('open'),null,'group growth respects a manual collapse');
-    await page.locator('[data-console-reset]').click();
+    await page.locator('[data-console-latest]').click();
     assert.equal(await page.locator('.console-failure, #console-failure-panel').count(),0,'console has no duplicate error banner');
     const errorLine = page.locator('.log-message.error', { hasText: 'FLOW_OLD_ERROR' });
     await errorLine.waitFor();
     assert.equal(await errorLine.evaluate(el => getComputedStyle(el).color), await page.locator('body').evaluate(el => { const probe=document.createElement('span');probe.style.color='var(--danger-ink)';el.append(probe);const color=getComputedStyle(probe).color;probe.remove();return color; }), 'historical failure stays red in the console log');
     assert.equal(await page.locator('[data-select-agent="agent_engineer"]').getAttribute('data-execution-state'),'idle','successful retry clears employee error state');
     assert.equal(await page.locator('[data-select-agent="agent_designer"]').getAttribute('data-execution-state'),'error');
-    assert.match(await page.locator('[data-select-agent="agent_designer"] .agent-runtime-status').textContent(),/错误/);
-    assert.equal(await page.locator('[data-select-agent="agent_designer"] .agent-runtime-status').evaluate(el=>getComputedStyle(el).color),await errorLine.evaluate(el=>getComputedStyle(el).color),'employee error state uses danger red');
+    assert.match(await page.locator('[data-select-agent="agent_designer"]').getAttribute('aria-label'),/错误/,'employee failure is exposed by the member control');
     await page.screenshot({ path: join(root, 'console-failure.png'), fullPage: true });
     await page.locator('#collaboration-mode').click();
     assert.equal(await page.locator('.collaboration-files, [data-collaboration-file], [data-collaboration-directory], [data-collaboration-jump], .collaboration-acceptance-detail').count(),0,'no automatic acceptance attachments or duplicate instructions');
+    await page.locator('[data-collaboration-latest]').click();
+    await row('FLOW_FINAL').waitFor();
     assert.equal(await row('FLOW_FINAL').count(),1);
     assert.equal(await row('FLOW_ACCEPTANCE').count(),0,'same-invocation platform acceptance explanation does not duplicate the manager report');
+    while(!await row('FLOW_HANDOFF').count() && await page.locator('[data-collaboration-older]').count()){const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before='));await page.locator('[data-collaboration-older]').click();await response;await page.waitForTimeout(150);}
     const reportBody=row('FLOW_HANDOFF').locator('.collaboration-body-content');
     await reportBody.locator('h1').waitFor();
     assert.equal(await reportBody.locator('strong').count(),1,'collapsed message already renders Markdown');
@@ -247,6 +257,7 @@ try {
     await row('FLOW_HANDOFF').getByRole('button',{name:'收起',exact:true}).click();
     assert.equal(await row('FLOW_ASSIGN').locator('[data-expand-collaboration-body]').isVisible(),false,'short messages have no expand button');
     assert.equal(await page.evaluate(() => Boolean(window.flowInjected)), false, 'record content remains safe');
+    await page.locator('[data-collaboration-latest]').click();await row('FLOW_FINAL').waitFor();
     await row('FLOW_FINAL').scrollIntoViewIfNeeded();
     await page.screenshot({path:join(root,'acceptance-summary.png'),fullPage:true});
     const sessionFile = join(root, 'cli/session.json'), endpointFile = join(data, 'desktop-endpoint.json');
@@ -260,10 +271,15 @@ try {
     assert.ok(records.items.some(r => r.deliveries?.some(d => d.history.some(h => h.content?.includes('FLOW_RETRY')))), 'CLI retains execution facts');
     assert.ok(records.items.every(r => !('tone' in r) && !('statusCode' in r)));
     await writeFile(join(root, 'cli-records.json'), JSON.stringify(records, null, 2));
-    await page.locator('[data-collaboration-filter="human"]').click();
-    assert.equal(await row('FLOW_HUMAN').count(), 1); assert.equal(await row('FLOW_ASSIGN').count(), 0);
-    await page.locator('[data-collaboration-filter="all"]').click();
-  while (await page.locator('[data-collaboration-older]').count()) await page.locator('[data-collaboration-older]').click();
+    assert.equal(await page.locator('[data-collaboration-filter]').count(),0,'collaboration exposes one complete chronological conversation');
+    while(await row('FLOW_HUMAN').count()===0 && await page.locator('[data-collaboration-older]').count()){
+      const response=page.waitForResponse(r=>r.url().includes('/collaboration?') && r.url().includes('before='));
+      await page.locator('[data-collaboration-older]').click();const olderPage=await (await response).json();
+      if(olderPage.items.length)await page.locator(`[data-collaboration-record="${olderPage.items[0].id}"]`).waitFor();else break;
+    }
+    await row('FLOW_HUMAN').waitFor();assert.equal(await row('FLOW_ASSIGN').count(),1,'employee and human records remain together');
+    await page.locator('[data-collaboration-latest]').click();await row('FLOW_FINAL').waitFor();
+  while (await page.locator('[data-collaboration-older]').count()) { const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before=')); await page.locator('[data-collaboration-older]').click(); await response; await page.waitForTimeout(150); }
   await page.locator('.human-message-list').evaluate(el => { el.scrollTop = 0; });
   await page.screenshot({ path: join(root, 'flow-wide.png'), fullPage: true });
   await app.evaluate(({ BrowserWindow }, origin) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith(origin)).setContentSize(760, 800), origin);
@@ -271,11 +287,29 @@ try {
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'narrow collaboration has no page overflow');
   await page.locator('.human-message-list').evaluate(el => { el.scrollTop = 0; });
   await page.screenshot({ path: join(root, 'flow-narrow.png'), fullPage: true });
-  for (const theme of ['minimal', 'warm']) for (const width of [1320, 760]) {
+  for (const theme of ['light', 'dark']) for (const width of [1320, 760]) {
     await app.evaluate(({ BrowserWindow }, { origin, width }) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith(origin)).setContentSize(width, 800), { origin, width });
     await page.waitForFunction(width => innerWidth === width, width);
     await page.goto(origin + '/settings/appearance'); await page.locator(`[name="theme"][value="${theme}"]`).check();
-    await page.goto(origin + '/runs/' + run.id); await page.locator('#console-mode').click();
+    await page.goto(origin + '/runs/' + run.id);
+    await page.locator('.collaboration-row:not(.from-human) .collaboration-avatar').first().waitFor();
+    const messageLayout = await page.locator('.collaboration-row:not(.from-human)').first().evaluate(row => {
+      const avatar=row.querySelector('.collaboration-avatar'), header=row.querySelector('header'), content=row.querySelector('.collaboration-content');
+      const av=avatar.getBoundingClientRect(), body=content.getBoundingClientRect(), style=getComputedStyle(row);
+      return { avatarWidth:av.width, avatarHeight:av.height, radius:getComputedStyle(avatar).borderRadius, indent:body.x-av.right, headerTime:Boolean(header.querySelector('time[title]')), border:style.borderBottomWidth, width:row.getBoundingClientRect().width, container:row.parentElement.clientWidth };
+    });
+    assert.deepEqual([messageLayout.avatarWidth,messageLayout.avatarHeight,messageLayout.radius],[28,28,'30%'],'message identity matches the Graphite design');
+    assert.ok(Math.abs(messageLayout.indent-12)<1,'body aligns beside the 28px avatar with a 12px gutter');
+    assert.ok(messageLayout.headerTime,'compact header time retains the full timestamp in its title');
+    assert.equal(messageLayout.border,'1px','messages retain a light divider');
+    assert.ok(messageLayout.width>=messageLayout.container-12,'message rows follow the available pane width');
+    await page.screenshot({path:join(root,`graphite-records-${theme}-${width}.png`),fullPage:true});
+    while(await row('FLOW_HUMAN').count()===0 && await page.locator('[data-collaboration-older]').count()){await page.locator('[data-collaboration-older]').click();await page.waitForTimeout(150);}
+    await row('FLOW_HUMAN').waitFor();
+    const humanLayout=await row('FLOW_HUMAN').evaluate(row=>({border:getComputedStyle(row).borderBottomWidth,width:row.getBoundingClientRect().width,container:row.parentElement.clientWidth,bubble:row.querySelector('.collaboration-content').getBoundingClientRect().width}));
+    assert.equal(humanLayout.border,'1px','human messages also have full-width dividers');
+    assert.ok(humanLayout.width>=humanLayout.container-12 && humanLayout.bubble<=humanLayout.width*.72+1,'only the human bubble is width-constrained');
+    await page.locator('#console-mode').click();
     await page.locator('[data-select-agent="agent_engineer"]').click();
     const prompt = page.locator(`[data-console-key="prompt:${recovered.id}"]`);
     await prompt.waitFor(); if (await prompt.getAttribute('open') === null) await prompt.locator('summary').click();
@@ -291,6 +325,12 @@ try {
     await page.waitForFunction(width=>innerWidth===width,width);
     await page.goto(origin+'/runs/'+runId);
     await page.locator('[data-answer-message="'+questionId+'"]').waitFor();
+    const replyContext=page.locator('.message-composer-card > .reply-context');
+    await replyContext.waitFor();
+    assert.ok(await replyContext.locator('span[title]').getAttribute('title'),'truncated reply context retains the complete question');
+    assert.ok((await replyContext.boundingBox()).height<=30,'reply context uses one compact line');
+    assert.ok((await page.locator('#instruction-text').boundingBox()).height<=50,'composer starts with two readable lines');
+    assert.equal(await page.locator('label[for="instruction-text"]').getAttribute('class'),'sr-only','composer keeps its accessible name');
     await page.locator('.collaboration-markdown').first().waitFor();
     await page.locator('[data-collaboration-older]').click();
     await page.waitForFunction(()=>!document.querySelector('.human-message-list')?.textContent.includes('SCROLL_QUESTION_'));
@@ -333,4 +373,10 @@ try {
     await page.screenshot({path:join(root,`reply-latest-${width}.png`)});
   }
   console.log('PASS' + ' ' + (appBundle ? 'packaged' : 'source') + (process.env.AGENTFORGE_COLLABORATION_SCROLL_ONLY ? ' collaboration reply scroll' : ' collaboration flow') + '; evidence: ' + root);
-} finally { await app.close(); }
+} finally {
+  // A failed desktop startup can leave the close handshake waiting on its error
+  // window. Bound cleanup to this test-owned process and retain the original error.
+  const cleanup = setTimeout(() => { console.warn('Isolated Electron cleanup exceeded 10s; terminating the test-owned process.'); app.process().kill('SIGKILL'); }, 10000);
+  cleanup.unref();
+  try { await app.close().catch(() => {}); } finally { clearTimeout(cleanup); }
+}

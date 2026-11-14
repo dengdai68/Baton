@@ -313,7 +313,11 @@ test("shared Console projections remain behind authenticated HTTP", async () => 
     readFile(new URL("../server/index.mjs", import.meta.url), "utf8"),
     readFile(new URL("../web/app.js", import.meta.url), "utf8")
   ]);
-  assert.match(web, /taskMatchesSearch\(task, state\.taskSearch\)/);
+  // Task search/filtering is built into the authenticated /api/tasks query and the
+  // client only re-paginates the fetched candidates by chip.
+  assert.match(web, /query\.set\('search',state\.taskSearch\.name\)/);
+  assert.match(web, /state\.taskCandidates = candidates/);
+  assert.match(web, /taskMatchesChip\(task\.status, state\.taskChip/);
   assert.match(web, /taskActionLabel\(current\.status\)/);
   assert.match(web, /roleExecutionStatus\(run, traces, agent\.id\)/);
   assert.match(server, /const clientRoot = join\(root, "client"\)/);

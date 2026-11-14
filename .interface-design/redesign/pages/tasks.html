@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>任务 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  /* 页面私有：任务行的列定义（只定义栅格，不定义视觉） */
+  .task-row { grid-template-columns: 16px minmax(0, 1fr) 168px 96px 76px 150px; }
+  .task-row .row__title { display: flex; align-items: center; gap: var(--sp-4); }
+  .task-row .row__title > span { overflow: hidden; text-overflow: ellipsis; }
+  .task-row .cell-step { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--fs-small); color: var(--text-secondary); min-width: 0; }
+  .board { display: grid; grid-template-columns: repeat(4, minmax(240px, 1fr)); gap: var(--sp-5); padding: var(--sp-6) var(--pad-page); align-items: start; min-width: 1000px; }
+  .board-col { border-radius: var(--r-md); background: var(--bg-subtle); padding: var(--sp-3); }
+  .board-col__head { display: flex; align-items: center; gap: var(--sp-3); height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-small); font-weight: var(--fw-semibold); }
+  .board-card { padding: var(--sp-5); margin-top: var(--sp-3); }
+  .board-card h4 { font-size: var(--fs-body); font-weight: var(--fw-medium); margin: var(--sp-3) 0 var(--sp-4); }
+  @media (max-width: 1000px) { .task-row { grid-template-columns: 16px minmax(0, 1fr) 96px 64px 120px; } .task-row .cell-step { display: none; } }
+  @media (max-width: 860px) { .task-row { grid-template-columns: 16px minmax(0, 1fr) 64px 104px; } .task-row .cell-members { display: none; } }
+</style>
+</head>
+<body data-page="tasks">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+
+  <main class="main" data-view-scope>
+    <header class="titlebar">
+      <div class="tb-title has-hero"><i data-icon="tasks"></i>任务<span class="tb-count">7</span></div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions">
+        <div class="seg seg--icon" role="group" aria-label="视图">
+          <button class="seg__item is-active" type="button" data-view="list" aria-pressed="true" title="列表视图"><i data-icon="list"></i></button>
+          <button class="seg__item" type="button" data-view="board" aria-pressed="false" title="看板视图"><i data-icon="board"></i></button>
+        </div>
+        <button class="btn btn--primary" type="button" data-open="dialog-new-task"><i data-icon="plus"></i>新建任务<kbd class="kbd kbd-hint">C</kbd></button>
+      </div>
+    </header>
+
+    <div class="page-hero">
+      <h1>任务</h1>
+      <p>创建任务、跟进协作与交接，并在这里确认交付。需要你处理的事项始终排在最前。</p>
+    </div>
+
+    <div class="toolbar">
+      <div class="vtabs" role="tablist" aria-label="快捷视图">
+        <button class="vtab is-active" type="button" role="tab" aria-selected="true">全部 <span class="count">7</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">待我处理 <span class="count count--attention">3</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">进行中 <span class="count">1</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">草稿 <span class="count">1</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false">已完成 <span class="count">1</span></button>
+        <button class="vtab" type="button" role="tab" aria-selected="false"><i data-icon="archive" class="icon--sm"></i>归档</button>
+      </div>
+      <span class="spacer"></span>
+      <label class="search"><i data-icon="search"></i><input class="input" placeholder="筛选任务名称" aria-label="筛选任务名称"><kbd class="kbd">/</kbd></label>
+      <button class="btn btn--ghost" type="button" data-menu="menu-filter" aria-label="筛选"><i data-icon="filter"></i><span class="hide-md">筛选</span></button>
+    </div>
+
+    <!-- 列表视图：按「需要谁行动」分组，而不是平铺 -->
+    <div class="scroll" data-view-panel="list">
+      <div class="group-head st-attention"><i data-icon="st-attention" class="st st-attention"></i>待我处理<span class="count">3</span><span class="spacer"></span><span class="faint" style="font-weight:400">回答澄清、验收交付或处理中断</span></div>
+
+      <a class="row task-row is-selected" href="task.html" data-selectable>
+        <i data-icon="st-attention" class="st st-attention" title="等待你的澄清"></i>
+        <div class="row__title"><span>重构登录页并补齐单元测试</span><span class="tag">软件交付</span></div>
+        <div class="cell-step"><span class="status status--text st-attention">等待你的澄清</span><span class="faint">· Kai 提问</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span><span class="av av--20 blue">K</span><span class="av av--20 green">S</span></span></div>
+        <div class="row__meta">12 分钟前</div>
+        <div class="row__actions"><span class="btn btn--sm btn--attention"><i data-icon="reply" class="icon--sm"></i>去澄清</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+      <a class="row task-row" href="task.html" data-selectable>
+        <i data-icon="st-review" class="st st-attention" title="待你验收"></i>
+        <div class="row__title"><span>Q4 竞品调研报告</span><span class="tag">软件交付</span></div>
+        <div class="cell-step"><span class="status status--text st-attention">待你验收</span><span class="faint">· 2 个文件</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span><span class="av av--20 orange">L</span></span></div>
+        <div class="row__meta">40 分钟前</div>
+        <div class="row__actions"><span class="btn btn--sm btn--attention"><i data-icon="clipboard" class="icon--sm"></i>去验收</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+      <a class="row task-row" href="task.html?state=failed" data-selectable>
+        <i data-icon="st-failed" class="st st-failed" title="错误中断"></i>
+        <div class="row__title"><span>修复导出 CSV 编码问题</span><span class="tag">缺陷修复</span></div>
+        <div class="cell-step"><span class="status status--text st-failed">错误中断</span><span class="faint truncate">· Runtime 未找到</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 blue">K</span><span class="av av--20 green">S</span></span></div>
+        <div class="row__meta">1 小时前</div>
+        <div class="row__actions"><span class="btn btn--sm"><i data-icon="alert" class="icon--sm"></i>查看恢复选项</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+
+      <div class="group-head st-running"><i data-icon="st-running" class="st st-running"></i>进行中<span class="count">1</span></div>
+      <a class="row task-row" href="task.html" data-selectable>
+        <i data-icon="st-running" class="st st-running" title="进行中"></i>
+        <div class="row__title"><span>官网定价页 A/B 文案</span><span class="tag">内容交付</span></div>
+        <div class="cell-step"><span class="dot dot--pulse st-running"></span><span class="truncate">内容创作 · Mira 执行中</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 cyan">N</span><span class="av av--20 violet">M</span><span class="av av--20 green">S</span></span></div>
+        <div class="row__meta">刚刚</div>
+        <div class="row__actions"><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+
+      <div class="group-head st-neutral"><i data-icon="st-paused" class="st st-neutral"></i>已暂停<span class="count">1</span></div>
+      <a class="row task-row" href="task.html" data-selectable>
+        <i data-icon="st-paused" class="st st-neutral" title="已暂停"></i>
+        <div class="row__title"><span>整理客户访谈纪要</span><span class="tag">内容交付</span></div>
+        <div class="cell-step"><span class="faint">等待补充录音</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 violet">M</span></span></div>
+        <div class="row__meta">3 小时前</div>
+        <div class="row__actions"><span class="btn btn--sm on-hover"><i data-icon="play" class="icon--sm"></i>继续</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+
+      <div class="group-head st-neutral"><i data-icon="st-draft" class="st st-neutral"></i>草稿<span class="count">1</span></div>
+      <a class="row task-row" href="tasks.html?dialog=new-task" data-selectable>
+        <i data-icon="st-draft" class="st st-neutral" title="草稿"></i>
+        <div class="row__title"><span>设计系统 Token 梳理</span><span class="tag">软件交付</span></div>
+        <div class="cell-step"><span class="faint">尚未开始</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 orange">L</span><span class="av av--20 blue">K</span></span></div>
+        <div class="row__meta">昨天</div>
+        <div class="row__actions"><span class="btn btn--sm on-hover"><i data-icon="play" class="icon--sm"></i>启动</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+
+      <div class="group-head st-done"><i data-icon="st-done" class="st st-done"></i>已完成<span class="count">1</span></div>
+      <a class="row task-row" href="task.html" data-selectable>
+        <i data-icon="st-done" class="st st-done" title="已完成"></i>
+        <div class="row__title"><span>官网博客：多 Agent 协作实践</span><span class="tag">内容交付</span></div>
+        <div class="cell-step"><span class="faint">你已确认完成</span></div>
+        <div class="cell-members"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 violet">M</span><span class="av av--20 green">S</span></span></div>
+        <div class="row__meta">11月9日</div>
+        <div class="row__actions"><span class="btn btn--sm on-hover"><i data-icon="archive" class="icon--sm"></i>归档</span><button class="btn btn--ghost btn--icon btn--sm on-hover" type="button" data-menu="menu-row" aria-label="更多操作"><i data-icon="more"></i></button></div>
+      </a>
+    </div>
+
+    <!-- 看板视图：同一数据的另一种排布 -->
+    <div class="scroll" data-view-panel="board" hidden>
+      <div class="board">
+        <section class="board-col">
+          <div class="board-col__head"><i data-icon="st-draft" class="st st-neutral"></i>草稿 <span class="faint">1</span></div>
+          <article class="card card--interactive board-card"><span class="tag">软件交付</span><h4>设计系统 Token 梳理</h4><div class="hstack"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 orange">L</span></span><span class="spacer"></span><span class="faint" style="font-size:12px">昨天</span></div></article>
+        </section>
+        <section class="board-col">
+          <div class="board-col__head"><i data-icon="st-running" class="st st-running"></i>进行中 <span class="faint">2</span></div>
+          <article class="card card--interactive board-card"><span class="tag">内容交付</span><h4>官网定价页 A/B 文案</h4><div class="hstack" style="font-size:12px"><span class="dot dot--pulse st-running"></span><span class="muted">内容创作 · Mira</span><span class="spacer"></span><span class="faint">刚刚</span></div></article>
+          <article class="card card--interactive board-card"><span class="tag">内容交付</span><h4>整理客户访谈纪要</h4><div class="hstack" style="font-size:12px"><span class="status st-neutral"><i data-icon="st-paused"></i>已暂停</span><span class="spacer"></span><span class="faint">3 小时前</span></div></article>
+        </section>
+        <section class="board-col">
+          <div class="board-col__head"><i data-icon="st-attention" class="st st-attention"></i>待我处理 <span class="faint">3</span></div>
+          <article class="card card--interactive board-card"><span class="tag">软件交付</span><h4>重构登录页并补齐单元测试</h4><div class="hstack" style="font-size:12px"><span class="status status--text st-attention"><i data-icon="st-attention"></i>等待你的澄清</span><span class="spacer"></span><span class="faint">12 分钟前</span></div></article>
+          <article class="card card--interactive board-card"><span class="tag">软件交付</span><h4>Q4 竞品调研报告</h4><div class="hstack" style="font-size:12px"><span class="status status--text st-attention"><i data-icon="st-review"></i>待你验收</span><span class="spacer"></span><span class="faint">40 分钟前</span></div></article>
+          <article class="card card--interactive board-card"><span class="tag">缺陷修复</span><h4>修复导出 CSV 编码问题</h4><div class="hstack" style="font-size:12px"><span class="status status--text st-failed"><i data-icon="st-failed"></i>错误中断</span><span class="spacer"></span><span class="faint">1 小时前</span></div></article>
+        </section>
+        <section class="board-col">
+          <div class="board-col__head"><i data-icon="st-done" class="st st-done"></i>已完成 <span class="faint">1</span></div>
+          <article class="card card--interactive board-card"><span class="tag">内容交付</span><h4>官网博客：多 Agent 协作实践</h4><div class="hstack" style="font-size:12px"><span class="av-stack"><span class="av av--20 violet">项</span><span class="av av--20 violet">M</span></span><span class="spacer"></span><span class="faint">11月9日</span></div></article>
+        </section>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- 行操作菜单：破坏性操作收进菜单并二次确认 -->
+<div class="menu" id="menu-row" role="menu">
+  <a class="menu__item" href="task.html" role="menuitem"><i data-icon="external"></i>打开任务<span class="meta"><kbd class="kbd">↵</kbd></span></a>
+  <button class="menu__item" type="button" role="menuitem"><i data-icon="edit"></i>编辑成员</button>
+  <button class="menu__item" type="button" role="menuitem"><i data-icon="link"></i>复制任务链接</button>
+  <button class="menu__item" type="button" role="menuitem"><i data-icon="archive"></i>归档</button>
+  <div class="menu__sep"></div>
+  <button class="menu__item menu__item--danger" type="button" role="menuitem" data-open="dialog-delete"><i data-icon="trash"></i>删除任务…</button>
+</div>
+<div class="menu" id="menu-filter" role="menu" style="width:240px">
+  <p class="menu__label">按条件筛选</p>
+  <button class="menu__item" type="button"><i data-icon="st-running"></i>状态<span class="meta">任意</span></button>
+  <button class="menu__item" type="button"><i data-icon="workflow"></i>工作流<span class="meta">任意</span></button>
+  <button class="menu__item" type="button"><i data-icon="users"></i>成员<span class="meta">任意</span></button>
+  <button class="menu__item" type="button"><i data-icon="calendar"></i>更新时间<span class="meta">任意</span></button>
+</div>
+
+<!-- 新建任务：内容优先；表单弹窗只能显式关闭，保护草稿 -->
+<div class="overlay" id="dialog-new-task" data-explicit-close>
+  <form class="dialog dialog--lg" role="dialog" aria-modal="true" aria-labelledby="new-task-title" onsubmit="return false">
+    <div class="dialog__head">
+      <h2 id="new-task-title">新建任务</h2>
+      <button class="btn btn--ghost btn--icon btn--sm" type="button" data-close aria-label="关闭"><i data-icon="x"></i></button>
+    </div>
+    <div class="dialog__body">
+      <input class="input input--title" placeholder="任务标题" aria-label="任务标题" value="重构登录页并补齐单元测试" data-autofocus>
+      <textarea class="textarea textarea--read" style="min-height:150px;border:0;padding:4px 0;box-shadow:none;resize:none" aria-label="内容描述" placeholder="描述要完成的事、背景和要求，可粘贴图片…">登录页在窄窗口下错位、错误提示不可读；请重构布局并为表单校验补齐单元测试，交付前给出截图与测试报告。</textarea>
+      <details style="margin:4px 0 18px">
+        <summary class="link-btn" style="color:var(--text-secondary);font-size:12px;cursor:default"><i data-icon="chevron-right" class="icon--sm"></i>验收标准<span class="faint">（选填）</span></summary>
+      </details>
+      <div class="field-row">
+        <div class="field" style="margin-bottom:0">
+          <span class="field__label">成员<span class="req">*</span><span class="spacer"></span><span class="opt">点击姓名设为经理</span></span>
+          <div class="picker">
+            <span class="token is-manager"><span class="av av--16 violet">项</span>★ 项目经理<span class="x"><i data-icon="x" class="icon--sm"></i></span></span>
+            <span class="token"><span class="av av--16 cyan">N</span>Noah<span class="x"><i data-icon="x" class="icon--sm"></i></span></span>
+            <span class="token"><span class="av av--16 blue">K</span>Kai<span class="x"><i data-icon="x" class="icon--sm"></i></span></span>
+            <span class="token"><span class="av av--16 green">S</span>Sora<span class="x"><i data-icon="x" class="icon--sm"></i></span></span>
+            <input placeholder="添加团队或员工…" aria-label="添加成员">
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:0">
+          <span class="field__label">工作流<span class="opt">（选填）</span></span>
+          <select class="select" style="height:var(--control-h-lg)"><option>软件交付 · 6 个节点</option><option>默认协作</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="dialog__foot">
+      <span class="hint"><i data-icon="folder" class="icon--sm"></i> 工作目录自动创建在 <span class="mono">~/AgentForge/tasks</span></span>
+      <span class="spacer"></span>
+      <button class="btn btn--ghost" type="button" data-close>取消</button>
+      <button class="btn" type="button">保存草稿</button>
+      <button class="btn btn--primary" type="submit">保存并开始<kbd class="kbd">⌘↵</kbd></button>
+    </div>
+  </form>
+</div>
+
+<!-- 删除确认：后果说明 + 危险主操作 -->
+<div class="overlay" id="dialog-delete">
+  <div class="dialog dialog--sm" role="alertdialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="dialog__head"><h2 id="delete-title">删除任务「设计系统 Token 梳理」？</h2></div>
+    <div class="dialog__body" style="padding-top:8px"><p class="muted">任务描述与草稿成员将被删除，此操作无法撤销。已产生的运行记录不受影响。</p></div>
+    <div class="dialog__foot"><span class="spacer"></span><button class="btn btn--ghost" type="button" data-close>取消</button><button class="btn btn--danger-solid" type="button" data-close>删除任务</button></div>
+  </div>
+</div>
+</body>
+</html>

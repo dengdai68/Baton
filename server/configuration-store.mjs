@@ -44,9 +44,9 @@ export function createConfigurationStore({directory=null,databasePath=':memory:'
     },
     abort(){if(readOnly)throw new Error('配置视图只读');if(candidate&&pending)unlinkSync(pending);candidate=null;},
     commit(){if(readOnly)throw new Error('配置视图只读');if(!candidate)return;try{if(pending)publish(pending,path);syncDirectory();document=candidate;listing=null;baseline=JSON.stringify(candidate.values);candidate=null;}catch(cause){document=candidate;listing=null;fault=true;const error=new Error('配置与业务变更已提交，但配置文件发布未完成；请修复目录后重启恢复，不要重复提交',{cause});error.committed=true;throw error;}},
-    query(kind,{search='',page=1,pageSize=20}={}){
+    query(kind,{search='',page=1,pageSize=20,excludeIds=[]}={}){
       listing??=(document?.values.extensionCatalog||[]).filter(entry=>!entry.deletedAt).map(entry=>({entry,search:`${entry.name} ${entry.description||''}`.toLocaleLowerCase()})).sort((a,b)=>b.entry.createdAt.localeCompare(a.entry.createdAt)||a.entry.id.localeCompare(b.entry.id));
-      const query=search.trim().toLocaleLowerCase(),rows=listing.filter(row=>row.entry.kind===kind&&row.search.includes(query));const total=rows.length,totalPages=Math.max(1,Math.ceil(total/pageSize));page=Math.min(page,totalPages);return {items:structuredClone(rows.slice((page-1)*pageSize,page*pageSize).map(row=>row.entry)),total,page,pageSize,totalPages,hasMore:page<totalPages};
+      const query=search.trim().toLocaleLowerCase(),excluded=new Set(excludeIds),rows=listing.filter(row=>row.entry.kind===kind&&!excluded.has(row.entry.id)&&row.search.includes(query));const total=rows.length,totalPages=Math.max(1,Math.ceil(total/pageSize));page=Math.min(page,totalPages);return {items:structuredClone(rows.slice((page-1)*pageSize,page*pageSize).map(row=>row.entry)),total,page,pageSize,totalPages,hasMore:page<totalPages};
     }
   };
 }

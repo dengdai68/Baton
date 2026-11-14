@@ -29,8 +29,10 @@ export function workflowRoute(nodes,edge) {
   return best?{sourcePort:best.sourcePort,targetPort:best.targetPort,vertices:best.vertices}:null;
 }
 export function routeGraphEdge(cell,nodes,edge) {
-  const route=workflowRoute(nodes,edge),sourcePort=route?.sourcePort || edge.sourcePort || 'right',targetPort=route?.targetPort || edge.targetPort || 'left';
-  cell.setSource({cell:edge.source,port:sourcePort});cell.setTarget({cell:edge.target,port:targetPort});
+  const route=workflowRoute(nodes,edge),sourcePort=edge.sourcePort || route?.sourcePort || 'right',targetPort=edge.targetPort || route?.targetPort || 'left';
+  // A manually selected port is authoritative. Automatic routing may select
+  // only an unspecified side; both endpoints stay on their port centers.
+  cell.setSource({cell:edge.source,port:sourcePort,connectionPoint:'anchor'});cell.setTarget({cell:edge.target,port:targetPort,connectionPoint:'anchor'});
   cell.setVertices(route?.vertices || []);
   cell.setRouter(route?{name:'normal'}:{name:'manhattan',args:{padding:24,startDirections:[sourcePort],endDirections:[targetPort]}});
 }

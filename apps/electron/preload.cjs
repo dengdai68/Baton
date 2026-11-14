@@ -29,6 +29,7 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
     openWorkspaceDirectory: () => ipcRenderer.invoke("desktop:workspace:open-directory"),
     getPreferences: () => ipcRenderer.invoke("desktop:preferences:get"),
     setCloseMode: (mode) => ipcRenderer.invoke("desktop:preferences:set", mode),
+    setAppearance: (theme) => ipcRenderer.invoke("desktop:appearance:set", theme),
     getCliInstallation: () => ipcRenderer.invoke("desktop:cli:status"),
     installCli: () => ipcRenderer.invoke("desktop:cli:install"),
     getAppUpdateState: () => ipcRenderer.invoke("desktop:updates:status"),

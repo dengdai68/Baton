@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沟通 · AgentForge 重设计稿</title>
+<link rel="stylesheet" href="../assets/tokens.css">
+<link rel="stylesheet" href="../assets/components.css">
+<script src="../assets/icons.js"></script>
+<script src="../assets/prototype.js"></script>
+<style>
+  /* 布局：会话列表 | 会话 | 成员栏（群聊）| 控制台（按成员打开）
+     控制台入口只在成员栏（每位成员一个），私聊在标题栏；打开控制台时收起会话列表让出宽度 */
+  .back-to-list, .show-md { display: none !important; }
+  .chat { display: grid; grid-template-columns: 280px minmax(0, 1fr) 248px; flex: 1; min-height: 0; }
+  .chat.is-direct { grid-template-columns: 280px minmax(0, 1fr); }
+  .chat.is-direct .members { display: none; }
+  .chat.is-console { grid-template-columns: minmax(0, 1fr) 216px minmax(340px, 40%); }
+  .chat.is-console .convs { display: none; }
+  .chat.is-direct.is-console { grid-template-columns: minmax(0, 1fr) minmax(360px, 50%); }
+  .chat:not(.is-console) .console-pane { display: none; }
+  .convs { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border-subtle); background: var(--bg-canvas); }
+  .conv { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: var(--sp-5); align-items: center; padding: var(--sp-4) var(--sp-5); margin: 1px var(--sp-3); border-radius: var(--r-sm); }
+  .conv:hover { background: var(--bg-hover); }
+  .conv.is-selected { background: var(--bg-active); }
+  .conv__top { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+  .conv__name { flex: 1; min-width: 0; font-weight: var(--fw-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv__time { font-size: var(--fs-caption); color: var(--text-tertiary); }
+  .conv__last { display: flex; align-items: center; gap: var(--sp-3); margin-top: 1px; font-size: var(--fs-small); color: var(--text-secondary); }
+  .conv__last > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .group-av { position: relative; width: 36px; height: 36px; }
+  .group-av .av { position: absolute; --s: 24px; font-size: 10px; box-shadow: 0 0 0 2px var(--bg-canvas); }
+  .group-av .av:nth-child(1) { left: 0; top: 0; } .group-av .av:nth-child(2) { right: 0; bottom: 0; } .group-av .av:nth-child(n+3) { display: none; }
+  .conv.is-selected .group-av .av { box-shadow: 0 0 0 2px var(--bg-active); }
+  .conv-main, .conv-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .conv-panel { flex: 1; }
+  .members, .console-pane { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border-subtle); background: var(--bg-canvas); }
+  .members__list { padding: var(--sp-3) var(--sp-5); overflow: auto; }
+  .typing { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-5) 0 0; border-top: 1px solid var(--border-subtle); font-size: var(--fs-small); color: var(--text-tertiary); }
+  @media (max-width: 1180px) {
+    .chat { grid-template-columns: 248px minmax(0, 1fr) 224px; } .chat.is-direct { grid-template-columns: 248px minmax(0, 1fr); }
+    .chat.is-console { grid-template-columns: minmax(0, 1fr) 56px minmax(300px, 46%); }
+    /* 打开控制台时成员栏收成头像窄条：仍是「点成员看控制台」，但把宽度留给会话 */
+    .chat.is-console .members .pane-head, .chat.is-console .member__name, .chat.is-console .member__console { display: none; }
+    .chat.is-console .members__list { padding: var(--sp-4) 0; }
+    .chat.is-console .members .member { justify-content: center; height: 44px; margin: 2px 6px; padding: 0; cursor: default; } .chat.is-direct.is-console { grid-template-columns: minmax(0, 1fr) minmax(300px, 50%); }
+  }
+  @media (max-width: 860px) {
+    .chat, .chat.is-direct, .chat.is-console, .chat.is-direct.is-console { grid-template-columns: minmax(0, 1fr); }
+    .convs, .members { display: none; }
+    .chat.is-console .conv-main { display: none; }
+    .back-to-list, .show-md { display: inline-flex !important; }
+    .chat.is-members-open:not(.is-direct) .members { display: flex; position: fixed; top: 56px; right: 8px; bottom: 8px; z-index: var(--z-drawer); width: min(280px, calc(100vw - 16px)); border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--bg-raised); box-shadow: var(--shadow-dialog); }
+  }
+</style>
+</head>
+<body data-page="chat">
+<div class="app">
+  <aside class="sidebar" data-shell="sidebar"></aside>
+  <main class="main">
+    <header class="titlebar">
+      <div class="tb-title"><i data-icon="message"></i>沟通</div>
+      <button class="cmd-field" type="button" data-open="palette"><i data-icon="search"></i><span>搜索或执行命令</span><kbd class="kbd">⌘K</kbd></button>
+      <span class="spacer"></span>
+      <div class="tb-actions"><button class="btn btn--sm" type="button"><i data-icon="plus" class="icon--sm"></i>发起沟通</button></div>
+    </header>
+    <div class="chat" id="chat" data-view-scope>
+      <aside class="convs" aria-label="会话列表">
+        <div style="padding:12px 12px 8px"><label class="search" style="width:100%"><i data-icon="search"></i><input class="input" placeholder="搜索会话" aria-label="搜索会话"></label></div>
+        <div class="scroll">
+          <div class="conv is-selected" data-selectable data-select-target="group" data-kind="group" tabindex="0">
+            <span class="group-av" aria-hidden="true"><span class="av cyan">N</span><span class="av orange">L</span><span class="av blue">K</span></span>
+            <div><div class="conv__top"><span class="conv__name">登录页改版讨论</span><span class="conv__time">10:40</span></div><div class="conv__last"><span>Kai 正在回复…</span></div></div>
+          </div>
+          <div class="conv" data-selectable data-select-target="direct" data-kind="direct" tabindex="0">
+            <span class="av av--36 blue">K</span>
+            <div><div class="conv__top"><span class="conv__name">Kai · 研发工程师</span><span class="conv__time">10:12</span></div><div class="conv__last"><span>预计半天。需要你确认两点：1. 第三方登录…</span><span class="nav-badge nav-badge--accent">2</span></div></div>
+          </div>
+          <div class="conv" tabindex="0">
+            <span class="av av--36 violet">M</span>
+            <div><div class="conv__top"><span class="conv__name">Mira · 内容编辑</span><span class="conv__time">昨天</span></div><div class="conv__last"><span>初稿已放在 docs/content，标注了 3 处待核实事实。</span></div></div>
+          </div>
+          <div class="conv" tabindex="0">
+            <span class="group-av" aria-hidden="true"><span class="av orange">I</span><span class="av cyan">T</span></span>
+            <div><div class="conv__top"><span class="conv__name">增长周会</span><span class="conv__time">周一</span></div><div class="conv__last"><span>Iris：本周注册转化率 4.8%，较上周 +0.6pt</span></div></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="conv-main">
+        <!-- 群聊 -->
+        <div class="conv-panel" data-select-panel="group">
+          <div class="pane-head" style="min-height:52px">
+            <button class="btn btn--ghost btn--icon btn--sm back-to-list" type="button" aria-label="返回会话列表"><i data-icon="chevron-left"></i></button>
+            <div style="min-width:0"><strong style="font-size:14px;font-weight:600" title="双击重命名">登录页改版讨论</strong><div class="faint" style="font-size:12px">群聊 · 3 位成员 · @ 指定成员回复，不 @ 时全员回复</div></div>
+            <span class="spacer"></span>
+            <button class="btn btn--ghost btn--sm show-md" type="button" data-toggle-members><i data-icon="users" class="icon--sm"></i>成员 3</button>
+            <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="更多操作"><i data-icon="more"></i></button>
+          </div>
+          <div class="scroll">
+            <div class="thread">
+              <div class="day">今天</div>
+              <article class="msg msg--human"><div class="msg__head"><span class="msg__time">10:28</span><span class="msg__name">你</span></div><div class="bubble"><span class="mention">@Lena · 产品设计师</span> 窄窗口下的登录表单布局，给个建议？</div></article>
+              <article class="msg"><span class="av av--28 orange">L</span><div><div class="msg__head"><span class="msg__name">Lena · 产品设计师</span><span class="msg__time">10:31</span></div>
+                <div class="msg__body"><p>建议改为单列：</p><ul><li>标签在上、输入在下，按钮通栏；</li><li>错误提示紧贴字段下方，不要用 toast；</li><li>760px 以下隐藏右侧插画。</li></ul></div>
+                <div class="msg__foot"><a class="file-chip" href="#"><i data-icon="image"></i>login-narrow.png<small>128 KB</small></a></div></div>
+                <div class="msg__tools"><button class="btn btn--ghost btn--sm" type="button" data-console-member="lena"><i data-icon="terminal" class="icon--sm"></i>本轮控制台</button></div></article>
+              <article class="msg"><span class="av av--28 blue">K</span><div><div class="msg__head"><span class="msg__name">Kai · 研发工程师</span><span class="msg__time">10:33</span></div><div class="msg__body">同意。我会在 <code>web/login.css</code> 里用一个断点处理，不新增依赖。</div></div></article>
+              <article class="msg"><span class="av av--28 cyan">N</span><div><div class="msg__head"><span class="msg__name">Noah · 需求分析师</span><span class="msg__time">10:36</span></div><div class="msg__body">补充：错误提示文案在 <code>docs/requirements/login-acceptance.md</code> 第 2 条，按那里来。</div></div></article>
+              <article class="msg msg--human"><div class="msg__head"><span class="msg__time">10:38</span><span class="msg__name">你</span></div><div class="bubble">好。<span class="mention">@Kai · 研发工程师</span> 改完后给出 760px 和 1320px 的截图，<span class="mention">@Noah · 需求分析师</span> 帮忙对一下验收标准。</div></article>
+              <div class="typing"><span class="av av--20 blue">K<span class="av__presence is-live"></span></span>Kai 正在回复…</div>
+            </div>
+          </div>
+          <div class="composer-dock">
+            <form class="composer" onsubmit="return false">
+              <textarea rows="2" placeholder="发送消息，@ 指定成员" aria-label="消息内容"></textarea>
+              <div class="composer__bar"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加文件"><i data-icon="paperclip"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加图片"><i data-icon="image"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="提及成员"><i data-icon="at"></i></button><span class="composer__hint">Enter 发送 · ⇧Enter 换行</span><button class="btn btn--primary btn--sm" type="submit"><i data-icon="send" class="icon--sm"></i>发送</button></div>
+            </form>
+          </div>
+        </div>
+
+        <!-- 私聊：没有成员栏，控制台入口在标题栏 -->
+        <div class="conv-panel" data-select-panel="direct" hidden>
+          <div class="pane-head" style="min-height:52px">
+            <button class="btn btn--ghost btn--icon btn--sm back-to-list" type="button" aria-label="返回会话列表"><i data-icon="chevron-left"></i></button>
+            <span class="av av--28 blue">K</span>
+            <div style="min-width:0"><strong style="font-size:14px;font-weight:600">Kai · 研发工程师</strong><div class="faint" style="font-size:12px">私聊 · 与任务执行上下文隔离</div></div>
+            <span class="spacer"></span>
+            <button class="btn btn--ghost btn--sm member__console" type="button" data-console-member="kai" aria-pressed="false"><i data-icon="terminal" class="icon--sm"></i>控制台</button>
+            <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="更多操作"><i data-icon="more"></i></button>
+          </div>
+          <div class="scroll">
+            <div class="thread">
+              <div class="day">今天</div>
+              <article class="msg msg--human"><div class="msg__head"><span class="msg__time">10:05</span><span class="msg__name">你</span></div><div class="bubble">登录页重构大概需要多久？有没有需要我提前确认的范围？</div></article>
+              <article class="msg"><span class="av av--28 blue">K</span><div><div class="msg__head"><span class="msg__name">Kai · 研发工程师</span><span class="msg__time">10:12</span></div><div class="msg__body"><p>预计半天。需要你确认两点：</p><ol><li>第三方登录按钮是否在范围内；</li><li>错误提示是否沿用现有红色语义。</li></ol><p>其余按验收标准执行。</p></div></div></article>
+            </div>
+          </div>
+          <div class="composer-dock">
+            <form class="composer" onsubmit="return false">
+              <textarea rows="2" placeholder="发送消息" aria-label="消息内容"></textarea>
+              <div class="composer__bar"><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加文件"><i data-icon="paperclip"></i></button><button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="添加图片"><i data-icon="image"></i></button><span class="composer__hint">Enter 发送 · ⇧Enter 换行</span><button class="btn btn--primary btn--sm" type="submit"><i data-icon="send" class="icon--sm"></i>发送</button></div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- 群成员：每位成员一个控制台入口；绿点 = 正在执行 -->
+      <aside class="members" aria-label="群成员">
+        <div class="pane-head" style="min-height:52px"><strong>成员</strong><span class="faint">3</span><span class="spacer"></span><button class="btn btn--ghost btn--sm" type="button">编辑</button></div>
+        <div class="members__list">
+          <div class="member" data-member="noah"><span class="av av--24 cyan">N</span><span class="member__name">Noah · 需求分析师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-console-member="noah" aria-pressed="false" aria-label="打开 Noah 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member" data-member="lena"><span class="av av--24 orange">L</span><span class="member__name">Lena · 产品设计师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-console-member="lena" aria-pressed="false" aria-label="打开 Lena 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+          <div class="member" data-member="kai"><span class="av av--24 blue">K<span class="av__presence is-live" title="正在回复"></span></span><span class="member__name">Kai · 研发工程师</span><button class="btn btn--ghost btn--icon btn--sm member__console" type="button" data-console-member="kai" aria-pressed="false" aria-label="打开 Kai 的控制台" title="控制台"><i data-icon="terminal" class="icon--sm"></i></button></div>
+        </div>
+      </aside>
+
+      <!-- 控制台：只显示所选成员，切换成员在成员栏完成（不再用页签） -->
+      <aside class="console-pane" aria-label="成员控制台">
+        <div class="pane-head" style="min-height:52px">
+          <span class="av av--24" data-console-av></span>
+          <div style="min-width:0"><strong style="font-size:13px" data-console-name></strong><div class="faint" style="font-size:11px" data-console-rt></div></div>
+          <span class="spacer"></span>
+          <button class="btn btn--ghost btn--icon btn--sm" type="button" aria-label="刷新" title="刷新"><i data-icon="refresh" class="icon--sm"></i></button>
+          <button class="btn btn--ghost btn--icon btn--sm" type="button" data-console-close aria-label="关闭控制台" title="关闭控制台"><i data-icon="x"></i></button>
+        </div>
+        <div class="scroll" style="padding:12px">
+          <div data-console-panel="noah" hidden>
+            <section class="trace">
+              <div class="trace__head"><strong>回复 #1</strong><span class="faint">10:35 – 10:36</span><span class="spacer"></span><span class="status st-done"><i data-icon="st-done"></i>完成</span></div>
+              <div class="log"><i data-icon="file"></i><div><span class="log__kind">读取</span><span class="cmd">docs/requirements/login-acceptance.md</span></div><span class="log__time">10:35</span></div>
+              <div class="log"><i data-icon="message"></i><div><span class="log__kind">输出</span>补充：错误提示文案在验收标准第 2 条…</div><span class="log__time">10:36</span></div>
+            </section>
+          </div>
+          <div data-console-panel="lena" hidden>
+            <section class="trace">
+              <div class="trace__head"><strong>回复 #3</strong><span class="faint">10:29 – 10:31</span><span class="spacer"></span><span class="status st-done"><i data-icon="st-done"></i>完成</span></div>
+              <div class="log log--think"><i data-icon="sparkle"></i><div><span class="log__kind">思考</span><span class="log__text">先回顾已有设计规范里的表单规则，再给出窄窗口方案。</span></div><span class="log__time">10:29</span></div>
+              <div class="log"><i data-icon="file"></i><div><span class="log__kind">读取</span><span class="cmd">docs/06-design-system.md</span></div><span class="log__time">10:30</span></div>
+              <div class="log"><i data-icon="message"></i><div><span class="log__kind">输出</span>建议改为单列：标签在上、输入在下…</div><span class="log__time">10:31</span></div>
+            </section>
+          </div>
+          <div data-console-panel="kai" hidden>
+            <section class="trace">
+              <div class="trace__head"><strong>回复 #2</strong><span class="faint">10:39 起</span><span class="spacer"></span><span class="status status--text st-live"><span class="dot dot--pulse"></span>执行中</span></div>
+              <div class="log"><i data-icon="file"></i><div><span class="log__kind">读取</span><span class="cmd">web/login.css</span></div><span class="log__time">10:39</span></div>
+              <div class="log"><i data-icon="terminal"></i><div><span class="log__kind">命令</span><span class="cmd">npm test -- login</span> <span class="tag tag--outline exit">exit 0</span></div><span class="log__time">10:40</span></div>
+              <div class="log"><i data-icon="loader" class="spin"></i><div><span class="log__kind">输出</span><span class="log__text">正在整理 760px 断点方案…</span></div><span class="log__time">10:40</span></div>
+            </section>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+</div>
+<script>
+/* 沟通原型交互：按成员打开控制台、关闭控制台、切换私聊 / 群聊、窄窗口成员浮层 */
+document.addEventListener('DOMContentLoaded', () => {
+  const chat = document.getElementById('chat');
+  const MEMBERS = {
+    noah: { initial: 'N', color: 'cyan', name: 'Noah · 需求分析师', runtime: 'Claude Code · sonnet' },
+    lena: { initial: 'L', color: 'orange', name: 'Lena · 产品设计师', runtime: 'Codex · gpt-5' },
+    kai: { initial: 'K', color: 'blue', name: 'Kai · 研发工程师', runtime: 'Claude Code · sonnet · 执行中' },
+  };
+  /** 打开指定成员的控制台，并在成员栏标记当前成员。 */
+  function openConsole(id) {
+    const member = MEMBERS[id];
+    if (!member) return;
+    const avatar = chat.querySelector('[data-console-av]');
+    avatar.className = 'av av--24 ' + member.color;
+    avatar.textContent = member.initial;
+    chat.querySelector('[data-console-name]').textContent = member.name;
+    chat.querySelector('[data-console-rt]').textContent = member.runtime;
+    chat.querySelectorAll('[data-console-panel]').forEach((panel) => { panel.hidden = panel.dataset.consolePanel !== id; });
+    chat.querySelectorAll('[data-console-member]').forEach((button) => button.setAttribute('aria-pressed', String(button.dataset.consoleMember === id)));
+    chat.querySelectorAll('.members .member').forEach((row) => row.classList.toggle('is-selected', row.dataset.member === id));
+    chat.classList.add('is-console');
+    chat.classList.remove('is-members-open');
+  }
+  /** 关闭控制台，恢复会话列表。 */
+  function closeConsole() {
+    chat.classList.remove('is-console');
+    chat.querySelectorAll('[data-console-member]').forEach((button) => button.setAttribute('aria-pressed', 'false'));
+    chat.querySelectorAll('.members .member').forEach((row) => row.classList.remove('is-selected'));
+  }
+  chat.addEventListener('click', (event) => {
+    const consoleButton = event.target.closest('[data-console-member]');
+    if (consoleButton) { consoleButton.getAttribute('aria-pressed') === 'true' ? closeConsole() : openConsole(consoleButton.dataset.consoleMember); return; }
+    if (event.target.closest('[data-console-close]')) { closeConsole(); return; }
+    if (event.target.closest('[data-toggle-members]')) { chat.classList.toggle('is-members-open'); return; }
+    const railMember = chat.classList.contains('is-console') && matchMedia('(max-width: 1180px)').matches && event.target.closest('.members .member');
+    if (railMember) { openConsole(railMember.dataset.member); return; }
+    const conversation = event.target.closest('.conv[data-kind]');
+    if (conversation) { chat.classList.toggle('is-direct', conversation.dataset.kind === 'direct'); closeConsole(); }
+  });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { closeConsole(); chat.classList.remove('is-members-open'); } });
+  const deepLink = new URLSearchParams(location.search).get('console');
+  if (deepLink) openConsole(deepLink);
+});
+</script>
+</body>
+</html>

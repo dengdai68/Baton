@@ -1,22 +1,32 @@
 // Browser-container presentation only. Never put credentials or domain facts here.
 export const PREFERENCES_KEY = "agentforge.presentation.v1";
 export const NAVIGATION = [
-  { id: "overview", label: "总览", group: "OPERATIONS" },
-  { id: "tasks", label: "任务中心", group: "OPERATIONS" },
-  { id: "automations", label: "自动化", group: "OPERATIONS" },
-  { id: "communication", label: "沟通", group: "OPERATIONS" },
-  { id: "teams", label: "团队", group: "OPERATIONS" },
-  { id: "workflows", label: "工作流", group: "OPERATIONS" },
-  { id: "agents", label: "数字员工", group: "BUILD" },
-  { id: "roles", label: "角色", group: "BUILD" },
-  { id: "mcp-marketplace", label: "MCP 市场", group: "BUILD" },
-  { id: "marketplace", label: "插件市场", group: "BUILD" },
-  { id: "manual", label: "开发手册", group: "REFERENCE" },
+  { id: "inbox", label: "待我处理", group: "工作" },
+  { id: "tasks", label: "任务", group: "工作" },
+  { id: "automations", label: "自动化", group: "工作" },
+  { id: "communication", label: "沟通", group: "工作" },
+  { id: "teams", label: "团队", group: "组织" },
+  { id: "workflows", label: "工作流", group: "组织" },
+  { id: "agents", label: "数字员工", group: "组织" },
+  { id: "roles", label: "角色", group: "组织" },
+  { id: "marketplace", label: "插件", group: "扩展" },
+  { id: "mcp-marketplace", label: "MCP", group: "扩展" },
+  { id: "manual", label: "开发手册", group: "扩展" },
 ];
 
+// Appearance follows the Graphite design system; "system" mirrors the OS setting.
+export const THEMES = [
+  { id: "light", label: "浅色", description: "白色画布与冷灰侧栏，适合大多数场景。" },
+  { id: "dark", label: "深色", description: "低亮度画布，适合暗光环境与长时间阅读。" },
+  { id: "system", label: "跟随系统", description: "随 macOS 外观自动切换浅色与深色。" },
+];
+const THEME_IDS = new Set(THEMES.map((theme) => theme.id));
+const THEME_COLORS = { light: "#ffffff", dark: "#111215" };
+
 export const DIRECTORY_THEMES = [
-  { id: "vscode-light", label: "VS Code 图标 · 浅色", description: "vscode-icons 彩色文件/文件夹图标，文件内容保持浅色代码配色。" },
-  { id: "vscode-dark", label: "VS Code 图标 · 深色", description: "同样的 vscode-icons 图标，选中文件的内容区使用深色代码配色（仅工作目录预览区）。" },
+  // "vscode-light" keeps its stored id; its code palette now follows the appearance.
+  { id: "vscode-light", label: "VS Code 图标 · 跟随外观", description: "vscode-icons 彩色文件/文件夹图标，文件内容随界面外观使用浅色或深色代码配色。" },
+  { id: "vscode-dark", label: "VS Code 图标 · 深色", description: "同样的 vscode-icons 图标，选中文件的内容区始终使用深色代码配色（仅工作目录预览区）。" },
   { id: "classic", label: "经典", description: "不加彩色图标的文字符号与原有配色，作为低装饰回退。" },
 ];
 const DIRECTORY_THEME_IDS = new Set(DIRECTORY_THEMES.map((theme) => theme.id));
@@ -25,7 +35,7 @@ export function normalizePreferences(value) {
   const input = value && typeof value === "object" && !Array.isArray(value) && [1, 2].includes(value.version) ? value : {};
   return {
     version: 2,
-    theme: input.theme === "minimal" ? "minimal" : "warm",
+    theme: THEME_IDS.has(input.theme) ? input.theme : "light",
     hiddenViews: NAVIGATION.filter(({ id }) => ["overview", "manual"].includes(id) && input.version !== 2 ? true : Array.isArray(input.hiddenViews) && input.hiddenViews.includes(id)).map(({ id }) => id),
     showGroups: input.showGroups !== false,
     showIcons: input.showIcons !== false,
@@ -53,7 +63,11 @@ export function applyPreferences(document, value) {
   root.dataset.navIcons = preferences.showIcons ? "show" : "hide";
   root.dataset.navCounts = preferences.showCounts ? "show" : "hide";
   root.dataset.navUnread = preferences.showUnread ? "show" : "hide";
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", preferences.theme === "minimal" ? "#f7f9ff" : "#faf9fc");
+  const view = document.defaultView;
+  const dark = preferences.theme === "dark" || (preferences.theme === "system" && Boolean(view?.matchMedia?.("(prefers-color-scheme: dark)").matches));
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", THEME_COLORS[dark ? "dark" : "light"]);
+  // The desktop host mirrors the choice so native dialogs and the next launch match.
+  view?.agentforgeDesktop?.setAppearance?.(preferences.theme)?.catch?.(() => {});
   for (const item of document.querySelectorAll(".sidebar .nav-item[data-view]")) {
     item.hidden = preferences.hiddenViews.includes(item.dataset.view);
   }
