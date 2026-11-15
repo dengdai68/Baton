@@ -1,5 +1,7 @@
 # 工程脚本
 
+App/CLI 核心对齐验收：node scripts/test-app-cli-parity.mjs 使用临时 HOME/数据和真实 Electron/HTTP/CLI，验证流程图高级字段往返、25个真实 stdio MCP 工具的搜索分页/schema、群聊管理、文件读取下载与越界拒绝。BATON_PARITY_REAL=1 增加真实 Codex 任务暂停/继续、文件/控制台读取、客户端验收、归档恢复，以及真实私聊/去重/已读。BATON_PARITY_APP 指定隔离安装包；不会替换操作者安装。
+
 画布/任务/沟通本轮验收：test-workflow-editor 先让拖线吸附目标节点的另一个端口再在目标端口松手（修复前稳定失败），核对焦点回到画布、Delete 只删新连线、重复连线被拒及保存端口；test-directory-headers 在两主题宽窄窗口核对草稿行「启动」「⋯」未悬停即可见且左对齐；test-communication-workbench 核对齿轮按钮尺寸与可读名称、编辑群聊底部删除位置、确认框取消/确认、删除后列表隐藏、私聊 DELETE 被拒，以及两主题宽窄的群聊设置截图。
 
 本轮Baton验收：test-task-creation/test-automations覆盖等高成员选择、仅Cron计划与非法输入；test-collaboration-flow覆盖senderId同名区分和按头像配色；test-progressive-loading覆盖待办先显、市场实际分页及独立辅助请求。test-plugin-updates只验证手动更新全部与CLI等价命令、冻结历史和失败恢复，不再验证自动开关。真实任务/沟通分别使用test-task-collaboration-real与test-communication-direct-real，所有环境标识均为BATON_*。
@@ -248,3 +250,7 @@ test-portable-runtimes 支持 BATON_PORTABLE_EFFORT，真实模式先经 CLI 查
 纸张最终目录回归：test-automations 核对状态 chips、原生启停/行导航；test-roles-ui 与 test-directory-headers 核对全宽角色行和独立删除菜单；test-market-catalog 覆盖1440/760浅深主题登录无卡片、插件/MCP来源与页脚、跨页使用筛选及真实工具命令的失败/重试呈现（工具响应夹具不代表 Provider 验证）。
 
 MCP 编辑回归：`test-market-catalog.mjs` 覆盖详情读取失败后通过右上编辑重新读取配置、键盘进入原表单和取消保留；工具发现失败与编辑相互独立。
+
+MCP 详情编辑验收：test-market-catalog.mjs 同时核对共享抽屉标题栏的原生 no-drag 命中区域与键盘编辑，详情/工具失败均可进入表单；真实鼠标命中需在安装包实际点击右上编辑、更多及关闭，不能仅凭 DOM click 或可访问性激活判定。mcp-tools 单测用16秒初始化服务验证45秒默认发现预算，另保留自定义短超时及清理失败路径。
+
+`test-console-live.mjs` 在临时 HOME/工作目录的暂停任务与私聊中验证实时增量、重复 SSE、旧行 DOM、向上阅读锚点、延迟长正文、最新定位、75条突发补页、读取失败保留与关闭停止轮询，并核对1320/760px及两主题的分页居中。事件/网络故障为展示夹具，不调用 Provider。BATON_CONSOLE_LIVE_APP 指定独立包；BATON_CONSOLE_PREVIEW=1 成功后保留隔离演示窗口，不替换当前安装。

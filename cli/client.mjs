@@ -141,15 +141,25 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
       throw new CliError('SESSION_FILE', '客户端 CLI 授权无法安全读取或验证', '请在客户端重新连接或登录；不会读取浏览器 Cookie/数据库。显式 --session-file 可使用独立会话。', 3);
     } finally { await file?.close(); }
   }
-  async function request(path, { method = 'GET', body, cookie, authenticated = true, timeoutMs = 120000 } = {}) {
+  async function request(path, { method = 'GET', body, cookie, authenticated = true, timeoutMs = 120000, outputFile } = {}) {
     await connect();
     const session = cookie === undefined && authenticated ? (await desktopSession() || await readSession()) : null;
     const streamed=Boolean(body?.[Symbol.asyncIterator]),binary=Buffer.isBuffer(body)||streamed;
     let response, value;
     try {
       response = await fetcher(origin + path, { method, redirect: 'error', signal: AbortSignal.timeout(timeoutMs), headers: { Origin: origin, 'Content-Type': binary ? 'application/octet-stream' : 'application/json', ...(cookie || session ? { Cookie: cookie || session.cookie } : {}) }, ...(body === undefined ? {} : { body: binary ? body : JSON.stringify(body),...(streamed?{duplex:'half'}:{}) }) });
-      value = JSON.parse(await readBounded(response.body, 16 * maxBytes));
-    } catch {
+      if(outputFile && response.ok) {
+        let file;
+        try {file=await open(resolve(outputFile),'wx',0o600);}
+        catch {throw new CliError('OUTPUT_FILE','无法新建下载文件，目标可能已存在','选择新的 --output 文件路径；不会覆盖已有文件或符号链接。',2);}
+        try {
+          for await(const chunk of response.body)await file.writeFile(chunk);
+          value={path:resolve(outputFile),bytes:(await file.stat()).size};
+        } catch(error) {await file.close();file=null;await unlink(resolve(outputFile));throw error;}
+        finally {await file?.close();}
+      } else value = JSON.parse(await readBounded(response.body, 16 * maxBytes));
+    } catch(error) {
+      if(error instanceof CliError)throw error;
       throw new CliError('CONNECTION_UNCERTAIN', '客户端服务未连接、超时或响应无法确认', method === 'GET' ? '确认 Baton 客户端正在运行，再查询；不自动切换实例。' : '写操作可能已经提交：先list/get核验再决定重试；不自动重发。', 5);
     }
     if (!response.ok) {
@@ -171,6 +181,7 @@ export function createClient({ endpointFile, sessionFile, fetcher = fetch, home 
   }
   return {
     request: async (path, options) => (await request(path, options)).value,
+    download: async (path, outputFile) => (await request(path,{outputFile})).value,
     async login(username, password) {
       let previous;
       try { previous = await readSession(true); } catch (error) { if (error.code !== 'AUTH_REQUIRED') throw error; }

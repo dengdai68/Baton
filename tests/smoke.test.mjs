@@ -610,11 +610,18 @@ test("console subscription invalidates stale visits and preserves history during
   page.events = Array.from({ length: 1000 }, (_, index) => ({ id: `event_${index}` }));
   const live = { id: "new", type: "runtime.event", runId: "run", actor: { id: "agent" }, data: {} };
   state.eventSource.emit(live); state.eventSource.emit(live);
-  assert.equal(page.events.length, 1000, "live events never grow or reanchor a historical window"); assert.equal(page.events[0].id, "event_0");
-  assert.equal(timers.length, 0, "a historical window is not repainted by live frames");
+  assert.equal(page.events.length, 1000, "explicit history paging preserves the displayed window");
+  assert.equal(page.liveEvents.length, 200, "live reception continues in a separate bounded tail");
+  assert.equal(page.liveEvents.filter(event => event.id === "new").length, 1, "duplicate SSE frames are merged once");
+  assert.equal(timers.length, 1, "new records render even while history is being read");
   state.eventSource.emit({ ...live, id: "status", type: "trace.accepted" });
   state.eventSource.emit({ ...live, id: "status2", type: "message.sent" });
-  assert.equal(timers.length, 1, "domain changes share one coalesced refresh");
+  assert.equal(timers.length, 2, "domain changes share one refresh independently of the console render");
+  page.loadingMode = 'reset'; page.loadingEvents = new Map();
+  const displayed = [...page.events];
+  state.eventSource.emit({ ...live, id: 'during-latest' });
+  assert.deepEqual(page.events, displayed, 'pending latest response never bridges a gap into displayed history');
+  assert.ok(page.loadingEvents.has('during-latest'), 'concurrent live record is buffered for the replacement response');
   state.eventSource.close(); state.eventSource = null;
   connect("run"); assert.equal(page.loaded, false); assert.deepEqual(page.events, []);
 });
@@ -2263,13 +2270,26 @@ test("coordination JSON embedded in manager prose is delivered without rejecting
   assert.equal(parseEmployeeResponse(JSON.stringify(envelope) + '\n' + JSON.stringify(envelope)).managerDecision, null);
 });
 
-test('full prose is the public message when a trailing coordination envelope contains an abbreviated summary', () => {
+test('prose and a distinct trailing summary are both preserved as the public message', () => {
   const body='我想去湖边坐着，带一本书，吃一碗热面。\n这是我的完整聊天正文。';
   const action={summary:'参与了闲聊，未写报告。',handoff:{recipientAgentId:'manager'}};
   for(const raw of [body+'\n\n'+JSON.stringify(action),body+'\n```json\n'+JSON.stringify(action)+'\n```']){
-    const output=parseEmployeeResponse(raw);assert.equal(output.summary,body);assert.equal(output.handoff.recipientAgentId,'manager');assert.equal(output.rawResponse,raw);
+    const output=parseEmployeeResponse(raw);assert.equal(output.summary,body+'\n\n'+action.summary);assert.equal(output.handoff.recipientAgentId,'manager');assert.equal(output.rawResponse,raw);
   }
   assert.equal(parseEmployeeResponse(JSON.stringify({...action,summary:body})).summary,body);
+});
+
+test('a short delivery preface cannot replace the complete report inside coordination JSON', () => {
+  const prefix='全部核验通过。交付完成，提交验收：';
+  const summary='本期已交付 YouTube视频精选.md，正式精选 2 条，待核验候选 10 条。\n\n限制：部分字幕不可用，未冒充精选。';
+  const decision={nextNodeId:null,nextAgentId:null};
+  for(const wrap of [text=>text,text=>'```json\n'+text+'\n```']) {
+    const raw=prefix+'\n\n'+wrap(JSON.stringify({summary,managerDecision:decision}));
+    const output=parseEmployeeResponse(raw);
+    assert.equal(output.summary,prefix+'\n\n'+summary);assert.deepEqual(output.managerDecision,decision);assert.equal(output.rawResponse,raw);
+    assert.equal(parseEmployeeResponse(summary+'\n\n'+wrap(JSON.stringify({summary,managerDecision:decision}))).summary,summary);
+    assert.equal(parseEmployeeResponse(prefix+'\n\n'+wrap(JSON.stringify({summary:'',managerDecision:decision}))).summary,prefix);
+  }
 });
 
 test("retired issue-ledger inputs reject without creating side effects; issues use role messages",()=>{

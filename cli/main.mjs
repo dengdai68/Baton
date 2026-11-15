@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import {mcpToolPage} from '../client/mcp-tool-page.mjs';
 import {RUNTIME_IDS,RUNTIME_PROVIDERS} from "../client/runtime-providers.mjs";
 import { pathToFileURL } from 'node:url';
 import { realpath, open } from 'node:fs/promises';
@@ -6,13 +7,14 @@ import { createHash } from 'node:crypto';
 import { resources, documentation, guide } from './commands.mjs';
 import { CliError, usage, createClient, readBounded, readInput, validateInput } from './client.mjs';
 import { formatOutput, formatError } from './output.mjs';
+import { executeCommunication, workspaceRead, resourceId as validResourceId } from './workspace.mjs';
 import { readPassword } from './password.mjs';
 import { collaborationRecords } from '../client/console-projections.mjs';
 
 function parse(argv) {
   const args = [], flags = {};
-  const switches = new Set(['help', 'yes', 'all', 'password-stdin', 'json', 'archived', 'start', 'refresh']);
-  const values = new Set(['file', 'session-file', 'username', 'page', 'search', 'endpoint-file', 'status', 'run', 'workflow', 'role', 'usage', 'client-request-id']);
+  const switches = new Set(['help', 'yes', 'all', 'password-stdin', 'json', 'archived', 'start', 'refresh', 'follow', 'full']);
+  const values = new Set(['file', 'session-file', 'username', 'page', 'search', 'endpoint-file', 'status', 'run', 'workflow', 'role', 'usage', 'client-request-id', 'agent', 'event', 'before', 'path', 'output', 'offset', 'attachment', 'artifact']);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (!arg.startsWith('--')) { args.push(arg); continue; }
@@ -27,7 +29,7 @@ const keyFields = (input, keys) => Object.fromEntries(keys.filter(key => Object.
 const asksForHelp = ({ args: [group, operation], flags }) => !group || ['help', 'schema'].includes(group) || flags.help || !operation && (group === 'auth' || Object.hasOwn(resources, group));
 
 export async function execute(argv, options = {}) { return executeParsed(parse(argv), options); }
-async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = process.stderr, fetcher, home } = {}) {
+async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = process.stderr, fetcher, home, signal, pollMs } = {}) {
   const [group, operation, id] = args;
   if (asksForHelp({ args, flags })) {
     if (args.length > 3) throw usage('帮助参数过多');
@@ -41,7 +43,7 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
   } else {
     if (!Object.hasOwn(resources, group) || !resources[group].operations.includes(operation)) throw usage('不存在此配置命令');
     if(group==='storage'){if(args.length!==2)throw usage('storage 不接受资源 ID');}
-    else if (['get', 'update', 'delete', 'test', 'start', 'terminate', 'progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'trigger', 'triggers', 'members', 'tools', 'check-compatibility'].includes(operation)) { if (args.length !== 3 || !(group === 'runtimes' && Object.values(RUNTIME_PROVIDERS).some(item=>item.label===id)) && !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw usage('需要精确资源ID，不能使用名称或路径'); }
+    else if (['get', 'update', 'delete', 'test', 'start', 'terminate', 'progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'trigger', 'triggers', 'members', 'tools', 'check-compatibility', 'pause', 'resume', 'retry-now', 'retry-failed-node', 'retry-orchestration', 'archive', 'unarchive', 'console', 'console-content', 'files', 'file', 'download', 'changes', 'diff', 'attachment', 'artifact', 'read', 'retry'].includes(operation)) { if (args.length !== 3 || !(group === 'runtimes' && Object.values(RUNTIME_PROVIDERS).some(item=>item.label===id)) && !/^[A-Za-z0-9_-]{1,128}$/.test(id)) throw usage('需要精确资源ID，不能使用名称或路径'); }
     else if (operation === 'models') { if (args.length !== 3 || !RUNTIME_IDS.includes(id)) throw usage('models 需要已支持的 Provider ID'); }
     else if (args.length !== 2) throw usage('此命令不接受额外参数');
     if (['create', 'update', 'import'].includes(operation)) allowed.push('file');
@@ -52,12 +54,28 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     if (group === 'agents' && operation === 'list') allowed.push('role');
     if (['delete', 'terminate', 'test'].includes(operation)) allowed.push('yes');
     if (group === 'automations' && ['list','triggers'].includes(operation)) allowed.push('status', 'page', 'all');
+    if(['tasks','communications'].includes(group)) {
+      if(operation==='console')allowed.push('agent','before','follow');
+      if(operation==='console-content')allowed.push('event');
+      if(operation==='attachment')allowed.push('attachment','output');
+    }
+    if(group==='communications') {
+      if(['message','read','retry'].includes(operation))allowed.push('file');
+      if(operation==='message')allowed.push('client-request-id');
+      if(operation==='get')allowed.push('before','all');
+    }
     if (group === 'tasks') {
       if (['create','update'].includes(operation)) allowed.push('start', 'workflow');
+      if (operation==='retry-failed-node')allowed.push('file');
+      if(['files','file','download','diff'].includes(operation))allowed.push('path');
+      if(operation==='files')allowed.push('offset');
+      if(operation==='download')allowed.push('output');
+      if(operation==='artifact')allowed.push('artifact','output');
+      if(operation==='diff')allowed.push('full');
       if (['message', 'reply', 'members'].includes(operation)) allowed.push('file');
       if (['message', 'reply'].includes(operation)) allowed.push('client-request-id');
       if (operation === 'list') allowed.push('status', 'archived', 'workflow');
-      if (['progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'terminate', 'members'].includes(operation)) allowed.push('run');
+      if (['progress', 'collaboration', 'questions', 'message', 'reply', 'artifacts', 'terminate', 'members', 'pause', 'resume', 'retry-now', 'retry-failed-node', 'retry-orchestration', 'console', 'console-content', 'files', 'file', 'download', 'changes', 'diff', 'attachment', 'artifact'].includes(operation)) allowed.push('run');
       if (['collaboration', 'questions', 'artifacts'].includes(operation)) allowed.push('page', 'all');
     }
   }
@@ -66,6 +84,15 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
   const page = flags.page === undefined ? 1 : Number(flags.page);
   if (!Number.isSafeInteger(page) || page < 1) throw usage('--page 必须是正整数');
   if (flags.run && !/^[A-Za-z0-9_-]{1,128}$/.test(flags.run)) throw usage('--run 需要精确执行ID');
+  for(const key of ['agent','event','before','attachment','artifact'])if(flags[key]!==undefined&&!validResourceId(flags[key]))throw usage(`--${key} 需要精确 ID`);
+  if(operation==='console' && group==='tasks' && !flags.agent)throw usage('tasks console 需要 --agent 员工ID');
+  if(operation==='console-content' && !flags.event)throw usage('console-content 需要 --event 事件ID');
+  if(operation==='artifact' && !flags.artifact)throw usage('artifact 需要 --artifact 交付快照ID');
+  if(operation==='attachment' && !flags.attachment)throw usage('attachment 需要 --attachment 附件ID');
+  if(['file','download'].includes(operation) && !flags.path)throw usage('需要 --path 工作目录相对文件路径');
+  if(['download','attachment'].includes(operation) && !flags.output)throw usage('下载需要 --output 本机文件路径');
+  if(flags.offset!==undefined && (!/^\d+$/.test(flags.offset) || !Number.isSafeInteger(Number(flags.offset))))throw usage('--offset 必须是非负整数');
+  if(flags.follow && flags.before)throw usage('--follow 与 --before 不能同时使用');
   const client = createClient({ endpointFile: flags['endpoint-file'], sessionFile: flags['session-file'], fetcher, home });
   if (group === 'auth') {
     if (operation === 'status') return client.request('/api/auth/session');
@@ -79,9 +106,7 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
   }
   if(group==='mcps' && operation==='tools') {
     const result=await client.request(`/api/runtime/mcp-marketplace/${id}/tools`,{method:'POST',body:{refresh:Boolean(flags.refresh)}});
-    const query=(flags.search || '').trim().toLowerCase(),tools=result.tools.filter(tool=>`${tool.name} ${tool.title || ''} ${tool.description}`.toLowerCase().includes(query));
-    const totalPages=Math.max(1,Math.ceil(tools.length/20)),current=Math.min(page,totalPages);
-    return {...result,tools:flags.all?tools:tools.slice((current-1)*20,current*20),total:tools.length,availableTotal:result.total,page:flags.all?null:current,pageSize:flags.all?null:20,totalPages,hasMore:!flags.all&&current<totalPages};
+    return mcpToolPage(result,{search:flags.search,page,all:flags.all});
   }
   if(group==='storage'){
     if(operation==='get')return client.request(resources.storage.path);
@@ -89,7 +114,8 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     return client.request(resources.storage.path,{method:'PUT',body:input});
   }
   if (group === 'automations') return executeAutomationCommand(client, operation, id, flags, page, stdin);
-  if (group === 'tasks') return executeTaskCommand(client, operation, id, flags, page, stdin);
+  if (group === 'communications') return executeCommunication(client, operation, id, flags, page, stdin, {signal,pollMs});
+  if (group === 'tasks') return executeTaskCommand(client, operation, id, flags, page, stdin, {signal,pollMs});
   const resource = resources[group], path = resource.path;
   if(['plugins','mcps'].includes(group) && operation==='check-compatibility')return client.request(`${path}/${id}/compatibility`,{method:'POST',body:{}});
   if(group==='plugins' && ['updates','check-updates'].includes(operation)) {
@@ -193,12 +219,13 @@ function taskView(task, { summary = false } = {}) {
 function runReceipt(run) {
   return run && keyFields(run, ['id', 'taskId', 'status']);
 }
-async function executeTaskCommand(client, operation, id, flags, page, stdin) {
+async function executeTaskCommand(client, operation, id, flags, page, stdin, options) {
   if (['terminate', 'delete'].includes(operation) && !flags.yes) throw usage('此命令需要显式 --yes', 'terminate 停止执行并保留记录；delete 永久删除任务及运行记录、本地交付快照。');
   if (operation === 'delete') {
     const result = await client.request(`/api/tasks/${id}`, { method: 'DELETE', body: {} });
     return { task: keyFields(result.task, ['id', 'title', 'status']), runIds: result.runIds, runFileCleanup: result.runFileCleanup || 'completed' };
   }
+  if(['archive','unarchive'].includes(operation)){const {task}=await client.request(`/api/tasks/${id}/${operation}`,{method:'POST',body:{}});return {task:keyFields(task,['id','title','status','archivedAt'])};}
   const paginate = items => ({ items: flags.all ? items : items.slice((page - 1) * 20, page * 20), total: items.length, page: flags.all ? null : page, pageSize: flags.all ? null : 20, hasMore: !flags.all && page * 20 < items.length });
   if (['create','update'].includes(operation)) {
     const input = await readInput(flags.file, stdin);
@@ -260,6 +287,17 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
   const run=task.runs?.find(run=>!flags.run||run.id===flags.run);
   if (!run && flags.run) throw new CliError('NOT_FOUND', '所选执行不属于此任务或不存在', '用 tasks progress 查看最新执行，不使用其他任务的 Run ID。', 4);
   if (!run && input) throw new CliError('RUN_REQUIRED', '任务尚未启动，无法发送协作消息', '先运行 baton tasks start 任务ID。', 4);
+  if(['pause','resume','retry-now','retry-failed-node','retry-orchestration','console','console-content','files','file','download','changes','diff','attachment','artifact'].includes(operation)) {
+    if(!run)throw new CliError('RUN_REQUIRED','任务尚未启动，没有执行记录','先运行 tasks start。',4);
+    const base=`/api/runs/${run.id}`;
+    if(['pause','resume','retry-now','retry-failed-node','retry-orchestration'].includes(operation)) {
+      let body=operation==='pause'?{reason:'用户通过 CLI 暂停'}:{};
+      if(operation==='retry-failed-node'){body=await readInput(flags.file,stdin);validateInput(body,resources.tasks.operationInputs[operation].schema);}
+      const result=await client.request(`${base}/${operation}`,{method:'POST',body});
+      return {taskId:id,...result,...(result.run?{run:runReceipt(result.run)}:{})};
+    }
+    return workspaceRead(client,base,operation,flags,options);
+  }
   if (operation === 'terminate') {
     if (!run) throw new CliError('RUN_REQUIRED', '任务尚未启动，没有可终止执行', '可直接删除尚未启动的任务。', 4);
     const result = await client.request(`/api/runs/${run.id}/terminate`, { method: 'POST', body: { reason: '用户通过 CLI 终止任务' } });
@@ -334,7 +372,7 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin) {
     pendingQuestions: questions.map(question => reference(question.id, question.questionType || '人类澄清')), artifactCount: workspace.artifacts.length,
     acceptanceRequest: workspace.run?.acceptanceRequest ? { summary: workspace.run.acceptanceRequest.summary } : null,
     deliveryReview: workspace.run?.deliveryReview ? { verdict: workspace.run.deliveryReview.verdict } : null,
-    nextAction: task.archivedAt ? '任务已归档，只读查看已有记录。' : !run ? '任务尚未启动；使用 tasks start 任务ID。' : workspace.run.status === 'failed' ? (workspace.traces.some(trace => trace.status === 'running') ? '任务因错误中断，其他员工正在收尾；收尾后在客户端重试原失败员工。' : '任务因错误中断；只能在客户端重试原失败员工，不能发送消息或 @ 其他成员。') : questions.length ? '请使用 tasks reply 精确回复待答问题；未答完仍阻塞。' : backoffDispatch && ['planning', 'running', 'review'].includes(workspace.run.status) ? `投递 ${backoffDispatch.id} 上次失败（类别 ${backoffDispatch.lastErrorKind || 'execution'}，已尝试 ${backoffDispatch.attempts} 次），将于 ${backoffDispatch.nextRetryAt} 自动重试；可在 客户端请求立即重试。该队列等待既有恢复调度；新的外部错误会停止任务，修复后由人类重试原员工。` : ({ awaiting_acceptance: '等待人类在 客户端核对产物并确认完成。', completed: '人类已确认完成。', paused: '执行已暂停；请在 客户端选择继续。', failed: '执行失败；查看失败原因、协作记录，在 客户端选择适用恢复操作。', cancelled: '执行已终止，历史记录保留。' })[workspace.run.status] || '查询协作记录和最新进度；状态由服务推进。' };
+    nextAction: task.archivedAt ? '任务已归档，只读查看已有记录。' : !run ? '任务尚未启动；使用 tasks start 任务ID。' : workspace.run.status === 'failed' ? (workspace.traces.some(trace => trace.status === 'running') ? '任务因错误中断，其他员工正在收尾；收尾后在客户端重试原失败员工。' : '任务因错误中断；使用 tasks retry-failed-node 或 retry-orchestration 恢复原失败投递；不能发送新消息。') : questions.length ? '请使用 tasks reply 精确回复待答问题；未答完仍阻塞。' : backoffDispatch && ['planning', 'running', 'review'].includes(workspace.run.status) ? `投递 ${backoffDispatch.id} 上次失败（类别 ${backoffDispatch.lastErrorKind || 'execution'}，已尝试 ${backoffDispatch.attempts} 次），将于 ${backoffDispatch.nextRetryAt} 自动重试；可用 tasks retry-now 请求立即重试。该队列等待既有恢复调度；新的外部错误会停止任务，修复后由人类重试原员工。` : ({ awaiting_acceptance: '等待人类在 客户端核对产物并确认完成。', completed: '人类已确认完成。', paused: '执行已暂停；使用 tasks resume 任务ID 继续。', failed: '执行失败；查看失败原因、协作记录，在 客户端选择适用恢复操作。', cancelled: '执行已终止，历史记录保留。' })[workspace.run.status] || '查询协作记录和最新进度；状态由服务推进。' };
 }
 
 export async function run(argv, options = {}) {
@@ -343,14 +381,24 @@ export async function run(argv, options = {}) {
   const json = argv.includes('--json');
   const presentation = { columns: options.columns || process.stdout.columns || 100 };
   try {
-    const command = parse(argv), data = await executeParsed(command, options);
+    const command = parse(argv);
+    const controller=new AbortController();
+    const interrupt=()=>controller.abort();
+    if(command.flags.follow)process.once('SIGINT',interrupt);
+    try {
+    const data = await executeParsed(command, {...options,signal:options.signal || controller.signal});
+    if(data?.[Symbol.asyncIterator]) {
+      for await(const item of data)write(json?JSON.stringify({ok:true,data:item}):formatOutput(command.args,item,presentation));
+      return controller.signal.aborted?130:0;
+    }
     write(json ? JSON.stringify({ ok: true, data }, null, 2) : formatOutput(command.args, data, { ...presentation, help: asksForHelp(command) }));
     return 0;
+    } finally {if(command.flags.follow)process.removeListener('SIGINT',interrupt);}
   }
   catch (error) {
     const known = error instanceof CliError, exitCode = known ? error.exitCode : 5;
     const safe = known ? { code: error.code, message: error.message, hint: error.hint, ...(error.status ? { status: error.status } : {}), ...(['TASK_CREATED_START_FAILED','TASK_UPDATED_START_FAILED'].includes(error.code) ? { taskId: error.taskId } : {}) } : { code: 'CLI_FAILURE', message: 'CLI未能完成命令', hint: guide.exitCodes[5] };
-    if (json) write(JSON.stringify({ ok: false, error: safe }, null, 2));
+    if (json) write(JSON.stringify({ ok: false, error: safe }, null, argv.includes('--follow')?undefined:2));
     else writeError(formatError(safe, exitCode, presentation));
     return exitCode;
   }

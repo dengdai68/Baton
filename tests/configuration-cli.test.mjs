@@ -86,6 +86,7 @@ test('plugin CLI exposes Runtime support progressively and documents source-wide
   const json=await captured(['plugins','get',entry.id,'--session-file',f.sessionFile,'--json'],{fetcher});assert.deepEqual(JSON.parse(json.stdout).data.compatibility,compatibility);
   const help=await captured(['plugins','import','--help']);assert.match(help.stdout,/全部插件/);assert.match(help.stdout,/github\/url\/git-subdir/);assert.match(help.stdout,/npm\/archive\/command/);
   assert.match(help.stdout,/链接安装为普通文件/);assert.match(help.stdout,/来源外链接/);assert.match(help.stdout,/整批回滚/);
+  assert.match(help.stdout.replace(/\s+/g,''),/不比较插件、资源和原始源目录的整树SHA256/);
   assert.match(help.stdout.replace(/\s+/g,''),/模型别名.*继承目标模型/);assert.match(help.stdout.replace(/\s+/g,''),/相对文件与行列/);
   assert.deepEqual(Object.keys(resources.plugins.schema.properties),['url','path'],'compatibility is automatic, without new conversion flags');
 });
@@ -429,7 +430,7 @@ test('text failures go only to stderr with exit code and recovery; no raw errors
 test('AI CLI provides offline comprehensive group/command schemas and safe examples', async () => {
   const failFetch = () => { throw new Error('help must be offline'); };
   const help = await execute(['help'], { fetcher: failFetch });
-  assert.equal(Object.keys(help.resources).length, 10); assert.match(help.sequence.join(' '), /runtimes.*plugins.*mcps.*roles.*agents.*teams.*workflows/);
+  assert.equal(Object.keys(help.resources).length, 11); assert.match(help.sequence.join(' '), /runtimes.*plugins.*mcps.*roles.*agents.*teams.*workflows/);
   for (const group of Object.keys(resources)) {
     const schema = await execute(['schema', group], { fetcher: failFetch });
     assert.equal(schema.schema.additionalProperties, false); assert.ok(schema.notes.length);
@@ -721,7 +722,7 @@ test('employee CLI rejects retired developer/repository writes and directs repos
 });
 
 
-test('task progress help describes original employee recovery without granting a CLI retry operation', async () => {
+test('task progress help describes original employee recovery through shared HTTP commands', async () => {
   const help = await execute(['tasks','progress','--help']);
   assert.match(JSON.stringify(help), /原失败员工的投递与会话/);
   assert.match(JSON.stringify(help), /协调协议拒收.*自动纠正一次/);
@@ -901,6 +902,7 @@ test('MCP tools CLI uses the authenticated discovery endpoint and explicit refre
  const f=await fixture(),calls=[];const fetcher=async(url,init)=>{calls.push({path:new URL(url).pathname,method:init.method,body:JSON.parse(init.body)});return new Response(JSON.stringify({tools:[{name:'lookup',description:'查找',inputSchema:{type:'object'}}],total:1,checkedAt:'2026-11-07T00:00:00Z'}));};
  const args=['mcps','tools','mcp_one','--session-file',f.sessionFile];const result=await execute(args,{fetcher});assert.equal(result.tools[0].name,'lookup');assert.deepEqual(calls[0],{path:'/api/runtime/mcp-marketplace/mcp_one/tools',method:'POST',body:{refresh:false}});
  await execute([...args,'--refresh'],{fetcher});assert.equal(calls[1].body.refresh,true);assert.match(resources.mcps.notes.join(' '),/不调用工具/);
+ const help=await captured(['mcps','tools','mcp_one','--help']);assert.match(help.stdout.replace(/\s+/g,''),/45秒总超时/);
 });
 
 test('task CLI requires explicit managerAgentId offline and automation uses the same field',async()=>{

@@ -1,5 +1,7 @@
 # 控制面
 
+扩展目录内容变化不再触发整树 SHA256 拒绝；插件详情、员工绑定和任务启动与 App 共用该规则，既有冻结引用也生效。清单文件摘要、执行计划和路径读取规则仍校验；命令参数、输入 schema 与输出字段不变。
+
 群聊删除由 `communication-store.mjs` 的 `deleteCommunication` 拥有：仅群聊、成员回复 claimed/running 时拒绝，排队/失败回复取消并记审计，会话写入 `status=deleted`、`deletedAt` 后从列表、未读和全部会话操作中排除（「群聊已删除」），消息、附件、原生会话、事件与工作目录保留为历史；删除后的 pump 领取为空即结束。`index.mjs` 提供认证 `DELETE /api/communications/:id`，`persistence.mjs` 的会话目录查询同步排除已删除群聊。
 
 任务 `POST /api/runs/:id/messages` 可选 `clientRequestId` 的 Run 范围幂等性由 `Store.submitHumanMessage` 拥有：原命令摘要、消息与派工回执原子保存；重放在状态/归档门禁前返回原事实。HTTP 仅对首次命令唤醒执行，冲突返回 409。协作投影透出请求 ID；详细契约见 docs/03、CLI 对齐见 docs/21。
@@ -143,7 +145,7 @@ PUT /api/runs/:id/members 经认证交给 Store 更新当前成员投影，不�
 同一轮包含 `summary` 与 `consultation` 时，先将非空且与问题正文不同的报告保存为普通角色 Message，再保存问题和等待关系；两条消息关联同一 Trace/本轮输入。缺少报告或正文与问题相同不另造消息，协调失败仍回滚路由并保留原报告；不从控制台补造旧 Message。
 
 任务必须显式managerAgentId，从最终active成员中选一位，不按员工kind推断。Task冻结经理原配置，Run继续独立经理别名/sourceAgentId与会话；新增其他成员不按kind拒绝，当前经理不可移除。自动化保存/更新/触发同一字段，配置版本与历史Run不联动。
-runtime/mcp-tools.mjs通过已安装不可变配置与现有mcp-launcher建立短连接，仅initialize/tools/list；15秒超时、成功60秒缓存、并发合并/上限和工具体积边界，finally关闭。POST认证tools入口校验当前目录项，CLI/UI共用，详情失败独立于配置读取。
+runtime/mcp-tools.mjs通过已安装不可变配置与现有mcp-launcher建立短连接，仅initialize/tools/list；45秒超时、成功60秒缓存、并发合并/上限和工具体积边界，finally关闭。POST认证tools入口校验当前目录项，CLI/UI共用，详情失败独立于配置读取。
 
 workflow当前写入及新Task冻结模板时校验process最多一出口，condition允许分支；sourcePort/targetPort仅接受四边枚举。读取现有模板与冻结历史不转换、不改写；更新失败保持原记录。
 
@@ -182,3 +184,5 @@ Run 全员在下一次合法调用自动补齐未读公开消息；本轮处理�
 Skill allowed-tools/allowedTools 是可选元信息，平台兼容性计算不再据此拒绝。原文与投影保留；App/CLI 共用现有 compatibility 刷新端点更新旧目录摘要，其他校验及冻结历史不变。
 
 Store.subscribeNotifications 发布未来已提交的任务待验收/完成及员工沟通新消息元数据；事务回滚丢弃、监听异常隔离、关闭 Store 清理，不新增持久事件或扫描历史。index 只向当前自有桌面 IPC 透传，系统通知失败不改业务结果。通知不含正文、附件、Trace 或提示词，边界见 docs/18。
+
+任务交接正文：orchestrator.parseEmployeeResponse 合并原生正文与尾部 JSON 内不同的完整 summary，避免“提交验收：”等短前言覆盖真实报告；相同正文去重。原始 rawResponse 保留，既有消息不回填或改写，App/CLI 共用保存后的正文。

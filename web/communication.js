@@ -1,3 +1,4 @@
+import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
 import { runtimeLabel } from '../client/runtime-providers.mjs';
 import { ByteCache } from "../client/byte-cache.mjs";
 import { consoleEventWindow } from "../client/console-projections.mjs";
@@ -373,24 +374,24 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('[data-chat-console-avatar]').innerHTML = identity ? renderAvatar(identity) : '';
     query('[data-chat-console-runtime]').textContent = [identity?.runtime?.provider ? runtimeLabel(identity.runtime.provider) : null, identity?.runtime?.model].filter(Boolean).join(' · ');
     if (!agent) { stream.textContent = state.consoleRequest ? '正在读取控制台…' : '此会话尚无执行记录。'; return; }
-    const key = JSON.stringify([agent.id, [...page.events.keys()], page.traces]);
+    const key = JSON.stringify([agent.id, [...page.events.keys()], page.traces, Boolean(page.forceLatest)]);
     if (state.consoleRenderKey === key) return;
     state.consoleRenderKey = key;
     const reading = page.reading || { following: true, top: 0, open: [], closed: [] };
     if (stream.dataset.agentId === agent.id && stream.children.length) {
-      reading.following = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
-      reading.top = stream.scrollTop;
+      Object.assign(reading, captureConsoleReading(stream));
       reading.open = [...stream.querySelectorAll('details[open][data-console-key]')].map(node => node.dataset.consoleKey);
       reading.closed = [...stream.querySelectorAll('details[data-default-open]:not([open])')].map(node => node.dataset.consoleKey);
     }
-    const anchor = state.consolePrepend ? [...stream.querySelectorAll('[data-console-row]')].find(node => node.getBoundingClientRect().bottom > stream.getBoundingClientRect().top) : null;
-    const anchorTop = anchor?.getBoundingClientRect().top;
+    if (stream.dataset.agentId !== agent.id) followConsoleLatest(stream);
+    onConsoleLatest(stream, () => { if (page.browsingHistory) { state.consoleRequest = null; void loadConsole(false, { latest: true }); } });
+    const position = page.forceLatest ? { following: true, top: 0 } : captureConsoleReading(stream);
     stream.dataset.agentId = agent.id;
     renderConsole(stream, { events: [...page.events.values()], traces: page.traces, hasMore: page.hasMore, refresh: Boolean(state.consoleRefresh), basePath: `/api/communications/${encodeURIComponent(currentId)}` }, agent);
     state.consoleRefresh = false;
     for (const details of stream.querySelectorAll('details[data-console-key]')) details.open = reading.open.includes(details.dataset.consoleKey) || (details.dataset.defaultOpen !== undefined && !reading.closed.includes(details.dataset.consoleKey));
-    stream.scrollTop = state.consolePrepend && anchor?.isConnected ? stream.scrollTop + anchor.getBoundingClientRect().top - anchorTop : state.consolePrepend ? 0 : reading.following ? stream.scrollHeight : reading.top;
-    state.consolePrepend = false; page.reading = reading;
+    restoreConsoleReading(stream, position, { prepend: state.consolePrepend, latest: page.forceLatest });
+    page.forceLatest = false; state.consolePrepend = false; page.reading = reading;
   }
   async function loadConsole(older = false, { latest = false } = {}) {
     const key = currentId, token = generation;
@@ -398,19 +399,20 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     const state = view(key), page = consolePage(state);
     if (!state.consoleOpen || state.consoleRequest || older && (!page.hasMore || !page.before)) return;
     const stream = query('[data-communication-stream]');
-    if (!latest && page.loaded && stream.scrollHeight - stream.scrollTop - stream.clientHeight >= 48) page.browsingHistory = true;
-    if (!older && !latest && page.browsingHistory) return;
+    if (older) { page.liveEvents ||= [...page.events.values()]; page.browsingHistory = true; }
     const request = { agentId: state.consoleAgentId }; state.consoleRequest = request;
     renderConsolePanel();
     try {
       const params = new URLSearchParams({ limit: '50', ...(request.agentId ? { agentId: request.agentId } : {}), ...(older ? { before: page.before } : {}) });
-      const result = await api(`/api/communications/${key}/console?${params}`);
+      const fetchPage = before => { const query = new URLSearchParams(params); if (before) query.set('before', before); return api(`/api/communications/${key}/console?${query}`); };
+      const result = older ? await fetchPage() : await readConsoleTail(latest ? [] : page.liveEvents || [...page.events.values()], fetchPage);
       if (!isCurrent(key, token) || !state.consoleOpen || state.consoleRequest !== request) return;
       state.consoleMembers = result.agents.filter(agent => !request.agentId || agent.id === request.agentId);
       if (!request.agentId && result.agents.length) {
         state.consoleAgentId = (result.agents.find(agent => agent.running) || result.agents[0]).id;
         state.consoleRequest = null; state.consoleRenderKey = null; renderConsolePanel(); void loadConsole(); return;
       }
+      if (!older && !latest && page.browsingHistory) { page.liveEvents = consoleEventWindow(page.liveEvents || [], result.events).events; return; }
       const window = consoleEventWindow(latest ? [] : [...page.events.values()], result.events, { older });
       page.events = new Map(window.events.map(event => [event.id, event]));
       const traceIds = new Set(window.events.map(event => event.data?.traceId));
@@ -418,7 +420,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       if (!page.loaded || older || latest || window.reset) { page.before = result.nextBefore; page.hasMore = result.hasMore; }
       if (window.trimmedBefore) { page.before = window.events[0].id; page.hasMore = true; }
       if (older) page.browsingHistory = true;
-      if (latest) { page.browsingHistory = false; page.reading = { following: true, top: 0, open: [], closed: [] }; stream.scrollTop = stream.scrollHeight; }
+      if (latest) { page.browsingHistory = false; page.liveEvents = null; page.forceLatest = true; }
       page.loaded = true; state.consoleError = ''; state.consolePrepend = older;
     } catch (error) { if (isCurrent(key, token) && state.consoleRequest === request) state.consoleError = `控制台读取失败：${error.message}；记录保留，可刷新重试。`; }
     finally { if (state.consoleRequest === request) state.consoleRequest = null; if (isCurrent(key, token)) renderConsolePanel(); }

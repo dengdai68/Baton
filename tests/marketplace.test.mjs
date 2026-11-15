@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {mkdir,mkdtemp,readFile,writeFile,stat,lstat,symlink,rm,chmod,realpath,unlink,readdir} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {createMarketplace,selectionIds} from '../server/runtime/marketplace.mjs';
+import {createMarketplace,selectionIds,readExtensionFile} from '../server/runtime/marketplace.mjs';
 import {selectedExtensions,codexMarketArgs,claudeMarketEnvironment} from '../server/runtime/extensions.mjs';
 import {runClaudeCodeCli} from '../server/runtime/local-cli.mjs';
 import {createCatalogFixtureStore as createStore} from './fixture-store.mjs';
@@ -424,15 +424,33 @@ test('market rejects invalid, duplicate, reserved, incompatible and missing sele
   assert.equal((await market.resolve({pluginIds:[],mcpIds:[http.id]},'codex')).extensionManifest.length,1);
   await assert.rejects(market.resolve({pluginIds:['../outside'],mcpIds:[]},'claude-code'));
 });
-test('market integrity and path mismatch fail before provider execution', async t => {
+test('directory changes do not invalidate current selections or frozen extension bindings', async t => {
+  const {root,market} = await fixture(t), entry = await install(market,root);
+  const runtime = {provider:'claude-code',...await market.resolve({pluginIds:[entry.id],mcpIds:[]},'claude-code')};
+  const ref=runtime.extensionManifest[0], installed=join(ref.path,'../..');
+  for(const directory of [installed,ref.sourceRoot]) {
+    const cache=join(directory,'skills/proof-0/scripts/__pycache__');
+    await mkdir(cache,{recursive:true});await writeFile(join(cache,'scout.cpython-313.pyc'),'runtime bytecode');
+  }
+  await writeFile(runtime.skillPaths[0],(await readFile(runtime.skillPaths[0],'utf8'))+'\nUpdated supporting instructions.');
+  const resources=join(root,'legacy-resources');await mkdir(resources);await writeFile(join(resources,'cache.pyc'),'changed resource');
+  assert.ok(await readExtensionFile({...ref,resourceRoot:resources,resourceSha256:'0'.repeat(64)}));
+  assert.deepEqual(Object.keys(await selectedExtensions(runtime)),[]);
+  assert.equal((await market.detail(entry.id,'plugin')).id,entry.id);
+  assert.deepEqual(Object.keys(await selectedExtensions({provider:'claude-code',...await market.resolve({pluginIds:[entry.id],mcpIds:[]},'claude-code')})),[]);
+});
+test('manifest integrity and path mismatch fail before provider execution', async t => {
   const {root,market} = await fixture(t), entry = await install(market,root);
   const runtime = {provider:'claude-code',...await market.resolve({pluginIds:[entry.id],mcpIds:[]},'claude-code')};
   await assert.rejects(selectedExtensions({...runtime,skillPaths:[]}),/不一致/);
-  await writeFile(runtime.skillPaths[0],'tampered');
+  const ref=runtime.extensionManifest[0],original=await readFile(ref.path);
+  await writeFile(ref.path,'tampered');
   await assert.rejects(selectedExtensions(runtime), error => error.code === 'EXTENSION_INTEGRITY_FAILED' && /SHA256 不匹配/.test(error.message) && error.retryable === false);
   await assert.rejects(runClaudeCodeCli({runtime:{...runtime,executable:join(root,'must-not-start')},workspacePath:root}),/SHA256 不匹配/);
+  await writeFile(ref.path,original);
+  await writeFile(join(root,'outside'),'outside component');
   await rm(runtime.skillPaths[0]); await symlink(join(root,'outside'),runtime.skillPaths[0]);
-  await assert.rejects(selectedExtensions(runtime), error => error.code === 'EXTENSION_INTEGRITY_FAILED' && /SKILL.md/.test(error.message));
+  await assert.rejects(selectedExtensions(runtime), /链接|越界|不可读取/);
 });
 
 test('market refuses a linked configuration root before creating a catalog outside it', async t => {

@@ -1,5 +1,11 @@
 # 代码导航
 
+App/CLI 对齐：cli/main.mjs 将任务暂停/恢复/重试/归档映射到现有 HTTP，cli/workspace.mjs 提供长期沟通、控制台游标持续读取及文件命令；client.mjs 流式下载，最终确认仍仅客户端。MCP 工具搜索分页共用 client/mcp-tool-page.mjs，workflow-editor 补齐高级业务字段。契约 docs/21、17、06；隔离验收 scripts/test-app-cli-parity.mjs、tests/cli-workspace.test.mjs。
+
+MCP 超时与详情编辑：server/runtime/mcp-tools.mjs 使用45秒发现预算；web/styles.css 的 directory-detail-header 显式 no-drag，确保抽屉覆盖宿主标题栏时的真实鼠标命中。CLI tools 帮助与 docs/15、21 同步，字段不变；tests/mcp-tools.test.mjs 覆盖超过旧15秒的初始化。
+
+扩展目录加载：runtime/marketplace.mjs 移除插件、资源和原始源副本的整树 SHA256 比较；安装摘要仅作元数据，缓存变化不阻断当前/冻结引用。App/CLI 共用加载规则，命令字段不变；回归 tests/marketplace.test.mjs，契约 docs/08、15、26。
+
 待我处理性能与自办呈现：`web/app.js` 的 refreshInbox 以 runId+run.status+task.updatedAt 签名缓存 compact 详情，空闲轮询不再产生每任务一次 workspace 请求；`client/console-projections.mjs` 对发送者即接收者的消息隐藏目标。DeepSeek Harness 兼容层升级 0.2.2-rc.1（turnBoundaryOf），官方桥重拷贝见 `server/runtime/vendor/dsh-hooks/`；真实验收 test-dsh-real 覆盖单人经理自办不显示自指目标。
 
 待办详情连续处理：`web/app.js` 的 `advanceInbox`、`renderInboxPreview`、`sendInboxAnswer` 保留已回答问题/上下文与任务内容，标题同行进入工作区；回答成功及确认完成后选择下一项，失败保留草稿。`web/styles.css` 维护标题同行与窄屏换行。验证 `tests/settings.test.mjs` 的 inbox 场景及隔离 Electron；HTTP/CLI/Store 不变。
@@ -88,7 +94,7 @@ CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，�
 
 ## 修改入口
 
-- 失败与续接：runtime/local-cli 保留脱敏原始错误并独立判定临时故障；marketplace 提供完整性失败位置，cli-environment 禁止默认 Python 字节码写入。orchestrator 将外部错误交给 Store 停止投递并标记任务失败；prompts 按内容摘要追加变化，模型实际活动确认输入游标。10 秒巡检继续队列或唤醒空闲任务经理，CLI 进度/帮助同步失败恢复语义。
+- 失败与续接：runtime/local-cli 保留脱敏原始错误并独立判定临时故障；marketplace 仅校验清单摘要、执行计划和实际组件读取路径，不再比较插件/资源/原始源目录整树 SHA256，cli-environment 禁止默认 Python 字节码写入。orchestrator 将外部错误交给 Store 停止投递并标记任务失败；prompts 按内容摘要追加变化，模型实际活动确认输入游标。10 秒巡检继续队列或唤醒空闲任务经理，CLI 进度/帮助同步失败恢复语义。
 
 - 任务目录标题由顶栏展示，index.html/styles.css 将内部任务/归档 h2 保留为无占位的可访问语义；app.js 更新归档顶栏名称。目录实机回归验证宽窄 客户端及往返搜索。Release 工作流发布成功后按构建输出的精确 artifact ID 清理 Actions 中转包，失败最多保留一天，不删除发布附件/标签。
 
@@ -273,7 +279,7 @@ Runtime 扩展：portable-extensions.mjs 在既有市场完整性校验后物化
 
 配置目录拥有桌面更新缓存；更新器在工作目录整理期间阻止并发下载，并按配置目录打开已验证安装包，见 docs/24-desktop-updates.md。
 
-存储搬运后的冻结 MCP 资源在 history/bridge 的前置检查前即解析，不能仅在 local-cli 执行边界解析；完整性和保留名称规则不变。
+存储搬运后的冻结 MCP 资源在 history/bridge 的前置检查前即解析，不能仅在 local-cli 执行边界解析；清单与计划校验、保留名称规则不变，整树 SHA256 不再作为加载门禁。
 
 当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
@@ -289,7 +295,7 @@ Runtime 扩展：portable-extensions.mjs 在既有市场完整性校验后物化
 
 提示词增量与资料入口：prompts.mjs 统一长正文资料计划、按实体状态增量和巡检消息去重；communication-store 的原生会话消息回执区分输入已接收与回复成功。run-files 保存内容寻址 input-materials 与稳定 workflow 入口，orchestrator/communication 在调用前写入并传实际目录。契约 docs/22，回归 prompts/communication/run-files-security，App/CLI 公共字段不变。
 
-共享协作输入：store.memberInputMessages 按成员回执补齐当前 Run 全部公开外部消息，prompts 明确本轮处理消息与背景，orchestrator 在附件异步校验前固定水位并保留正文加尾部 JSON 的自然正文。Store 合并经理队尾未尝试报告并保留多来源/幂等键，console-projections 同时服务 App/CLI 关联。契约 docs/22、03，覆盖 prompts/task-parallel/smoke。
+共享协作输入：store.memberInputMessages 按成员回执补齐当前 Run 全部公开外部消息，prompts 明确本轮处理消息与背景，orchestrator 在附件异步校验前固定水位；回复解析按原顺序保留正文和尾部 JSON 中不同的完整 summary，相同文本只保留一次。Store 合并经理队尾未尝试报告并保留多来源/幂等键，console-projections 同时服务 App/CLI 关联。契约 docs/22、03，覆盖 prompts/task-parallel/smoke。
 
 真实共享协作验收：scripts/test-shared-collaboration-real.mjs；随机标记仅配置给各自员工，通过公开报告传递，再经同伴咨询和原生续接回忆，最后客户端确认。不用Provider夹具代替。
 
@@ -321,3 +327,5 @@ Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedT
 目录对齐（纸张期落地，现按石墨取值）：web/automations.mjs 复用 status 查询与 PUT enabled，web/app.js 角色整行编辑/独立删除菜单，web/marketplace.mjs 在既有分页和 usage 查询上做客户端 chips 与卡片摘要；MCP 配置只读推导类型、显式工具发现后保留本会话计数/错误，Git 更新仍复用全来源更新命令。登录/初始化共用 login.css 无卡片布局；验证 test-automations、test-roles-ui、test-market-catalog、test-directory-headers，协议不变。
 
 设计稿复核（纸张期，现以石墨为准）：侧栏命令/导航分组（web/index.html）、员工卡片（web/app.js）、协作消息与输入卡片（web/app.js、styles.css）、沟通成员（styles.css）；仅展示无CLI协议变化。验收 test-redesign、test-collaboration-flow；审查范围见 docs/development/paper-alignment-review.md。
+
+控制台实时阅读由 `web/console-stream.mjs` 统一：任务 SSE/可见控制台5秒补查、沟通2秒轮询持续收新记录；上滚只停止自动滚动。稳定行锚点/ResizeObserver 处理增量、延迟正文与窄屏布局，现有 before 分页补齐断线和突发窗口。入口 app.js/communication.js；验收 scripts/test-console-live.mjs，HTTP/CLI/执行状态协议不变。

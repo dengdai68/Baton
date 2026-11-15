@@ -116,7 +116,7 @@ Orchestrator 每轮按 removedParticipantIds 过滤当前派工名单；已有�
 
 同一轮包含 `summary` 与 `consultation` 时，先将非空且与问题正文不同的报告保存为普通角色 Message，再保存问题和等待关系；两条消息关联同一 Trace/本轮输入。缺少报告或正文与问题相同不另造消息，协调失败仍回滚路由并保留原报告；不从控制台补造旧 Message。
 
-经理是Task的显式managerAgentId，不是Agent.kind分类。Store验证属于所选active成员并冻结，Run保留独立经理别名、sourceAgentId和会话；Orchestrator/Prompt依据Run身份协调。自动化持久保存选择、每次触发创建同协议Task，不重写在途身份。MCP工具发现为runtime适配器，只通过已安装不可变配置执行initialize/tools/list，HTTP认证和目录有效性仍由控制面/Store负责，缓存仅成功元数据且限60秒/64项/16MiB，4并发、15秒超时；不进SQLite，不影响市场分页和业务执行，不调用具体工具。
+经理是Task的显式managerAgentId，不是Agent.kind分类。Store验证属于所选active成员并冻结，Run保留独立经理别名、sourceAgentId和会话；Orchestrator/Prompt依据Run身份协调。自动化持久保存选择、每次触发创建同协议Task，不重写在途身份。MCP工具发现为runtime适配器，只通过已安装不可变配置执行initialize/tools/list，HTTP认证和目录有效性仍由控制面/Store负责，缓存仅成功元数据且限60秒/64项/16MiB，4并发、45秒超时；不进SQLite，不影响市场分页和业务执行，不调用具体工具。
 
 工作流呈现共用web/workflow-layout.mjs：局部ELK仅决定坐标，正交几何与视口控制不参与任务状态。Store在当前workflow写入及新Task冻结入口执行process单出口规则；四边端口是可选呈现元数据，App/CLI通过同一HTTP保存。历史冻结图保留原事实，只读整理不写回。
 
@@ -143,3 +143,5 @@ Store 选择 Run 全部未读公开消息并管理当前处理消息引用，Orc
 初始化只枚举集合名称和小配置快照；各业务集合的 ID/顺序及正文分别按首次访问加载。分页读模型继续使用 SQL 限定查询，未访问的产物/事件不因其他集合保存或提交而加载。执行恢复只读取必要的运行、投递、会话状态；存在真实待恢复执行时允许加载其所需记录。此决策复用原 Store、SQLite、定时器，不增加缓存库、服务或兼容迁移。
 
 系统通知沿用自有子服务 IPC：Store 成功提交后发布有界元数据 → index 透传 → Electron 校验身份/当前登录并显示原生通知。无全量历史扫描、数据库轮询、第二事件库或 renderer 通用通知桥；系统失败不回滚业务。页面 toast 使用浏览器顶层 Popover，解决原生 dialog 不受普通 z-index 约束的问题。实现和生命周期见 docs/18 与 docs/06。
+
+任务回复解析保留原始 rawResponse；正文加唯一尾部协调 JSON 时，正文和非空、不同的 summary 按原顺序合并，相同正文只保存一次，协调字段仍按原协议执行。短引导句不能覆盖完整交付报告。既有 Message 不重写，原始完整输出可在对应控制台读取。

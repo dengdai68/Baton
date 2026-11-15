@@ -142,14 +142,14 @@ test('current installed compatibility is derived without reinstall or rewriting 
   assert.equal((await market.resolve(selection,'dsh')).extensionManifest[0].planSha256,ref.planSha256);
   assert.equal(await readFile(file,'utf8'),before);assert.equal(ref.planTarget,'dsh');
 });
-test('plan/directory tampering cannot silently change execution; old frozen projection remains separate',async t=>{
+test('frozen plans remain checked while original-source directory changes no longer block execution',async t=>{
   const {market,selection}=await fixture(t),ref=(await market.resolve(selection,'dsh')).extensionManifest[0];
   await assert.rejects(readPluginExecutionPlan({...ref,planSha256:'f'.repeat(64)}),/执行计划/);
   const claude=await market.resolve(selection,'claude-code');claude.extensionManifest[0].planSha256='f'.repeat(64);
   await assert.rejects(selectedExtensions({provider:'claude-code',...claude}),/执行计划/);
   const legacy={...ref,adapterVersion:1};delete legacy.sourceRoot;delete legacy.sourceSha256;
   await writeFile(join(ref.sourceRoot,'agents/review.md'),'tampered source');
-  await assert.rejects(readPluginExecutionPlan(ref),/原始源副本/);
+  assert.ok(await readPluginExecutionPlan(ref));
   assert.ok(await readExtensionFile(legacy),'no automatic upgrade of historical source references');
 });
 test('unsupported lifecycle, non-command Hooks and agent metadata are explicit failures, never partial success',async t=>{

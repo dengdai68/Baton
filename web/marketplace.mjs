@@ -1,3 +1,4 @@
+import {mcpToolPage} from '../client/mcp-tool-page.mjs';
 import {runtimeLabel,RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import { paginate, paginationMarkup } from './pagination.mjs';
 import { createFloatingList } from './floating-list.mjs';
@@ -227,15 +228,19 @@ function marketUI({api,esc,openModal,closeModal,confirmDialog,toast,headerAction
       target.querySelectorAll('[data-jump-view]').forEach(button=>{button.onclick=()=>{closeModal();globalThis.document?.querySelector('.nav-item[data-view="agents"]')?.click();};});
       if(!plugin){
         const tools=target.querySelector('[data-mcp-tools]'),button=target.querySelector('[data-mcp-tools-refresh]'),heading=target.querySelector('[data-mcp-tools-count]');
-        const renderTools=discovered=>{
-          tools.innerHTML=discovered.length ? discovered.map(tool=>`<article class="plugin-detail-component mcp-tool">${icon('tool')}<div><strong>${esc(tool.name)}</strong>${tool.title && tool.title!==tool.name?`<small>${esc(tool.title)}</small>`:''}${tool.description?`<p>${esc(tool.description)}</p>`:''}</div></article>`).join('') : '<p class="field-hint">此服务当前未提供工具。</p>';
+        let discovered={tools:[],total:0},toolSearch='',toolPage=1;
+        const renderTools=()=>{
+          const result=mcpToolPage(discovered,{search:toolSearch,page:toolPage});toolPage=result.page;
+          tools.innerHTML=`<label class="form-field">搜索工具<input type="search" data-tool-search value="${esc(toolSearch)}" placeholder="名称或说明"></label><div data-tool-rows>${result.tools.length ? result.tools.map(tool=>`<article class="plugin-detail-component mcp-tool">${icon('tool')}<div><strong>${esc(tool.name)}</strong>${tool.title && tool.title!==tool.name?`<small>${esc(tool.title)}</small>`:''}${tool.description?`<p>${esc(tool.description)}</p>`:''}<details><summary>参数与返回值</summary><pre>${esc(JSON.stringify({inputSchema:tool.inputSchema,...(tool.outputSchema?{outputSchema:tool.outputSchema}:{})},null,2))}</pre></details></div></article>`).join('') : '<p class="field-hint">没有匹配的工具。</p>'}</div><div class="form-actions"><button type="button" class="small-button" data-tool-prev ${toolPage===1?'disabled':''}>上一页</button><span>${toolPage} / ${result.totalPages} · ${result.total} 个工具</span><button type="button" class="small-button" data-tool-next ${!result.hasMore?'disabled':''}>下一页</button></div>`;
+          const search=tools.querySelector('[data-tool-search]');search.oninput=()=>{toolSearch=search.value;const start=search.selectionStart,end=search.selectionEnd;toolPage=1;renderTools();const next=tools.querySelector('[data-tool-search]');next.focus({preventScroll:true});next.setSelectionRange(start,end);};
+          tools.querySelector('[data-tool-prev]').onclick=()=>{toolPage--;renderTools();};tools.querySelector('[data-tool-next]').onclick=()=>{toolPage++;renderTools();};
         };
         const loadTools=async(refresh=false)=>{
           button.disabled=true;tools.setAttribute('role','status');tools.textContent='正在读取工具…';
           try{
             const result=await discoverTools(id,refresh);if(!tools.isConnected)return;
             heading.hidden=false;heading.textContent=result.total;tools.removeAttribute('role');
-            renderTools(result.tools);
+            discovered=result;renderTools();
           }catch(error){if(tools.isConnected){heading.hidden=true;tools.setAttribute('role','alert');tools.innerHTML=`<div class="mcp-tools-error">${icon('xcircle',16)}<div><strong>无法读取工具列表</strong><p>${esc(error.message)}</p><div><button type="button" class="small-button" data-mcp-retry>重试</button><button type="button" class="small-button" data-mcp-edit>编辑配置</button></div></div></div>`;tools.querySelector('[data-mcp-retry]').onclick=()=>loadTools(true);tools.querySelector('[data-mcp-edit]').onclick=()=>installMcp(item);}}
           finally{if(button.isConnected)button.disabled=false;}
         };

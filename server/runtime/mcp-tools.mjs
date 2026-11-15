@@ -6,7 +6,7 @@ import { diagnosticRedactor } from '../diagnostics.mjs';
 
 // Use the same immutable configuration and launcher as actual Provider calls.
 // Only initialize and tools/list are sent; discovery never calls a tool.
-export function createMcpToolDiscovery({timeoutMs=15000,ttlMs=60000,clock=Date.now}={}) {
+export function createMcpToolDiscovery({timeoutMs=45000,ttlMs=60000,clock=Date.now}={}) {
   const cache=new Map(),pending=new Map();let cacheBytes=0;
   return async function discover(reference,serviceName,{secrets=[],refresh=false}={}) {
     for(const [id,item] of cache)if(item.expires<=clock()){cache.delete(id);cacheBytes-=item.bytes;}

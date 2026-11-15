@@ -4,7 +4,7 @@
 
 local-cli 按原生最终完成与进程退出结算恢复：早期错误在后续明确成功且 exit=0 时不再作为最终失败；非零退出、无成功完成、或后续新失败继续失败。Codex 的错误展示只标记实际错误事件，不污染其后的正文/思考/完成事件；原历史错误不删除。
 
-失败原文、退出码和可用 stderr 经脱敏保留，不替换为泛化提示；重试资格另行判定，只有明确临时服务/连接错误可退避，次数由 Orchestrator/Store 控制。插件完整性错误提供路径和哈希差异且不可自动重试。Provider 继承 PYTHONDONTWRITEBYTECODE=1，避免普通 Python 导入向安装树写缓存；不忽略已有缓存、不自动清理真实安装目录，也不承诺沙箱隔离。
+失败原文、退出码和可用 stderr 经脱敏保留，不替换为泛化提示；重试资格另行判定，只有明确临时服务/连接错误可退避，次数由 Orchestrator/Store 控制。扩展加载不再核对插件、资源和原始源目录的整树 SHA256，目录缓存变化不会阻断当前或冻结引用；清单摘要、执行计划和实际组件读取的路径规则仍校验。Provider 继承 PYTHONDONTWRITEBYTECODE=1，避免普通 Python 导入向安装树写缓存；不忽略已有缓存、不自动清理真实安装目录，也不承诺沙箱隔离。
 
 remotePluginRevision 用 ls-remote 查询真实提交并保留 ref/sha；importPlugins 可传 signal 和内部 transient 选项，自动更新源码用后清理，不保留重复检出。插件 source 记录安装 origin 及依赖 ref/sha/revision；marketplace 内部 pluginNames/includeMcps 限定自动更新只准备当前已装名称且不新装 MCP。公开安装输入仍仅 url/path，未扩权。
 
@@ -18,7 +18,7 @@ promptSnapshot 完整保存脱敏系统指令/本轮输入，控制台如实展�
 
 应用 systemPrompt 与当前 prompt 分离。Claude 使用 Trace 私有追加指令文件并关闭旧系统快照，Codex 使用 developer_instructions/原生 developerInstructions；均续接原生会话。定位参数只含当前输入，不额外注入技能文件清单。要求 CLI 支持这些参数，详见 docs/22。
 
-来源内文件/目录链接仅在安装复制时展开（含同仓库共享资源），安装副本全为真实文件/目录；断链、循环、来源外链接和特殊文件按插件/相对路径明确失败，整批回滚。普通文件名的中文、空格保持不变，展开后仍计入大小/数量限制；执行期完整性校验仍拒绝受管副本中的链接。
+来源内文件/目录链接仅在安装复制时展开（含同仓库共享资源），安装副本全为真实文件/目录；断链、循环、来源外链接和特殊文件按插件/相对路径明确失败，整批回滚。普通文件名的中文、空格保持不变，展开后仍计入大小/数量限制；执行期实际组件读取仍拒绝链接路径，不再遍历整个安装树比较哈希。
 
 - `local-cli.mjs`：Claude Code/Codex/DeepSeek Harness 调用、事件投影、会话恢复和取消。
 - `model-catalog.mjs`：真实模型目录及思考等级能力。
@@ -72,7 +72,7 @@ Marketplace.resolveRole 解析角色选择到兼容Provider引用；resolveRoleR
 
 性能：市场 ID→安装目录索引按批次目录指纹失效，单操作共享解析/校验结果；跨操作摘要缓存仍校验文件元数据和链接，不跳过变化内容哈希。模型目录 30 秒缓存/in-flight 去重，Provider、二进制、环境摘要、账号/配置变动失效，支持显式 refresh。任务/沟通资源池属于编排层，Runtime 仍只适配 Provider，不拥有任务业务状态。
 
-mcp-tools.mjs复用mcp-launcher读取真实工具定义（initialize/tools/list），支持stdio/SSE/HTTP；成功60秒缓存、同配置并发合并、最多4连接、64项/16MiB缓存和每清单2000项/2MiB，15秒总超时，失败不缓存、finally关闭。只脱敏真实值、保留schema中password等参数定义；市场列表不执行发现，详情和CLI按需读取。
+mcp-tools.mjs复用mcp-launcher读取真实工具定义（initialize/tools/list），支持stdio/SSE/HTTP；成功60秒缓存、同配置并发合并、最多4连接、64项/16MiB缓存和每清单2000项/2MiB，45秒总超时，失败不缓存、finally关闭。只脱敏真实值、保留schema中password等参数定义；市场列表不执行发现，详情和CLI按需读取。
 
 工具发现适配器仅首次显式读取工具时动态加载；普通Runtime启动器、元数据列表和安装配置读取不导入工具发现客户端，不额外启动服务。
 

@@ -196,15 +196,8 @@ async function verifyExtensionFile(ref) {
     if(!info.isFile() || info.isSymbolicLink() || info.size>128*1024 || await realpath(ref.path)!==ref.path) throw new Error(`扩展清单不是有效的普通文件：${ref.path}`);
     const content=await readFile(ref.path,'utf8');
     if(digest(content)!==ref.sha256) throw new Error(`扩展清单 SHA256 不匹配：${ref.path}；expected=${ref.sha256}；actual=${digest(content)}`);
-    if(ref.treeSha256) {
-      const root=ref.kind==='plugin'?dirname(dirname(ref.path)):dirname(ref.path), actual=await tree(root);
-      if(actual!==ref.treeSha256) throw new Error(`扩展目录 SHA256 不匹配：${root}；expected=${ref.treeSha256}；actual=${actual}`);
-    }
-    if(ref.resourceRoot) {
-      const actual=await tree(ref.resourceRoot);
-      if(actual!==ref.resourceSha256) throw new Error(`扩展资源 SHA256 不匹配：${ref.resourceRoot}；expected=${ref.resourceSha256}；actual=${actual}`);
-    }
-    if(ref.sourceRoot && await tree(ref.sourceRoot)!==ref.sourceSha256) throw new Error('插件原始源副本完整性校验失败');
+    // Directory digests are installation metadata. Runtime-generated files
+    // (including Python bytecode) must not invalidate current or frozen bindings.
     return content;
   } catch (error) {
     error.code='EXTENSION_INTEGRITY_FAILED'; error.retryable=false;

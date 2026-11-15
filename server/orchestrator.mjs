@@ -22,9 +22,14 @@ export function readNodeResult(value) {
 }
 export function parseEmployeeResponse(value) {
   const raw = String(value ?? "").trim();
+  const withReport = (value, prefix) => {
+    const report = typeof value?.summary === 'string' ? value.summary : '';
+    const summary = prefix && report.trim() && prefix !== report.trim() ? `${prefix}\n\n${report}` : prefix || report;
+    return readNodeResult({ ...value, ...(summary ? {summary} : {}), rawResponse: raw });
+  };
   const candidates = [{ text:raw, prefix:'' }, ...Array.from(raw.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi), match => ({ text:match[1], prefix:raw.slice(match.index + match[0].length).trim() ? '' : raw.slice(0,match.index).trim() }))];
   for (const candidate of candidates) {
-    try { return readNodeResult({ ...JSON.parse(candidate.text), ...(candidate.prefix ? {summary:candidate.prefix} : {}), rawResponse: raw }); }
+    try { return withReport(JSON.parse(candidate.text), candidate.prefix); }
     catch { /* Ordinary text remains a valid employee handoff. */ }
   }
   // CLI text may put one coordination envelope after a natural-language
@@ -49,7 +54,7 @@ export function parseEmployeeResponse(value) {
     if (!raw.slice(item.end).trim() && /(?:^|\n)\s*$/.test(raw.slice(0, item.start)) &&
         ["managerDecision", "consultation", "deliveryReview", "handoff"].some(key => item.value[key] && typeof item.value[key] === "object")) {
       const body = raw.slice(0,item.start).trim();
-      return readNodeResult({ ...item.value, ...(body ? {summary:body} : {}), rawResponse: raw });
+      return withReport(item.value, body);
     }
   }
   return readNodeResult({ summary: raw });

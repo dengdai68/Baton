@@ -140,7 +140,7 @@ function communicationReaderFixture(t, options = {}) {
   const pending = [], intervals = new Set();
   t.mock.method(globalThis, "setInterval", (callback) => { intervals.add(callback); return callback; });
   t.mock.method(globalThis, "clearInterval", (callback) => intervals.delete(callback));
-  const node = () => ({ innerHTML: "", textContent: "", hidden: false, disabled: false, value: "", dataset: {}, classList: { toggle() {}, remove() {} }, setAttribute() {}, addEventListener() {}, focus() {}, scrollTop: 0, scrollHeight: 100, clientHeight: 100, selectionStart: 0, querySelectorAll: () => [] });
+  const node = () => ({ innerHTML: "", textContent: "", hidden: false, disabled: false, value: "", dataset: {}, classList: { toggle() {}, remove() {} }, setAttribute() {}, addEventListener() {}, focus() {}, scrollTop: 0, scrollHeight: 100, clientHeight: 100, selectionStart: 0, getBoundingClientRect:()=>({top:0}), ownerDocument:{getSelection:()=>null,defaultView:{requestAnimationFrame:callback=>{callback();return 0;},cancelAnimationFrame(){}}}, querySelectorAll: () => [] });
   const nodes = new Map();
   const query = (selector) => { if (!nodes.has(selector)) nodes.set(selector, node()); return nodes.get(selector); };
   Object.defineProperty(query(".communication-messages"), "scrollHeight", { get() { return (this.innerHTML.match(/<article /g) || []).length * 100; } });

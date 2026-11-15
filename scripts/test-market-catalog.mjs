@@ -75,7 +75,7 @@ try{
  const detailPath=`**/api/runtime/mcp-marketplace/${mcp.id}`;let failedDetail=false;
  await page.route(detailPath,route=>{if(route.request().method()==='GET'&&!failedDetail){failedDetail=true;return route.fulfill({status:503,json:{error:'隔离详情读取失败'}});}return route.continue();});
  await page.locator(`[data-extension-detail="${mcp.id}"]`).first().click();await page.locator('[data-extension-detail-body][role=alert]').filter({hasText:'隔离详情读取失败'}).waitFor();
- const editHeader=page.locator('[data-edit-mcp]');assert.equal(await editHeader.isEnabled(),true);await editHeader.focus();await page.keyboard.press('Enter');await page.locator('#mcp-market-form').waitFor();
+ const editHeader=page.locator('[data-edit-mcp]');assert.equal(await editHeader.isEnabled(),true);assert.equal(await editHeader.evaluate(button=>getComputedStyle(button.closest('.directory-detail-header')).webkitAppRegion),'no-drag');await editHeader.focus();await page.keyboard.press('Enter');await page.locator('#mcp-market-form').waitFor();
  assert.equal(await page.locator('#mcp-market-form [name=name]').inputValue(),mcp.name);assert.ok((await page.locator('#mcp-market-form [name=content]').inputValue()).includes('mcpServers'));
  await page.locator('#mcp-market-form [data-close-modal]').click();await page.unroute(detailPath);
  await page.locator('[data-market-filter=attention]').click();const failedCard=page.locator(`[data-extension-id="${mcp.id}"]`);await failedCard.locator('.extension-error').waitFor();

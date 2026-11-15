@@ -1353,7 +1353,7 @@ button { cursor:pointer; }
 .communication-chat,.communication-console { display:flex; flex-direction:column; min-width:0; min-height:0; }
 .communication-console { border-left:1px solid var(--border); background:var(--bg-canvas); }
 .communication-console-toolbar { flex:none; padding:10px 12px; border-bottom:1px solid var(--border); }
-.communication-console-older { flex:none; align-self:center; margin:8px; font-size:11px; }
+.communication-console-older { flex:none; align-self:center; margin:8px auto; font-size:11px; }
 .communication-console-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }
 .communication-console-actions button { font-size:11px; }
 .communication-console-error { margin:0; padding:8px 12px; color:var(--danger-ink); font-size:12px; }
@@ -3234,7 +3234,7 @@ html:root, html:root[data-theme] {
   .detail-drawer.role-config-modal { width:min(560px,calc(100vw - 16px)); }
   .detail-drawer:is(.employee-detail-modal,.role-config-modal,.extension-detail-modal) > .modal-close { display:none; }
   .detail-drawer:is(.employee-detail-modal,.role-config-modal,.extension-detail-modal) #modal-content { display:flex; flex-direction:column; min-height:0; overflow:hidden; }
-  .directory-detail-header { display:flex; align-items:center; flex:none; gap:8px; min-height:52px; padding:0 16px 0 20px; border-bottom:1px solid var(--border-subtle); }
+  .directory-detail-header { display:flex; align-items:center; flex:none; gap:8px; min-height:52px; padding:0 16px 0 20px; border-bottom:1px solid var(--border-subtle); -webkit-app-region:no-drag; }
   .directory-detail-header h2 { flex:1; min-width:0; margin:0; padding:0; font-size:var(--fs-title-sm); font-weight:600; line-height:22px; }
   .directory-detail-header > button[data-close-modal] { width:var(--control-h-sm); min-height:var(--control-h-sm); padding:0; font-size:20px; }
   .directory-detail-body { flex:1; min-height:0; overflow:auto; padding:20px; overscroll-behavior:contain; }
@@ -4205,3 +4205,13 @@ html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.co
 html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown :not(pre) > code { color:var(--sender-accent); }
 html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown blockquote { border-left-color:var(--sender-accent); background:var(--sender-soft); }
 html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.communication-message)[data-sender-color] .communication-markdown .member-mention { color:var(--sender-accent); background:var(--sender-soft); }
+
+/* Console pagination belongs to the timeline; browser anchoring must not fight
+   the explicit reader when delayed content grows or live rows are appended. */
+.console-history-controls { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:8px; padding:8px 0; }
+#trace-stream,.communication-trace-stream { overflow-anchor:none; }
+
+.workflow-advanced-fields { margin-top:16px; }
+.workflow-advanced-fields > summary { cursor:pointer; color:var(--text-secondary); margin-bottom:12px; }
+.workflow-advanced-fields > label { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+html:root #modal-backdrop .workflow-editor-modal .workflow-advanced-fields input[type=checkbox] { width:16px; height:16px; min-height:16px; padding:0; }

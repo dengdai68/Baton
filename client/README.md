@@ -1,5 +1,7 @@
 # 共享展示投影
 
+mcp-tool-page.mjs 是桌面与 CLI 共用的纯 MCP 工具搜索/20条分页投影，不发请求、不调用工具；schema 保留完整返回。
+
 `collaborationRecords` 保留 Message 的真实 `senderId`，供 renderer 按冻结成员身份选择头像和同色 Markdown 强调；CLI 文本/JSON 保留该发送者引用，不按姓名或 Trace 反推。该投影将任务 Message 的可选 `clientRequestId` 原样透出，供 renderer 和 CLI 精确确认逻辑发送；不按正文或时间归并消息，内部请求摘要/回执不进入该展示投影。
 
 workspaceAgents 使用服务端 deletedAgentIds 过滤已删除员工（经理以 sourceAgentId 识别）；仅过滤成员列表，不改写 Run、Trace、协作正文与历史事实。

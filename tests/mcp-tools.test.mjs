@@ -54,3 +54,19 @@ test('MCP discovery times out and closes hanging transports; invalid content rej
  const discover=createMcpToolDiscovery({timeoutMs:100});await assert.rejects(discover(ref,'test'),/超时/);await assert.rejects(discover(ref,'test'),/超时/);
  await writeFile(ref.path,'changed');await assert.rejects(createMcpToolDiscovery({timeoutMs:3000})(ref,'test'),/无法读取/);
 });
+
+test('default MCP discovery allows a slow service to initialize beyond fifteen seconds',async t=>{
+ const root=await fixture(t);let called=0;
+ const server=createServer(async(req,res)=>{
+  if(req.method!=='POST'){res.writeHead(405).end();return;}
+  let body='';for await(const part of req)body+=part;const message=JSON.parse(body);let result;
+  if(message.method==='initialize'){
+   await new Promise(resolve=>setTimeout(resolve,16000));
+   result={protocolVersion:'2025-03-26',capabilities:{tools:{}},serverInfo:{name:'slow-start',version:'1.0.0'}};
+  }else if(message.method==='tools/list')result={tools:[tool('slow_tool')]};
+  else if(message.method==='tools/call')called++;
+  if(result)res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({jsonrpc:'2.0',id:message.id,result}));else res.writeHead(202).end();
+ });server.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>{server.closeAllConnections();server.close();});
+ const ref=await reference(root,{type:'http',url:`http://127.0.0.1:${server.address().port}/mcp`});
+ const found=await createMcpToolDiscovery()(ref,'test');assert.equal(found.tools[0].name,'slow_tool');assert.equal(called,0);
+});

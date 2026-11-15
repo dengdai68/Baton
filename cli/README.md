@@ -1,5 +1,11 @@
 # CLI
 
+任务与长期沟通统一调用桌面认证 HTTP；cli/workspace.mjs 负责沟通命令、控制台持续读取和文件命令，client.mjs 流式下载不覆盖目标文件。现有配置 CRUD 保留，恢复资格、会话和路径规则由服务判定。完整命令矩阵见 docs/21；验证 tests/cli-workspace.test.mjs 与 scripts/test-app-cli-parity.mjs。
+
+任务协作正文与 App 共用保存结果：原生回复含正文和唯一尾部协调 JSON 时，前文与其中非空、不同的 summary 按原顺序保留，相同文本只显示一次。既有消息不重写；完整原始回复仍可从对应控制台读取。命令、输入 schema、输出字段及任务状态语义不变。
+
+扩展目录内容变化不再触发整树 SHA256 拒绝；插件详情、员工绑定和任务启动与 App 共用该规则，既有冻结引用也生效。清单文件摘要、执行计划和路径读取规则仍校验；命令参数、输入 schema 与输出字段不变。
+
 任务 `message/reply` 支持 JSON `clientRequestId` 或 `--client-request-id`；同 Run 原命令重试返回原消息和 `replayed=true`，变更输入明确冲突。精确回复重试交 Store 判定已保存事实。带本机附件的重试按协作分页核对同请求原附件的名称/大小/摘要并复用 IDs，不下载完整工作区或重新上传已绑定文件。帮助/schema/文本和 JSON 保留该引用，详见 docs/21。
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
@@ -8,19 +14,19 @@
 
 `tasks list --workflow ID_OR_NAME` 支持精确 ID 或唯一的当前/任务冻结名称；歧义须用 ID，不存在明确报错。与 search/status/archived 组合后分页，摘要包含 workflow 的 ID 与任务冻结名称，不返回完整工作流配置。
 
-任务失败人工恢复在客户端继续原失败员工的投递与会话；CLI 无恢复命令，不扩展操作权限。progress 保留累计 attempts/脱敏错误，协作查询保留失败及恢复事件。
+任务失败人工恢复在客户端继续原失败员工的投递与会话；CLI 提供同一恢复接口。progress 保留累计 attempts/脱敏错误，协作查询保留失败及恢复事件。
 
 任务从团队与员工 ID 合并成独立成员集合，必须显式从所选员工中指定一位本次经理；团队不拥有任务或群聊。领域规则见 [领域模型](../docs/03-domain-model.md)，CLI 输入输出见 [CLI 指南](../docs/21-configuration-cli.md)。
 
-任务创建可传 teamIds 进行批量选人，持久化使用 memberAgentIds；移除 --team。团队 managerAgentId 废弃，成员可空；员工删除保留持久标记及历史。详情只输出成员 ID/名称引用，不包含员工提示词/扩展配置。长期群聊仍不属于 CLI 命令覆盖范围。
+任务创建可传 teamIds 进行批量选人，持久化使用 memberAgentIds；移除 --team。团队 managerAgentId 废弃，成员可空；员工删除保留持久标记及历史。详情只输出成员 ID/名称引用，不包含员工提示词/扩展配置。长期私聊和群聊由 communications 命令组覆盖。
 
 协作读模型仅返回员工、经理、人类之间的沟通消息；关联投递与执行元数据保留，系统事件不再单独生成记录行。sourceMessageId 关联同 Run 消息，不按正文或时间猜测历史。startMessageId 对应 Trace.inputMessageId，用于定位本轮提示词；完整执行事实和文件仍由控制台与 artifacts 查询。
 
 本仓库仅提供客户端。CLI 配置/任务/auth 命令和参数不变，连接私有 endpoint，不提供服务器部署目标。
 
-Runtime 外部故障立即保留脱敏原始错误并标记任务失败，禁止新消息；修复后在客户端重试原员工投递和会话，CLI 不新增恢复权限。只有确认的原生会话丢失允许重建一次；经理非终止安排仍尊重已有投递，验收后的协调跟进结算只保留审计事件。
+Runtime 外部故障立即保留脱敏原始错误并标记任务失败，禁止新消息；修复后用客户端或 CLI 的恢复命令重试原员工投递和会话。只有确认的原生会话丢失允许重建一次；经理非终止安排仍尊重已有投递，验收后的协调跟进结算只保留审计事件。
 
-工作流 artifactPaths 是规范工作目录相对文件/目录建议，可省略为空；任意业务根均可使用，不再强制docs。create/update/schema/帮助/文本标签同步；任务artifacts仍按实际不可变快照查询，大文件当前目录浏览/下载属于客户端，不新增CLI越权入口。
+工作流 artifactPaths 是规范工作目录相对文件/目录建议，可省略为空；任意业务根均可使用，不再强制docs。create/update/schema/帮助/文本标签同步；任务artifacts仍按实际不可变快照查询，当前目录浏览/下载通过同一认证 HTTP 的 files/file/download 命令完成。
 
 plugins updates查询手动状态，check-updates等价于插件页“更新全部”：异步发起所有已安装Git来源更新，随后updates读取最终回执；重复在途请求合并。帮助/schema/输出与受认证HTTP同步，移除auto-update与自动周期配置。回执只含插件ID/原ID/名称，不倾倒其他资源；命令不创建任务或确认完成。Git网络由客户端服务处理。
 
@@ -69,9 +75,9 @@ tasks message 的 recipientAgentId 可省略，默认发给当前 Run 的项目�
 
 插件 import 的 warnings 明确列出跳过组件；文本 ⚠️、JSON 结构化结果和插件 get 共享相对路径/原因。路径或完整性失败仍拒绝批次。
 
-员工 kind 只接受 business/manager，schema/help 移除 repository 与 developer；仓库说明放 systemPrompt。当前员工 get 不展示废弃仓库字段。普通沟通不属于 CLI 配置/任务命令，私聊/群聊输出协议没有新增 CLI 能力。
+员工 kind 只接受 business/manager，schema/help 移除 repository 与 developer；仓库说明放 systemPrompt。当前员工 get 不展示废弃仓库字段。普通沟通使用独立 communications 命令组，与 Task 消息分开。
 
-tasks collaboration 文本/JSON 仅返回角色沟通，包含 startMessageId；tasks message 指定员工直接送达，错误任务拒绝新消息。tasks progress 对 failed 优先提示在客户端重试原员工。帮助/schema 同步以上含义；本次不增加恢复命令，最终完成仍由客户端人类确认。
+tasks collaboration 文本/JSON 仅返回角色沟通，包含 startMessageId；tasks message 指定员工直接送达，错误任务拒绝新消息。tasks progress 对 failed 提示恢复原员工投递。帮助/schema 同步以上含义；恢复命令复用原接口，最终完成仍由客户端人类确认。
 
 tasks progress 移除 openDefects；问题报告与处理反馈统一使用 tasks collaboration 查询、tasks message/reply 交接。帮助/schema 同步此读模型变化，不增加命令或确认权限。
 
@@ -85,7 +91,7 @@ tasks/automations create 的 workflowTemplateId 可省略、null 或空字符串
 
 自动化任务标题统一为 `自动化名称#yyyy-MM-dd HH:mm:ss`（当地时区、24 小时制；定时取计划时刻，手动取触发时刻）。触发列表首列展示真实任务标题；HTTP/CLI 的触发回执、列表和 latestTrigger 返回 taskTitle，未生成任务为 null；不重写历史任务名称。
 
-并行任务不增加创建参数或开关：App/CLI 通过同一 HTTP 创建与启动，经理按任务指令批量分工。`tasks progress` 的 activeTraces/pendingDispatches 展示全部成员执行与队列；错误后仍有成员收尾时 nextAction 明示等待收尾后重试。`tasks terminate --yes` 停止全部成员，包含 failed 后仍在执行的成员；最终确认与重试仍在客户端。
+并行任务不增加创建参数或开关：App/CLI 通过同一 HTTP 创建与启动，经理按任务指令批量分工。`tasks progress` 的 activeTraces/pendingDispatches 展示全部成员执行与队列；错误后仍有成员收尾时 nextAction 明示等待收尾后重试。`tasks terminate --yes` 停止全部成员，包含 failed 后仍在执行的成员；最终确认在客户端，失败重试也可通过 CLI 完成。
 
 任务草稿：tasks create 默认只保存完整任务（backlog），tasks start ID 显式执行，create --start 对齐 App「保存并开始」。列表 --status backlog、详情和删除沿用既有命令，不引入第二套 draft 状态或未完成字段协议。
 
@@ -109,7 +115,7 @@ workflows create/update 支持最简节点title/description（id省略生成node
 执行画布工作流：`baton tasks create --workflow "工作流名称或ID" --file task.json --start`。文件提供title、objective、memberAgentIds/teamIds、可选acceptanceCriteria；省略--start只存草稿。工作流名称必须唯一；和workflowTemplateId同时指定时需为相同ID，冲突不创建任务。节点、分支和连线提示词冻结为workflow.md，由经理读取；执行/协作与App一致，完成在客户端确认。
 
 任务经理现由tasks create/automations create文件中的必填managerAgentId从所选员工中指定，所有员工都可担任；员工kind保留但不影响身份。自动化部分更新可单独切换经理，不能移除经理而不重选。原Task/Run和成员会话保持冻结。
-mcps tools ID [--refresh]查询真实工具名称、说明、inputSchema/outputSchema及total/checkedAt，支持stdio/SSE/HTTP，仅列工具不调用；15秒超时、60秒成功缓存，失败不缓存。get仍只查询脱敏安装详情。
+mcps tools ID [--refresh]查询真实工具名称、说明、inputSchema/outputSchema及total/checkedAt，支持stdio/SSE/HTTP，仅列工具不调用；45秒超时、60秒成功缓存，失败不缓存。get仍只查询脱敏安装详情。
 
 mcps tools支持--search名称/说明筛选后分页，默认每页20条，--page N与--all互斥；--all返回全部匹配工具。输出tools、匹配total、服务availableTotal、page/pageSize/totalPages/hasMore及checkedAt；与App详情搜索和20条分页相同，查询只读取一次工具定义。
 

@@ -54,7 +54,7 @@ HTTP/CLI 拒绝 `skillIds`、员工 `mcpJson`、连接字段、手工路径及�
 
 ## Runtime 加载与隔离
 
-安装允许来源仓库/本机市场目录内部的文件与目录符号链接（包括同仓库共享资源），将目标内容按链接原路径复制成普通文件/目录，保留字节与可执行标记；中文、空格等合法文件名保持不变。来源边界为本次传入的目录或各条目所属的 Git 仓库，不是任意上级目录。断链、循环链接、来源外目标及 socket/FIFO/设备等特殊文件明确报告插件名和相对路径，整批不发布，不静默漏装。展开后的文件仍计入原有大小/数量限制。安装副本和受管配置目录仍不允许符号链接，执行前摘要/完整性校验不放宽；不执行来源中的脚本或 Hook。既有安装无需迁移，失败的来源重新安装即可。
+安装允许来源仓库/本机市场目录内部的文件与目录符号链接（包括同仓库共享资源），将目标内容按链接原路径复制成普通文件/目录，保留字节与可执行标记；中文、空格等合法文件名保持不变。来源边界为本次传入的目录或各条目所属的 Git 仓库，不是任意上级目录。断链、循环链接、来源外目标及 socket/FIFO/设备等特殊文件明确报告插件名和相对路径，整批不发布，不静默漏装。展开后的文件仍计入原有大小/数量限制。安装副本和受管配置目录仍不允许符号链接；加载时保留清单摘要与执行计划校验，移除插件、资源及原始源目录的整树 SHA256 比较，实际组件读取继续校验路径；不执行来源中的脚本或 Hook。既有安装无需迁移，失败的来源重新安装即可。
 
 安装时分别解析 Claude 与 Codex 清单，不把优先发现的清单组件覆盖到另一个 Runtime。Codex 根 manifest 的 `extensions.com.openai` 或 `.codex-plugin` 配置用于 Codex 投影；显式 `hooks: {}` 关闭默认 Hook，不继承 Claude 的启动 Hook。组件并集只用于详情展示，实际 Skill/Subagent/Hook 按员工所选 Runtime 投影并随任务冻结。切换 Runtime 不自动删除原选择；不兼容时 UI 和服务端均拒绝保存，须移除或更换插件。
 
@@ -126,7 +126,7 @@ Runtime 展示名称为Claude Code、Codex、DeepSeek Harness、Cursor、Gemini 
 
 扩展详情通过安装批次目录指纹维护版本 ID→路径索引；绑定/执行准备在单次操作内共享解析与完整性检查，后续操作按文件指纹重新判断。元数据或内容发生变化仍拒绝使用冻结版本，不跳过篡改检测。Runtime 模型目录使用 30 秒短缓存与在途请求合并，账号配置、环境和可执行文件变更使缓存失效，App/CLI 显式刷新可绕过已完成缓存。完整资源边界见 [docs/28](28-performance-architecture.md)。
 
-MCP工具发现：POST /api/runtime/mcp-marketplace/:id/tools，空对象或{refresh?:boolean}；只允许当前已安装项，读取不可变配置，使用与真实调用相同的mcp-launcher进行initialize/tools/list，支持stdio/SSE/HTTP，不调用业务工具。返回{tools:[{name,title?,description,inputSchema,outputSchema?,annotations?}],total,checkedAt}，名称/参数结构保留，真实凭据值脱敏。15秒总超时，成功缓存60秒且同配置请求合并，刷新绕过缓存，失败不缓存；进程与连接总会关闭，最多4个并发发现，每项最多2000工具/2MiB并限制分页。列表页仍只查询配置元数据缓存，不连接全部MCP。详情在静态展示的连接配置下独立加载并完整显示工具名称和说明，保留刷新；不显示搜索、分页和参数定义，失败不伪装成空列表。HTTP/CLI保留完整参数结构与既有查询能力，CLI mcps tools ID --all [--refresh]读取全部工具。
+MCP工具发现：POST /api/runtime/mcp-marketplace/:id/tools，空对象或{refresh?:boolean}；只允许当前已安装项，读取不可变配置，使用与真实调用相同的mcp-launcher进行initialize/tools/list，支持stdio/SSE/HTTP，不调用业务工具。返回{tools:[{name,title?,description,inputSchema,outputSchema?,annotations?}],total,checkedAt}，名称/参数结构保留，真实凭据值脱敏。45秒总超时，成功缓存60秒且同配置请求合并，刷新绕过缓存，失败不缓存；进程与连接总会关闭，最多4个并发发现，每项最多2000工具/2MiB并限制分页。列表页仍只查询配置元数据缓存，不连接全部MCP。详情在静态展示的连接配置下独立加载并完整显示工具名称和说明，保留刷新；不显示搜索、分页和参数定义，失败不伪装成空列表。HTTP/CLI保留完整参数结构与既有查询能力，CLI mcps tools ID --all [--refresh]读取全部工具。
 
 mcps tools支持--search名称/说明筛选后分页，默认每页20条，--page N与--all互斥；--all返回全部匹配工具。输出tools、匹配total、服务availableTotal、page/pageSize/totalPages/hasMore及checkedAt；与App详情搜索和20条分页相同，查询只读取一次工具定义。
 

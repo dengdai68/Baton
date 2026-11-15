@@ -1,3 +1,4 @@
+import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
 import { createToast } from './toast.mjs';
 import {runtimeLabel,RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import { workflowConnections } from '/client/workflow-description.mjs';
@@ -1530,8 +1531,7 @@ function renderWorkspace() {
     rememberDiffReading(view);
     for (const details of box.querySelectorAll("[data-workspace-disclosure]")) view.disclosures[details.dataset.workspaceDisclosure] = details.open;
     if (oldStream?.clientHeight) view.consoleViews.set(box.dataset.agentId, {
-      top: oldStream.scrollTop,
-      following: oldStream.scrollHeight - oldStream.scrollTop - oldStream.clientHeight < 48,
+      ...captureConsoleReading(oldStream),
       open: [...oldStream.querySelectorAll("details[open][data-console-key]")].map((item) => item.dataset.consoleKey),
       closed: [...oldStream.querySelectorAll("details[data-default-open]:not([open])")].map((item) => item.dataset.consoleKey),
     });
@@ -1623,12 +1623,12 @@ function renderWorkspace() {
   const consoleView = view.consoleViews.get(selected?.id);
   if (consoleView) {
     for (const details of stream.querySelectorAll("details[data-console-key]")) details.open = consoleView.open.includes(details.dataset.consoleKey) || (details.dataset.defaultOpen !== undefined && !(consoleView.closed || []).includes(details.dataset.consoleKey));
-    stream.scrollTop = consoleView.following ? stream.scrollHeight : consoleView.top;
+    restoreConsoleReading(stream, consoleView);
   }
   const followConsole = !consoleView || consoleView.following || view.jumpLatest;
   view.jumpLatest = false;
   requestAnimationFrame(() => {
-    if (stream.isConnected && tab === "console" && followConsole) stream.scrollTop = stream.scrollHeight;
+    if (stream.isConnected && tab === "console" && followConsole) followConsoleLatest(stream);
   });
   if (draftFocused && $("#instruction-text")) {
     $("#instruction-text").focus({ preventScroll: true });
@@ -1665,20 +1665,21 @@ function renderConsolePage({ prepend = false } = {}) {
   const stream = $("#trace-stream"), agent = workspaceAgents(state.workspace, state.agents, { includeDeleted: true }).find((item) => item.id === state.selectedAgentId);
   if (!stream || !agent) return;
   const page = consolePage(state.selectedRunId, agent.id);
-  const top = stream.scrollTop, height = stream.scrollHeight, following = height - top - stream.clientHeight < 48;
-  const anchor = prepend ? [...stream.querySelectorAll('[data-console-row]')].find(node => node.getBoundingClientRect().bottom > stream.getBoundingClientRect().top) : null;
-  const anchorTop = anchor?.getBoundingClientRect().top;
+  if (stream.dataset.readingAgent !== agent.id) { followConsoleLatest(stream); stream.dataset.readingAgent = agent.id; }
+  onConsoleLatest(stream, () => { if (page.browsingHistory && !page.traceId) void loadConsolePage(state.selectedRunId, agent.id, { reset: true, traceId: null }); });
+  const reading = captureConsoleReading(stream);
   const open = new Set([...stream.querySelectorAll("details[open][data-console-key]")].map((item) => item.dataset.consoleKey));
   const closed = new Set([...stream.querySelectorAll("details[data-default-open]:not([open])")].map((item) => item.dataset.consoleKey));
   renderChatStream(page.events, agent, { traceId: page.traceId, hasMore: page.hasMore });
   const controls = document.createElement("div"); controls.className = "console-history-controls";
-  controls.innerHTML = `${page.hasMore ? '<button class="small-button" data-console-older>加载更早记录</button>' : ""}${page.traceId ? '<button class="small-button" data-console-reset>查看该角色全部执行</button>' : ""}${page.loading ? '<span role="status">正在加载记录…</span>' : ""}${page.error ? `<span role="alert">${esc(page.error)}</span><button class="small-button" data-console-retry>重试</button>` : ""}`;
+  controls.innerHTML = `${page.hasMore ? '<button class="small-button" data-console-older>加载更早记录</button>' : ""}${page.traceId ? '<button class="small-button" data-console-reset>查看该角色全部执行</button>' : ""}${page.loading && !page.silent ? '<span role="status">正在加载记录…</span>' : ""}${page.error ? `<span role="alert">${esc(page.error)}</span><button class="small-button" data-console-retry>重试</button>` : ""}`;
   for (const button of controls.querySelectorAll("button")) button.disabled = page.loading;
   const oldControls = stream.querySelector(".console-history-controls");
   if (!oldControls) stream.prepend(controls);
   else if (oldControls.outerHTML !== controls.outerHTML) oldControls.replaceWith(controls);
   for (const details of stream.querySelectorAll("details[data-console-key]")) details.open = open.has(details.dataset.consoleKey) || (details.dataset.defaultOpen !== undefined && !closed.has(details.dataset.consoleKey));
-  stream.scrollTop = prepend && anchor?.isConnected ? stream.scrollTop + anchor.getBoundingClientRect().top - anchorTop : prepend ? 0 : following ? stream.scrollHeight : top;
+  restoreConsoleReading(stream, reading, { prepend, latest: page.forceLatest });
+  page.forceLatest = false;
 }
 
 async function openCollaborationTurn(traceId, startMessageId) {
@@ -1706,26 +1707,32 @@ async function loadConsolePage(runId, agentId, { older = false, reset = false, t
   if(state.currentView!=='workspace' || state.selectedRunId!==runId || workspaceView(runId).tab!=='console')return;
   const page = consolePage(runId, agentId);
   if (page.loading && !reset) return;
-  if (reset) { page.events = []; page.loaded = false; page.hasMore = false; page.nextBefore = null; page.browsingHistory = false; }
-  if (older) page.browsingHistory = true;
+  if (reset) { page.loaded = false; page.forceLatest = !traceId; page.browsingHistory = false; page.liveEvents = null; }
+  if (older) { page.liveEvents ||= [...page.events]; page.browsingHistory = true; }
   if (traceId !== undefined) page.traceId = traceId;
   const request = ++page.request;
   const arriving = new Map(); page.loadingEvents = arriving;
   const query = new URLSearchParams({ agentId, limit: "50" });
   if (older && page.nextBefore) query.set("before", page.nextBefore);
   if (page.traceId) query.set("traceId", page.traceId);
+  page.silent = page.loaded && !older && !reset;
+  page.loadingMode = reset ? 'reset' : older ? 'older' : 'tail';
   page.loading = true; page.error = null;
   if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage();
   try {
-    const result = await api(`/api/runs/${encodeURIComponent(runId)}/console?${query}`);
+    const fetchPage = before => { const params = new URLSearchParams(query); if (before) params.set('before', before); return api(`/api/runs/${encodeURIComponent(runId)}/console?${params}`); };
+    const result = older ? await fetchPage() : await readConsoleTail(reset ? [] : page.liveEvents || page.events, fetchPage);
     if (request !== page.request) return;
     if(state.currentView==='workspace' && state.workspace?.run.id===runId && state.selectedRunId===runId)state.workspace.traces=[...new Map([...state.workspace.traces,...(result.traces||[])].map(item=>[item.id,item])).values()].slice(-300);
-    const received = [...new Map([...result.events, ...arriving.values()].map(event => [event.id, event])).values()];
-    page.events = consoleEventWindow(older ? page.events : [], received, { older }).events;
-    page.loaded = true; page.hasMore = result.hasMore; page.nextBefore = result.nextBefore;
-    if (!older && received.length > page.events.length) { page.hasMore = true; page.nextBefore = page.events[0].id; }
+    const received = [...new Map([...result.events, ...(older ? [] : arriving.values())].map(event => [event.id, event])).values()];
+    if (!older && page.browsingHistory && !page.traceId) { page.liveEvents = consoleEventWindow(page.liveEvents || [], received).events; return; }
+    const window = consoleEventWindow(reset ? [] : page.events, received, { older });
+    page.events = window.events;
+    if (!page.loaded || older || reset || window.reset) { page.hasMore = result.hasMore; page.nextBefore = result.nextBefore; }
+    if (window.trimmedBefore) { page.hasMore = true; page.nextBefore = page.events[0].id; }
+    page.loaded = true;
   } catch (error) { if (request === page.request) page.error = error.message; }
-  finally { if (request === page.request) { page.loading = false; page.loadingEvents = null; if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage({ prepend: older }); } }
+  finally { if (request === page.request) { page.loading = false; page.loadingMode = null; page.loadingEvents = null; if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage({ prepend: older }); } }
 }
 
 function isCurrentRuntimeAudit(event) {
@@ -1853,7 +1860,6 @@ function renderChatEvent(event, trace, agent) {
 /* 初次进入跟随最新；后续由 Run 的本地阅读状态决定是否跟随。 */
 function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
   if (stream.dataset.consoleIdentity !== identity) { stream.replaceChildren(); stream.dataset.consoleIdentity = identity; }
-  const following = stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
   // An empty console is a plain centered state, not an execution card.
   if (!rows.length) {
     if (stream.dataset.consoleEmpty !== "1") {
@@ -1929,7 +1935,6 @@ function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
   }
   for (const node of existing.values()) node.remove();
   for (const node of existingGroups.values()) node.remove();
-  if (following) stream.scrollTop = stream.scrollHeight;
 }
 
 function renderChatStream(events, agent, { traceId = null, hasMore = false, stream = $("#trace-stream"), runId = state.selectedRunId, traces = null } = {}) {
@@ -2077,7 +2082,7 @@ async function hydrateConsoleContent(nodes = []) {
       const result = await consoleContentCache.get(key);
       if (!node.isConnected) continue;
       const stream = node.closest('#trace-stream, [data-communication-stream]');
-      const following = stream && stream.scrollHeight - stream.scrollTop - stream.clientHeight < 48;
+      const reading = stream && captureConsoleReading(stream);
       const toolDetails = node.closest("[data-tool-name]");
       const toolName = toolDetails?.dataset.toolName || "";
       if (node.dataset.consoleSummary) {
@@ -2122,7 +2127,7 @@ async function hydrateConsoleContent(nodes = []) {
           else { seen.add(input); section.hidden = false; }
         }
       }
-      if (following) stream.scrollTop = stream.scrollHeight;
+      if (reading) restoreConsoleReading(stream, reading);
     }
   }
   await Promise.all(Array.from({ length: 4 }, worker));
@@ -2645,8 +2650,7 @@ function connectEvents(runId) {
     setLiveIndicator(true);
     if (connected) {
       scheduleWorkspaceRefresh(runId);
-      for (const [key, page] of consolePages) if (key.startsWith(`${runId}:`)) { page.request++; page.loading = false; page.loaded = false; page.events = []; page.error = null; }
-      if (workspaceView(runId).tab === "console" && state.selectedAgentId) loadConsolePage(runId, state.selectedAgentId, { reset: true });
+      if (workspaceView(runId).tab === "console" && state.selectedAgentId) loadConsolePage(runId, state.selectedAgentId);
     }
     connected = true;
   });
@@ -2656,14 +2660,17 @@ function connectEvents(runId) {
     const event = JSON.parse(message.data);
     const page = consolePages.get(`${runId}:${event.actor?.id}`);
     if (page && (page.loaded || page.loading) && (!page.traceId || page.traceId === event.data?.traceId) && !page.events.some((item) => item.id === event.id)) {
-      const readingStream = event.actor?.id === state.selectedAgentId ? $("#trace-stream") : null;
-      if (readingStream && (readingStream.scrollHeight - readingStream.scrollTop - readingStream.clientHeight >= 48 || (!getSelection()?.isCollapsed && readingStream.contains(getSelection()?.anchorNode)))) page.browsingHistory = true;
-      if(page.browsingHistory){if(event.type!=='runtime.event')scheduleWorkspaceRefresh(runId);return;}
       if (page.loadingEvents) { page.loadingEvents.set(event.id, event); if (page.loadingEvents.size > 200) page.loadingEvents.delete(page.loadingEvents.keys().next().value); }
-      page.events.push(event);
-      // Keep the automatic live window bounded; older events remain available through pagination.
-      if (!page.browsingHistory && page.events.length > 200) { page.events = page.events.slice(-200); page.nextBefore = page.events[0].id; page.hasMore = true; }
-      if (event.actor?.id === state.selectedAgentId && workspaceView(runId).tab === "console" && !consoleRenderTimer) consoleRenderTimer = setTimeout(() => { consoleRenderTimer = null; renderConsolePage(); }, 100);
+      // A latest-page replacement buffers concurrent SSE until its response;
+      // never attach a new tail to a stale historical window across a gap.
+      if (page.loadingMode !== 'reset') {
+        if (page.browsingHistory && !page.traceId) {
+          page.liveEvents = [...new Map([...(page.liveEvents || page.events), event].map(item => [item.id, item])).values()].slice(-200);
+        } else page.events.push(event);
+        // Keep the automatic live window bounded; older events remain available through pagination.
+        if (!page.browsingHistory && page.events.length > 200) { page.events = page.events.slice(-200); page.nextBefore = page.events[0].id; page.hasMore = true; }
+        if (event.actor?.id === state.selectedAgentId && workspaceView(runId).tab === "console" && !consoleRenderTimer) consoleRenderTimer = setTimeout(() => { consoleRenderTimer = null; renderConsolePage(); }, 100);
+      }
     }
     if (event.type !== "runtime.event" || event.data?.subtype === "init") scheduleWorkspaceRefresh(runId);
   });
@@ -3468,7 +3475,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-answer-message]"))) { workspaceView().replyToMessageId = target.dataset.answerMessage;workspaceView().sendRequest=null; renderWorkspace(); $("#instruction-text").focus({ preventScroll: true }); return; }
   if ((target = el("[data-open-collaboration-trace]"))) { void openCollaborationTurn(target.dataset.openCollaborationTrace, target.dataset.startMessageId); return; }
   if ((target = el("[data-open-acceptance-review]"))) { const trace = state.workspace?.traces.find((item) => item.id === target.dataset.openAcceptanceReview); if (!trace) return toast("经理交接记录在当前 Run 中不可读取。", true); state.selectedAgentId = trace.agentId; workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, trace.agentId, { reset: true, traceId: trace.id }); renderWorkspace(); return; }
-  if ((target = el("[data-console-latest]"))) { workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null }); renderWorkspace(); const stream = $("#trace-stream"); stream.scrollTop = stream.scrollHeight; return; }
+  if ((target = el("[data-console-latest]"))) { workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null }); renderWorkspace(); const stream = $("#trace-stream"); followConsoleLatest(stream); return; }
   if ((target = el("[data-collaboration-older]"))) {loadCollaboration(state.selectedRunId,{older:true}).catch(error=>toast(error.message,true));return;}
   if ((target = el("[data-select-agent]"))) { state.selectedAgentId = target.dataset.selectAgent; workspaceView().jumpLatest = true; return renderWorkspace(); }
   if ((target = el("[data-mention-insert]"))) {
@@ -3611,6 +3618,14 @@ async function init() {
   render();
   const initialData = refresh();
   setInterval(refreshNavigation, 5000);
+  // Reconcile a bounded tail after sleeps or missed SSE records without clearing the reader.
+  const reconcileConsole = () => {
+    if (document.visibilityState === 'hidden' || state.currentView !== 'workspace' || workspaceView().tab !== 'console' || !state.selectedAgentId) return;
+    const page = consolePage(state.selectedRunId, state.selectedAgentId);
+    if (page.loaded && !page.loading) void loadConsolePage(state.selectedRunId, state.selectedAgentId);
+  };
+  setInterval(reconcileConsole, 5000);
+  document.addEventListener('visibilitychange', reconcileConsole);
   if (state.currentView === "workspace" && state.selectedRunId) await Promise.all([initialData, loadWorkspace(state.selectedRunId, { quiet: true })]);
   else if (state.currentView === "workspace") renderWorkspace();
 }
