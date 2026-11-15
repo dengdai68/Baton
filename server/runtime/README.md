@@ -48,7 +48,7 @@ DeepSeek Harness 入口 dsh.mjs、私有原生 bridge dsh-plugin.mjs：独立 SD
 
 Runtime 展示名称为 Claude Code、Codex、DeepSeek Harness，内部 Provider/CLI 命令仍为 claude-code/codex/dsh。服务通过与执行相同的 CLI 环境检查可执行文件（不运行模型、不读取凭据）；Store 注入该只读事实，在 list/get 返回 installed 和实际 enabled。未安装或客户端 PATH 找不到可执行文件时 enabled=false、界面开关关闭并锁定，HTTP/CLI 拒绝修改 enabled 和发起新调用；安装检查不改写用户开关偏好、员工或 Task 冻结事实。安装/PATH 修复后重开客户端或重新进入 Runtime 设置重新读取；已安装但未登录不属于未安装。
 
-`plugin-compatibility.mjs` 安全解析源 frontmatter 并生成无提示词的冻结计划；marketplace 从当前安装只读派生支持矩阵。`dsh-extensions.mjs` 在 Harness 中创建原生独立子代理与选中 Hook，版本固定的 MIT 原代码/许可在 `vendor/dsh-hooks/`。私有目录生成 peer import URL 与源工具名映射，不改全局配置。设计/边界见 docs/26。MCP 启动器在三种 Runtime 共用；新调用保留源名称，旧冻结引用保留旧投影。
+`plugin-compatibility.mjs` 安全解析源 frontmatter 并生成无提示词的冻结计划；marketplace 从当前安装只读派生支持矩阵。`dsh-extensions.mjs` 在 Harness 中创建原生独立子代理与选中 Hook，版本固定（0.2.2-rc.1）的 MIT 原代码/许可在 `vendor/dsh-hooks/`；官方 hooks 桥升级随 Runtime 实测版本同步重拷贝并更新 provenance。私有目录生成 peer import URL 与源工具名映射，不改全局配置。设计/边界见 docs/26。MCP 启动器在三种 Runtime 共用；新调用保留源名称，旧冻结引用保留旧投影。
 
 `plugin-agent-tools.mjs` 为 Codex 源子代理生成原生工具选择 Hook；按 child session 记录选择，不限制父员工/其他子代理，不改操作系统或领域权限。
 

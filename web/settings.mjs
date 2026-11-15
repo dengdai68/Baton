@@ -2,7 +2,7 @@ import {runtimeLabel,RUNTIME_EFFORT_LEVELS} from "../client/runtime-providers.mj
 import { DIRECTORY_THEMES, NAVIGATION, normalizePreferences, THEMES } from "./preferences.mjs";
 import { createFloatingList, closeFloatingLists } from './floating-list.mjs';
 
-export const SETTINGS_PAGES = { general: "常规", appearance: "外观", workspace: "工作目录", cli: "命令行 CLI", repositories: "仓库访问", runtime: "运行时", updates: "更新", logs: "运行日志" };
+export const SETTINGS_PAGES = { general: "常规", appearance: "外观", workspace: "工作目录", cli: "CLI", repositories: "仓库访问", runtime: "运行时", updates: "更新", logs: "运行日志" };
 const escape = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
 
 const settingsIcon = id => {
@@ -498,10 +498,9 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
             <h3 id="runtime-title">运行时</h3><p class="settings-description">启用的运行时可被员工选择。模型与思考等级留空时使用 CLI 默认配置，保存后用于之后的调用。</p><div class="repository-access-grid settings-box" data-runtime-config></div>
           </section>
           <section class="settings-section" data-settings-panel="cli" hidden>
-            <h3>命令行 CLI</h3><p class="settings-description">在终端中使用 baton 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
+            <h3>CLI</h3><p class="settings-description">在终端中使用 baton 配置员工、团队、工作流、插件与 MCP，创建和查询任务。</p>
             <div class="settings-group"><div class="settings-box"><div class="settings-row"><span class="settings-provider-icon" aria-hidden="true">${settingsIcon('cli')}</span><div class="settings-row-text"><strong>baton</strong><small data-cli-status role="status">正在检查 CLI 安装…</small></div><div class="settings-row-controls"><button type="button" class="ghost-button" data-cli-refresh>刷新</button><button type="button" class="small-button" data-cli-install disabled>安装 CLI</button></div></div><pre class="settings-paths" data-cli-paths></pre></div></div>
-            <div class="settings-group"><h4>快速开始</h4><pre class="settings-code">baton help\nbaton schema agents\nbaton tasks list --json</pre><p class="field-hint">CLI 复用客户端登录授权，相当于本机管理员权限，只交给可信的 AI。配置保存不等于任务执行，也不能代替你确认交付。</p></div>
-            <details class="settings-explanation"><summary>安装说明与登录</summary><p>仅 Mac 安装包支持，适用于默认配置目录的 zsh/bash。确认窗口列出将写入的文件；不使用 sudo，不覆盖同名命令。安装后请新开终端，移动客户端后需重新安装。自定义 Shell/ZDOTDIR 需手动配置。</p><pre class="settings-code">baton auth login --username YOUR_NAME</pre><p>无需系统 Node。客户端未登录时可单独登录；密码用隐藏输入或显式 --password-stdin 管道，不放在命令参数。CLI 不读取浏览器 Cookie 或数据库。</p></details>
+            <div class="settings-group"><h4>快速开始</h4><pre class="settings-code">baton help\nbaton schema agents\nbaton tasks list --json</pre></div>
           </section>
           <section class="settings-section" data-settings-panel="repositories" aria-labelledby="repositories-title" hidden>
             <h3 id="repositories-title">仓库访问</h3><p class="settings-description">Token 仅用于拉取私有仓库，保存后不回显。</p><div id="git-credential-config" class="repository-access-grid settings-box" aria-live="polite"></div>

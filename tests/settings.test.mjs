@@ -1046,7 +1046,7 @@ async function inboxHarness(extra = {}) {
   const preview = {dataset:{},isConnected:true,innerHTML:'',querySelector(){return null;}};
   const list={innerHTML:''},host={innerHTML:'',querySelector:selector=>selector==='.inbox-list'?list:selector==='.inbox-layout'?{}:null};
   const context = {state,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:selector=>selector==='#inbox-content'?host:preview,setTitleCount(){},requestAnimationFrame:callback=>callback(),esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
-  const controller = runWithCache(block+';({refreshInbox,renderInbox,renderInboxPreview,sendInboxAnswer,inboxFacts,inboxDrafts,inboxAnswered,inboxTasks})',context);
+  const controller = runWithCache(block+';({refreshInbox,renderInbox,renderInboxPreview,sendInboxAnswer,inboxFacts,inboxDrafts,inboxAnswered,inboxTasks,advanceInbox})',context);
   return {controller,state:context.state,preview,...context};
 }
 test('inbox rows derive real question identity, failure text and acceptance from compact facts',async()=>{
@@ -1065,7 +1065,7 @@ test('inbox state previews use exact context, inline reply, acceptance, raw erro
   h.state.inboxDetails.a={run:{id:'r',task:{workflowSnapshot:{nodes:[{id:'dev',name:'功能开发'}]}},participants:[]},pendingQuestions:[{id:'q',traceId:'t',workflowNodeId:'dev',content:'问题全文',sender:{name:'Kai'},recipient:{type:'human'}}],traces:[{id:'t',inputMessageId:'input'}]};
   await h.controller.renderInboxPreview(task);
   assert.match(h.preview.innerHTML,/Noah 的交接/);assert.match(h.preview.innerHTML,/原始交接 &lt;script>/);assert.doesNotMatch(h.preview.innerHTML,/无关消息/);
-  assert.match(h.preview.innerHTML,/<label[^>]*for="inbox-answer-text"/);assert.match(h.preview.innerHTML,/data-question-id="q"/);assert.match(h.preview.innerHTML,/发送并处理下一项/);
+  assert.match(h.preview.innerHTML,/<label[^>]*for="inbox-answer-text"/);assert.match(h.preview.innerHTML,/data-question-id="q"/);assert.match(h.preview.innerHTML,/发送回答/);assert.doesNotMatch(h.preview.innerHTML,/发送并处理下一项|value="stay"/);assert.match(h.preview.innerHTML,/inbox-task-heading/);assert.doesNotMatch(h.preview.innerHTML,/inbox-preview-footer/);
   assert.match(h.preview.innerHTML,/功能开发/);
   h.state.inboxDetails.a={run:{id:'r',artifactCount:2,task:{}},pendingQuestions:[]};
   await h.controller.renderInboxPreview({...task,status:'awaiting_acceptance'});assert.match(h.preview.innerHTML,/宽窄布局/);assert.match(h.preview.innerHTML,/2 项交付文件/);assert.match(h.preview.innerHTML,/data-inbox-confirm="r"/);assert.match(h.preview.innerHTML,/继续咨询/);
@@ -1088,24 +1088,53 @@ test('inbox stale previews and refresh tickets cannot overwrite newer views',asy
   resolvers.slice(0,5).forEach(({resolve})=>resolve({tasks:[],total:0}));await pending;
   assert.equal(r.state.inboxResults.done.tasks[0].id,'done');assert.equal(r.state.inboxLoadedView,'recent');
 });
-test('inbox reply uses existing precise message contract, preserves failure draft, and selects next or stays',async()=>{
+test('inbox recent previews retain original question, task content and completion result',async()=>{
+  const h=await inboxHarness();
+  h.state.inboxDetails.a={run:{id:'run-a',task:{objective:'原任务内容 <safe>'},acceptanceRequest:{summary:'经理交付结果'}}};
+  await h.controller.renderInboxPreview({id:'a',title:'任务',status:'awaiting_human',inboxAnsweredAt:'2026-11-14',inboxQuestion:{content:'原问题 <script>'},inboxContext:{content:'原始交接上下文'},inboxAnswer:'回答结果'});
+  for(const text of ['原任务内容 &lt;safe>','原问题 &lt;script>','原始交接上下文','回答结果'])assert.ok(h.preview.innerHTML.includes(text),text);
+  assert.doesNotMatch(h.preview.innerHTML,/<script>|inbox-preview-footer|data-inbox-answer/);
+  await h.controller.renderInboxPreview({id:'a',title:'任务',status:'done'});
+  assert.match(h.preview.innerHTML,/原任务内容 &lt;safe>/);assert.match(h.preview.innerHTML,/经理交付结果/);
+});
+
+test('inbox compact polling preserves the current live answer form while metadata reloads',async()=>{
+  const h=await inboxHarness();
+  h.state.inboxDetails.a={loading:true};h.preview.dataset.taskId='a';h.preview.innerHTML='LIVE ANSWER WITH FAILURE';
+  h.preview.querySelector=selector=>selector==='[data-inbox-answer]'?{dataset:{taskId:'a'}}:null;
+  await h.controller.renderInboxPreview({id:'a',title:'任务',status:'awaiting_human'});
+  assert.equal(h.preview.innerHTML,'LIVE ANSWER WITH FAILURE');
+  h.state.inboxDetails.b={loading:true};await h.controller.renderInboxPreview({id:'b',title:'其他任务',status:'awaiting_human'});
+  assert.match(h.preview.innerHTML,/正在读取事项详情/);
+});
+
+test('inbox advancement crosses status groups, wraps and clears the last selection',async()=>{
+  const h=await inboxHarness();
+  h.state.inboxResults.awaiting_acceptance={tasks:[{id:'c',status:'awaiting_acceptance'}]};
+  h.state.inboxResults.failed={tasks:[{id:'d',status:'failed'}]};
+  for(const [current,next]of[['a','b'],['b','c'],['c','d'],['d','a']]){h.controller.advanceInbox(current);assert.equal(h.state.inboxSelection,next);assert.equal(h.state.inboxReceipt,null);}
+  h.state.inboxResults={awaiting_human:{tasks:[{id:'a'}]}};h.controller.advanceInbox('a');assert.equal(h.state.inboxSelection,null);
+});
+
+test('inbox reply preserves the precise message contract and failure draft, then always selects next',async()=>{
   for(const mode of ['next','stay','failure']) {
     const requests=[];let renders=0;
     const h=await inboxHarness({api:async(path,options)=>{requests.push({path,options});if(options?.method==='POST'){if(mode==='failure')throw Error('发送失败');return {resumed:true};}return {tasks:[],total:0,page:1,totalPages:1};}});
     const input={value:'  只调整 GitHub  ',readOnly:false},error={hidden:true},buttons=[{},{}];
     const form={dataset:{runId:'run/a',questionId:'question/a',taskId:'a'},isConnected:true,querySelector:selector=>selector==='textarea'?input:error,querySelectorAll:()=>buttons};
+    form.inboxQuestion={id:'question/a',content:'回答前的原问题'};form.inboxContext={content:'原始上下文'};
     h.controller.inboxDrafts.set('run/a:question/a',input.value);
     // Only rendering is stubbed; execute real send/refresh/query logic.
     const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
     const send=runWithCache(source.slice(source.indexOf('async function sendInboxAnswer('),source.indexOf('/* ---------- 总览 ---------- */'))+';sendInboxAnswer',{
-      ...h, inboxTasks:h.controller.inboxTasks,inboxDrafts:h.controller.inboxDrafts,inboxAnswered:h.controller.inboxAnswered,
+      ...h, inboxTasks:h.controller.inboxTasks,inboxDrafts:h.controller.inboxDrafts,inboxAnswered:h.controller.inboxAnswered,advanceInbox:h.controller.advanceInbox,
       refreshInbox:async()=>{h.state.inboxResults.awaiting_human.tasks.shift();},renderInbox:()=>renders++,toast(){},Date,encodeURIComponent,
     });
     await send({preventDefault(){},currentTarget:form,submitter:{value:mode}});
     assert.equal(requests[0].path,'/api/runs/run%2Fa/messages');
     assert.deepEqual(JSON.parse(requests[0].options.body),{recipientAgentId:null,replyToMessageId:'question/a',content:'只调整 GitHub',attachmentIds:[]});
     if(mode==='failure'){assert.equal(h.controller.inboxDrafts.get('run/a:question/a'),input.value);assert.equal(error.textContent,'发送失败');assert.equal(renders,0);}
-    else {assert.equal(h.controller.inboxDrafts.has('run/a:question/a'),false);assert.equal(renders,1);if(mode==='next')assert.equal(h.state.inboxSelection,'b');else assert.equal(h.state.inboxReceipt.inboxAnswer,'只调整 GitHub');}
+    else {assert.equal(h.controller.inboxDrafts.has('run/a:question/a'),false);assert.equal(renders,1);assert.equal(h.state.inboxSelection,'b');assert.equal(h.state.inboxReceipt,null);assert.equal(h.controller.inboxAnswered.get('a').inboxQuestion.content,'回答前的原问题');assert.equal(h.controller.inboxAnswered.get('a').inboxContext.content,'原始上下文');}
     assert.ok(buttons.every(button=>!button.disabled));assert.equal(input.readOnly,false);
   }
 });
@@ -1120,7 +1149,7 @@ test('inbox rich grouped rows hide empty groups and retain the live composer on 
   });
   render();assert.match(list.innerHTML,/Kai 向你提问/);assert.match(list.innerHTML,/第三方登录是否在范围内/);assert.match(list.innerHTML,/<button class="inbox-item selected"/);assert.doesNotMatch(list.innerHTML,/执行中断/);assert.match(chips.innerHTML,/data-inbox-view="recent"/);assert.doesNotMatch(host.innerHTML,/data-inbox-view/);
   const form={dataset:{questionId:'q'}},input={value:'正在输入的回答'};
-  h.preview.innerHTML='LIVE COMPOSER';h.preview.querySelector=selector=>selector==='#inbox-answer-text'?input:selector==='[data-question-id]'?form:null;
+  h.preview.innerHTML='LIVE COMPOSER';h.preview.dataset.taskId='a';h.preview.querySelector=selector=>selector==='#inbox-answer-text'?input:selector==='[data-question-id]'?form:null;
   h.api=async()=>({items:[]});
   // Re-rendering an updated summary for the same immutable question cannot replace its live input.
   await h.controller.renderInboxPreview({id:'a',title:'登录',status:'awaiting_human'});

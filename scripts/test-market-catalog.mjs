@@ -71,6 +71,13 @@ try{
  let discoveryAttempts=0;const toolsPath=`**/api/runtime/mcp-marketplace/${mcp.id}/tools`;
  await page.route(toolsPath,route=>{discoveryAttempts++;return route.fulfill({status:discoveryAttempts===1?400:200,json:discoveryAttempts===1?{error:'隔离工具读取失败'}:{total:1,tools:[{name:'proof',description:'隔离界面工具'}]}});});
  await page.locator(`[data-extension-detail="${mcp.id}"]`).first().click();await page.locator('[data-mcp-tools][role=alert]').filter({hasText:'隔离工具读取失败'}).waitFor();await page.locator('#modal-close:visible, #modal-content [data-close-modal]:visible').first().click();
+ // The header editor must stay usable after a failed detail read, independently of tools.
+ const detailPath=`**/api/runtime/mcp-marketplace/${mcp.id}`;let failedDetail=false;
+ await page.route(detailPath,route=>{if(route.request().method()==='GET'&&!failedDetail){failedDetail=true;return route.fulfill({status:503,json:{error:'隔离详情读取失败'}});}return route.continue();});
+ await page.locator(`[data-extension-detail="${mcp.id}"]`).first().click();await page.locator('[data-extension-detail-body][role=alert]').filter({hasText:'隔离详情读取失败'}).waitFor();
+ const editHeader=page.locator('[data-edit-mcp]');assert.equal(await editHeader.isEnabled(),true);await editHeader.focus();await page.keyboard.press('Enter');await page.locator('#mcp-market-form').waitFor();
+ assert.equal(await page.locator('#mcp-market-form [name=name]').inputValue(),mcp.name);assert.ok((await page.locator('#mcp-market-form [name=content]').inputValue()).includes('mcpServers'));
+ await page.locator('#mcp-market-form [data-close-modal]').click();await page.unroute(detailPath);
  await page.locator('[data-market-filter=attention]').click();const failedCard=page.locator(`[data-extension-id="${mcp.id}"]`);await failedCard.locator('.extension-error').waitFor();
  await failedCard.locator('.extension-card-footer > [data-extension-retry]').click();await page.locator('[data-market-empty]').filter({hasText:'没有匹配'}).waitFor();
  await page.locator('[data-market-filter=all]').click();await page.locator('.extension-card-footer').filter({hasText:'1 个工具'}).waitFor();assert.equal(discoveryAttempts,2);await page.unroute(toolsPath);

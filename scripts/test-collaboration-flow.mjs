@@ -292,7 +292,13 @@ try {
     await page.waitForFunction(width => innerWidth === width, width);
     await page.goto(origin + '/settings/appearance'); await page.locator(`[name="theme"][value="${theme}"]`).check();
     await page.goto(origin + '/runs/' + run.id);
-    await page.locator('.collaboration-row:not(.from-human) .collaboration-avatar').first().waitFor();
+    // Progressive collaboration phases replace the list once; measuring a
+    // replaced node yields 0×0. Measure only a connected, laid-out avatar.
+    await page.waitForFunction(() => {
+      const row = document.querySelector('.collaboration-row:not(.from-human)');
+      const avatar = row?.querySelector('.collaboration-avatar');
+      return Boolean(row?.isConnected && avatar?.isConnected && avatar.getBoundingClientRect().width);
+    }, null, { polling: 100 });
     const messageLayout = await page.locator('.collaboration-row:not(.from-human)').first().evaluate(row => {
       const avatar=row.querySelector('.collaboration-avatar'), header=row.querySelector('header'), content=row.querySelector('.collaboration-content');
       const av=avatar.getBoundingClientRect(), body=content.getBoundingClientRect(), style=getComputedStyle(row);
@@ -345,11 +351,18 @@ try {
     await page.locator('[data-send-instruction]').click();
     await page.getByText('SCROLL_EXPECTED_FAILURE',{exact:true}).waitFor();
     await page.waitForFunction(()=>!document.querySelector('[data-send-instruction]')?.disabled);
-    assert.equal(await page.locator('#instruction-text').inputValue(),reply,'failed reply keeps the draft');
+    // The composer clears on send; a failed reply reports under its own record
+    // and the draft returns only through the explicit recovery action.
+    assert.equal(await page.locator('#instruction-text').inputValue(),'','send clears the composer immediately');
+    const unconfirmed=page.locator('[data-outgoing-feedback=unconfirmed]').filter({hasText:'发送未确认'});
+    await unconfirmed.waitFor();
+    await unconfirmed.getByText('SCROLL_EXPECTED_FAILURE').waitFor();
+    await page.screenshot({path:join(root,`reply-failure-${width}.png`)});
     assert.equal(await page.locator('.collaboration-row').first().getAttribute('data-collaboration-record'),firstRecord,'failed reply keeps the historical page');
     const failureTop = await page.locator('.human-message-list').evaluate(el=>el.scrollTop);
-    if(Math.abs(failureTop-historyTop)>=2)await page.screenshot({path:join(root,`reply-failure-${width}.png`)});
     assert.ok(Math.abs(failureTop-historyTop)<2,`failed reply preserves the reading position (${width}: ${historyTop} → ${failureTop})`);
+    await unconfirmed.getByRole('button',{name:'恢复草稿',exact:true}).click();
+    assert.equal(await page.locator('#instruction-text').inputValue(),reply,'recovery restores the exact draft');
     await page.unroute('**/api/runs/'+runId+'/messages',rejectMessage);
     await page.locator('[data-send-instruction]').click();
     await page.locator('.collaboration-row.from-human').filter({hasText:reply}).waitFor();

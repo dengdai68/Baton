@@ -85,7 +85,7 @@ Store 拥有状态，Runtime 不直接写领域对象。平台执行员工和经
 
 固定 Runtime 增加 DeepSeek Harness；认证配置资源、Store 开关/冻结/会话确认、任务 Orchestrator 和普通沟通都调用独立 SDK 适配器。原生模型目录和连接测试共用真实配置，不另设 DeepSeek Harness HTTP 权限或存储 Token。MCP 安装/导入返回 DeepSeek Harness 兼容声明；专用 Hook/Subagent 组件不兼容，已有安装版本不迁移。
 
-Runtime 展示名称为 Claude Code、Codex、DeepSeek Harness，内部 Provider/CLI 命令仍为 claude-code/codex/dsh。服务通过与执行相同的 CLI 环境检查可执行文件（不运行模型、不读取凭据）；Store 注入该只读事实，在 list/get 返回 installed 和实际 enabled。未安装或客户端 PATH 找不到可执行文件时 enabled=false、界面开关关闭并锁定，HTTP/CLI 拒绝修改 enabled 和发起新调用；安装检查不改写用户开关偏好、员工或 Task 冻结事实。安装/PATH 修复后重开客户端或重新进入 Runtime 设置重新读取；已安装但未登录不属于未安装。
+DeepSeek Harness 插件兼容层随本机实测版本 0.2.2-rc.1 重拷贝官方 hooks 桥并更新 provenance；版本不匹配仍明确拒绝含这些组件的调用。Runtime 展示名称为 Claude Code、Codex、DeepSeek Harness，内部 Provider/CLI 命令仍为 claude-code/codex/dsh。服务通过与执行相同的 CLI 环境检查可执行文件（不运行模型、不读取凭据）；Store 注入该只读事实，在 list/get 返回 installed 和实际 enabled。未安装或客户端 PATH 找不到可执行文件时 enabled=false、界面开关关闭并锁定，HTTP/CLI 拒绝修改 enabled 和发起新调用；安装检查不改写用户开关偏好、员工或 Task 冻结事实。安装/PATH 修复后重开客户端或重新进入 Runtime 设置重新读取；已安装但未登录不属于未安装。
 
 submitHumanMessage 允许省略/null recipientAgentId，默认路由给冻结 Run 经理；显式成员校验和精确澄清回复优先规则保持。终态仅答疑、归档只读；HTTP/CLI 使用同一领域命令。
 

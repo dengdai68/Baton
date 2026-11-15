@@ -86,6 +86,13 @@ try {
   release(delayed);
   await page.waitForFunction(() => !document.querySelector('#inbox-preview-content [aria-busy="true"]'));
   check('inbox confirmed directory rows precede compact details and selected preview stays explicitly loading');
+  // An idle inbox must not repeat per-task workspace reads on navigation polls.
+  const settledRequests = evidence.requests.length;
+  await page.waitForTimeout(6500);
+  const idleWorkspaceReads = evidence.requests.slice(settledRequests).filter(item => /\/workspace(\?|$)/.test(item.path));
+  console.log('IDLE inbox window requests:', evidence.requests.length - settledRequests, 'workspace reads:', idleWorkspaceReads.length);
+  assert.equal(idleWorkspaceReads.length, 0, 'idle inbox polls reuse cached details');
+  check('idle inbox polls skip unchanged workspace details', { windowMs: 6500 });
   await page.goto(origin + '/tasks'); await rowCount(20);
 
   const search = page.locator('#task-search-form input[name="name"]');

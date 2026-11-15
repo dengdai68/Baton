@@ -346,6 +346,30 @@ test("collaboration keeps all team messages with no invented all-team recipient"
   assert.equal(records[0].statusCode, "recorded");
 });
 
+test("collaboration omits the redundant target when the manager decides to work itself", () => {
+  const manager = { type: "agent", id: "manager-1", name: "项目经理" };
+  const records = collaborationRecords({ run: { participants: [{ id: "manager-1", name: "项目经理" }] }, messages: [
+    { id: "self", kind: "manager_decision", createdAt: "2026-10-24T00:00:00Z", sender: manager, recipient: { ...manager }, content: "本节点由我亲自完成" },
+    { id: "peer", kind: "manager_decision", createdAt: "2026-10-24T00:00:01Z", sender: manager, recipient: { type: "agent", id: "worker-1", name: "研发工程师" }, content: "请研发修复" },
+    { id: "note", kind: "manager_decision", createdAt: "2026-10-24T00:00:02Z", sender: manager, recipient: { type: "team", name: "团队" }, content: "同步当前安排" },
+  ] });
+  assert.equal(records.find(item => item.id === "self").to, null, "self assignment never renders 经理决策 → 同一员工");
+  assert.equal(records.find(item => item.id === "peer").to, "研发工程师", "real delegation keeps its recipient");
+  assert.equal(records.find(item => item.id === "note").to, null, "team records stay untargeted");
+  assert.deepEqual(records.map(item => item.title), ["经理决策", "经理决策", "经理决策"]);
+});
+
+test("a manager followup dispatch to the manager itself adds no self target to its decision", () => {
+  const time = "2026-10-30T00:00:00Z";
+  const manager = { type: "agent", id: "manager-1", name: "研发经理" };
+  const decision = { id: "decision", kind: "manager_decision", createdAt: time, sender: manager, recipient: { type: "team", name: "全体团队" }, traceId: "manager-trace", content: "返工安排与后续由我继续处理" };
+  const followup = { id: "followup", createdAt: time, recipientAgentId: "manager-1", workflowNodeId: "review", purpose: "manager", status: "queued", attempts: 0, traceIds: [], dedupeKey: "followup:work", sourceMessageId: decision.id };
+  const records = collaborationRecords({ run: { participants: [{ id: "manager-1", name: "研发经理" }] }, messages: [decision], dispatches: [followup] });
+  const record = records.find(item => item.id === "decision");
+  assert.equal(record.to, null, "a manager coordination turn for the manager itself renders no target");
+  assert.equal(record.deliveries[0].recipientName, "研发经理", "the actual delivery recipient stays in the delivery details");
+});
+
 test("collaboration colors reflect recorded pending/answered status, not business approval", () => {
   const question = { id: "q", kind: "clarification_question", createdAt: "2026-01-01", sender: { type: "agent", name: "A" }, recipient: { type: "human", name: "你" }, content: "需确认" };
   const dispatches = [{ waitingMessageId: "q", status: "waiting" }];

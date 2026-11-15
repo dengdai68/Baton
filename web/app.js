@@ -542,10 +542,16 @@ function toggleSidebar() {
 }
 
 const inboxGroups = [['awaiting_human','等待你的澄清'],['awaiting_acceptance','待你验收'],['failed','执行中断'],['paused','已暂停'],['blocked','等待恢复']];
-let inboxRequest = 0, inboxPreviewRequest = 0;
+let inboxRequest = 0, inboxPreviewRequest = 0, inboxDetailRunning = false, inboxDetailAgain = false;
 const inboxDrafts = new Map(), inboxAnswered = new Map();
 function inboxVisibleGroups() { return state.inboxView === 'recent' ? [['done','最近已处理']] : inboxGroups; }
 function inboxTasks() { return inboxVisibleGroups().flatMap(([status]) => state.inboxResults?.[status]?.tasks || []); }
+function advanceInbox(taskId) {
+  const tasks = inboxTasks(), index = tasks.findIndex(task => task.id === taskId);
+  const following = index < 0 ? tasks : [...tasks.slice(index+1), ...tasks.slice(0,index)];
+  state.inboxReceipt = null;
+  state.inboxSelection = following[0]?.id || null;
+}
 function inboxFacts(task, workspace = state.inboxDetails?.[task.id]) {
   const run = workspace?.run, question = workspace?.pendingQuestions?.find(item => item.recipient?.type === 'human');
   const agent = run?.participants?.find(item => item.id === question?.sender?.id) || question?.sender;
@@ -570,7 +576,7 @@ async function refreshInbox() {
   const previous = JSON.stringify([state.inboxResults,state.inboxErrors,state.inboxDetails]);
   const results = await Promise.allSettled(groups.map(async ([status]) => [status, await api('/api/tasks?' + new URLSearchParams({status,archived:'false',page:String(status === 'done' ? 1 : state.inboxPages?.[status] || 1),pageSize:'20'}))]));
   if (!current()) return;
-  const next = {}, errors = {}, details = {};
+  const next = {}, errors = {};
   results.forEach((result,index) => { if (result.status === 'fulfilled') next[result.value[0]] = result.value[1]; else errors[groups[index][0]] = result.reason.message; });
   if (view === 'recent' && next.done) {
     // No date filter exists in the task directory: retain its latest 20 completed tasks.
@@ -581,11 +587,28 @@ async function refreshInbox() {
   }
   // Directory rows are already confirmed facts. Paint them before their
   // independent compact details, retaining explicit loading in the preview.
-  const queue = Object.values(next).flatMap(result => result.tasks).filter(task => task.runs?.[0]);
-  for (const task of queue) details[task.id] = {loading:true};
+  // Cached details survive unchanged rows: a poll only refetches rows whose
+  // run, run status or task update changed, so an idle inbox costs five small
+  // directory queries instead of one workspace read per visible task.
+  const cachedDetails = state.inboxDetails || {}, details = {}, queue = [];
+  for (const task of Object.values(next).flatMap(result => result.tasks)) {
+    const run = task.runs?.[0];
+    if (!run) continue;
+    const signature = `${run.id}:${run.status}:${task.updatedAt}`;
+    const cached = cachedDetails[task.id];
+    // A failed read is cached briefly instead of retried on every poll.
+    if (cached && !cached.loading && cached.signature === signature && (!cached.error || Date.now() - cached.errorAt < 30000)) { details[task.id] = cached; continue; }
+    details[task.id] = { loading: true, signature };
+    queue.push({ task, signature });
+  }
   state.inboxResults = next; state.inboxErrors = errors; state.inboxDetails = details;
   state.inboxLoading = false; state.inboxLoadedView = view;
   renderInbox();
+  const changed = previous !== JSON.stringify([next,errors,details]);
+  if (!current()) return changed;
+  if (!queue.length) return changed;
+  if (inboxDetailRunning) { inboxDetailAgain = true; return changed; }
+  inboxDetailRunning = true;
   let paintQueued = false;
   const paintDetails = () => {
     if (paintQueued) return;
@@ -593,19 +616,25 @@ async function refreshInbox() {
     requestAnimationFrame(() => { paintQueued = false; if (current()) renderInbox(); });
   };
   // Keep detail reads bounded to the visible pages and four concurrent requests.
-  await Promise.all(Array.from({length:Math.min(4,queue.length)}, async () => {
-    while (queue.length && current()) {
-      const task = queue.shift(), run = task.runs[0];
-      let detail;
-      try { detail = await api(`/api/runs/${encodeURIComponent(run.id)}/workspace?view=compact`); }
-      catch (error) { detail = {error:error.message}; }
-      if (!current()) return;
-      details[task.id] = detail;
-      paintDetails();
+  void (async () => {
+    try {
+      await Promise.all(Array.from({length:Math.min(4,queue.length)}, async () => {
+        while (queue.length && current()) {
+          const { task, signature } = queue.shift(), run = task.runs[0];
+          let detail;
+          try { detail = await api(`/api/runs/${encodeURIComponent(run.id)}/workspace?view=compact`); }
+          catch (error) { detail = {error:error.message}; }
+          if (!current()) return;
+          if (state.inboxDetails[task.id]?.loading && state.inboxDetails[task.id].signature === signature) state.inboxDetails[task.id] = detail.error ? { error: detail.error, signature, errorAt: Date.now() } : { ...detail, signature };
+          paintDetails();
+        }
+      }));
+    } finally {
+      inboxDetailRunning = false;
+      if (inboxDetailAgain) { inboxDetailAgain = false; void refreshInbox(); }
     }
-  }));
-  if (!current()) return;
-  return previous !== JSON.stringify([next,errors,details]);
+  })();
+  return changed;
 }
 function inboxStatusIcon(status) {
   return `<span class="task-state-icon" data-status-tone="${statusTone(status)}" aria-hidden="true">${statusShape(status)}</span>`;
@@ -647,29 +676,40 @@ function renderInbox() {
 async function renderInboxPreview(task) {
   const request = ++inboxPreviewRequest, target = $('#inbox-preview-content');
   const valid = () => request === inboxPreviewRequest && target.isConnected && state.currentView === 'inbox';
+  if (target.dataset.taskId !== task.id) {
+    target.dataset.taskId = task.id;
+    target.innerHTML = '<div class="directory-empty" role="status" aria-busy="true">正在读取事项详情…</div>';
+  }
   try {
     const cached = state.inboxDetails?.[task.id];
-    if (cached?.loading) { target.innerHTML = '<div class="directory-empty" role="status" aria-busy="true">正在读取事项详情…</div>'; return; }
+    if (cached?.loading) {
+      if (target.querySelector('[data-inbox-answer]')?.dataset.taskId === task.id) return;
+      target.innerHTML = '<div class="directory-empty" role="status" aria-busy="true">正在读取事项详情…</div>'; return;
+    }
     if (cached?.error) throw new Error(cached.error);
     const workspace = cached || (task.runs?.[0] ? await api(`/api/runs/${encodeURIComponent(task.runs[0].id)}/workspace?view=compact`) : {});
     if (!valid()) return;
     const {run,question,agent,error} = inboxFacts(task,workspace), answered = Boolean(task.inboxAnsweredAt);
-    let body = '', answerMarkup = '', collaboration, headline = task.title;
+    let body = '', answerMarkup = '', collaboration, answerContext, headline = task.title;
     if (run && question && !answered) {
       collaboration = await api(`/api/runs/${encodeURIComponent(run.id)}/collaboration?limit=100`);
       if (!valid()) return;
     }
-    if (task.status === 'awaiting_human' && question && !answered) {
+    if (answered) {
+      const original = task.inboxQuestion;
+      body = `<div class="inbox-summary"><strong>任务内容</strong><p>${esc(run?.task?.objective || task.objective || '未记录任务内容。')}</p></div>${task.inboxContext ? `<blockquote class="inbox-context"><strong>原始上下文</strong><p>${esc(task.inboxContext.content)}</p></blockquote>` : ''}<h3>原问题</h3><p>${esc(original?.content || '此处理记录未保存原问题，可在任务工作区查看。')}</p><h3>你的回答</h3><p>${esc(task.inboxAnswer || '')}</p>`;
+    } else if (task.status === 'awaiting_human' && question) {
       const trace = workspace.traces?.find(item => item.id === question.traceId);
       const dispatch = workspace.dispatches?.find(item => item.waitingMessageId === question.id);
       const contextId = question.startMessageId || trace?.inputMessageId || dispatch?.sourceMessageId;
       const context = collaboration?.items?.find(item => item.id === contextId);
+      answerContext = context;
       const name = agent?.name || '任务成员', draftKey = `${run.id}:${question.id}`;
       headline = `${name} 需要你的澄清`;
       const workflowNode = run.task?.workflowSnapshot?.nodes?.find(item => item.id === question.workflowNodeId);
       const node = workflowNode?.title || workflowNode?.name || question.workflowNodeId || '';
-      body = `<div class="inbox-breadcrumb"><span>${esc(task.title)}</span><span>${esc(node)}</span><time title="${esc(exactTime(question.createdAt))}">${timeAgo(question.createdAt)}</time></div><blockquote class="inbox-context"><strong>上下文${context?.from ? ` · ${esc(context.from)} 的交接` : ''}</strong><p>${esc(context?.content || '当前分页中没有该问题的原始上文，请打开任务工作区查看完整记录。')}</p></blockquote><div class="inbox-question"><span class="agent-card-avatar ${esc(roleColor(agent))}" aria-hidden="true">${esc(initialsOf(agent))}</span><div><strong>${esc(name)}</strong><span class="field-hint"> 向你提问</span><p>${esc(question.content)}</p></div></div>`;
-      answerMarkup = `<form class="inbox-answer" data-inbox-answer data-run-id="${esc(run.id)}" data-question-id="${esc(question.id)}" data-task-id="${esc(task.id)}"><label class="sr-only" for="inbox-answer-text">回答 ${esc(name)} 的问题</label><textarea id="inbox-answer-text" name="content" rows="3" required placeholder="输入回答，发送后 ${esc(name.split(' · ')[0])} 会继续执行">${esc(inboxDrafts.get(draftKey) || '')}</textarea><div class="inbox-answer-actions"><span class="field-hint">Enter 发送 · Shift + Enter 换行</span><button type="submit" class="small-button" value="stay">发送回答</button><button type="submit" class="primary-button" value="next">发送并处理下一项</button></div><p role="alert" data-inbox-answer-error hidden></p></form>`;
+      body = `<div class="inbox-breadcrumb"><span>${esc(node)}</span><time title="${esc(exactTime(question.createdAt))}">${timeAgo(question.createdAt)}</time></div><blockquote class="inbox-context"><strong>上下文${context?.from ? ` · ${esc(context.from)} 的交接` : ''}</strong><p>${esc(context?.content || '当前分页中没有该问题的原始上文，请打开任务工作区查看完整记录。')}</p></blockquote><div class="inbox-question"><span class="agent-card-avatar ${esc(roleColor(agent))}" aria-hidden="true">${esc(initialsOf(agent))}</span><div><strong>${esc(name)}</strong><span class="field-hint"> 向你提问</span><p>${esc(question.content)}</p></div></div>`;
+      answerMarkup = `<form class="inbox-answer" data-inbox-answer data-run-id="${esc(run.id)}" data-question-id="${esc(question.id)}" data-task-id="${esc(task.id)}"><label class="sr-only" for="inbox-answer-text">回答 ${esc(name)} 的问题</label><textarea id="inbox-answer-text" name="content" rows="3" required placeholder="输入回答，发送后 ${esc(name.split(' · ')[0])} 会继续执行">${esc(inboxDrafts.get(draftKey) || '')}</textarea><div class="inbox-answer-actions"><span class="field-hint">Enter 发送 · Shift + Enter 换行</span><button type="submit" class="primary-button">发送回答</button></div><p role="alert" data-inbox-answer-error hidden></p></form>`;
     } else if (task.status === 'awaiting_acceptance') {
       const acceptance = acceptanceReview(workspace);
       let files = '', fileError = '';
@@ -684,16 +724,17 @@ async function renderInboxPreview(task) {
       const timeline = run ? await api(`/api/runs/${encodeURIComponent(run.id)}/timeline`) : {};
       const reason = timeline.events?.filter(item => ['run.paused','run.blocked'].includes(item.type)).at(-1)?.data?.reason;
       body = `<h3>${task.status === 'paused' ? '暂停原因' : '等待恢复'}</h3><p>${esc(reason || inboxFacts(task,workspace).reason || '请查看任务中的暂停或阻塞记录。')}</p>${run ? `<button class="primary-button" data-open-run="${esc(run.id)}">查看并继续</button>` : ''}`;
-    } else body = `<h3>${answered ? '你已回答' : '你确认了完成'}</h3><p>${esc(task.inboxAnswer || task.objective || '')}</p>`;
+    } else body = `<div class="inbox-summary"><strong>任务内容</strong><p>${esc(run?.task?.objective || task.objective || '未记录任务内容。')}</p></div><h3>处理结果</h3><p>${esc(run?.acceptanceRequest?.summary || run?.summary || '你已确认任务完成。')}</p>`;
     if (!valid()) return;
     const activeDraft = target.querySelector('#inbox-answer-text');
     if (task.status === 'awaiting_human' && !answered && activeDraft && target.querySelector('[data-question-id]')?.dataset.questionId === question?.id) return;
-    target.innerHTML = `<div class="inbox-preview-reading">${pill(answered ? 'done' : task.status)}<h2>${esc(headline)}</h2>${body}</div>${answerMarkup}<footer class="inbox-preview-footer">${run ? `<button class="small-button" data-open-run="${esc(run.id)}">打开任务工作区</button>` : '<button class="small-button" data-goto="tasks">前往任务中心</button>'}</footer>`;
+    target.innerHTML = `<div class="inbox-preview-reading">${pill(answered ? 'done' : task.status)}<div class="inbox-task-heading"><h2>${esc(task.title)}</h2>${run ? `<button class="text-action" data-open-run="${esc(run.id)}">打开任务工作区</button>` : '<button class="text-action" data-goto="tasks">前往任务中心</button>'}</div>${headline !== task.title ? `<h3>${esc(headline)}</h3>` : ''}${body}</div>${answerMarkup}`;
     const form = target.querySelector('[data-inbox-answer]');
     if (form) {
       const input = form.querySelector('textarea'), key = `${run.id}:${question.id}`;
+      form.inboxQuestion = question; form.inboxContext = answerContext;
       input.oninput = () => inboxDrafts.set(key,input.value);
-      input.onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); form.requestSubmit(form.querySelector('[value=next]')); } };
+      input.onkeydown = event => { if (event.key === 'Enter' && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); form.requestSubmit(form.querySelector('[type=submit]')); } };
       form.onsubmit = sendInboxAnswer;
     }
   } catch (error) { if (valid()) { delete target.dataset.key; target.innerHTML = `<p role="alert">${esc(error.message)}</p><button class="small-button" data-inbox-retry>重试</button>`; } }
@@ -703,22 +744,18 @@ async function sendInboxAnswer(event) {
   const form = event.currentTarget, input = form.querySelector('textarea'), content = input.value.trim();
   if (!content || form.dataset.sending) return;
   const {runId,questionId,taskId} = form.dataset, task = inboxTasks().find(item => item.id === taskId);
-  const pending = inboxTasks(), index = pending.findIndex(item => item.id === taskId);
-  const nextId = [...pending.slice(index+1),...pending.slice(0,index)].find(item => item.status === 'awaiting_human')?.id;
+  const question = form.inboxQuestion || state.inboxDetails?.[taskId]?.pendingQuestions?.find(item => item.id === questionId);
   form.dataset.sending = 'true'; input.readOnly = true; form.querySelectorAll('button').forEach(button => button.disabled = true);
   const errorBox = form.querySelector('[data-inbox-answer-error]'); errorBox.hidden = true;
   try {
     await api(`/api/runs/${encodeURIComponent(runId)}/messages`, {method:'POST',body:JSON.stringify({recipientAgentId:null,replyToMessageId:questionId,content,attachmentIds:[]})});
     inboxDrafts.delete(`${runId}:${questionId}`);
-    if (task) inboxAnswered.set(taskId,{...task,inboxAnsweredAt:new Date().toISOString(),inboxAnswer:content});
+    if (task) inboxAnswered.set(taskId,{...task,inboxAnsweredAt:new Date().toISOString(),inboxAnswer:content,inboxQuestion:question,inboxContext:form.inboxContext});
     toast('回答已发送');
     if (state.currentView !== 'inbox' || state.inboxSelection !== taskId || state.inboxView === 'recent') return;
-    // Stay shows a sent receipt even after the task leaves the pending query.
-    const stay = event.submitter?.value === 'stay';
-    if (stay) state.inboxReceipt = inboxAnswered.get(taskId);
+    advanceInbox(taskId);
     await refreshInbox();
     if (state.currentView !== 'inbox') return;
-    if (!stay && state.inboxSelection === taskId && nextId && inboxTasks().some(item => item.id === nextId)) state.inboxSelection = nextId;
     renderInbox();
   } catch (error) { if (form.isConnected) { errorBox.textContent = error.message; errorBox.hidden = false; } }
   finally { delete form.dataset.sending; input.readOnly = false; form.querySelectorAll('button').forEach(button => button.disabled = false); }
@@ -2485,7 +2522,7 @@ function renderCollaboration(workspace, agents) {
       ${view.replyToMessageId ? `<div class="reply-context"><span title="${esc(replyQuestion?.content || '')}">回复 <strong>${esc(replyQuestion?.sender.name || '')}</strong>：${esc(replyQuestion?.content || '')}</span><button type="button" class="text-action" data-clear-reply aria-label="取消当前回复">×</button></div>` : ''}
       <div class="mention-wrap"><div class="message-composer-input"><div class="communication-draft-attachments" data-task-attachments>${draftAttachments(view.attachments, "task", view.sending || messagingBlocked)}</div><textarea id="instruction-text" name="content" rows="2" placeholder="输入消息…"></textarea></div><div class="mention-list" id="mention-list"></div></div>
       <input type="file" multiple data-task-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-task-image-file hidden>
-      <div class="communication-composer-actions">${attachmentControls("task", messagingBlocked || view.sending)}<button type="button" class="composer-icon-button" data-task-mention aria-label="提及成员" title="提及成员" ${messagingBlocked || view.sending ? "disabled" : ""}>@</button><span class="composer-hint">Enter 发送 · Shift + Enter 换行</span><button class="primary-button" type="submit" data-send-instruction ${messagingBlocked || view.sending ? 'disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>${view.sending ? '发送中…' : '发送'}</button></div></div>
+      <div class="communication-composer-actions">${attachmentControls("task", messagingBlocked || view.sending)}<button type="button" class="composer-icon-button" data-task-mention aria-label="提及成员" title="提及成员" ${messagingBlocked || view.sending ? "disabled" : ""}>@</button><span class="composer-hint">Enter 发送 · Shift + Enter 换行</span><button class="primary-button" type="submit" data-send-instruction ${messagingBlocked || view.sending ? 'disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>发送</button></div></div>
       <p class="directive-note">${run.task.archivedAt ? "任务已归档，协作记录只读。" : run.status === "failed" ? "任务因错误中断，请先点击重试继续失败员工；当前不能发送消息或 @ 其他成员。" : questions.length ? "请先回复待澄清的问题。" : ["completed", "cancelled", "paused"].includes(run.status) ? "可继续咨询；仅答疑，不恢复业务流程。" : "新指令入队，不打断当前成员。"}</p>
     </form>`}`;
   $("#instruction-form")?.addEventListener("submit", sendInstruction);
@@ -2703,8 +2740,12 @@ async function sendInstruction(event) {
   const replyQuestion=state.workspace.pendingQuestions?.find(item=>item.id===replyToMessageId) || view.outbox.get(view.sendRequest.id)?.replyQuestion;
   const outgoing={id:view.sendRequest.id,signature,content,draft,draftRevision,createdAt:new Date().toISOString(),status:'sending',attachments,replyToMessageId,replyQuestion,recipientName:replyToMessageId ? replyQuestion?.sender.name : (target || state.workspace.run.manager)?.name};
   view.outbox.set(outgoing.id,outgoing);
+  view.draft = ''; view.attachments = []; view.sendRequest = null;
+  const input = event.currentTarget.querySelector?.('#instruction-text');
+  if (input) { input.value = ''; input.focus({preventScroll:true}); }
   view.jumpLatest=true;
   renderCollaboration(state.workspace, agents);
+  if (input && state.selectedRunId === runId) input.ownerDocument.getElementById('instruction-text')?.focus({preventScroll:true});
   try {
     for (const item of attachments) if (!item.uploaded) {
       const result = await api(`/api/runs/${runId}/attachments?name=${encodeURIComponent(item.file.name)}`, {method:'POST',headers:{'Content-Type':'application/octet-stream'},body:item.file});
@@ -2751,8 +2792,10 @@ function openCompletionModal(runId, workspace = state.workspace?.run?.id === run
   $("#ack-completion").addEventListener("change", (event) => { button.disabled = !event.target.checked; });
   button.addEventListener("click", async () => {
     button.disabled = true;
+    const inboxTaskId = state.currentView === 'inbox' ? state.inboxSelection : null;
     try {
       await api(`/api/runs/${runId}/confirm-completion`, { method: "POST", body: "{}" });
+      if (inboxTaskId && state.currentView === 'inbox' && state.inboxView !== 'recent' && state.inboxSelection === inboxTaskId) advanceInbox(inboxTaskId);
       closeModal();
       await refresh({ quiet: true });
       if (state.currentView === 'inbox') { await refreshInbox(); renderInbox(); }

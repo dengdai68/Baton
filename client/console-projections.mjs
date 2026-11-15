@@ -494,9 +494,13 @@ export function collaborationRecords(workspace = {}) {
     const waiting = dispatches.find(entry => entry.status === "waiting" && entry.waitingMessageId === item.id);
     const answer = messages.find(entry => entry.replyToMessageId === item.id), question = byMessage.get(item.replyToMessageId);
     const statusCode = answer ? "answered" : waiting ? "waiting" : "recorded";
+    // A manager working a node itself is both sender and recipient; the
+    // underlying message keeps the real recipient, the record omits the
+    // redundant self target.
+    const selfAddressed = item.recipient?.type === "agent" && item.recipient?.id && item.recipient.id === item.sender?.id;
     return {
       id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type, senderId: item.sender?.id || null,
-      from: item.sender?.name || "Baton", to: item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
+      from: item.sender?.name || "Baton", to: selfAddressed ? null : item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
       title: kinds[item.kind] || (item.replyToMessageId ? "答复" : "协作消息"), content: collaborationContent(item), attachments: asArray(item.attachments),
       status: answer ? "当前：已回答" : waiting ? "当前：等待答复" : "", statusCode,
       tone: waiting || item.kind === "escalation" ? "warning" : item.sender?.type === "human" ? "info" : ["manager_decision", "agent_consultation"].includes(item.kind) ? "violet" : "teal",
@@ -586,7 +590,10 @@ export function collaborationRecords(workspace = {}) {
         // under deliveries, never stamped onto the message's historical time.
         Object.assign(record, { dispatchId: details.dispatchId, sourceMessageId: details.sourceMessageId, recipientAgentId: details.recipientAgentId, workflowNodeId: details.workflowNodeId, executionTraceId: details.executionTraceId });
         const originalRecipient = source && byMessage.get(source.id)?.recipient;
-        if (originalRecipient?.type === "team") record.to = details.recipientName;
+        // A team-addressed decision followed by the sender's own coordination
+        // turn (purpose manager/delivery_review) is not a handoff target.
+        const selfDelivery = details.recipientAgentId && details.recipientAgentId === record.senderId;
+        if (originalRecipient?.type === "team") record.to = selfDelivery ? null : details.recipientName;
         else if (originalRecipient?.type === "agent" && originalRecipient.id !== delivery.recipientAgentId) {
           record.addressedRecipient = { id: originalRecipient.id, name: originalRecipient.name };
           record.routingNote = `原消息指向 ${originalRecipient.name || originalRecipient.id}；实际交由 ${details.recipientName} 处理。`;

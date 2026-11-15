@@ -1940,16 +1940,17 @@ test("clarification submission preserves another Run or a newly edited draft, in
     );
     const sending = submit({ preventDefault() {}, currentTarget: {} });
     assert.equal([...views['run-a'].outbox.values()][0].status,'sending','outgoing feedback exists before HTTP completes');
+    assert.equal(views['run-a'].draft,'','composer clears when the local message appears');
     if (scenario === "switch-run") state.selectedRunId = "run-b";
     if (scenario === "edit-draft") views["run-a"].draft = "继续输入的新草稿";
-    if (scenario === "edit-same-draft") views["run-a"].draftRevision = 1;
+    if (scenario === "edit-same-draft") {views["run-a"].draft='原草稿';views["run-a"].draftRevision = 1;}
     if (scenario === "failure-scroll") views["run-a"].collaborationReadingRevision=1;
     if (scenario.startsWith("failure")) rejectRequest(new Error("服务暂不可用"));
     else resolveRequest({message:{id:'saved-message',clientRequestId:[...views['run-a'].outbox.keys()][0]}});
     await sending;
     assert.deepEqual(requests, ["/api/runs/run-a/messages"]);
     assert.equal(views["run-b"].draft, "另一个任务的草稿");
-    assert.equal(views["run-a"].draft, ['failure','failure-scroll','edit-same-draft'].includes(scenario) ? "原草稿" : scenario === "edit-draft" ? "继续输入的新草稿" : "");
+    assert.equal(views["run-a"].draft, scenario==='edit-same-draft' ? "原草稿" : scenario === "edit-draft" ? "继续输入的新草稿" : "");
     assert.deepEqual(refreshed, ["success", "edit-draft", "edit-same-draft"].includes(scenario) ? ["run-a"] : []);
     assert.equal([...views['run-a'].outbox.values()][0].status,scenario.startsWith('failure')?'unconfirmed':'confirmed');
     if (scenario.startsWith("failure")) assert.deepEqual(notices, ["服务暂不可用"]);

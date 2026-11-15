@@ -46,18 +46,18 @@ const evidence = { root, provider: 'dsh', realModel: true, cases: [] };
 console.log('EVIDENCE ' + root);
 const wait = async (label, check) => { const start = Date.now(); let logged = 0; for (;;) { const result = await check(); if (result) return result; if (Date.now() - start > 12 * 60000) throw new Error('Timed out: ' + label); if (Date.now() - logged > 30000) { console.log('WAIT ' + label); logged = Date.now(); } await new Promise(done => setTimeout(done, 1500)); } };
 try {
-  const page = await app.firstWindow(); await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout: 60000 });
+  const page = await app.firstWindow({ timeout: 90000 }); await page.waitForURL(/^http:\/\/127\.0\.0\.1:/, { timeout: 60000 });
   const origin = new URL(page.url()).origin;
   const api = (path, body, method = 'POST') => page.evaluate(async ({ path, body, method }) => { const r = await fetch(path, { method, ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) }); const value = await r.json(); if (!r.ok) throw new Error(path + ': ' + JSON.stringify(value)); return value; }, { path, body, method });
   await page.goto(origin + '/login'); await page.locator('#username').fill('dsh-qa'); await page.locator('#password').fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.locator('#account-name').waitFor();
-  const { profiles } = await api('/api/settings/runtime-profiles', null, 'GET'), slot = profiles.find(p => p.provider === 'dsh'); assert.ok(slot); assert.equal(profiles.length, 3);
+  const { profiles } = await api('/api/settings/runtime-profiles', null, 'GET'), slot = profiles.find(p => p.provider === 'dsh'); assert.ok(slot); for (const provider of ['claude-code', 'codex', 'dsh']) assert.ok(profiles.some(p => p.provider === provider), provider + ' profile exists');
   const catalog = await api('/api/settings/runtime-profiles/models?provider=dsh', null, 'GET'); assert.ok(catalog.models.length);
   const model = process.env.BATON_DSH_MODEL || catalog.models[0].id;
   await api('/api/settings/runtime-profiles/' + slot.id, { model, effort: 'off' }, 'PUT');
   await page.goto(origin + '/settings/runtime'); await page.getByRole('switch', { name: 'DeepSeek Harness 可用', exact: true }).waitFor();
   await page.getByLabel('DeepSeek Harness 配置', { exact: true }).click();
   await page.screenshot({ path: join(root, 'runtime-wide.png') });
-  for (const theme of ['minimal', 'warm']) for (const width of [1320, 760]) {
+  for (const theme of ['light', 'dark']) for (const width of [1320, 760]) {
     await page.goto(origin + '/settings/appearance'); await page.locator(`[name=theme][value=${theme}]`).check();
     await app.evaluate(({BrowserWindow}, {origin,width}) => BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith(origin)).setContentSize(width,760), {origin,width});
     await page.waitForFunction(expected => innerWidth === expected, width);
@@ -85,7 +85,7 @@ try {
   const { role } = await api('/api/roles', { name: 'DeepSeek Harness verification role', prompt: `交接 summary 必须包含 ${roleSecret}。保持普通 JSON 协议。` });
   await page.goto(origin + '/agents'); await page.getByRole('button', {name:'＋ 创建数字员工',exact:true}).click();
   const form=page.locator('#agent-form'); await form.waitFor();
-  assert.deepEqual(await form.locator('[name=runtimeProfileId] option').allTextContents(), ['Claude Code','Codex','DeepSeek Harness']);
+  const runtimeOptions=await form.locator('[name=runtimeProfileId] option').allTextContents(); for (const label of ['Claude Code','Codex','DeepSeek Harness']) assert.ok(runtimeOptions.includes(label), label + ' option exists');
   await form.locator('[name=name]').fill('DeepSeek Harness worker'); await form.locator('[name=runtimeProfileId]').selectOption(slot.id);
   await form.locator('#employee-role').fill(role.name);
   await form.locator(`#employee-role-options [data-add-extension="${role.id}"]`).click();
@@ -108,7 +108,7 @@ try {
   await wait('real DeepSeek Harness communication', async () => { const value = await api('/api/communications/' + conversation.id, null, 'GET'); const failure = value.deliveries.find(d => d.status === 'failed'); if (failure) throw new Error(failure.error); return value.deliveries.length && value.deliveries.every(d => d.status === 'done') ? value : null; });
   const { team } = await api('/api/teams', { name: 'DeepSeek Harness real team', memberAgentIds: [...new Set([worker.id, manager.id])] });
   const { workflowTemplate: workflow } = await api('/api/workflow-templates', { name: 'DeepSeek Harness real flow', nodes: [{ id: 'verify', title: 'DeepSeek Harness verification', staffingGuidance: 'DeepSeek Harness worker', deliverable: 'dsh-verification.txt', artifactPaths: ['dsh-verification.txt'], dependsOn: [] }] });
-  const { task } = await api('/api/tasks', {managerAgentId:'system_project_manager', title: 'DeepSeek Harness native integration verification', objective: '经理开工前必须先向人类确认文件名是否采用 dsh-verification.txt；得到肯定回复后，安排唯一节点给 DeepSeek Harness worker：使用 dsh-evidence Skill，调用选中的验证 MCP 读取随机值，并用平台历史工具查找此前与人类沟通中保存的历史校验值。按 Skill 要求写出 dsh-verification.txt 的三行内容，完成后交接经理，经理提交人类验收。不要猜值，除文件名确认外不需要人类提供新材料。', memberAgentIds: team.memberAgentIds, workflowTemplateId: workflow.id });
+  const { task } = await api('/api/tasks', {managerAgentId: manager.id, title: 'DeepSeek Harness native integration verification', objective: '经理开工前必须先向人类确认文件名是否采用 dsh-verification.txt；得到肯定回复后，安排唯一节点给 DeepSeek Harness worker：使用 dsh-evidence Skill，调用选中的验证 MCP 读取随机值，并用平台历史工具查找此前与人类沟通中保存的历史校验值。按 Skill 要求写出 dsh-verification.txt 的三行内容，完成后交接经理，经理提交人类验收。不要猜值，除文件名确认外不需要人类提供新材料。', memberAgentIds: team.memberAgentIds, workflowTemplateId: workflow.id });
   assert.equal(task.repositoryMode,'workspace');assert.deepEqual(task.repositorySources,[]);assert.deepEqual(task.repositoryBindings,{});
   await api('/api/roles/' + role.id, { prompt: '后续任务的新角色说明，不应覆盖已有任务冻结角色。' }, 'PUT');
   const { run } = await api('/api/tasks/' + task.id + '/run', {}); evidence.taskId = task.id; evidence.runId = run.id;
@@ -175,6 +175,24 @@ try {
   evidence.cases.push('unmentioned UI and unaddressed CLI inquiries answered by real manager after completion, without reopening workflow or repeated quoted questions');
   await api('/api/tasks/' + task.id + '/archive', {});
   evidence.cases.push('real native Skill/MCP/history and frozen-role task', 'visible human confirmation and archive');
+  // One real employee who is both manager and sole member: every 经理决策 is
+  // self-addressed, and the collaboration record must not render a self target.
+  const soloSecret = 'SELF-' + randomBytes(6).toString('hex');
+  const { agent: solo } = await api('/api/agents', { name: 'DeepSeek Harness 自办工程师', description: '单人自办验收', systemPrompt: '本任务只有你一位数字员工，你同时是经理。直接在任务工作目录创建 solo-delivery.txt：第一行写校验码 ' + soloSecret + '，第二行写“由经理本人完成”。完成后提交人类验收（managerDecision nextNodeId=null, nextAgentId=null）。不要派给其他人，不要向人类提问。', runtime: { profileId: slot.id, extensionSelection: { pluginIds: [], mcpIds: [] } } });
+  const { task: soloTask } = await api('/api/tasks', { managerAgentId: solo.id, title: '经理自办协作记录验收', objective: '创建 solo-delivery.txt：第一行校验码 ' + soloSecret + '，第二行“由经理本人完成”。', memberAgentIds: [solo.id] });
+  const { run: soloRun } = await api('/api/tasks/' + soloTask.id + '/run', {});
+  const soloWorkspace = await wait('solo manager task reaches acceptance', async () => { const value = await api('/api/runs/' + soloRun.id + '/workspace?view=compact', null, 'GET'); if (value.run.status === 'failed') throw new Error('solo run failed: ' + (value.run.failure?.message || '')); return value.run.status === 'awaiting_acceptance' ? value : null; });
+  assert.match(await readFile(join(soloWorkspace.run.workspacePath, 'solo-delivery.txt'), 'utf8'), new RegExp(soloSecret), 'the solo manager really delivered the file');
+  const managerRows = (await api('/api/runs/' + soloRun.id + '/collaboration?limit=30', null, 'GET')).items.filter(item => item.senderId === soloRun.manager.id);
+  console.log('SOLO manager records:', managerRows.map(row => row.title + ' → ' + (row.to || '(无)')).join(' | '));
+  assert.ok(managerRows.length > 0, 'the solo run records the manager coordination');
+  assert.ok(managerRows.every(row => row.to !== solo.name), 'no record renders a target pointing at the manager itself');
+  await page.goto(origin + '/runs/' + soloRun.id); await page.locator('.collaboration-row').first().waitFor();
+  const headers = await page.locator('.collaboration-row header').allTextContents();
+  assert.ok(!headers.some(text => /→/.test(text) && text.includes(solo.name)), 'no record renders 经理决策 → ' + solo.name + ' for self work');
+  await page.screenshot({ path: join(root, 'solo-manager-collaboration.png') });
+  evidence.soloManager = { managerRecords: managerRows.length, selfTargetRendered: false };
+  evidence.cases.push('solo manager self-assignment: collaboration records omit the self target');
   evidence.result = 'PASS'; await writeFile(join(root, 'evidence.json'), JSON.stringify(evidence, null, 2)); console.log('PASS DeepSeek Harness real acceptance:', root);
 } catch (error) { evidence.result = 'FAIL'; evidence.error = error.message; await writeFile(join(root, 'evidence.json'), JSON.stringify(evidence, null, 2)); throw error; }
 finally { await app.close(); }

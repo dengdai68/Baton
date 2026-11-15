@@ -1,5 +1,13 @@
 # 代码导航
 
+待我处理性能与自办呈现：`web/app.js` 的 refreshInbox 以 runId+run.status+task.updatedAt 签名缓存 compact 详情，空闲轮询不再产生每任务一次 workspace 请求；`client/console-projections.mjs` 对发送者即接收者的消息隐藏目标。DeepSeek Harness 兼容层升级 0.2.2-rc.1（turnBoundaryOf），官方桥重拷贝见 `server/runtime/vendor/dsh-hooks/`；真实验收 test-dsh-real 覆盖单人经理自办不显示自指目标。
+
+待办详情连续处理：`web/app.js` 的 `advanceInbox`、`renderInboxPreview`、`sendInboxAnswer` 保留已回答问题/上下文与任务内容，标题同行进入工作区；回答成功及确认完成后选择下一项，失败保留草稿。`web/styles.css` 维护标题同行与窄屏换行。验证 `tests/settings.test.mjs` 的 inbox 场景及隔离 Electron；HTTP/CLI/Store 不变。
+
+消息输入与 MCP 编辑：`web/communication.js`、`web/app.js` 在显示本地消息时清空 composer，只对未确认失败展示恢复操作；保留精确回执合并及新草稿保护。`web/marketplace.mjs` 在详情读取失败后恢复编辑按钮，点击重新读取配置，复用原编辑表单。验证：communication/smoke tests、test-market-catalog；HTTP/CLI/Store 无协议变化。
+
+CLI 设置文案与自动化行内状态：`web/settings.mjs` 的分类/标题为「CLI」，保留宿主安装/刷新和快速开始，移除安装说明与登录提示；`web/styles.css` 的 `.automation-latest .status-pill` 在清除底色/圆角时同时清除共享内阴影，保留图标语义及控件焦点。隔离验收见 `scripts/test-runtime-settings.mjs`、`scripts/test-automations.mjs`；无 CLI/HTTP/Store 契约变化。
+
 画布连线/任务行操作/群聊删除：`web/workflow-editor.mjs` 关闭会把拖动中临时线算入的 X6 allowMulti，重复连线由编辑器校验，连线后焦点回画布；`web/app.js`、`web/styles.css` 让任务行下一步与更多菜单常显左对齐；`web/communication.js` 用齿轮进入编辑群聊并在弹框底部删除群聊（注入共享 confirmDialog）。`server/communication-store.mjs` 的 deleteCommunication 做群聊逻辑删除，`server/index.mjs` 提供 DELETE 路由，`server/persistence.mjs` 目录查询排除已删除；契约见 docs/17，验收见 test-workflow-editor、test-directory-headers、test-communication-workbench 与 communication.test。CLI 不覆盖长期沟通，无 CLI 变化。
 
 Baton更名：App/CLI/更新仓库与环境变量统一；当前协议、私有配置位置及显式本机切换见 `docs/development/baton-identity-cutover.md`。发送者配色按共享senderId引用，表单/成员换行复用共享控件。待办详情与市场辅助计数渐进加载，不扩大API或派工语义。

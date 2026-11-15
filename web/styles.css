@@ -3321,6 +3321,9 @@ html:root, html:root[data-theme] {
   #inbox-preview-content { display:flex; flex:1; flex-direction:column; width:100%; min-height:0; max-width:720px; margin:0 auto; padding:24px 32px 16px; }
   .inbox-preview-reading { flex:1; min-height:0; overflow:auto; }
   .inbox-preview h2 { font-size:var(--fs-title); line-height:28px; font-weight:600; margin:6px 0 4px; }
+  .inbox-task-heading { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; margin:6px 0 4px; }
+  .inbox-task-heading h2 { min-width:0; margin:0; }
+  .inbox-task-heading > button { flex:none; font-size:var(--fs-small); }
   .inbox-preview h3 { margin:24px 0 12px; font-size:var(--fs-title-sm); }
   .inbox-preview p { white-space:pre-wrap; color:var(--text-secondary); line-height:1.7; }
   .inbox-breadcrumb { display:flex; flex-wrap:wrap; gap:8px; color:var(--text-tertiary); font-size:var(--fs-small); }
@@ -3338,7 +3341,6 @@ html:root, html:root[data-theme] {
   .inbox-answer-actions .field-hint { margin-right:auto; }
   .inbox-answer [role=alert] { padding:0 8px; color:var(--st-failed); }
   .inbox-error { max-width:100%; padding:16px; border-radius:var(--r-md); background:var(--code-bg); color:var(--text); font:var(--fs-body)/1.7 var(--font-mono); white-space:pre-wrap; overflow-wrap:anywhere; }
-  .inbox-preview-footer { flex:none; margin-top:12px; }
   .inbox-summary { margin:20px 0; padding:12px 16px; border:1px solid var(--border-subtle); border-radius:var(--r-md); background:var(--bg-subtle); font-size:var(--fs-body); }
   .inbox-summary p { margin:4px 0 0; }
   .inbox-files { display:flex; flex-direction:column; align-items:flex-start; gap:8px; }
@@ -3565,7 +3567,7 @@ html:root .automation-directory-table .automation-name { display:block; width:10
 html:root .automation-switch { display:flex; justify-content:center; min-height:var(--control-h); padding:0; border:0; }
 .automation-switch input { flex:none; }
 .automation-latest { color:var(--text-secondary); font-size:var(--fs-small); }
-html:root .automation-latest .status-pill { padding:0; border:0; border-radius:0; background:transparent; font-size:var(--fs-small); color:var(--text-secondary); }
+html:root .automation-latest .status-pill { padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; font-size:var(--fs-small); color:var(--text-secondary); }
 html:root .automation-latest .status-pill svg { color:var(--c); }
 .automation-latest [data-tone=done] { color:var(--st-done); }
 html:root #roles-grid { display:flex; flex-direction:column; gap:0; }

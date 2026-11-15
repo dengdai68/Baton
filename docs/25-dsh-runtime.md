@@ -2,7 +2,7 @@
 
 ## 协议和边界
 
-DeepSeek Harness 为官方 Runtime，本轮验证版本 0.2.1-rc.2。使用本机 dsh sdk 的 JSON-RPC 协议，保持独立 Provider，不借用 Claude/Codex 适配器、不直接代替 Harness 调模型 API。设置增加唯一 dsh 槽位，可用开关及 model/effort；员工、CLI、任务/沟通共享该配置，冻结快照和人类确认语义保持不变。
+DeepSeek Harness 为官方 Runtime，本轮验证版本 0.2.2-rc.1。使用本机 dsh sdk 的 JSON-RPC 协议，保持独立 Provider，不借用 Claude/Codex 适配器、不直接代替 Harness 调模型 API。设置增加唯一 dsh 槽位，可用开关及 model/effort；员工、CLI、任务/沟通共享该配置，冻结快照和人类确认语义保持不变。
 
 适配入口 server/runtime/dsh.mjs；原生桥 server/runtime/dsh-plugin.mjs 只使用 Node 内置模块与 DeepSeek Harness 提供的 Cordis context，不新增依赖。打包后将桥源码写入 Trace 私有目录，外部 Node 不读取 ASAR。JSON 本身是有效 YAML，调用补丁用 JSON 序列化，避免自行拼接 YAML 或引入解析依赖。
 

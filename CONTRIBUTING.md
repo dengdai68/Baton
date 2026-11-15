@@ -19,7 +19,7 @@ npm start
 
 `npm start` / `npm run dev` 启动 Electron 及其自有随机端口子服务，不复用 4310，也不提供独立 Web 部署。数据根默认 `~/.baton/workspace`，业务资料在 `<数据根>/.baton/desktop/`（开发为 desktop-dev），任务文件为该根下独立 Task/Run；认证、启动定位和日志仍位于 `~/.baton`。目录整理与现有实例显式搬运见 docs/30-storage-layout.md。仓库改名不改变应用身份。数字员工以当前本机用户权限执行，Runtime bypass 不是沙箱；当前为本机单管理员应用。
 
-安装版启动时提供用户级 `baton` 命令，可在「设置 → 命令行 CLI」查看及修复；源码入口为 `npm run cli -- help`。CLI 连接运行中的客户端并复用当前登录授权，完整指南见 [docs/21](docs/21-configuration-cli.md)。
+安装版启动时提供用户级 `baton` 命令，可在「设置 → CLI」查看及修复；源码入口为 `npm run cli -- help`。CLI 连接运行中的客户端并复用当前登录授权，完整指南见 [docs/21](docs/21-configuration-cli.md)。
 
 ## 开发流程
 

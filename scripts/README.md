@@ -116,7 +116,7 @@ test-marketplace-edit.mjs 同时验收角色宽窄空态与 MCP 一致、重复�
 
 test-application-updates.mjs 用隔离 HOME/数据启动真实 Electron（BATON_UPDATES_APP 可指定安装包），通过注入控制器适配器覆盖正式版/Beta/无正式版/离线、下载进度与真实文件校验、后台发现更新及下载完成均不创建通知卡、返回更新区域仍可操作、原生安装繁忙/空闲和两主题宽窄布局。假DMG不执行、原生安装适配器不退出测试客户端，不冒充真实签名升级。
 
-test-dsh-real.mjs（BATON_DSH_REAL=1）使用隔离 Electron、真实 DeepSeek Harness/模型，核验 Runtime/CLI、原生 Skill/MCP/平台历史、角色冻结和完整任务到可见人类确认；仅为测试实例创建数据，不碰操作者实例。DeepSeek Harness 命令可由 BATON_DSH_COMMAND 指定，模型可由 BATON_DSH_MODEL 指定；原 DSH_HOME 仅交给原生凭据服务读取。
+test-dsh-real.mjs（BATON_DSH_REAL=1）使用隔离 Electron、真实 DeepSeek Harness/模型；Runtime 列表/员工表单按包含关系核对 Provider（不锁定总数），主任务使用自建经理（经理必须是所选成员），并验证单人经理自办的协作记录不显示“→ 同一员工”，核验 Runtime/CLI、原生 Skill/MCP/平台历史、角色冻结和完整任务到可见人类确认；仅为测试实例创建数据，不碰操作者实例。DeepSeek Harness 命令可由 BATON_DSH_COMMAND 指定，模型可由 BATON_DSH_MODEL 指定；原 DSH_HOME 仅交给原生凭据服务读取。
 
 `BATON_SETTINGS_MISSING=1 node scripts/test-runtime-settings.mjs` 使用隔离 HOME/PATH 验证未安装 Runtime 的关闭/锁定、API/CLI 拒绝、可执行文件安装/移除后的重新读取及两主题宽窄布局。可结合 BATON_SETTINGS_APP 指向安装候选，不调用模型。
 
@@ -246,3 +246,5 @@ test-portable-runtimes 支持 BATON_PORTABLE_EFFORT，真实模式先经 CLI 查
 `node scripts/test-desktop-notifications.mjs`：隔离 HOME/配置/工作目录验证两主题宽窄窗口 toast 覆盖原生 dialog、晚开模态/Popover、保留编辑与焦点；真实 HTTP/受控 Provider 产生任务待验收/完成和私聊/后台群聊通知，验证精确跳转和不回放历史。设 `BATON_NOTIFICATIONS_APP` 指定安装包，`BATON_NOTIFICATIONS_NATIVE=1` 验证真实 OS show 事件，`BATON_NOTIFICATIONS_REAL=1` 使用当前已授权 Claude 认证完成真实任务及沟通；受控协议输出不是真实模型证据。截图/诊断只保存到系统临时目录。
 
 纸张最终目录回归：test-automations 核对状态 chips、原生启停/行导航；test-roles-ui 与 test-directory-headers 核对全宽角色行和独立删除菜单；test-market-catalog 覆盖1440/760浅深主题登录无卡片、插件/MCP来源与页脚、跨页使用筛选及真实工具命令的失败/重试呈现（工具响应夹具不代表 Provider 验证）。
+
+MCP 编辑回归：`test-market-catalog.mjs` 覆盖详情读取失败后通过右上编辑重新读取配置、键盘进入原表单和取消保留；工具发现失败与编辑相互独立。

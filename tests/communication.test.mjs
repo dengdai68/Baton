@@ -113,7 +113,7 @@ test('communication list marks only incoming unread replies, never pending outgo
   assert.doesNotMatch(f.query('.communication-list').innerHTML, /<i|待回复消息/);
 });
 
-test('attachment upload failure retains the draft and references without sending a partial message', async t => {
+test('attachment upload failure keeps a recoverable outbox without sending a partial message', async t => {
   const f = communicationReaderFixture(t);
   f.mount(); f.take('').resolve({ conversations: [] }); f.take('/a').resolve(f.result([])); await f.flush();
   const files = f.query('[data-chat-file]');
@@ -122,9 +122,13 @@ test('attachment upload failure retains the draft and references without sending
   const sending = f.query('form').onsubmit({ preventDefault() {} });
   f.take('/a/attachments?name=a.txt').resolve({ attachment: { id: 'attachment-one' } }); await f.flush();
   f.take('/a/attachments?name=b.txt').reject(new Error('disk full')); await sending;
-  assert.equal(input.value, '保留原草稿');
+  assert.equal(input.value, '');
   assert.equal(f.pending.some(row => row.url.endsWith('/messages')), false);
-  assert.match(f.query('[data-chat-attachments]').innerHTML, /a\.txt/); assert.match(f.query('[data-chat-attachments]').innerHTML, /b\.txt/);
+  assert.equal(f.query('[data-chat-attachments]').innerHTML, '');
+  assert.match(f.query('.communication-messages').innerHTML, /a\.txt/); assert.match(f.query('.communication-messages').innerHTML, /b\.txt/);
+  const requestId=f.query('.communication-messages').innerHTML.match(/data-recover-chat-message="([^"]+)"/)[1];
+  f.query(`[data-recover-chat-message="${requestId}"]`).onclick();
+  assert.equal(input.value, '保留原草稿');
   const retry = f.query('form').onsubmit({ preventDefault() {} });
   assert.equal(f.pending.some(row => row.url.endsWith('name=a.txt')), false, 'successful upload is not repeated');
   f.take('/a/attachments?name=b.txt').resolve({ attachment: { id: 'attachment-two' } }); await f.flush();
@@ -332,6 +336,7 @@ test('outgoing chat appears immediately and a GET receipt before POST replaces i
   const input=f.query('textarea');input.value='pending message';input.oninput();
   const sending=f.query('form').onsubmit({preventDefault(){}}),post=f.take('/a/messages'),payload=JSON.parse(post.options.body);
   assert.match(f.query('.communication-messages').innerHTML,/data-outgoing-state="sending"/);
+  assert.equal(input.value,'');assert.doesNotMatch(f.query('.communication-messages').innerHTML,/发送中/);
   input.value='new draft while pending';input.oninput();
   const message={id:'confirmed-message',clientRequestId:payload.clientRequestId,content:payload.content,createdAt:'2026-01-01T00:01:00.000Z',sender:{type:'human',name:'你'}};
   f.tick();f.take('').resolve({conversations:[]});const result=f.result([]);result.messages=[message];f.take('/a').resolve(result);await f.flush();
@@ -342,14 +347,14 @@ test('outgoing chat appears immediately and a GET receipt before POST replaces i
   assert.equal((f.query('.communication-messages').innerHTML.match(/pending message/g)||[]).length,1);
 });
 
-test('lost chat response stays unconfirmed until exact request ID is read, then clears only the sent draft and attachments',async t=>{
+test('lost chat response retains a recoverable snapshot until its exact request ID is read',async t=>{
   const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
   const files=f.query('[data-chat-file]');files.files=[{name:'proof.txt',size:3}];files.onchange({currentTarget:files});
   const input=f.query('textarea');input.value='saved but response lost';input.oninput();const sending=f.query('form').onsubmit({preventDefault(){}});
   f.take('/a/attachments?name=proof.txt').resolve({attachment:{id:'attachment-proof'}});await f.flush();
   const post=f.take('/a/messages'),payload=JSON.parse(post.options.body);post.reject(new Error('connection closed'));await sending;
-  assert.match(f.query('.communication-messages').innerHTML,/发送未确认/);assert.equal(input.value,payload.content);
-  assert.match(f.query('[data-chat-attachments]').innerHTML,/proof.txt/);assert.equal(f.pending.filter(row=>row.url.endsWith('/messages')).length,0,'failure never resends automatically');
+  assert.match(f.query('.communication-messages').innerHTML,/发送未确认/);assert.equal(input.value,'');
+  assert.equal(f.query('[data-chat-attachments]').innerHTML,'');assert.match(f.query('.communication-messages').innerHTML,/proof.txt/);assert.equal(f.pending.filter(row=>row.url.endsWith('/messages')).length,0,'failure never resends automatically');
   const result=f.result([]);result.messages=[{id:'saved-message',clientRequestId:payload.clientRequestId,content:payload.content,attachments:[{id:'attachment-proof',name:'proof.txt',bytes:3}],createdAt:'2026-01-01T00:01:00.000Z',sender:{type:'human',name:'你'}}];
   f.tick();f.take('').resolve({conversations:[]});f.take('/a').resolve(result);await f.flush();
   assert.equal(input.value,'');assert.equal(f.query('[data-chat-attachments]').innerHTML,'');
@@ -370,7 +375,7 @@ test('retrying unchanged chat reuses its ID while editing content creates a new 
   const f=communicationReaderFixture(t);f.mount();f.take('').resolve({conversations:[]});f.take('/a').resolve(f.result([]));await f.flush();
   const input=f.query('textarea');input.value='retry this';input.oninput();
   const attempt=async()=>{const send=f.query('form').onsubmit({preventDefault(){}}),post=f.take('/a/messages');const payload=JSON.parse(post.options.body);post.reject(new Error('fixture 503'));await send;return payload.clientRequestId;};
-  const first=await attempt(),retry=await attempt();assert.equal(first,retry);assert.equal((f.query('.communication-messages').innerHTML.match(/data-outgoing-state="unconfirmed"/g)||[]).length,1);
+  const first=await attempt();f.query(`[data-recover-chat-message="${first}"]`).onclick();const retry=await attempt();assert.equal(first,retry);assert.equal((f.query('.communication-messages').innerHTML.match(/data-outgoing-state="unconfirmed"/g)||[]).length,1);
   input.value='a revised message';input.oninput();assert.notEqual(await attempt(),first);
 });
 

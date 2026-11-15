@@ -66,7 +66,7 @@ Provider 最终错误保留原始措辞、退出码、路径和可用 stderr，�
 
 Claude Code print/stream-json 可以在 result 之后等待后台命令、子代理、Monitor 或计划唤醒，再执行后续轮次。平台按原生后台任务生命周期区分等待与活动执行：有已知后台工作或成功轮次等待时，停止无进展计时；后续执行重新启用。仅活动轮次既无后台工作也无可审计进展时才报空闲超时。不能把首个 result 当最终交付，也不能因十分钟后台安静就取消 TTS。等待由原生 CLI 的后台生命周期和等待上限管理；保留人类暂停/终止、API 重试计时、非零退出与结构化失败。参见 [Claude 官方说明](https://code.claude.com/docs/en/headless#background-tasks-at-exit)。
 
-DeepSeek Harness 接入使用本机 dsh sdk（实测 0.2.1-rc.2），系统/角色提示词通过原生 systemPrompt.section 注入，字面模板不插值；用户消息只承载当前输入。通过 session/prompt 入队并以 session/wait 等待原生托管后续执行，检查完成原因和进程退出，不在第一条 turn/end 提前结算。取消终止调用进程组；会话缺失、非 JSON、token 上限和 SDK 不兼容均如实失败。仅助手公开正文/思考及工具事件进入脱敏内容，system/user/request header 不倾倒。详见 docs/25。
+DeepSeek Harness 接入使用本机 dsh sdk（实测 0.2.2-rc.1），系统/角色提示词通过原生 systemPrompt.section 注入，字面模板不插值；用户消息只承载当前输入。通过 session/prompt 入队并以 session/wait 等待原生托管后续执行，检查完成原因和进程退出，不在第一条 turn/end 提前结算。取消终止调用进程组；会话缺失、非 JSON、token 上限和 SDK 不兼容均如实失败。仅助手公开正文/思考及工具事件进入脱敏内容，system/user/request header 不倾倒。详见 docs/25。
 
 Runtime 展示名称为Claude Code、Codex、DeepSeek Harness、Cursor、Gemini CLI、Qwen Code、Kimi Code、Pi、OpenCode；固定 Provider ID、执行文件与能力边界见 [多 Runtime 接入](29-runtime-providers.md)。服务通过与执行相同的 CLI 环境检查可执行文件（不运行模型、不读取凭据）；Store 注入该只读事实，在 list/get 返回 installed 和实际 enabled。未安装或客户端 PATH 找不到可执行文件时 enabled=false、界面开关关闭并锁定，HTTP/CLI 拒绝修改 enabled 和发起新调用；安装检查不改写用户开关偏好、员工或 Task 冻结事实。安装/PATH 修复后重开客户端或重新进入 Runtime 设置重新读取；已安装但未登录不属于未安装。
 

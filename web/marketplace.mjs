@@ -189,6 +189,16 @@ function marketUI({api,esc,openModal,closeModal,confirmDialog,toast,headerAction
     target.closest('.modal').classList.add('extension-detail-modal','detail-drawer');
     target.closest('.modal').querySelector('[data-close-modal]').focus();
     const entry=allItems.find(item=>item.id===id);
+    let loadedItem=null;
+    const edit=target.closest('.modal').querySelector('[data-edit-mcp]');
+    if(edit)edit.onclick=async()=>{
+      edit.disabled=true;
+      try {
+        const item=loadedItem || await api(`${path}/${encodeURIComponent(id)}`);
+        if(edit.isConnected)installMcp(item);
+      }catch(error){if(edit.isConnected)toast(error.message,true);}
+      finally{if(edit.isConnected)edit.disabled=false;}
+    };
     target.closest('.modal').querySelector('[data-copy-extension]').onclick=()=>copyExtension(id);
     const rediscover=target.closest('.modal').querySelector('[data-mcp-rediscover]');
     if(rediscover)rediscover.onclick=()=>{const refresh=target.querySelector('[data-mcp-tools-refresh]');if(refresh)refresh.click();};
@@ -209,7 +219,7 @@ function marketUI({api,esc,openModal,closeModal,confirmDialog,toast,headerAction
     };
     try {
       const item=await api(`${path}/${encodeURIComponent(id)}`);if(!target.isConnected)return;
-      if(!plugin){const edit=target.closest('.modal').querySelector('[data-edit-mcp]');edit.disabled=false;edit.onclick=()=>installMcp(item);}
+      loadedItem=item;
       target.removeAttribute('role');
       const server=Object.values(item.configuration?.mcpServers || {})[0];
       const type=server?.command?'stdio':server?.type==='sse'?'SSE':server?.url?'HTTP':'类型未记录';
@@ -236,6 +246,7 @@ function marketUI({api,esc,openModal,closeModal,confirmDialog,toast,headerAction
         target.querySelector('.extension-detail-overview').insertAdjacentHTML('afterend',warningMarkup(item.warnings,esc));
         const tabs=[...target.querySelectorAll('[data-plugin-tab]')];const select=button=>{tabs.forEach(tab=>{tab.setAttribute('aria-selected',String(tab===button));tab.tabIndex=tab===button?0:-1;});const panel=target.querySelector('[role=tabpanel]');panel.setAttribute('aria-labelledby',button.id);panel.innerHTML=components(item,esc,button.dataset.pluginTab);};tabs.forEach((button,index)=>{button.onclick=()=>select(button);button.onkeydown=event=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const next=event.key==='Home'?tabs[0]:event.key==='End'?tabs.at(-1):tabs[(index+(event.key==='ArrowRight'?1:tabs.length-1))%tabs.length];select(next);next.focus();};});}
     } catch(error) {if(target.isConnected) {target.setAttribute('role','alert');target.textContent=error.message;}}
+    finally {if(edit?.isConnected)edit.disabled=false;}
   }
   function installMcp(item) {
     if(item instanceof Event)item=null;

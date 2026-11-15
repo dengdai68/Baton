@@ -157,9 +157,8 @@ export function communicationSenderTone(sender = {}) {
 // Local delivery feedback is deliberately separate from persisted messages.
 // A rejected/lost response cannot prove that the server did not save a message.
 export function outgoingMessageFeedback(entry, scope) {
-  if (!entry || entry.status === 'confirmed') return '';
-  const failed = entry.status === 'unconfirmed';
-  return `<div class="outgoing-message-feedback" role="${failed ? 'alert' : 'status'}" data-outgoing-feedback="${failed ? 'unconfirmed' : 'sending'}"><span>${failed ? '发送未确认' : '发送中…'}</span>${failed ? `<small>${escapeHtml(entry.error)}。请先检查记录，再恢复草稿；不会自动重发。</small><button type="button" class="text-action" data-recover-${scope}-message="${escapeHtml(entry.id)}">恢复草稿</button>` : ''}</div>`;
+  if (!entry || entry.status !== 'unconfirmed') return '';
+  return `<div class="outgoing-message-feedback" role="alert" data-outgoing-feedback="unconfirmed"><span>发送未确认</span><small>${escapeHtml(entry.error)}。请先检查记录，再恢复草稿；不会自动重发。</small><button type="button" class="text-action" data-recover-${scope}-message="${escapeHtml(entry.id)}">恢复草稿</button></div>`;
 }
 
 export function outgoingAttachmentMarkup(entry) {
@@ -614,6 +613,8 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       state.outbox ||= new Map();
       const outgoing={id:requestId,key,signature,content,draftRevision,createdAt:new Date().toISOString(),status:'sending',attachments,mentions:[...state.mentions]};
       state.outbox.set(requestId,outgoing);
+      state.draft = ''; state.mentions = []; state.attachments = []; state.requestId = null;
+      input.value = ''; input.focus({preventScroll:true}); closeFloatingList(query('.communication-mentions'));
       state.sending = true; submit.disabled = true; renderAttachments();
       renderMessages();const messages=query('.communication-messages');messages.scrollTop=messages.scrollHeight;
       const accept = message => {

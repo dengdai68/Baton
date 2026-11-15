@@ -15,7 +15,7 @@ export async function mountExtensions(ctx, instructions, directory) {
   // Resolve peers relative to the actual CLI, not this private file or the app.
   const host = createRequire(pathToFileURL(await realpath(process.argv[1])));
   const version = JSON.parse(await readFile(host.resolve('@deepseek-ai/dsh-agent/package.json'),'utf8')).version;
-  if (version !== '0.2.1-rc.2') throw new Error(`插件兼容层需要 DeepSeek Harness 0.2.1-rc.2，当前为 ${version}`);
+  if (version !== '0.2.2-rc.1') throw new Error(`插件兼容层需要 DeepSeek Harness 0.2.2-rc.1，当前为 ${version}`);
   const agents = new Map(), children = new Map();
   for (const plugin of plugins) for (const agent of plugin.agents) {
     const definition = {...agent,qualifiedName:`${plugin.name}:${agent.name}`};

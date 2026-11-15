@@ -9,7 +9,7 @@ marketplace 拥有来源和完整性检查；plugin-compatibility 解析源组�
 ## 依赖与复用
 
 - 直接声明现有锁文件中的 js-yaml 4.3.2，以安全 JSON schema 解析 Markdown frontmatter；不执行标签、脚本或表达式。原始正文不经过模型改写。
-- 复用 MIT 许可的 DeepSeek Harness 0.2.1-rc.2 官方 hooks-claude-code、hooks-codex、hook-protocol 的发布 JS。随应用保存原代码和许可，执行时在 Trace 私有目录物化，解析到当前实际 dsh 入口的原生 peer packages；不安装全局插件、不读取全局 Hook 配置、不从网络运行代码。
+- 复用 MIT 许可的 DeepSeek Harness 0.2.2-rc.1 官方 hooks-claude-code、hooks-codex、hook-protocol 的发布 JS。随应用保存原代码和许可，执行时在 Trace 私有目录物化，解析到当前实际 dsh 入口的原生 peer packages；不安装全局插件、不读取全局 Hook 配置、不从网络运行代码。
 - 官方桥接仅支持声明的事件/command 类型；在计划阶段明确拒绝不能等价执行的组件和字段，不能依赖上游“警告后跳过”的默认行为。版本不匹配明确失败，不强行加载旧桥。
 - 子代理使用 Harness 原生 spawn 服务、独立 Session 和独立作用域系统段，等待真实结果和清理，转交取消信号；不以同一模型对话中的文字角色扮演代替。
 - 多目标解析/计划结构参考 EveryInc/compound-engineering-plugin 的 Converter/Writer 模式；不直接运行其全局安装器。dsh-movein 的子代理转 Skill 策略不采用。
