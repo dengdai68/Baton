@@ -1,3 +1,4 @@
+import { $t } from "./i18n.mjs";
 // One fixed slot per native CLI. Installation and authentication are separate facts.
 export const RUNTIME_PROVIDERS = Object.freeze({
   'claude-code': {label:'Claude Code',command:'claude',efforts:['low','medium','high','xhigh','max']},
@@ -13,5 +14,5 @@ export const RUNTIME_PROVIDERS = Object.freeze({
 export const RUNTIME_IDS = Object.freeze(Object.keys(RUNTIME_PROVIDERS));
 export const PORTABLE_RUNTIME_IDS = Object.freeze(RUNTIME_IDS.slice(3));
 export const RUNTIME_EFFORT_LEVELS = Object.fromEntries(Object.entries(RUNTIME_PROVIDERS).map(([id,value])=>[id,value.efforts]));
-export const runtimeLabel = id => RUNTIME_PROVIDERS[id]?.label || id || '未知 Runtime';
+export const runtimeLabel = id => RUNTIME_PROVIDERS[id]?.label || id || $t("未知 Runtime");
 export const nativeSessionId = value => typeof value==='string'&&/^[A-Za-z0-9_-]{8,200}$/.test(value);

@@ -17,6 +17,12 @@ import { createSqlitePersistence } from "../server/persistence.mjs";
 import { executeRun, readNodeResult, parseEmployeeResponse, terminateRun } from "../server/orchestrator.mjs";
 import { runClaudeCodeCli, RuntimeSessionMissingError } from "../server/runtime/local-cli.mjs";
 import { taskNeedsAttention, collaborationRecords, mentionables, roleExecutionStatus, workflowFocus } from "../client/console-projections.mjs";
+import { $t, $tm, intlLocale, currentLocale } from '../client/i18n.mjs';
+// Extracted renderer source runs outside its module; expose the translators it imports
+// (identity in the source language, so rendered text is unchanged).
+Object.assign(globalThis, { $t, $tm, intlLocale, currentLocale });
+// Source assertions predate $t(): compare the original wording, not the call form.
+const sourceWording = text => text.replace(/\$\{\$t\(("(?:[^"\\]|\\.)*")\)\}/g, (_, literal) => JSON.parse(literal)).replace(/\$t\(("(?:[^"\\]|\\.)*")\)/g, '$1');
 
 async function directory(prefix) { const path = await mkdtemp(join(tmpdir(), prefix)); await mkdir(join(path, "repos", "app", ".git"), { recursive: true }); return path; }
 
@@ -1783,7 +1789,7 @@ test("collaboration responsibilities come from configured prompts, not role-name
 test("workspace Artifact counts do not filter custom business paths by docs/repos prefixes", async () => { const app = await readFile(new URL("../web/app.js", import.meta.url), "utf8"); assert.ok(!app.includes("/^(docs|repos)\\//")); assert.doesNotMatch(app, /历史兼容/); });
 test("workspace shows current files and CHANGE while retaining documented Artifact history", async () => {
   const [app, artifactDoc] = await Promise.all([
-    readFile(new URL("../web/app.js", import.meta.url), "utf8"),
+    readFile(new URL("../web/app.js", import.meta.url), "utf8").then(sourceWording),
     readFile(new URL("../docs/13-local-artifact-rendering.md", import.meta.url), "utf8")
   ]);
   assert.ok(app.indexOf('id="collaboration-mode"') < app.indexOf('id="directory-mode"'));

@@ -97,3 +97,5 @@ model-catalog 投影新增六种原生模型目录与思考档位，忽略提供
 裸 Skill：configuration 无清单时仅识别根 SKILL.md 或 skills/<目录>/SKILL.md，安全读取 name/description；marketplace 在 plugin/skills/<name>/ 复制完整目录并生成外壳，source 保留原字节。Git 更新复用 source.origin 与名称身份，不改 Runtime 协议；本地重新导入更新。完整描述不截断，元信息无效整批失败。测试见 marketplace/plugin-updates 与 test-bare-skills。
 
 plugin-compatibility 不检查 Skill 可选 allowed-tools/allowedTools 来决定支持与否；保持源字节和 native 投影元信息，其他字段/Hook/子代理与摘要校验不变。已有安装 detail/resolve 直接按当前规则重新计算，显式 compatibility 命令刷新目录缓存。portable-extensions 测试覆盖九 Runtime 绑定、六 Runtime 字段保留与旧摘要刷新，真实 OpenCode 验证含会话续接。
+
+Runtime 审计事件、诊断与错误摘要保持源语言产生和保存；界面按当前语言翻译已知文字，原始 Provider 输出不翻译。

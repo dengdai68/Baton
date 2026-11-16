@@ -109,3 +109,7 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 宿主保留数据盘定位检查，子服务 cwd 使用配置目录。服务 ready 只代表认证与 HTTP 已建立，业务库由首次业务请求或后台恢复打开；安装空闲预约等待真实业务状态，未知/失败不得视为空闲。任务和沟通的员工 cwd 规则保持不变。
 
 系统通知由 `notifications.mjs` 校验、去重和管理，main 只接收自有已登录子服务提交的任务待验收/完成与员工沟通新消息元数据，点击打开对应任务/会话；原生失败不影响业务，不增加 renderer 发送桥。未关闭编辑表单先确认跳转。退出登录/后台替换清理通知，系统授权和专注模式决定真实显示。页面 toast 通过共享手动 Popover 跨过模态遮罩，详见 docs/18、06。
+
+## 界面语言
+
+宿主偏好 `desktop-preferences.json` 新增 `language`（`system` / `zh-CN` / `zh-TW` / `en`，与 closeMode、appearance 合并写入）。启动时按偏好或 macOS 首选语言（`BATON_LOCALE` 可覆盖系统语言，供隔离验收）解析语言，读取 `client/locales/<locale>.json` 后构建应用菜单、托盘、原生对话框、系统通知与 CLI 安装确认窗。renderer 只有两条新增受限通道：`getLocale`（`desktop:locale:get`，主窗口控制台页面读取已解析语言）与 `setLanguage`（`desktop:language:set`，仅设置 → 常规可写）；切换后立即重建菜单与托盘。配置迁移与更新状态文字保持源语言，在显示时翻译。

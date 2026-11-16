@@ -4,7 +4,7 @@
   <p><strong>面向超级个体的 AI 团队操作系统：像定制虚拟员工一样配置 Agent，组织多 Agent 小组或团队，协作完成任务并交付真实文件。</strong></p>
   <p>你负责目标与决策，让 AI 员工各司其职。</p>
   <p>Claude Code · Codex · DeepSeek Harness · Cursor · Gemini CLI · Qwen Code · Kimi Code · Pi · OpenCode</p>
-  <p><a href="https://github.com/dengdai68/Baton/releases/latest">下载 macOS 版</a> · <a href="#快速上手">快速上手</a> · <a href="#cli">CLI</a> · <a href="docs/README.md">文档</a> · <a href="https://github.com/dengdai68/Baton/issues">反馈</a></p>
+  <p><a href="https://github.com/dengdai68/Baton/releases/latest">下载 macOS 版</a> · <a href="#快速上手">快速上手</a> · <a href="#cli">CLI</a> · <a href="docs/README.md">文档</a> · <a href="https://github.com/dengdai68/Baton/issues">反馈</a> · <a href="README.en.md">English</a></p>
 </div>
 
 从代码开发、调研分析到知识整理和内容生产，你可以为 Agent 定义职责、提示词、模型与工具，与单个虚拟员工交流，也可以组建团队共同执行任务。Baton 将成员、协作、执行记录和交付文件组织在同一个本机工作空间中。
@@ -25,6 +25,7 @@
 | 定时自动化 | 用 Cron 安排重复任务，独立记录每轮执行、触发状态和成果。 |
 | 插件、Skill 与 MCP | 安装插件、加载 Skill，为员工选择 MCP；查看工具列表和输入输出 schema，核对 Runtime 兼容性。 |
 | 文件与控制台 | 预览、下载工作目录中的实际文件，查看累计变更与差异；控制台增量追加执行记录，按需展开正文。 |
+| 多语言界面 | 支持简体中文、繁體中文与 English；默认跟随 macOS 语言，可在「设置 → 常规 → 语言」切换。业务内容、提示词、CLI 输出与历史记录保持原文。 |
 
 | 数字员工 | 团队沟通 |
 | :---: | :---: |
@@ -105,6 +106,8 @@ npm start
 ```
 
 `npm start` 启动 Electron 及其自有随机端口后台；`npm run dev` 使用相同入口。源码 CLI 使用 `node cli/main.mjs --help`。更多开发与构建说明见 [CONTRIBUTING](CONTRIBUTING.md)。
+
+界面文字的译文位于 `client/locales/`（`en.json`、`zh-TW.json`），以简体中文源文本为键；`npm test` 会检查每条界面文字都有英文和繁体译文，隔离实机验收见 `node scripts/test-i18n.mjs`。
 
 ---
 

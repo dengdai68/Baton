@@ -175,3 +175,5 @@ DeepSeek Harness 为第三个固定 Runtime，设置与员工选择复用现有�
 
 
 Baton使用com.baton.desktop、Baton.app及baton命令；认证数据库和任务历史保留。安装版配置根直接为 `~/.baton`，首次启动在打开认证和持久浏览器之前完成用户授权的旧 `desktop` 配置目录搬迁；中断可继续、冲突或旧实例活动则拒绝启动，错误使用独立内存 partition 的共享提示窗，不创建空实例。数据根仍由显式locator确定，冻结扩展旧地址通过已有映射读取。CLI 使用新根的 endpoint/委托授权；详见 docs/30 与 development/baton-identity-cutover.md。
+
+界面语言：默认跟随 macOS 首选语言（繁体地区与 zh-Hant 解析为繁體中文，其他中文为简体，其余为英文），设置 → 常规 → 语言可显式选择并保存到 `desktop-preferences.json` 的 `language` 键（与其他偏好序列化合并写入）。宿主用 `client/i18n.mjs` 与 `client/locales/` 翻译菜单、托盘、原生对话框、系统通知和 CLI 安装确认；renderer 仅新增 `getLocale`（主窗口控制台页面读取）与 `setLanguage`（仅常规设置可写）两条关闭式通道，没有通用文件或进程能力。`BATON_LOCALE` 只覆盖“跟随系统”时的系统语言，供隔离验收确定结果。业务数据、提示词、CLI 输出与存储历史不翻译。

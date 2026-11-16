@@ -1,3 +1,4 @@
+import { $t } from "../../client/i18n.mjs";
 import {diagnosticRedactor} from '../../server/diagnostics.mjs';
 const redact=diagnosticRedactor();
 const identifier=value=>typeof value==='string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
@@ -9,11 +10,11 @@ export function desktopNotice(input) {
   const title=label(input.title);if(!title)return null;
   if(['run.awaiting_acceptance','run.completed'].includes(input.type) && identifier(input.runId) && identifier(input.taskId))return {
     id:input.id,type:input.type,targetId:input.runId,route:'/runs/'+input.runId,
-    options:{id:input.id,groupId:'task-'+input.taskId,title:input.type==='run.completed'?'任务已完成':'任务待验收',body:title}
+    options:{id:input.id,groupId:'task-'+input.taskId,title:input.type==='run.completed'?$t("任务已完成"):$t("任务待验收"),body:title}
   };
   if(input.type==='communication.message' && identifier(input.conversationId) && label(input.senderName))return {
     id:input.id,type:input.type,targetId:input.conversationId,route:'/communication/'+input.conversationId,
-    options:{id:input.id,groupId:'chat-'+input.conversationId,title:label(input.senderName)+' 发来新消息',body:title}
+    options:{id:input.id,groupId:'chat-'+input.conversationId,title:$t("{0} 发来新消息", [label(input.senderName)]),body:title}
   };
   return null;
 }

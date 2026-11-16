@@ -87,3 +87,5 @@ Skill 可选字段 allowed-tools/allowedTools 不再构成六种 Runtime 的不�
 
 
 2026-11-14本轮真实验收使用官方Claude Code 2.1.325、Codex 0.167.2、DeepSeek Harness 0.2.2-rc.1。升级解决旧Claude缺少system-prompt-snapshot选项、旧DSH stdout混入目录日志的问题，未添加适配回退。验证包含普通App登录shell解析的实际CLI、原生会话续接、真实任务到人类验收及三Runtime私聊/群聊问答；resume系统指令另有请求形状检查，不能把模型输出服从性当请求未送达。后续仍应从官方来源更新并按实际executable验证。
+
+Runtime 显示名、思考档位标签与模型目录说明在界面按当前语言显示；Runtime ID、原生参数、调用与会话协议不变，服务端诊断文字保持源语言并在展示时翻译。

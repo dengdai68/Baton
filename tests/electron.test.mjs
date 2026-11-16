@@ -11,6 +11,9 @@ import { normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode,
 import { confirmCliInstallation } from "../apps/electron/cli-confirmation.mjs";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
+import { $t, $tm } from "../client/i18n.mjs";
+// Source assertions predate $t(): compare the original wording, not the call form.
+const sourceWording = text => text.replace(/\$\{\$t\(("(?:[^"\\]|\\.)*")\)\}/g, (_, literal) => JSON.parse(literal)).replace(/\$t\(("(?:[^"\\]|\\.)*")\)/g, '$1');
 
 test("CLI and close preferences accept only their own Settings entry", () => {
   const origin = "http://127.0.0.1:51983", mainFrame = { url: `${origin}/settings/cli` }, contents = { mainFrame };
@@ -45,7 +48,7 @@ test("login only offers application setup and never source commands or downloads
   assert.doesNotMatch(source + html, /auth:setup|source-setup-guidance|owned-setup-guidance|client-download|BatonDesktop/);
   for (const status of [{configured:true},{configured:false,available:true},{configured:false,available:false}]) {
     const nodes=new Map();const get=key=>{if(!nodes.has(key))nodes.set(key,{hidden:true,focus(){},addEventListener(){},querySelector:get,username:{focus(){}}});return nodes.get(key);};
-    vm.runInNewContext(source,{document:{querySelector:get},AbortSignal,fetch:async()=>({ok:true,json:async()=>status})});
+    vm.runInNewContext(source.replace(/^import .*\n/m, ""),{document:{querySelector:get,documentElement:{}},AbortSignal,$t,$tm,localizeStatic(){},fetch:async()=>({ok:true,json:async()=>status})});
     await new Promise(resolve=>setImmediate(resolve));
     assert.equal(get("#login-form").hidden,!status.configured);
     if(!status.configured)assert.equal(get("#desktop-setup-guidance").hidden,false);
@@ -130,7 +133,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
     return document;
   };
   const document = fixture();
-  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getLocale", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode", "setLanguage"]);
   const attributes = new Map(), navigation = { matches: selector => selector === ".nav-item", setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), blur: () => assert.fail("must not move focus") };
   const restore = handlers.get("desktop:tray-restore"), marked = () => attributes.has("data-desktop-restored-focus");
   document.activeElement = navigation;
@@ -150,7 +153,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
   assert.match(css, /:focus-visible \{ outline:2px solid var\(--focus\)/);
   assert.match(css, /\.nav-item\[data-desktop-restored-focus\]:focus-visible \{ outline:none; \}/);
   const main = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
-  assert.match(main, /label: "打开 Baton", click: showWindowFromTray/);
+  assert.match(sourceWording(main), /label: "打开 Baton", click: showWindowFromTray/);
   const calls = [], host = { window: { isDestroyed: () => false, webContents: { send: (...args) => calls.push(args) } }, showWindow: () => calls.push("show") };
   const restoreHost = vm.runInNewContext(`${main.slice(main.indexOf("function showWindowFromTray()"), main.indexOf("function ensureTray()"))}\nshowWindowFromTray`, host);
   restoreHost(); assert.deepEqual(calls, [["desktop:tray-restore"], "show"], "notify before showing the window");
@@ -162,7 +165,7 @@ test("first-close controller cancels, deduplicates, saves before action and keep
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   const controller = source.slice(source.indexOf("async function closeWindow()"), source.indexOf("function installMenu()"));
   const fixture = (show, fail = false) => {
-    const calls = [], context = { savingCloseMode: false, closingPrompt: false, quitting: false, closeMode: null, window: {}, BrowserWindow: function BrowserWindow() {},
+    const calls = [], context = { $t, savingCloseMode: false, closingPrompt: false, quitting: false, closeMode: null, window: {}, BrowserWindow: function BrowserWindow() {},
       appDialog: show, diagnostic() {}, diagnostics: () => ({ status: () => ({ filePath: "/test/log" }) }),
       showWindow: () => calls.push("visible"), changeCloseMode: async mode => { calls.push(`save:${mode}`); if (fail) throw new Error("write failed"); context.closeMode = mode; },
       applyCloseMode: () => calls.push(`apply:${context.closeMode}`) };
@@ -222,21 +225,23 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(source, /nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true/);
   assert.doesNotMatch(source, /createStore/);
-  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 9);
-  assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 2);
+  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 11);
+  assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   assert.equal((source.match(/isCliSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   const preload = await readFile(new URL("../apps/electron/preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /process.isMainFrame && \/\^http:/);
   assert.match(preload, /getPreferences: \(\) => ipcRenderer.invoke\("desktop:preferences:get"\)/);
   assert.match(preload, /setCloseMode: \(mode\) => ipcRenderer.invoke\("desktop:preferences:set", mode\)/);
-  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 11);
+  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 13);
+  assert.match(preload, /getLocale: \(\) => ipcRenderer.invoke\("desktop:locale:get"\)/);
+  assert.match(preload, /setLanguage: \(language\) => ipcRenderer.invoke\("desktop:language:set", language\)/);
   assert.match(preload, /getCliInstallation: \(\) => ipcRenderer.invoke\("desktop:cli:status"\)/);
   assert.match(preload, /installCli: \(\) => ipcRenderer.invoke\("desktop:cli:install"\)/);
   assert.match(source, /args.length \|\| !isCliSender/);
   assert.match(source, /await confirmCliInstallation\(\{ BrowserWindow, parent: window, status, signal: shellEnvironmentAbort.signal, backgroundColor: appearanceBackground\(\) \}\)/);
   assert.doesNotMatch(preload, /node:|send:|invoke:|require\("(?:fs|child_process)"/);
   assert.doesNotMatch(source, /\bdialog\.(?:showMessageBox|showErrorBox|showOpenDialog|showSaveDialog)/, "no system dialogs remain in the desktop host");
-  assert.match(source, /buttons: \["退出程序", "保留在菜单栏", "取消"\], defaultIndex: 2, cancelIndex: 2/);
+  assert.match(sourceWording(source), /buttons: \["退出程序", "保留在菜单栏", "取消"\], defaultIndex: 2, cancelIndex: 2/);
   assert.match(source, /child\?\.kill\(\)/);
   assert.match(source, /requestSingleInstanceLock/);
   assert.match(source, /setUserAgent\(.*BatonDesktop\/1/);
@@ -254,7 +259,7 @@ test('CLI host bridge requires isolated host consent, rejects arguments/navigati
   const code = source.slice(source.indexOf("  ipcMain.handle('desktop:cli:status'"), source.indexOf('  // Presentation only:'));
   const handlers = new Map(); let writes = 0, allowed = true, accepted = false, answer;
   const status = { canInstall: true, installed: false, commandPath: '/fixture/bin/baton', profilePaths: ['/fixture/.zshrc'] };
-  const context = { ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, isCliSender: () => allowed,
+  const context = { $t, ipcMain: { handle: (name, fn) => handlers.set(name, fn) }, isCliSender: () => allowed,
     contents: {}, controlOrigin: "http://127.0.0.1:51983", quitting: false, installingCli: false, window: {}, BrowserWindow() {}, shellEnvironmentAbort: new AbortController(), diagnostic() {}, cliUnavailable() {}, appearanceBackground: () => "#ffffff",
     cliInstallation: () => ({ status: async () => status, install: async paths => { assert.equal(JSON.stringify(paths), JSON.stringify(status.profilePaths)); writes++; return { ...status, installed: true }; } }),
     confirmCliInstallation: async () => answer ? new Promise(resolve => { answer.resolve = resolve; }) : accepted };
@@ -418,12 +423,12 @@ test('Web confirmation flows use the in-app dialog, never native dialogs', async
     const source = await readFile(new URL(file, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /(?<![\w$.-])(?:window\.)?(?:confirm|alert|prompt)\(/, `${file} must not call native dialogs`);
   }
-  const app = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
+  const app = sourceWording(await readFile(new URL('../web/app.js', import.meta.url), 'utf8'));
   assert.match(app, /function confirmDialog\(\{ title, message, confirmLabel = "确认", danger = false \}\)/);
   assert.match(app, /openModal, closeModal, confirmDialog,/);
   assert.match(app, /confirmDialog\(\{ title: "删除工作流"/);
   assert.match(app, /confirmDialog\(\{ title: "归档任务"/);
-  const settings = await readFile(new URL('../web/settings.mjs', import.meta.url), 'utf8');
+  const settings = sourceWording(await readFile(new URL('../web/settings.mjs', import.meta.url), 'utf8'));
   assert.match(settings, /await confirmDialog\(\{ title: "移除拉取 Token"/);
   const shared = await readFile(new URL('../web/styles.css', import.meta.url), 'utf8');
   assert.match(shared, /\.modal\.confirm-dialog \{[^}]*overflow:hidden/);
@@ -755,7 +760,7 @@ test("workspace opening resolves only the authenticated current Run directory", 
     assert.equal(options.credentials, "include"); assert.equal(options.redirect, "error");
     return { ok, json: async () => workspace };
   } } };
-  vm.runInNewContext(code, { ipcMain: { handle: (_name, fn) => { handler = fn; } }, contents, controlOrigin, isConsoleURL, URL, AbortSignal,
+  vm.runInNewContext(code, { $t, ipcMain: { handle: (_name, fn) => { handler = fn; } }, contents, controlOrigin, isConsoleURL, URL, AbortSignal,
     isAbsolute: value => value.startsWith("/"), lstat: async () => ({ isDirectory: () => directory }), shell: { openPath: async value => { opened = value; return failure; } } });
   const event = { sender: contents, senderFrame: mainFrame };
   assert.equal(await handler(event), true); assert.equal(opened, path); opened = null;

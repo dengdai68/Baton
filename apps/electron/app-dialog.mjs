@@ -1,3 +1,4 @@
+import { $t } from "../../client/i18n.mjs";
 import { fileURLToPath } from "node:url";
 
 // Main-owned app-styled confirmation/notice window, replacing system dialogs.
@@ -14,8 +15,8 @@ const WIDTH = 480, MAX_WIDTH = 720, MIN_HEIGHT = 148, WORK_AREA_MARGIN = 64;
 const MEASURE = "Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)";
 
 export function showAppDialog({ BrowserWindow, parent = null, kind = "question", title, message, detail = "", buttons, defaultIndex = 0, cancelIndex = buttons.length - 1, signal, workAreaHeight, backgroundColor = "#ffffff" }) {
-  if (!Array.isArray(buttons) || buttons.length === 0 || buttons.some(label => typeof label !== "string" || !label)) throw new Error("对话框按钮无效");
-  for (const index of [defaultIndex, cancelIndex]) if (!Number.isInteger(index) || index < 0 || index >= buttons.length) throw new Error("对话框按钮索引无效");
+  if (!Array.isArray(buttons) || buttons.length === 0 || buttons.some(label => typeof label !== "string" || !label)) throw new Error($t("对话框按钮无效"));
+  for (const index of [defaultIndex, cancelIndex]) if (!Number.isInteger(index) || index < 0 || index >= buttons.length) throw new Error($t("对话框按钮索引无效"));
   if (signal?.aborted || parent?.isDestroyed()) return Promise.resolve(cancelIndex);
   const page = new URL("./app-dialog.html", import.meta.url);
   page.searchParams.set("kind", kind === "error" ? "error" : "question");

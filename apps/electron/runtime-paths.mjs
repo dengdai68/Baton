@@ -1,3 +1,4 @@
+import { $t } from "../../client/i18n.mjs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { defaultTaskWorkspaceRoot } from "../../server/data-home.mjs";
@@ -13,7 +14,7 @@ export function resolveDesktopDataRoot({ packaged, env = {}, home = homedir() } 
 }
 
 export function desktopBrowserPaths(dataRoot) {
-  if(typeof dataRoot!=='string' || !isAbsolute(dataRoot)) throw new Error('桌面配置目录必须是绝对路径');
+  if(typeof dataRoot!=='string' || !isAbsolute(dataRoot)) throw new Error($t("桌面配置目录必须是绝对路径"));
   return {userData:join(dataRoot,'browser'),sessionData:join(dataRoot,'browser'),logs:join(dataRoot,'electron-logs'),crashDumps:join(dataRoot,'crash-dumps')};
 }
 
@@ -26,7 +27,7 @@ export function legacyDesktopDataRoot({ packaged, userData, env = {}, sourceRoot
 }
 
 export function desktopStoragePaths(configurationDirectory, { home = homedir(),controlRoot=configurationDirectory,workspaceRoot=defaultTaskWorkspaceRoot(home),previousRuntimeRoots=[],instance='desktop' } = {}) {
-  if (typeof configurationDirectory !== "string" || !isAbsolute(configurationDirectory)) throw new Error("桌面配置目录必须是绝对路径");
+  if (typeof configurationDirectory !== "string" || !isAbsolute(configurationDirectory)) throw new Error($t("桌面配置目录必须是绝对路径"));
   // Only workspaceRoot determines records; configuration paths cannot override it.
   const dataRoot = storageBusinessRoot(workspaceRoot,instance);
   return {
@@ -49,7 +50,7 @@ export function defaultDesktopLocation({home=homedir(),packaged}){
 }
 
 export function desktopControlPlaneEnvironment({ environment = {}, storage, electronExecutable, bootstrapToken }) {
-  if (!storage?.dataRoot || typeof electronExecutable !== "string" || !electronExecutable) throw new Error("桌面控制面启动配置无效");
+  if (!storage?.dataRoot || typeof electronExecutable !== "string" || !electronExecutable) throw new Error($t("桌面控制面启动配置无效"));
   const inherited = Object.fromEntries(Object.entries(environment)
     .filter(([key]) => key !== "HOST" && !key.startsWith("BATON_")));
   const values = Object.fromEntries(Object.entries(storage)

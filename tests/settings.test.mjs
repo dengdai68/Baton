@@ -15,6 +15,12 @@ import { resolve, join, isAbsolute, normalize, parse } from "node:path";
 import { STATUS_TEXT, buildConsoleEntries, taskActionLabel, taskMatchesFilter, taskNeedsAttention } from "../client/console-projections.mjs";
 import { collaborationRecords } from "../client/console-projections.mjs";
 import { createMarketplaceUI, createMcpMarketplaceUI } from "../web/marketplace.mjs";
+import { $t, $tm } from '../client/i18n.mjs';
+// Extracted renderer source runs outside its module; expose the translators it imports
+// (identity in the source language, so rendered text is unchanged).
+Object.assign(globalThis, { $t, $tm });
+// Source assertions predate $t(): compare the original wording, not the call form.
+const sourceWording = text => text.replace(/\$\{\$t\(("(?:[^"\\]|\\.)*")\)\}/g, (_, literal) => JSON.parse(literal)).replace(/\$t\(("(?:[^"\\]|\\.)*")\)/g, '$1');
 
 function closePanel() {
   const options = ["quit", "tray"].map(value => ({ value, checked: false, disabled: true })), save = { disabled: true }, status = {}, retry = { hidden: true };
@@ -138,7 +144,7 @@ test("General settings saves immediately, restores a failed change and ignores d
 });
 
 test("Runtime headings stay subordinate and General uses an explicit native radio group", async () => {
-  const settings = await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8");
+  const settings = sourceWording(await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8"));
   const css = await readFile(new URL("../web/styles.css", import.meta.url), "utf8");
   const desktop = (await Promise.all(["../web/tokens.css","../web/styles.css","../apps/electron/compact.css"].map(path=>readFile(new URL(path,import.meta.url),"utf8")))).join("\n");
   assert.doesNotMatch(settings, /本机执行说明与版本|data-control-version|<select[^>]*name="closeMode"/);
@@ -267,7 +273,7 @@ test("overview presents execution facts without inferred completion percentages"
 });
 
 test("workspace removes delivery-version navigation without removing backend Artifact history", async () => {
-  const source = await readFile(new URL("../web/app.js", import.meta.url), "utf8");
+  const source = sourceWording(await readFile(new URL("../web/app.js", import.meta.url), "utf8"));
   assert.doesNotMatch(source, /data-ws-tab="artifacts"|artifact-snapshots-panel|loadArtifactSnapshot|selectedArtifactId/);
   assert.match(source, /data-open-acceptance-directory/);
   assert.ok(source.includes('>变更</button>'));
@@ -347,7 +353,7 @@ test("console does not echo collaboration messages as a second system result", a
 test('CHANGE shares complete workspace hierarchy and retains deleted files and gitlinks', async () => {
   const source = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
   const { workingDirectoryIcon } = await import('../client/console-projections.mjs');
-  const context = vm.createContext({ workingDirectoryIcon, esc: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;') });
+  const context = vm.createContext({ $t, $tm, workingDirectoryIcon, esc: value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;') });
   vm.runInContext(source.slice(source.indexOf('function directoryNodeIcon('), source.indexOf('function renderWorkingDirectory(')) + source.slice(source.indexOf('function workingChangesTree('), source.indexOf('function rememberDiffReading(')), context);
   const view = { directoryOpen: {}, directory: { directories: [{ path: 'docs/content', type: 'files' }] } };
   const repo = { path: '', changes: [{ path: 'docs/content/nested/a.js', status: 'M' }, { path: 'docs/content/deleted.md', status: 'D' }] };
@@ -887,7 +893,7 @@ test("Runtime catalog requests are sequenced so stale responses never overwrite 
 test('Diff explorer nests changed files, preserves collapsed directories and escapes paths', async () => {
   const source = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
   const {workingDirectoryIcon} = await import('../client/console-projections.mjs');
-  const context = vm.createContext({workingDirectoryIcon, esc: value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')});
+  const context = vm.createContext({$t,$tm,workingDirectoryIcon, esc: value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;')});
   vm.runInContext(source.slice(source.indexOf('function directoryNodeIcon'),source.indexOf('function renderWorkingDirectory')) + source.slice(source.indexOf('function workingChangesTree'),source.indexOf('function renderWorkingChanges')),context);
   const repo = {path:'repos/app',changes:[{path:'repos/app/src/a.js',status:'M'},{path:'repos/app/src/nested/<b>.js',status:'A'},{path:'repos/app/tests/a.js',status:'D'}]};
   const html = context.workingChangesTree(repo,{selectedDiffPath:'repos/app/src/a.js',diffTreeOpen:{'repos/app/src':false}},'vscode-light');
@@ -903,7 +909,7 @@ test('Diff explorer nests changed files, preserves collapsed directories and esc
 test('Edit diff separates block rows without extra newline text nodes, retaining source blank lines', async () => {
   const source = await readFile(new URL('../web/app.js', import.meta.url), 'utf8');
   const {editDiff} = await import('../client/console-projections.mjs');
-  const context = vm.createContext({editDiff,esc:String});
+  const context = vm.createContext({$t,$tm,editDiff,esc:String});
   vm.runInContext(source.slice(source.indexOf('function editDiffMarkup'),source.indexOf('async function hydrateConsoleContent')),context);
   const html = context.editDiffMarkup({filePath:'src/a.js',oldText:'a\n\nb',newText:'a\n\nc'});
   assert.doesNotMatch(html,/<\/span>\n/);
@@ -932,7 +938,7 @@ test('file tool bodies show Write text rather than its JSON envelope and preserv
 
 test('split Diff aligns replacements, preserves line numbers and escapes code',async()=>{
  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
- const context=vm.createContext({esc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;')});
+ const context=vm.createContext({$t,$tm,esc:value=>String(value).replaceAll('&','&amp;').replaceAll('<','&lt;')});
  vm.runInContext(source.slice(source.indexOf('function workingDiffMarkup'),source.indexOf('function workingChangesTree')),context);
  const preview={patch:'--- a/a\n+++ b/a\n@@ -1,3 +1,3 @@\n same\n-old\n+<new>\n end\n'};
  const split=context.workingDiffMarkup(preview,'split');
@@ -945,7 +951,7 @@ test('split Diff aligns replacements, preserves line numbers and escapes code',a
 
 test('console session labels use the event Trace and never expose a provisional Codex ID as native',async()=>{
  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');
- const context=vm.createContext({runtimeLabel,RUNTIME_IDS,esc:value=>String(value).replaceAll('<','&lt;')});
+ const context=vm.createContext({$t,$tm,runtimeLabel,RUNTIME_IDS,esc:value=>String(value).replaceAll('<','&lt;')});
  vm.runInContext(source.slice(source.indexOf('function consoleSessionMarkup'),source.indexOf('function renderChatEvent')),context);
  const event={type:'session.created',actor:{id:'agent'},data:{traceId:'trace',sessionId:'allocated'}};
  const trace={id:'trace',agentId:'agent',providerSessionId:'allocated',sessionMode:'new'};
@@ -1052,7 +1058,7 @@ test("thinking hydration displays recorded public text and explains empty histor
   for(const node of nodes.slice(2)){assert.match(node.innerHTML,/未保存可显示的思考正文/);assert.doesNotMatch(node.innerHTML,/已脱敏|敏感片段已隐藏/);}
 });
 
-function runWithCache(source,context={},...options){context.ByteCache=ByteCache;context.runtimeLabel=runtimeLabel;context.RUNTIME_IDS=RUNTIME_IDS;return vm.runInNewContext(source,context,...options);}
+function runWithCache(source,context={},...options){context.$t=$t;context.$tm=$tm;context.ByteCache=ByteCache;context.runtimeLabel=runtimeLabel;context.RUNTIME_IDS=RUNTIME_IDS;return vm.runInNewContext(source,context,...options);}
 
 test('work-root reset preserves presentation preferences and reloads the retained login',async()=>{const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');const callback=source.slice(source.indexOf('onDataReset:'),source.indexOf('onWorkspaceSaved:'));assert.doesNotMatch(callback,/removeItem|clear\(/);assert.match(callback,/location.replace/);});
 

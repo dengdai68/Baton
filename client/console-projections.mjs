@@ -1,3 +1,4 @@
+import { $t, $tm, currentLocale, intlLocale } from "./i18n.mjs";
 import {runtimeLabel} from "./runtime-providers.mjs";
 // Browser-safe view models shared by Web and desktop hosts. These functions only
 // project already-authoritative API payloads; they never own domain state.
@@ -41,9 +42,9 @@ export function consoleContentTokens(value, { json = true, truncated = false } =
 }
 
 export const STATUS_TEXT = {
-  backlog: "草稿", planning: "进行中", running: "进行中", awaiting_human: "等待你的澄清",
-  review: "进行中", awaiting_acceptance: "待你验收", paused: "已暂停", done: "已完成",
-  blocked: "错误中断", failed: "错误中断", completed: "已完成", cancelled: "已终止"
+  backlog: $t("草稿"), planning: $t("进行中"), running: $t("进行中"), awaiting_human: $t("等待你的澄清"),
+  review: $t("进行中"), awaiting_acceptance: $t("待你验收"), paused: $t("已暂停"), done: $t("已完成"),
+  blocked: $t("错误中断"), failed: $t("错误中断"), completed: $t("已完成"), cancelled: $t("已终止")
 };
 
 // Shell-like tools whose already-redacted input carries a real command line.
@@ -222,12 +223,12 @@ export function editDiff(oldText, newText, { maxCells = 2000000 } = {}) {
 // These categories are display-only. Store remains the authority for every
 // Task/Run transition; clients use them only to make human next actions clear.
 export const TASK_FILTERS = Object.freeze([
-  { id: "all", label: "全部" },
-  { id: "attention", label: "待你处理" },
-  { id: "active", label: "执行中" },
-  { id: "backlog", label: "草稿" },
-  { id: "done", label: "已完成" },
-  { id: "cancelled", label: "已终止" }
+  { id: "all", label: $t("全部") },
+  { id: "attention", label: $t("待你处理") },
+  { id: "active", label: $t("执行中") },
+  { id: "backlog", label: $t("草稿") },
+  { id: "done", label: $t("已完成") },
+  { id: "cancelled", label: $t("已终止") }
 ]);
 
 const taskAttentionStatuses = new Set(["awaiting_human", "awaiting_acceptance", "paused", "blocked", "failed"]);
@@ -247,17 +248,17 @@ export function taskMatchesFilter(status, filter) {
 
 export function taskActionLabel(status) {
   return {
-    awaiting_human: "去澄清",
-    awaiting_acceptance: "去验收",
-    paused: "查看并继续",
-    blocked: "查看恢复选项",
-    failed: "查看恢复选项",
-    done: "查看结果",
-    cancelled: "查看记录"
-  }[status] || "进入任务空间";
+    awaiting_human: $t("去澄清"),
+    awaiting_acceptance: $t("去验收"),
+    paused: $t("查看并继续"),
+    blocked: $t("查看恢复选项"),
+    failed: $t("查看恢复选项"),
+    done: $t("查看结果"),
+    cancelled: $t("查看记录")
+  }[status] || $t("进入任务空间");
 }
 
-export const EVENT_KIND_LABEL = { output: "输出", thinking: "推理片段", tool: "工具调用", deliver: "交付", system: "系统" };
+export const EVENT_KIND_LABEL = { output: $t("输出"), thinking: $t("推理片段"), tool: $t("工具调用"), deliver: $t("交付"), system: $t("系统") };
 
 const asArray = (value) => Array.isArray(value) ? value : [];
 const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -268,22 +269,24 @@ export function providerLabel(agent) {
 
 export function formatRelativeTime(iso, now = Date.now()) {
   const minutes = Math.floor(Math.max(0, now - new Date(iso).getTime()) / 60000);
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes} 分钟前`;
+  if (minutes < 1) return $t("刚刚");
+  if (minutes < 60) return $t("{0} 分钟前", [minutes]);
   const hours = Math.floor(minutes / 60);
-  return hours < 24 ? `${hours} 小时前` : `${Math.floor(hours / 24)} 天前`;
+  return hours < 24 ? $t("{0} 小时前", [hours]) : $t("{0} 天前", [Math.floor(hours / 24)]);
 }
 
 export function formatExactTime(iso) {
-  return new Date(iso).toLocaleString("zh-CN", { hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  return new Date(iso).toLocaleString(intlLocale(), { hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 export function formatMessageTime(iso, now = new Date()) {
   if (!iso) return '';
   const day = new Date(iso);
   if (!Number.isFinite(day.getTime())) return '';
-  const year = day.getFullYear() === now.getFullYear() ? '' : `${day.getFullYear()}年`;
-  return `${year}${day.getMonth() + 1}月${day.getDate()}日 ${day.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false})}`;
+  const sameYear = day.getFullYear() === now.getFullYear();
+  // zh-CN keeps the established "11月17日 14:05" wording; other locales use Intl.
+  if (currentLocale() === 'zh-CN') return `${sameYear ? '' : `${day.getFullYear()}年`}${day.getMonth() + 1}月${day.getDate()}日 ${day.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false})}`;
+  return day.toLocaleString(intlLocale(), { ...(sameYear ? {} : { year: 'numeric' }), month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
 export function classifyEvent(event = {}) {
@@ -340,7 +343,7 @@ export function isRoutineConsoleEvent(event = {}) {
   // Task audits prefix their message with the exact Provider event type;
   // communication audits do not. Normalize that envelope, not business text.
   const summary = text.startsWith(`${type}: `) ? text.slice(type.length + 2) : text;
-  return ["Provider 会话已初始化", "成员会话已连接", "Provider 已返回结构化结果", "模型已更新执行进展", "模型正在整理执行方案"].includes(summary);
+  return [$t("Provider 会话已初始化"), $t("成员会话已连接"), $t("Provider 已返回结构化结果"), $t("模型已更新执行进展"), $t("模型正在整理执行方案")].includes(summary);
 }
 
 export function workspaceAgents(workspace = {}, agents = [], { includeDeleted = false } = {}) {
@@ -367,13 +370,13 @@ export function roleExecutionStatus(run = {}, traces = [], agentId) {
   const latest = agentTraces.at(-1), terminal = terminalRunStatuses.has(run.status);
   const activeTrace = (!terminal || run.status === "failed") && latest?.status === "running" ? latest : null;
   const failed = !activeTrace && latest?.status === "failed";
-  const terminalLabel = terminal ? run.status === "failed" ? "已停止" : STATUS_TEXT[run.status] || run.status : null;
+  const terminalLabel = terminal ? run.status === "failed" ? $t("已停止") : STATUS_TEXT[run.status] || run.status : null;
   return {
     active: Boolean(activeTrace), activeTrace, failed,
     state: activeTrace ? "running" : failed ? "error" : "idle",
     traceCount,
-    label: activeTrace ? `● 执行中 · ${activeTrace.workflowNodeId}`
-      : `${failed ? "● 错误" : `○ ${terminalLabel || "空闲"}`} · ${traceCount} 条 Trace`,
+    label: activeTrace ? $t("● 执行中 · {0}", [activeTrace.workflowNodeId])
+      : $t("{0} · {1} 条 Trace", [failed ? $t("● 错误") : `○ ${terminalLabel || $t("空闲")}`, traceCount]),
   };
 }
 
@@ -428,7 +431,7 @@ function groupConsecutiveToolEntries(entries) {
   while (index < entries.length) {
     const current = entries[index];
     if (current.type !== "tool") { grouped.push(current); index += 1; continue; }
-    const toolName = current.event.data?.toolName || current.event.data?.providerEventType || "工具";
+    const toolName = current.event.data?.toolName || current.event.data?.providerEventType || $t("工具");
     if (toolName === "StructuredOutput") { grouped.push(current); index += 1; continue; }
     // A group is one visual run of identical calls within a single invocation;
     // merging across Trace boundaries would hide later invocations' entries.
@@ -437,7 +440,7 @@ function groupConsecutiveToolEntries(entries) {
     let next = index + 1;
     while (next < entries.length) {
       const candidate = entries[next];
-      const candidateName = candidate.type === "tool" ? (candidate.event.data?.toolName || candidate.event.data?.providerEventType || "工具") : null;
+      const candidateName = candidate.type === "tool" ? (candidate.event.data?.toolName || candidate.event.data?.providerEventType || $t("工具")) : null;
       if (candidateName !== toolName || (candidate.event.data?.traceId || null) !== traceId) break;
       tools.push(candidate);
       next += 1;
@@ -487,10 +490,10 @@ function collaborationContent(message) {
   if (report) {
     try { JSON.parse(report); } catch { return report; }
   }
-  const facts = [["status", "状态"], ["verdict", "结论"], ["handoff", "交接文件"]]
+  const facts = [["status", $t("状态")], ["verdict", $t("结论")], ["handoff", $t("交接文件")]]
     .filter(([key]) => typeof envelope[key] === "string")
     .map(([key, label]) => `${label}：${envelope[key]}`);
-  return facts.length ? facts.join("\n\n") : "员工已提交结构化交接结果，详情见本轮控制台。";
+  return facts.length ? facts.join("\n\n") : $t("员工已提交结构化交接结果，详情见本轮控制台。");
 }
 
 export function collaborationRecords(workspace = {}) {
@@ -503,9 +506,9 @@ export function collaborationRecords(workspace = {}) {
   const memberName = id => participants.find(item => item.id === id)?.name || (run.manager?.id === id ? run.manager.name : id);
   const time = value => Date.parse(value) || 0;
   const chronological = (a, b) => time(a.timestamp) - time(b.timestamp);
-  const kinds = { inquiry: "人类咨询", inquiry_answer: "答疑回复", agent_consultation: "成员咨询", clarification_question: "询问人类", consultation_answer: "咨询答复", clarification_answer: "人类答复", human_instruction: "追加指令", instruction: "追加指令", handoff: "交接", manager_decision: "经理决策", escalation: "升级协调", coordination_notice: "协调说明", automatic_retry: "重试说明" };
-  const purposes = { manager: "经理协调", node: "节点派工", consultation: "咨询投递", instruction: "指令投递", inquiry: "答疑投递", delivery_review: "交付复核" };
-  const eventTitles = { "dispatch.retry_scheduled": "安排重试", "dispatch.retry_requested": "人类重试", "dispatch.retry_stopped": "因失败停止", "dispatch.escalated": "升级协调", "dispatch.coordination_followups_settled": "协调投递结算", "session.reset": "会话重建", "run.completed": "人类确认完成", "run.awaiting_acceptance": "提交人类验收", "run.acceptance_reopened": "重新协作", "run.recovered": "中断恢复", "run.cancelled": "人类终止", "run.paused": "任务暂停", "run.resumed": "任务继续", "run.inquiries_cancelled": "停止答疑", "run.failed": "执行失败", "run.retry_requested": "人类恢复", "run.orchestration_retry_requested": "重新协调", "run.reassessment_requested": "重新评估" };
+  const kinds = { inquiry: $t("人类咨询"), inquiry_answer: $t("答疑回复"), agent_consultation: $t("成员咨询"), clarification_question: $t("询问人类"), consultation_answer: $t("咨询答复"), clarification_answer: $t("人类答复"), human_instruction: $t("追加指令"), instruction: $t("追加指令"), handoff: $t("交接"), manager_decision: $t("经理决策"), escalation: $t("升级协调"), coordination_notice: $t("协调说明"), automatic_retry: $t("重试说明") };
+  const purposes = { manager: $t("经理协调"), node: $t("节点派工"), consultation: $t("咨询投递"), instruction: $t("指令投递"), inquiry: $t("答疑投递"), delivery_review: $t("交付复核") };
+  const eventTitles = { "dispatch.retry_scheduled": $t("安排重试"), "dispatch.retry_requested": $t("人类重试"), "dispatch.retry_stopped": $t("因失败停止"), "dispatch.escalated": $t("升级协调"), "dispatch.coordination_followups_settled": $t("协调投递结算"), "session.reset": $t("会话重建"), "run.completed": $t("人类确认完成"), "run.awaiting_acceptance": $t("提交人类验收"), "run.acceptance_reopened": $t("重新协作"), "run.recovered": $t("中断恢复"), "run.cancelled": $t("人类终止"), "run.paused": $t("任务暂停"), "run.resumed": $t("任务继续"), "run.inquiries_cancelled": $t("停止答疑"), "run.failed": $t("执行失败"), "run.retry_requested": $t("人类恢复"), "run.orchestration_retry_requested": $t("重新协调"), "run.reassessment_requested": $t("重新评估") };
   const publicEvent = event => ({
     id: event.id, timestamp: event.timestamp, category: "event", eventType: event.type,
     title: eventTitles[event.type], content: event.message || "", from: event.actor?.name || "Baton",
@@ -523,20 +526,20 @@ export function collaborationRecords(workspace = {}) {
     const selfAddressed = item.recipient?.type === "agent" && item.recipient?.id && item.recipient.id === item.sender?.id;
     return {
       id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type, senderId: item.sender?.id || null,
-      from: item.sender?.name || "Baton", to: selfAddressed ? null : item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? "你" : item.recipient?.id || null),
-      title: kinds[item.kind] || (item.replyToMessageId ? "答复" : "协作消息"), content: collaborationContent(item), attachments: asArray(item.attachments),
-      status: answer ? "当前：已回答" : waiting ? "当前：等待答复" : "", statusCode,
+      from: item.sender?.name || "Baton", to: selfAddressed ? null : item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? $t("你") : item.recipient?.id || null),
+      title: kinds[item.kind] || (item.replyToMessageId ? $t("答复") : $t("协作消息")), content: collaborationContent(item), attachments: asArray(item.attachments),
+      status: answer ? $t("当前：已回答") : waiting ? $t("当前：等待答复") : "", statusCode,
       tone: waiting || item.kind === "escalation" ? "warning" : item.sender?.type === "human" ? "info" : ["manager_decision", "agent_consultation"].includes(item.kind) ? "violet" : "teal",
       human: item.sender?.type === "human" || item.recipient?.type === "human",
       questionType: item.questionType, routingReason: item.routingReason,
-      reply: question ? `${question.sender?.name || "团队"}：${question.content || ""}` : null,
+      reply: question ? `${question.sender?.name || $t("团队")}：${question.content || ""}` : null,
       replyId: item.id, canReply: Boolean(!answer && waiting && item.recipient?.type === "human"), traceId: item.traceId,
       deliveries: [], relatedEvents: [],
     };
   });
   const recordById = new Map(records.map(item => [item.id, item]));
   const start = run.startedAt && run.task?.objective ? {
-    id: `${run.id}:start`, timestamp: run.startedAt, category: "event", eventType: "run.started", title: "开始协作",
+    id: `${run.id}:start`, timestamp: run.startedAt, category: "event", eventType: "run.started", title: $t("开始协作"),
     from: "Baton", to: run.manager?.name || null, senderType: "system", content: run.task.objective,
     acceptanceCriteria: asArray(run.task.acceptanceCriteria), tone: "info", statusCode: "recorded", status: "", human: true, deliveries: [], relatedEvents: [],
   } : null;
@@ -587,15 +590,15 @@ export function collaborationRecords(workspace = {}) {
       const recovery = !source && events.find(event => ["run.retry_requested", "run.orchestration_retry_requested"].includes(event.type) && event.data?.dispatchId === delivery.id);
       let record = source ? recordById.get(source.id) : recovery ? eventRecords.get(recovery.id) : delivery.dedupeKey === "initial-manager" ? start : null;
       if (!record) {
-        record = { id: delivery.id, timestamp: delivery.createdAt, category: "dispatch", title: "建立投递", from: "Baton", to: memberName(delivery.recipientAgentId), senderType: "system", content: "", status: "", statusCode: "recorded", tone: "violet", human: false, sourceNotice: "来源未关联；仅展示已建立的实际投递。", deliveries: [], relatedEvents: [] };
+        record = { id: delivery.id, timestamp: delivery.createdAt, category: "dispatch", title: $t("建立投递"), from: "Baton", to: memberName(delivery.recipientAgentId), senderType: "system", content: "", status: "", statusCode: "recorded", tone: "violet", human: false, sourceNotice: $t("来源未关联；仅展示已建立的实际投递。"), deliveries: [], relatedEvents: [] };
         records.push(record); recordById.set(record.id, record);
       }
       const history = asArray(delivery.traceIds).map((id, index) => {
         const trace = byTrace.get(id);
-        return trace ? { id: `attempt:${id}`, category: "attempt", timestamp: trace.startedAt, endedAt: trace.endedAt || null, title: `第 ${index + 1} 次执行`, status: trace.status, statusLabel: ({ running: "执行中", completed: "执行结束", failed: "失败", cancelled: "已停止" })[trace.status] || trace.status, traceId: id, error: trace.error || null } : null;
+        return trace ? { id: `attempt:${id}`, category: "attempt", timestamp: trace.startedAt, endedAt: trace.endedAt || null, title: $t("第 {0} 次执行", [index + 1]), status: trace.status, statusLabel: ({ running: $t("执行中"), completed: $t("执行结束"), failed: $t("失败"), cancelled: $t("已停止") })[trace.status] || trace.status, traceId: id, error: trace.error || null } : null;
       }).filter(Boolean).concat(deliveryHistory.get(delivery.id) || []).sort(chronological);
-      const scope = ["manager", "delivery_review"].includes(delivery.purpose) ? "全流程协调" : nodes.find(node => node.id === delivery.workflowNodeId)?.title || delivery.workflowNodeId;
-      const currentStatus = ({ queued: delivery.nextRetryAt ? "等待重试" : "排队中", claimed: "执行中", waiting: "等待答复", done: "执行已结束", cancelled: delivery.lastError ? "因失败停止" : "已取消" })[delivery.status] || delivery.status;
+      const scope = ["manager", "delivery_review"].includes(delivery.purpose) ? $t("全流程协调") : nodes.find(node => node.id === delivery.workflowNodeId)?.title || delivery.workflowNodeId;
+      const currentStatus = ({ queued: delivery.nextRetryAt ? $t("等待重试") : $t("排队中"), claimed: $t("执行中"), waiting: $t("等待答复"), done: $t("执行已结束"), cancelled: delivery.lastError ? $t("因失败停止") : $t("已取消") })[delivery.status] || delivery.status;
       const details = {
         dispatchId: delivery.id, sourceMessageId: source?.id || null, sourceLink: source?.via || (recovery ? "recoveryEvent" : delivery.dedupeKey === "initial-manager" && start ? "runStart" : null),
         recipientAgentId: delivery.recipientAgentId, recipientName: memberName(delivery.recipientAgentId), workflowNodeId: delivery.workflowNodeId,
@@ -606,7 +609,7 @@ export function collaborationRecords(workspace = {}) {
         executionTraceId: asArray(delivery.traceIds).at(-1) || null, history,
       };
       record.deliveries.push(details);
-      if (source && byMessage.get(source.id)?.kind === "manager_decision" && delivery.purpose === "node") record.title = "派工";
+      if (source && byMessage.get(source.id)?.kind === "manager_decision" && delivery.purpose === "node") record.title = $t("派工");
       record.human ||= history.some(item => item.senderType === "human");
       if (!record.dispatchId) {
         // Keep scalar references for existing clients; all mutable state is scoped
@@ -619,7 +622,7 @@ export function collaborationRecords(workspace = {}) {
         if (originalRecipient?.type === "team") record.to = selfDelivery ? null : details.recipientName;
         else if (originalRecipient?.type === "agent" && originalRecipient.id !== delivery.recipientAgentId) {
           record.addressedRecipient = { id: originalRecipient.id, name: originalRecipient.name };
-          record.routingNote = `原消息指向 ${originalRecipient.name || originalRecipient.id}；实际交由 ${details.recipientName} 处理。`;
+          record.routingNote = $t("原消息指向 {0}；实际交由 {1} 处理。", [originalRecipient.name || originalRecipient.id, details.recipientName]);
           record.to = details.recipientName;
         }
         if (recovery) record.to = details.recipientName;
@@ -632,9 +635,9 @@ export function collaborationRecords(workspace = {}) {
     if (event.type === "run.awaiting_acceptance") {
       const matches = messages.filter(item => item.kind === "manager_decision" && item.traceId && item.traceId === event.data?.acceptanceRequest?.traceId);
       const anchor = matches.length === 1 ? recordById.get(matches[0].id) : record;
-      anchor.title = run.task?.kind === "automation" ? "本轮交付完成" : "提交人类验收"; anchor.human = run.task?.kind !== "automation";
+      anchor.title = run.task?.kind === "automation" ? $t("本轮交付完成") : $t("提交人类验收"); anchor.human = run.task?.kind !== "automation";
       if (anchor !== record) {
-        anchor.relatedEvents.push({ ...publicEvent(event), content: event.message === anchor.content ? (run.task?.kind === "automation" ? "经理已完成本轮交付。" : "经理已提交人类验收。") : event.message || "" });
+        anchor.relatedEvents.push({ ...publicEvent(event), content: event.message === anchor.content ? (run.task?.kind === "automation" ? $t("经理已完成本轮交付。") : $t("经理已提交人类验收。")) : event.message || "" });
       } else records.push(record);
       const latestFiles = new Map();
       for (const file of asArray(workspace.artifacts).filter(item => !item.createdAt || time(item.createdAt) <= time(event.timestamp))) {
@@ -649,7 +652,7 @@ export function collaborationRecords(workspace = {}) {
       if (event.type === "run.completed") {
         const acceptance = acceptances.filter(item => time(item.timestamp) <= time(event.timestamp)).sort(chronological).at(-1);
         if (acceptance) record.acceptanceRecordId = acceptance.recordId;
-        record.confirmationNote = "确认前的交付说明与未验证事项保留在对应验收记录中；平台不替代人类判断交付质量。";
+        record.confirmationNote = $t("确认前的交付说明与未验证事项保留在对应验收记录中；平台不替代人类判断交付质量。");
       }
       records.push(record);
     }

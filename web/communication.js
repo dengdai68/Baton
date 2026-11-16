@@ -1,3 +1,4 @@
+import { $t, $tm, currentLocale, intlLocale } from "../client/i18n.mjs";
 import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
 import { runtimeLabel } from '../client/runtime-providers.mjs';
 import { ByteCache } from "../client/byte-cache.mjs";
@@ -37,8 +38,8 @@ export function attachmentImageError(event) {
 export function openAttachmentImage(trigger, onClose = () => {}) {
     const dialog = document.createElement('dialog'); dialog.className = 'communication-image-viewer';
     const name = trigger.dataset.imageName, url = trigger.dataset.imageUrl;
-    dialog.setAttribute('aria-label', `图片预览：${name}`);
-    dialog.innerHTML = `<header><strong>${escapeHtml(name)}</strong><div class="communication-image-actions"><a class="text-action" href="${escapeHtml(url.replace(/\?preview=1$/, ""))}" download="${escapeHtml(name)}" data-image-download>下载</a><button type="button" class="text-action" data-close-image aria-label="关闭图片预览（Esc）">×</button></div></header><div class="communication-image-stage"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}"><p role="status" hidden>图片无法预览，请关闭后下载原文件。</p></div>`;
+    dialog.setAttribute('aria-label', $t("图片预览：{0}", [name]));
+    dialog.innerHTML = `<header><strong>${escapeHtml(name)}</strong><div class="communication-image-actions"><a class="text-action" href="${escapeHtml(url.replace(/\?preview=1$/, ""))}" download="${escapeHtml(name)}" data-image-download>${$t("下载")}</a><button type="button" class="text-action" data-close-image aria-label="${$t("关闭图片预览（Esc）")}">×</button></div></header><div class="communication-image-stage"><img src="${escapeHtml(url)}" alt="${escapeHtml(name)}"><p role="status" hidden>${$t("图片无法预览，请关闭后下载原文件。")}</p></div>`;
     dialog.querySelector('[data-close-image]').onclick = () => dialog.close();
     dialog.querySelector('[data-image-download]').onclick = async event => {
       event.preventDefault();
@@ -58,7 +59,7 @@ export function openAttachmentImage(trigger, onClose = () => {}) {
 export async function downloadAttachment(link) {
   const response = await fetch(link.href,{method:'HEAD'});
   // HEAD intentionally has no response body, including error responses.
-  if (!response.ok) throw new Error(`附件下载失败（HTTP ${response.status}）`);
+  if (!response.ok) throw new Error($t("附件下载失败（HTTP {0}）", [response.status]));
   const download=document.createElement('a');download.href=link.href;download.download=link.download;download.click();
 }
 
@@ -66,7 +67,7 @@ import { createEmployeeMultiSelect, extensionAvatarColor } from "./marketplace.m
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
 const escapeHtml = (value = "") => String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
-const date = (value) => new Date(value).toLocaleString("zh-CN", { hour12: false });
+const date = (value) => new Date(value).toLocaleString(intlLocale(), { hour12: false });
 const messageDayKey = value => {
   const day = new Date(value);
   return `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}`;
@@ -74,30 +75,32 @@ const messageDayKey = value => {
 export function communicationDayLabel(value, today = new Date()) {
   const day = new Date(value), yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (messageDayKey(day) === messageDayKey(today)) return '今天';
-  if (messageDayKey(day) === messageDayKey(yesterday)) return '昨天';
-  return `${day.getFullYear() === today.getFullYear() ? '' : `${day.getFullYear()}年`}${day.getMonth() + 1}月${day.getDate()}日`;
+  if (messageDayKey(day) === messageDayKey(today)) return $t("今天");
+  if (messageDayKey(day) === messageDayKey(yesterday)) return $t("昨天");
+  const sameYear = day.getFullYear() === today.getFullYear();
+  if (currentLocale() === 'zh-CN') return `${sameYear ? '' : `${day.getFullYear()}年`}${day.getMonth() + 1}月${day.getDate()}日`;
+  return day.toLocaleDateString(intlLocale(), { ...(sameYear ? {} : { year: 'numeric' }), month: 'long', day: 'numeric' });
 }
-const shortTime = value => value ? new Date(value).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
+const shortTime = value => value ? new Date(value).toLocaleTimeString(intlLocale(), {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
 const consoleIcon = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m7 9 3 3-3 3m6 0h4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
 // Gear-shaped settings icon for group chat editing.
 const settingsIcon = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.7 2.1L13.3 2.1L13.6 4.6L16.1 5.6L18.1 4.1L19.9 5.9L18.4 7.9L19.4 10.4L21.9 10.7L21.9 13.3L19.4 13.6L18.4 16.1L19.9 18.1L18.1 19.9L16.1 18.4L13.6 19.4L13.3 21.9L10.7 21.9L10.4 19.4L7.9 18.4L5.9 19.9L4.1 18.1L5.6 16.1L4.6 13.6L2.1 13.3L2.1 10.7L4.6 10.4L5.6 7.9L4.1 5.9L5.9 4.1L7.9 5.6L10.4 4.6Z"/><circle cx="12" cy="12" r="3"/></svg>';
 
 export const imageAttachment = name => /\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(name || '');
 const attachmentSize = bytes => bytes == null ? '' : bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : bytes >= 1024 ? `${Math.ceil(bytes / 1024)} KB` : `${bytes} B`;
-export const imageButton = (url, name, thumbnail=url) => `<button type="button" class="communication-image" data-chat-image data-image-url="${escapeHtml(url)}" data-image-name="${escapeHtml(name)}" aria-label="放大查看 ${escapeHtml(name)}"><img src="${escapeHtml(thumbnail)}" alt="${escapeHtml(name)}" loading="lazy"><span class="communication-image-error">图片无法预览</span></button>`;
+export const imageButton = (url, name, thumbnail=url) => `<button type="button" class="communication-image" data-chat-image data-image-url="${escapeHtml(url)}" data-image-name="${escapeHtml(name)}" aria-label="${$t("放大查看 {0}", [escapeHtml(name)])}"><img src="${escapeHtml(thumbnail)}" alt="${escapeHtml(name)}" loading="lazy"><span class="communication-image-error">${$t("图片无法预览")}</span></button>`;
 const attachmentIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m8 13 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9"/></svg>';
 const pictureIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 17 5-5 4 4 4-6 5 7"/></svg>';
 export function attachmentControls(scope, disabled = false) {
-  return `<button type="button" class="composer-icon-button" data-${scope}-attach aria-label="添加附件" title="添加附件" ${disabled ? 'disabled' : ''}>${attachmentIcon}</button><button type="button" class="composer-icon-button" data-${scope}-attach-image aria-label="添加图片" title="添加图片" ${disabled ? 'disabled' : ''}>${pictureIcon}</button>`;
+  return `<button type="button" class="composer-icon-button" data-${scope}-attach aria-label="${$t("添加附件")}" title="${$t("添加附件")}" ${disabled ? 'disabled' : ''}>${attachmentIcon}</button><button type="button" class="composer-icon-button" data-${scope}-attach-image aria-label="${$t("添加图片")}" title="${$t("添加图片")}" ${disabled ? 'disabled' : ''}>${pictureIcon}</button>`;
 }
 export function draftAttachments(items, scope, disabled = false) {
   return items.map(item => {
     const name = escapeHtml(item.file.name);
-    const remove = `<button type="button" class="composer-remove" data-remove-${scope}-attachment="${escapeHtml(item.id)}" aria-label="移除附件 ${name}" title="移除 ${name}" ${disabled ? 'disabled' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
+    const remove = `<button type="button" class="composer-remove" data-remove-${scope}-attachment="${escapeHtml(item.id)}" aria-label="${$t("移除附件 {0}", [name])}" title="${$t("移除 {0}", [name])}" ${disabled ? 'disabled' : ''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg></button>`;
     return item.previewURL
       ? `<div class="communication-draft-image">${imageButton(item.previewURL, item.file.name)}${remove}</div>`
-      : `<div class="communication-attachment pending" title="${name}">${attachmentIcon}<span class="composer-file-info"><span>${name}</span><small>${escapeHtml(item.file.name.split(".").length > 1 ? item.file.name.split(".").pop().toUpperCase().slice(0,12) : "文件")}</small></span>${remove}</div>`;
+      : `<div class="communication-attachment pending" title="${name}">${attachmentIcon}<span class="composer-file-info"><span>${name}</span><small>${escapeHtml(item.file.name.split(".").length > 1 ? item.file.name.split(".").pop().toUpperCase().slice(0,12) : $t("文件"))}</small></span>${remove}</div>`;
   }).join('');
 }
 export function messageAttachments(files, conversationId, scope = "communications") {
@@ -163,7 +166,7 @@ export function communicationSenderTone(sender = {}) {
 // A rejected/lost response cannot prove that the server did not save a message.
 export function outgoingMessageFeedback(entry, scope) {
   if (!entry || entry.status !== 'unconfirmed') return '';
-  return `<div class="outgoing-message-feedback" role="alert" data-outgoing-feedback="unconfirmed"><span>发送未确认</span><small>${escapeHtml(entry.error)}。请先检查记录，再恢复草稿；不会自动重发。</small><button type="button" class="text-action" data-recover-${scope}-message="${escapeHtml(entry.id)}">恢复草稿</button></div>`;
+  return `<div class="outgoing-message-feedback" role="alert" data-outgoing-feedback="unconfirmed"><span>${$t("发送未确认")}</span><small>${$t("{0}。请先检查记录，再恢复草稿；不会自动重发。", [escapeHtml(entry.error)])}</small><button type="button" class="text-action" data-recover-${scope}-message="${escapeHtml(entry.id)}">${$t("恢复草稿")}</button></div>`;
 }
 
 export function outgoingAttachmentMarkup(entry) {
@@ -206,11 +209,11 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const employee = item.members?.find(member => member.id === item.targetId) || contacts.find(member => member.id === item.targetId) || {name:item.name};
       const initials = ([...(employee.name || employee.initials || '?')][0] || '?').toLocaleUpperCase();
       const groupMembers = (item.members || []).slice(0, 2);
-      const avatar = item.kind !== 'agent' ? `<span class="communication-group-avatar" aria-hidden="true">${groupMembers.length ? groupMembers.map(member => renderAvatar(member)).join('') : `<span class="agent-card-avatar color-${extensionAvatarColor(item.id)}">群</span>`}</span>` : renderAvatar({...employee,initials},'communication-avatar') || `<span class="communication-avatar color-${escapeHtml(employee.color || 'system')}" aria-hidden="true">${escapeHtml(initials)}</span>`;
+      const avatar = item.kind !== 'agent' ? `<span class="communication-group-avatar" aria-hidden="true">${groupMembers.length ? groupMembers.map(member => renderAvatar(member)).join('') : `<span class="agent-card-avatar color-${extensionAvatarColor(item.id)}">${$t("群")}</span>`}</span>` : renderAvatar({...employee,initials},'communication-avatar') || `<span class="communication-avatar color-${escapeHtml(employee.color || 'system')}" aria-hidden="true">${escapeHtml(initials)}</span>`;
       const running = (item.members || []).filter(member => member.running).map(member => member.name);
-      const preview = running.length ? `${running.join('、')}正在回复` : item.preview || (item.kind !== "agent" ? "群聊" : "数字员工私聊");
-      return `<button class="communication-contact ${item.id === currentId ? "selected" : ""}" data-chat-id="${escapeHtml(item.id)}">${avatar}<span class="communication-contact-content"><span class="communication-contact-top"><strong>${escapeHtml(item.name)}</strong><time title="${escapeHtml(date(item.updatedAt))}">${escapeHtml(shortTime(item.updatedAt))}</time></span><span class="communication-contact-bottom"><small>${escapeHtml(preview)}</small>${item.unreadCount ? `<span class="communication-unread" aria-label="${item.unreadCount} 条未读">${item.unreadCount}</span>` : ""}</span></span></button>`;
-    }).join('') || `<div class="directory-empty" role="${listError ? "alert" : "status"}">${listError ? "会话列表读取失败，正在重连。" : listLoaded ? "<strong>还没有会话</strong>点击“发起沟通”，选择数字员工开始沟通。" : "正在读取会话…"}</div>`;
+      const preview = running.length ? $t("{0}正在回复", [running.join('、')]) : item.preview || (item.kind !== "agent" ? $t("群聊") : $t("数字员工私聊"));
+      return `<button class="communication-contact ${item.id === currentId ? "selected" : ""}" data-chat-id="${escapeHtml(item.id)}">${avatar}<span class="communication-contact-content"><span class="communication-contact-top"><strong>${escapeHtml(item.name)}</strong><time title="${escapeHtml(date(item.updatedAt))}">${escapeHtml(shortTime(item.updatedAt))}</time></span><span class="communication-contact-bottom"><small>${escapeHtml(preview)}</small>${item.unreadCount ? `<span class="communication-unread" aria-label="${$t("{0} 条未读", [item.unreadCount])}">${item.unreadCount}</span>` : ""}</span></span></button>`;
+    }).join('') || `<div class="directory-empty" role="${listError ? "alert" : "status"}">${listError ? $t("会话列表读取失败，正在重连。") : listLoaded ? `<strong>${$t("还没有会话")}</strong>${$t("点击“发起沟通”，选择数字员工开始沟通。")}` : $t("正在读取会话…")}</div>`;
     if (query('.communication-list').innerHTML !== html) query('.communication-list').innerHTML = html;
     query(".communication-pager").innerHTML = paginationMarkup(page, "communications");
     queryAll("[data-chat-id]").forEach((button) => button.onclick = () => navigate(button.dataset.chatId));
@@ -242,7 +245,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     for (const [id, entry] of state.outbox) if (messageIds.has(entry.message?.id) || requestIds.has(id)) {
       confirmOutgoingMessage(state,entry,saved.find(message=>message.id===entry.message?.id || message.clientRequestId===id));state.outbox.delete(id);
     }
-    const messages = [...saved, ...[...state.outbox.values()].map(entry => entry.message || { id:entry.id, clientRequestId:entry.id, content:entry.content, sender:{type:'human',name:'你'}, createdAt:entry.createdAt, outgoing:entry })].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    const messages = [...saved, ...[...state.outbox.values()].map(entry => entry.message || { id:entry.id, clientRequestId:entry.id, content:entry.content, sender:{type:'human',name:$t("你")}, createdAt:entry.createdAt, outgoing:entry })].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     const today = new Date();
     const html = messages.map((message, index) => {
       const dayDivider = !index || messageDayKey(messages[index - 1].createdAt) !== messageDayKey(message.createdAt)
@@ -255,11 +258,11 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       let content=markdownCache.get(cacheKey);if(content===undefined){content=renderContent(message.content,mentions);markdownCache.set(cacheKey,content);}
       const attachments = message.outgoing ? outgoingAttachmentMarkup(message.outgoing) : messageAttachments(message.attachments || [], currentId);
       const failed = [...state.deliveries.values()].filter(item => item.messageId === message.id && item.status === 'failed');
-      const recovery = failed.map(item => `<div class="communication-recovery"><span>${escapeHtml(state.conversation.members.find(member=>member.id===item.agentId)?.name || '员工')} 回复失败</span><button type="button" class="text-action" data-chat-failure-console="${escapeHtml(item.agentId)}">查看控制台</button><button type="button" class="text-action" data-retry-chat-delivery="${escapeHtml(item.id)}">重试</button></div>`).join('');
+      const recovery = failed.map(item => `<div class="communication-recovery"><span>${$t("{0} 回复失败", [escapeHtml(state.conversation.members.find(member=>member.id===item.agentId)?.name || $t("员工"))])}</span><button type="button" class="text-action" data-chat-failure-console="${escapeHtml(item.agentId)}">${$t("查看控制台")}</button><button type="button" class="text-action" data-retry-chat-delivery="${escapeHtml(item.id)}">${$t("重试")}</button></div>`).join('');
       return `${dayDivider}<article class="communication-message ${human ? "from-human" : ""}" data-chat-message="${escapeHtml(message.id)}"${message.outgoing ? ` data-outgoing-state="${escapeHtml(message.outgoing.status)}"` : ''} data-tone="${communicationSenderTone(message.sender)}" data-sender-color="${escapeHtml(member.color || 'system')}"><header>${avatar}<strong>${escapeHtml(message.sender.name)}</strong><time title="${escapeHtml(date(message.createdAt))}" datetime="${escapeHtml(message.createdAt)}">${escapeHtml(formatMessageTime(message.createdAt))}</time></header><div class="communication-body communication-markdown">${content}</div>${attachments ? `<div class="communication-message-attachments">${attachments}</div>` : ''}${outgoingMessageFeedback(message.outgoing, 'chat')}${recovery}</article>`;
-    }).join("") || `<div class="communication-empty">${state.latestError ? "聊天记录读取失败，正在重连。" : state.loaded ? "从一句话开始沟通。消息将持续保留。" : "正在读取聊天记录…"}</div>`;
+    }).join("") || `<div class="communication-empty">${state.latestError ? $t("聊天记录读取失败，正在重连。") : state.loaded ? $t("从一句话开始沟通。消息将持续保留。") : $t("正在读取聊天记录…")}</div>`;
     const running = (state.conversation?.members || []).filter(member => member.running);
-    const rendered = html + (running.length ? `<div class="communication-typing" role="status"><span class="communication-member-avatar">${renderAvatar(running[0])}<span class="member-running-dot" aria-hidden="true"></span></span><span>${escapeHtml(running.map(member => member.name).join('、'))}正在回复…</span></div>` : '');
+    const rendered = html + (running.length ? `<div class="communication-typing" role="status"><span class="communication-member-avatar">${renderAvatar(running[0])}<span class="member-running-dot" aria-hidden="true"></span></span><span>${$t("{0}正在回复…", [escapeHtml(running.map(member => member.name).join('、'))])}</span></div>` : '');
     if (state.renderedMessages !== rendered || state.messageList !== list) {
       state.renderedMessages = rendered; state.messageList = list;
       list.innerHTML = rendered;
@@ -271,8 +274,8 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query(".communication-older").disabled = Boolean(state.olderRequest?.generation === generation);
     queryAll('[data-recover-chat-message]').forEach(button => button.onclick = () => {
       const entry=state.outbox.get(button.dataset.recoverChatMessage); if (!entry || state.sending) return;
-      if (state.draft && state.draft !== entry.content) { notify('输入框已有新草稿，请先保存或清空，再恢复这条消息。',true); return; }
-      if(state.attachments.some(item=>!entry.attachments.includes(item))){notify('输入框已有新附件，请先保存或移除，再恢复这条消息。',true);return;}
+      if (state.draft && state.draft !== entry.content) { notify($t("输入框已有新草稿，请先保存或清空，再恢复这条消息。"),true); return; }
+      if(state.attachments.some(item=>!entry.attachments.includes(item))){notify($t("输入框已有新附件，请先保存或移除，再恢复这条消息。"),true);return;}
       state.draft=entry.content;state.mentions=entry.mentions;state.requestId=entry.id;state.requestSignature=entry.signature;
       state.draftRevision=(state.draftRevision || 0)+1;entry.draftRevision=state.draftRevision;
       entry.attachments.forEach(item=>{if(!item.previewURL && imageAttachment(item.file.name))item.previewURL=URL.createObjectURL(item.file);});
@@ -334,8 +337,8 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       renderReadErrors();
     } catch (error) {
       if (!isCurrent(key, token) || (older && request.epoch !== state.historyEpoch)) return;
-      state[errorSlot] = older ? `更早消息读取失败：${error.message}（历史和草稿保留，可再次加载更早消息）` : `聊天记录读取失败：${error.message}（历史和草稿保留，正在重连）`;
-      if (!state.loaded) query(".communication-heading").textContent = "会话读取失败";
+      state[errorSlot] = older ? $t("更早消息读取失败：{0}（历史和草稿保留，可再次加载更早消息）", [error.message]) : $t("聊天记录读取失败：{0}（历史和草稿保留，正在重连）", [error.message]);
+      if (!state.loaded) query(".communication-heading").textContent = $t("会话读取失败");
       renderReadErrors(); renderMessages();
     } finally {
       if (state[slot] === request) state[slot] = null;
@@ -351,7 +354,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       if (!host || token !== generation) return;
       listPagination=result;conversations = result.conversations; listLoaded = true; listError = ""; renderList(); renderReadErrors();
       if(!currentId){const latest=latestConversationId(conversations);if(latest)navigate(latest);}
-    } catch (error) { if (host && token === generation) { listError = `会话列表读取失败：${error.message}（历史和草稿保留，正在重连）`; renderList(); renderReadErrors(); } }
+    } catch (error) { if (host && token === generation) { listError = $t("会话列表读取失败：{0}（历史和草稿保留，正在重连）", [error.message]); renderList(); renderReadErrors(); } }
     finally { if (listRequest === request) listRequest = null; }
   }
   function consolePage(state) {
@@ -373,11 +376,11 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('[data-communication-console-older]').disabled = Boolean(state.consoleRequest);
     const stream = query('[data-communication-stream]');
     const agent = state.consoleMembers.find(row => row.id === state.consoleAgentId);
-    query("[data-chat-console-name]").textContent = agent?.name || "控制台";
+    query("[data-chat-console-name]").textContent = agent?.name || $t("控制台");
     const identity = state.conversation?.members.find(member => member.id === state.consoleAgentId) || contacts.find(member => member.id === state.consoleAgentId) || agent;
     query('[data-chat-console-avatar]').innerHTML = identity ? renderAvatar(identity) : '';
     query('[data-chat-console-runtime]').textContent = [identity?.runtime?.provider ? runtimeLabel(identity.runtime.provider) : null, identity?.runtime?.model].filter(Boolean).join(' · ');
-    if (!agent) { stream.textContent = state.consoleRequest ? '正在读取控制台…' : '此会话尚无执行记录。'; return; }
+    if (!agent) { stream.textContent = state.consoleRequest ? $t("正在读取控制台…") : $t("此会话尚无执行记录。"); return; }
     const key = JSON.stringify([agent.id, [...page.events.keys()], page.traces, Boolean(page.forceLatest)]);
     if (state.consoleRenderKey === key) return;
     state.consoleRenderKey = key;
@@ -426,7 +429,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       if (older) page.browsingHistory = true;
       if (latest) { page.browsingHistory = false; page.liveEvents = null; page.forceLatest = true; }
       page.loaded = true; state.consoleError = ''; state.consolePrepend = older;
-    } catch (error) { if (isCurrent(key, token) && state.consoleRequest === request) state.consoleError = `控制台读取失败：${error.message}；记录保留，可刷新重试。`; }
+    } catch (error) { if (isCurrent(key, token) && state.consoleRequest === request) state.consoleError = $t("控制台读取失败：{0}；记录保留，可刷新重试。", [error.message]); }
     finally { if (state.consoleRequest === request) state.consoleRequest = null; if (isCurrent(key, token)) renderConsolePanel(); }
   }
   function renderAttachments() {
@@ -459,7 +462,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     const match = activeMention(input.value, input.selectionStart, state.mentions);
     if (!match || state.conversation?.kind !== "group") { closeFloatingList(menu); return; }
     const members = state.conversation.members.filter((member) => member.status === "active" && member.name.toLowerCase().includes(match[1].toLowerCase()));
-    menu.innerHTML = members.map((member, index) => `<button type="button" role="option" aria-selected="${index === 0}" data-chat-mention="${escapeHtml(member.id)}">${escapeHtml(member.name)}</button>`).join("") || "<p>没有匹配成员</p>";
+    menu.innerHTML = members.map((member, index) => `<button type="button" role="option" aria-selected="${index === 0}" data-chat-mention="${escapeHtml(member.id)}">${escapeHtml(member.name)}</button>`).join("") || `<p>${$t("没有匹配成员")}</p>`;
     createFloatingList(input,menu).open();
     menu.querySelectorAll("button").forEach((button) => button.onclick = () => {
       const member = members.find((item) => item.id === button.dataset.chatMention);
@@ -471,7 +474,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   function renderHeading() {
     const state = view(currentId), conversation = state.conversation, heading = query('.communication-heading');
     const group = conversation?.kind === 'group';
-    heading.textContent = conversation?.name || (state.latestError ? '会话读取失败' : '加载会话…');
+    heading.textContent = conversation?.name || (state.latestError ? $t("会话读取失败") : $t("加载会话…"));
     heading.hidden = Boolean(state.nameEditing);
     heading.setAttribute('tabindex', group ? '0' : '-1');
     heading.setAttribute('title', conversation?.name || '');
@@ -481,8 +484,8 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('[data-chat-heading-avatar]').hidden = group || !member;
     query('[data-chat-rename]').hidden = !group;
     query('[data-chat-mention]').hidden = !group;
-    query('.communication-subtitle').textContent = conversation ? (group ? `群聊 · ${conversation.members.length} 位成员 · @ 指定成员回复，不 @ 时全员回复` : [member?.runtime?.provider ? runtimeLabel(member.runtime.provider) : null, member?.runtime?.model].filter(Boolean).join(' · ') || '长期私聊') : '';
-    query('textarea').placeholder = group ? '输入消息，@ 提及成员…' : '输入消息…';
+    query('.communication-subtitle').textContent = conversation ? (group ? $t("群聊 · {0} 位成员 · @ 指定成员回复，不 @ 时全员回复", [conversation.members.length]) : [member?.runtime?.provider ? runtimeLabel(member.runtime.provider) : null, member?.runtime?.model].filter(Boolean).join(' · ') || $t("长期私聊")) : '';
+    query('textarea').placeholder = group ? $t("输入消息，@ 提及成员…") : $t("输入消息…");
   }
   function beginRename() {
     const state = view(currentId);
@@ -500,7 +503,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     if (state.renaming) return;
     const name = input.value.trim();
     if (name === state.conversation.name) { cancelRename(); return; }
-    input.setCustomValidity(!name ? '请输入群聊名称' : name.length > 100 ? '群聊名称最多 100 字符' : '');
+    input.setCustomValidity(!name ? $t("请输入群聊名称") : name.length > 100 ? $t("群聊名称最多 100 字符") : '');
     if (!input.reportValidity()) return;
     state.renaming = true; input.disabled = true;
     try {
@@ -513,19 +516,19 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   }
   function setupConversation() {
     const area = query(".communication-main");
-    if (!currentId) { area.innerHTML = '<div class="communication-empty"><h2>沟通</h2><p>选择数字员工开始私聊，或新建一个群聊。</p><small>历史长期保存 · 不受任务归档影响</small></div>'; return; }
+    if (!currentId) { area.innerHTML = `<div class="communication-empty"><h2>${$t("沟通")}</h2><p>${$t("选择数字员工开始私聊，或新建一个群聊。")}</p><small>${$t("历史长期保存 · 不受任务归档影响")}</small></div>`; return; }
     const state = view(currentId);
     state.consoleRenderKey = null;
     area.innerHTML = `<div class="communication-panes">
       <section class="communication-chat">
-        <header class="communication-header"><button type="button" class="text-action conversation-list-toggle" data-toggle-conversation-list aria-label="显示会话列表" aria-expanded="false">会话</button><span class="communication-heading-avatar" data-chat-heading-avatar hidden></span><div class="communication-heading-text"><h2 class="communication-heading"></h2><input class="communication-name-input" data-chat-name-input aria-label="群聊名称" maxlength="100" required hidden><p class="communication-subtitle"></p></div><button type="button" class="text-action" data-toggle-chat-members aria-expanded="false" hidden>成员</button><button type="button" class="text-action communication-console-toggle" data-toggle-communication-console aria-label="控制台" title="控制台" aria-controls="communication-console-panel" aria-expanded="${state.consoleOpen}" hidden>${consoleIcon}<span>控制台</span></button><button type="button" class="text-action" data-chat-rename aria-label="编辑群名" title="编辑群名" hidden>⋯</button></header>
-        <div><button class="small-button communication-older" hidden>加载更早消息</button><button class="small-button communication-latest" hidden>回到最新</button></div><div class="communication-messages" aria-label="聊天记录"></div>
-        <form class="communication-composer"><div class="communication-mentions" role="listbox" aria-label="@ 成员" hidden></div><div class="message-composer-card"><div class="message-composer-input"><div class="communication-draft-attachments" data-chat-attachments></div><textarea id="communication-input" aria-label="输入消息" placeholder="输入消息…" rows="2">${escapeHtml(state.draft)}</textarea></div><p class="field-hint" data-chat-upload-status role="status"></p><input type="file" multiple data-chat-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-chat-image-file hidden><div class="communication-composer-actions">${attachmentControls('chat', state.sending)}<button type="button" class="composer-icon-button" data-chat-mention aria-label="提及成员" title="提及成员" hidden>@</button><span class="composer-hint">Enter 发送 · Shift + Enter 换行</span><button class="primary-button" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>发送</button></div></div></form>
+        <header class="communication-header"><button type="button" class="text-action conversation-list-toggle" data-toggle-conversation-list aria-label="${$t("显示会话列表")}" aria-expanded="false">${$t("会话")}</button><span class="communication-heading-avatar" data-chat-heading-avatar hidden></span><div class="communication-heading-text"><h2 class="communication-heading"></h2><input class="communication-name-input" data-chat-name-input aria-label="${$t("群聊名称")}" maxlength="100" required hidden><p class="communication-subtitle"></p></div><button type="button" class="text-action" data-toggle-chat-members aria-expanded="false" hidden>${$t("成员")}</button><button type="button" class="text-action communication-console-toggle" data-toggle-communication-console aria-label="${$t("控制台")}" title="${$t("控制台")}" aria-controls="communication-console-panel" aria-expanded="${state.consoleOpen}" hidden>${consoleIcon}<span>${$t("控制台")}</span></button><button type="button" class="text-action" data-chat-rename aria-label="${$t("编辑群名")}" title="${$t("编辑群名")}" hidden>⋯</button></header>
+        <div><button class="small-button communication-older" hidden>${$t("加载更早消息")}</button><button class="small-button communication-latest" hidden>${$t("回到最新")}</button></div><div class="communication-messages" aria-label="${$t("聊天记录")}"></div>
+        <form class="communication-composer"><div class="communication-mentions" role="listbox" aria-label="${$t("@ 成员")}" hidden></div><div class="message-composer-card"><div class="message-composer-input"><div class="communication-draft-attachments" data-chat-attachments></div><textarea id="communication-input" aria-label="${$t("输入消息")}" placeholder="${$t("输入消息…")}" rows="2">${escapeHtml(state.draft)}</textarea></div><p class="field-hint" data-chat-upload-status role="status"></p><input type="file" multiple data-chat-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-chat-image-file hidden><div class="communication-composer-actions">${attachmentControls('chat', state.sending)}<button type="button" class="composer-icon-button" data-chat-mention aria-label="${$t("提及成员")}" title="${$t("提及成员")}" hidden>@</button><span class="composer-hint">${$t("Enter 发送 · Shift + Enter 换行")}</span><button class="primary-button" type="submit"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>${$t("发送")}</button></div></div></form>
       </section>
-      <aside class="communication-roster" aria-label="聊天成员" hidden><header><strong data-chat-member-count>成员</strong><button type="button" class="text-action" data-edit-chat-group aria-label="编辑群聊" title="编辑群聊">${settingsIcon}</button><button type="button" class="text-action" data-close-chat-members aria-label="关闭成员列表">×</button></header><div data-chat-roster></div></aside>
-      <dialog class="communication-picker communication-member-detail" aria-label="员工详细信息"></dialog>
+      <aside class="communication-roster" aria-label="${$t("聊天成员")}" hidden><header><strong data-chat-member-count>${$t("成员")}</strong><button type="button" class="text-action" data-edit-chat-group aria-label="${$t("编辑群聊")}" title="${$t("编辑群聊")}">${settingsIcon}</button><button type="button" class="text-action" data-close-chat-members aria-label="${$t("关闭成员列表")}">×</button></header><div data-chat-roster></div></aside>
+      <dialog class="communication-picker communication-member-detail" aria-label="${$t("员工详细信息")}"></dialog>
       <aside id="communication-console-panel" class="communication-console" data-communication-console hidden>
-        <div class="communication-console-toolbar"><span class="communication-console-avatar" data-chat-console-avatar></span><div class="communication-console-identity"><strong data-chat-console-name></strong><small data-chat-console-runtime></small></div><div class="communication-console-actions"><button type="button" class="text-action" data-communication-console-latest>↓ 最新</button><button type="button" class="text-action" data-communication-console-refresh>刷新</button><button type="button" class="text-action" data-close-chat-console aria-label="关闭控制台">×</button></div></div><button type="button" class="text-action communication-console-older" data-communication-console-older hidden>加载更早记录</button><p class="communication-console-error" data-communication-console-error role="alert"></p><div class="communication-trace-stream" data-communication-stream tabindex="0" role="log" aria-label="沟通控制台"></div>
+        <div class="communication-console-toolbar"><span class="communication-console-avatar" data-chat-console-avatar></span><div class="communication-console-identity"><strong data-chat-console-name></strong><small data-chat-console-runtime></small></div><div class="communication-console-actions"><button type="button" class="text-action" data-communication-console-latest>${$t("↓ 最新")}</button><button type="button" class="text-action" data-communication-console-refresh>${$t("刷新")}</button><button type="button" class="text-action" data-close-chat-console aria-label="${$t("关闭控制台")}">×</button></div></div><button type="button" class="text-action communication-console-older" data-communication-console-older hidden>${$t("加载更早记录")}</button><p class="communication-console-error" data-communication-console-error role="alert"></p><div class="communication-trace-stream" data-communication-stream tabindex="0" role="log" aria-label="${$t("沟通控制台")}"></div>
       </aside>
     </div>`;
     state.nameEditing = false; renderHeading();
@@ -557,7 +560,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const picker = event.currentTarget;
       if (state.sending) return;
       for (const file of picker.files) {
-        if (file.size > 20 * 1024 * 1024) { notify(`「${file.name}」超过单文件 20 MiB 上限。`, true); continue; }
+        if (file.size > 20 * 1024 * 1024) { notify($t("「{0}」超过单文件 20 MiB 上限。", [file.name]), true); continue; }
         state.attachments.push({ id: crypto.randomUUID(), file, uploaded: null, previewURL: imageAttachment(file.name) ? URL.createObjectURL(file) : null });
       }
       picker.value = ''; state.requestId = null; renderAttachments();
@@ -606,7 +609,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     form.onsubmit = async (event) => {
       event.preventDefault(); const key = currentId, token = generation, content = input.value;
       if (state.sending || (!content.trim() && !state.attachments.length)) return;
-      if (content.length > 32000) { notify("消息最多 32000 字符。", true); return; }
+      if (content.length > 32000) { notify($t("消息最多 32000 字符。"), true); return; }
       const mentionAgentIds = state.mentions.filter((member) => content.includes("@" + member.name)).map((member) => member.id);
       const attachments = [...state.attachments];
       const signature=JSON.stringify({content,mentionAgentIds,attachments:attachments.map(item=>item.id)});
@@ -628,7 +631,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       try {
         for (const item of attachments) {
           if (item.uploaded) continue;
-          if (isCurrent(key, token)) query('[data-chat-upload-status]').textContent = `正在上传 ${item.file.name}…`;
+          if (isCurrent(key, token)) query('[data-chat-upload-status]').textContent = $t("正在上传 {0}…", [item.file.name]);
           const result = await api(`/api/communications/${key}/attachments?name=${encodeURIComponent(item.file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: item.file });
           item.uploaded = result.attachment;
         }
@@ -656,10 +659,10 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('.communication-panes').classList.toggle('has-group',group);
     query('.communication-roster').hidden = !group;
     query('[data-toggle-chat-members]').hidden = !group;
-    query('[data-toggle-chat-members]').textContent = `成员 ${members.length}`;
+    query('[data-toggle-chat-members]').textContent = $t("成员 {0}", [members.length]);
     query('[data-toggle-communication-console]').hidden = group;
-    query('[data-chat-member-count]').textContent = `成员 ${members.length}`;
-    const html = members.map(member => `<div class="communication-roster-member ${state.consoleOpen && state.consoleAgentId === member.id ? 'is-selected' : ''}"><button type="button" class="text-action communication-member-identity" data-chat-member-detail="${escapeHtml(member.id)}" title="${escapeHtml(member.name)}"><span class="communication-member-avatar">${renderAvatar(member)}${member.running ? '<span class="member-running-dot" role="status" aria-label="正在运行" title="正在运行"></span>' : ''}</span><span class="communication-member-name">${escapeHtml(member.name)}</span></button><button type="button" class="text-action member-console-icon" data-chat-member-console="${escapeHtml(member.id)}" aria-pressed="${state.consoleOpen && state.consoleAgentId === member.id}" aria-label="查看 ${escapeHtml(member.name)} 的控制台" title="查看控制台"><span class="member-console-avatar">${renderAvatar(member)}${member.running ? '<span class="member-running-dot" aria-label="正在运行"></span>' : ''}</span>${consoleIcon}</button></div>`).join('') || '<p class="field-hint">暂无员工</p>';
+    query('[data-chat-member-count]').textContent = $t("成员 {0}", [members.length]);
+    const html = members.map(member => `<div class="communication-roster-member ${state.consoleOpen && state.consoleAgentId === member.id ? 'is-selected' : ''}"><button type="button" class="text-action communication-member-identity" data-chat-member-detail="${escapeHtml(member.id)}" title="${escapeHtml(member.name)}"><span class="communication-member-avatar">${renderAvatar(member)}${member.running ? `<span class="member-running-dot" role="status" aria-label="${$t("正在运行")}" title="${$t("正在运行")}"></span>` : ''}</span><span class="communication-member-name">${escapeHtml(member.name)}</span></button><button type="button" class="text-action member-console-icon" data-chat-member-console="${escapeHtml(member.id)}" aria-pressed="${state.consoleOpen && state.consoleAgentId === member.id}" aria-label="${$t("查看 {0} 的控制台", [escapeHtml(member.name)])}" title="${$t("查看控制台")}"><span class="member-console-avatar">${renderAvatar(member)}${member.running ? `<span class="member-running-dot" aria-label="${$t("正在运行")}"></span>` : ''}</span>${consoleIcon}</button></div>`).join('') || `<p class="field-hint">${$t("暂无员工")}</p>`;
     if (container.innerHTML !== html) container.innerHTML = html;
     container.onclick = event => {
       const detail = event.target.closest('[data-chat-member-detail]'), consoleButton = event.target.closest('[data-chat-member-console]');
@@ -673,7 +676,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   function renderMemberDetail(memberId, focus = false) {
     const member = view(currentId).conversation?.members?.find(row => row.id === memberId), panel = query('.communication-member-detail');
     if (!member) { if (panel.open) panel.close(); return; }
-    const html = employeeDetailMarkup(member,{renderAvatar,renderContent,closeControl:'<button type="button" class="text-action" data-close-member-detail aria-label="关闭员工详情">×</button>'});
+    const html = employeeDetailMarkup(member,{renderAvatar,renderContent,closeControl:`<button type="button" class="text-action" data-close-member-detail aria-label="${$t("关闭员工详情")}">×</button>`});
     if (panel.innerHTML !== html) panel.innerHTML = html;
     panel.dataset.memberId = memberId;
     panel.querySelector('[data-close-member-detail]').onclick = () => panel.close();
@@ -687,7 +690,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     views.delete(key);
   }
   async function startConversation(memberAgentIds) {
-    if (!memberAgentIds.length) throw new Error('请至少选择一位数字员工');
+    if (!memberAgentIds.length) throw new Error($t("请至少选择一位数字员工"));
     const input = memberAgentIds.length === 1 ? {kind:'agent',targetId:memberAgentIds[0]} : {kind:'group',memberAgentIds};
     const result = await api('/api/communications',{method:'POST',body:JSON.stringify(input)});
     return result;
@@ -695,15 +698,15 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   function showGroupEditor(existing = null) {
     const trigger = query('[data-new-chat]'), key = currentId;
     const dialog = document.createElement('dialog'); dialog.className = 'communication-picker'; dialog.setAttribute('aria-labelledby','communication-picker-title');
-    dialog.innerHTML = `<header><h2 id="communication-picker-title">${existing ? '编辑群聊' : '新建对话'}</h2></header><form>${existing ? `<div class="form-field"><label for="chat-group-name">群聊名称</label><input id="chat-group-name" name="name" maxlength="100" required value="${escapeHtml(existing.name)}"></div>` : ''}<div class="form-field" data-group-member-picker></div><p role="alert" data-group-error></p><div class="form-actions">${existing ? '<button type="button" class="small-button danger" data-delete-group>删除群聊</button>' : ''}<button type="button" class="small-button" data-close-group autofocus>关闭</button><button type="submit" class="primary-button">${existing ? '保存' : '开始沟通'}</button></div></form>`;
+    dialog.innerHTML = `<header><h2 id="communication-picker-title">${existing ? $t("编辑群聊") : $t("新建对话")}</h2></header><form>${existing ? `<div class="form-field"><label for="chat-group-name">${$t("群聊名称")}</label><input id="chat-group-name" name="name" maxlength="100" required value="${escapeHtml(existing.name)}"></div>` : ''}<div class="form-field" data-group-member-picker></div><p role="alert" data-group-error></p><div class="form-actions">${existing ? `<button type="button" class="small-button danger" data-delete-group>${$t("删除群聊")}</button>` : ''}<button type="button" class="small-button" data-close-group autofocus>${$t("关闭")}</button><button type="submit" class="primary-button">${existing ? $t("保存") : $t("开始沟通")}</button></div></form>`;
     host.append(dialog);
     const employees = contacts.filter(item => item.contactKind === 'agent'), teams = contacts.filter(item => item.contactKind === 'team');
-    const selection = createEmployeeMultiSelect(dialog.querySelector('[data-group-member-picker]'), { id:'chat-group-members', label:'成员', placeholder:'添加团队或数字员工', esc:escapeHtml, items:[...teams,...employees], selectedIds:existing?.members.map(member=>member.id) || [], detail:item=>`<small>${escapeHtml(item.contactKind === 'team' ? '团队 · '+item.memberAgentIds.length+' 位员工' : item.description || '数字员工')}</small>`, expand:item=>item.contactKind === 'team' ? item.memberAgentIds.filter(id=>employees.some(member=>member.id===id)) : [item.id] });
+    const selection = createEmployeeMultiSelect(dialog.querySelector('[data-group-member-picker]'), { id:'chat-group-members', label:$t("成员"), placeholder:$t("添加团队或数字员工"), esc:escapeHtml, items:[...teams,...employees], selectedIds:existing?.members.map(member=>member.id) || [], detail:item=>`<small>${escapeHtml(item.contactKind === 'team' ? $t("团队 · {0} 位员工", [item.memberAgentIds.length]) : item.description || $t("数字员工@@item"))}</small>`, expand:item=>item.contactKind === 'team' ? item.memberAgentIds.filter(id=>employees.some(member=>member.id===id)) : [item.id] });
     dialog.querySelector('[data-close-group]').onclick = () => dialog.close();
     const remove = dialog.querySelector('[data-delete-group]');
     if (remove) remove.onclick = async () => {
       const error = dialog.querySelector('[data-group-error]');
-      if (!await confirmDialog({ title: '删除群聊', message: `删除「${existing.name}」后，群聊从会话列表移除且不能再发送消息；已有消息、附件和执行记录保留为历史。`, confirmLabel: '删除群聊', danger: true })) { if (dialog.open) remove.focus(); return; }
+      if (!await confirmDialog({ title: $t("删除群聊"), message: $t("删除「{0}」后，群聊从会话列表移除且不能再发送消息；已有消息、附件和执行记录保留为历史。", [existing.name]), confirmLabel: $t("删除群聊"), danger: true })) { if (dialog.open) remove.focus(); return; }
       remove.disabled = true; error.textContent = '';
       try {
         await api(`/api/communications/${key}`, { method: 'DELETE' });
@@ -731,7 +734,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     newConversation() { if (!host) return false; showGroupEditor(); return true; },
     async open(kind, targetId) {
       if (kind === 'team') {
-        try { const team = (await api('/api/teams')).teams.find(item => item.id === targetId); if (!team) throw new Error('团队不存在'); const result = await startConversation(team.memberAgentIds); navigate(result.conversation.id); } catch(error) { notify(error.message,true); } return;
+        try { const team = (await api('/api/teams')).teams.find(item => item.id === targetId); if (!team) throw new Error($t("团队不存在")); const result = await startConversation(team.memberAgentIds); navigate(result.conversation.id); } catch(error) { notify(error.message,true); } return;
       }
       const existing = conversations.find((item) => item.kind === kind && item.targetId === targetId);
       if (existing) { navigate(existing.id); return; }
@@ -742,7 +745,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const fresh = host !== element; host = element;
       contacts = [...state.agents.map((item) => ({ ...item, contactKind: "agent" })), ...state.teams.map((item) => ({ ...item, contactKind: "team" }))];
       if (fresh) {
-        host.innerHTML = '<header class="communication-page-header"><h1><span class="nav-icon topbar-icon" data-view-icon="communication" aria-hidden="true"></span>沟通</h1><button type="button" class="secondary-button" data-new-chat><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>发起沟通</button></header><div class="communication-error" role="status"></div><div class="communication-layout"><aside class="communication-sidebar" aria-label="会话列表"><button type="button" class="text-action conversation-list-close" data-close-conversation-list aria-label="关闭会话列表">‹ 返回会话</button><div class="communication-list"></div><div class="communication-pager"></div></aside><section class="communication-main"></section></div>';
+        host.innerHTML = `<header class="communication-page-header"><h1><span class="nav-icon topbar-icon" data-view-icon="communication" aria-hidden="true"></span>${$t("沟通")}</h1><button type="button" class="secondary-button" data-new-chat><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>${$t("发起沟通")}</button></header><div class="communication-error" role="status"></div><div class="communication-layout"><aside class="communication-sidebar" aria-label="${$t("会话列表")}"><button type="button" class="text-action conversation-list-close" data-close-conversation-list aria-label="${$t("关闭会话列表")}">${$t("‹ 返回会话")}</button><div class="communication-list"></div><div class="communication-pager"></div></aside><section class="communication-main"></section></div>`;
         query("[data-new-chat]").onclick = () => showGroupEditor();
         query("[data-close-conversation-list]").onclick = () => { query(".communication-layout").classList.remove("conversation-list-open"); const trigger=query("[data-toggle-conversation-list]"); trigger?.setAttribute("aria-expanded","false"); trigger?.focus(); };
         query(".communication-pager").onclick = (event) => { const button = event.target.closest("[data-page]"); if (button) { listPage = Number(button.dataset.page); poll(); } };
@@ -759,9 +762,9 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
 
 export function employeeDetailMarkup(member, {renderAvatar = () => '', renderContent = escapeHtml, closeControl = ''} = {}) {
   const roles=member.roles || member.roleSnapshots || [];
-  return `<section class="employee-profile"><header class="employee-profile-identity">${renderAvatar(member)}<div class="employee-profile-name"><h3>${escapeHtml(member.name)}</h3>${member.taskRole==='manager'?'<span class="employee-profile-kind">本次经理</span>':''}${roles.length?`<p class="employee-profile-roles">${roles.map(role=>escapeHtml(role.name)).join(' · ')}</p>`:''}</div>${closeControl}</header>
-    <section class="employee-profile-section"><h4>简介</h4><p class="employee-profile-description">${escapeHtml(member.description || '暂无简介')}</p></section>
-    ${member.capabilities?.length ? `<section class="employee-profile-section"><h4>能力标签</h4><div class="capabilities">${member.capabilities.map(capability => `<span class="capability">${escapeHtml(capability)}</span>`).join('')}</div></section>` : ''}
-    <section class="employee-profile-section"><h4>工作提示词</h4><div class="employee-profile-prompt communication-markdown">${renderContent(member.systemPrompt || '未填写')}${roles.map(role=>`<section class="employee-role-prompt"><h5>${escapeHtml(role.name)}</h5>${renderContent(role.prompt || '未填写')}</section>`).join('')}</div></section>
+  return `<section class="employee-profile"><header class="employee-profile-identity">${renderAvatar(member)}<div class="employee-profile-name"><h3>${escapeHtml(member.name)}</h3>${member.taskRole==='manager'?`<span class="employee-profile-kind">${$t("本次经理")}</span>`:''}${roles.length?`<p class="employee-profile-roles">${roles.map(role=>escapeHtml(role.name)).join(' · ')}</p>`:''}</div>${closeControl}</header>
+    <section class="employee-profile-section"><h4>${$t("简介")}</h4><p class="employee-profile-description">${escapeHtml(member.description || $t("暂无简介"))}</p></section>
+    ${member.capabilities?.length ? `<section class="employee-profile-section"><h4>${$t("能力标签")}</h4><div class="capabilities">${member.capabilities.map(capability => `<span class="capability">${escapeHtml(capability)}</span>`).join('')}</div></section>` : ''}
+    <section class="employee-profile-section"><h4>${$t("工作提示词")}</h4><div class="employee-profile-prompt communication-markdown">${renderContent(member.systemPrompt || $t("未填写"))}${roles.map(role=>`<section class="employee-role-prompt"><h5>${escapeHtml(role.name)}</h5>${renderContent(role.prompt || $t("未填写"))}</section>`).join('')}</div></section>
   </section>`;
 }

@@ -188,3 +188,7 @@ Skill allowed-tools/allowedTools 是可选元信息，平台兼容性计算不�
 Store.subscribeNotifications 发布未来已提交的任务待验收/完成及员工沟通新消息元数据；事务回滚丢弃、监听异常隔离、关闭 Store 清理，不新增持久事件或扫描历史。index 只向当前自有桌面 IPC 透传，系统通知失败不改业务结果。通知不含正文、附件、Trace 或提示词，边界见 docs/18。
 
 任务交接正文：orchestrator.parseEmployeeResponse 合并原生正文与尾部 JSON 内不同的完整 summary，避免“提交验收：”等短前言覆盖真实报告；相同正文去重。原始 rawResponse 保留，既有消息不回填或改写，App/CLI 共用保存后的正文。
+
+## 多语言边界
+
+服务端错误、事件与系统消息继续以简体中文源文字产生和存储，不随界面语言变化；客户端在展示点用 `$tm` 翻译已知文字，未知文字原样显示。认证守卫允许未登录读取 `/client/i18n.mjs` 与 `/client/locales/<locale>.json`（公开静态目录，不含凭据）。

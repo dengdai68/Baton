@@ -89,3 +89,5 @@ App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主�
 
 
 Baton当前身份使用~/.baton及records/baton.sqlite。品牌切换只显式搬运本机配置、切换数据库文件名和启动定位，不重写Task/Run/Trace或历史文件路径，不在产品保留旧身份探测/双协议。既有用户选择的工作根可以保留原目录名，不能把目录名当品牌配置推断或自动重置。详见development/baton-identity-cutover.md。
+
+界面语言偏好与关闭行为、外观一起保存在配置根的 `desktop-preferences.json`（`language` 键），属于宿主界面偏好，不进入业务数据库；清除工作目录不影响该偏好。

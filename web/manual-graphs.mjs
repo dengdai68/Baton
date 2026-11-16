@@ -1,3 +1,4 @@
+import { $t } from "../client/i18n.mjs";
 import { workflowConnections } from '/client/workflow-description.mjs';
 import {routeGraphEdge,formatWorkflowLayout,attachWorkflowViewport} from './workflow-layout.mjs';
 /* 开发手册只读图：X6 负责端口、视口与小地图；ELK 为动态工作流计算布局与折线路径。领域语义仍由 docs/ 与服务端模块定义。 */
@@ -77,15 +78,15 @@ function workflowDefinition(workflow, { focus = {}, assignments = {}, agentsById
       const position = node.position || positions.get(node.id);
       const state = focus[node.id];
       const assigned = agentsById[assignments[node.id]];
-      const owner = assigned?.name || node.ownerRole || "未分配角色";
-      const labels = { active: "正在处理", current: "项目经理当前重心", waiting_human: "等待澄清", waiting_agent: "等待协作", attention: "需要关注", recent: "最近交付" };
-      const result=card(node.id, position.x, position.y, positioned ? 140 : nodeWidth, positioned ? (node.type==='condition'?76:52) : nodeHeight, node.title || node.id, positioned ? [] : [node.type==='condition'?'条件判断':node.id, state ? `${owner} · ${labels[state]}` : owner], toneFor(node));
+      const owner = assigned?.name || node.ownerRole || $t("未分配角色");
+      const labels = { active: $t("正在处理"), current: $t("项目经理当前重心"), waiting_human: $t("等待澄清"), waiting_agent: $t("等待协作"), attention: $t("需要关注"), recent: $t("最近交付") };
+      const result=card(node.id, position.x, position.y, positioned ? 140 : nodeWidth, positioned ? (node.type==='condition'?76:52) : nodeHeight, node.title || node.id, positioned ? [] : [node.type==='condition'?$t("条件判断"):node.id, state ? `${owner} · ${labels[state]}` : owner], toneFor(node));
       if(positioned)result.attrs.label={...result.attrs.label,fontSize:12,lineHeight:16,textWrap:{width:node.type==='condition'?80:116,height:36,ellipsis:true}};
       if(node.type==='condition'){result.attrs.body.fill='var(--st-planning-bg)';result.attrs.body.stroke='var(--st-planning-border)';result.shape='polygon';result.attrs.body.refPoints='0,50 50,0 100,50 50,100';result.attrs.label.fontSize=compact?11:12;}
       return result;
     }),
     edges: workflowConnections(workflow).filter(link => byId.has(link.source) && byId.has(link.target)).map(link =>
-      ({...edge(link.source, link.sourcePort || 'right', link.target, link.targetPort || 'left', (link.condition || link.description || (link.dependency ? '前置依赖' : '交接')).replace(/\s+/g,' ').slice(0,24), {position:.5,markerWidth:10,markerHeight:8,markerRefX:-1.6}),data:{workflowEdge:link}})),
+      ({...edge(link.source, link.sourcePort || 'right', link.target, link.targetPort || 'left', (link.condition || link.description || (link.dependency ? $t("前置依赖") : $t("交接"))).replace(/\s+/g,' ').slice(0,24), {position:.5,markerWidth:10,markerHeight:8,markerRefX:-1.6}),data:{workflowEdge:link}})),
   };
 }
 
@@ -93,93 +94,93 @@ const graphs = {
   "data-model": {
     nodes: [
       card("agent", 70, 110, 220, 112, "Agent", ["kind · role · systemPrompt", "description · runtime · repository"], "agent"),
-      card("team", 405, 110, 220, 112, "Team", ["members · managerAgentId", "业务成员 / 经理 / 人类"], "default"),
-      card("workflow", 740, 110, 245, 112, "WorkflowTemplate", ["nodes[] · dependsOn", "职责与文档交付定义"], "flow"),
+      card("team", 405, 110, 220, 112, "Team", ["members · managerAgentId", $t("业务成员 / 经理 / 人类")], "default"),
+      card("workflow", 740, 110, 245, 112, "WorkflowTemplate", ["nodes[] · dependsOn", $t("职责与文档交付定义")], "flow"),
       card("task", 1085, 110, 300, 112, "Task", ["workflowSnapshot", "nodeAssignments{} · workspacePath"], "task"),
-      card("run", 1085, 390, 300, 150, "Run", ["taskId · participants 快照", "manager · currentFocus", "memberSessions · 成员会话绑定", "deliveryReview · overall status"], "task"),
+      card("run", 1085, 390, 300, 150, "Run", [$t("taskId · participants 快照"), "manager · currentFocus", $t("memberSessions · 成员会话绑定"), "deliveryReview · overall status"], "task"),
       card("trace", 70, 760, 220, 130, "Trace", ["runId · nodeId · agentId", "type · status · tracePath", "providerSessionId · sessionMode"], "default"),
       card("message", 365, 760, 220, 112, "Message", ["replyToMessageId · questionType", "sender · recipient · kind"], "warm"),
-      card("dispatch", 365, 1040, 300, 112, "Dispatch · 内部投递", ["messageIds · parentDispatchId", "status · nextRetryAt · traceIds"], "default"),
+      card("dispatch", 365, 1040, 300, 112, $t("Dispatch · 内部投递"), ["messageIds · parentDispatchId", "status · nextRetryAt · traceIds"], "default"),
       card("decision", 660, 760, 210, 112, "Decision", ["runId · traceId", "impact · affected nodes"], "flow"),
       card("artifact", 1240, 760, 230, 112, "Artifact", ["runId · traceId", "hash · version · storagePath"], "storage"),
       card("files", 1195, 1040, 320, 86, "Run Files", ["traces/<traceId>/events.ndjson", "output/ · workspace/"], "storage"),
     ],
     edges: [
-      edge("team", "left", "agent", "right", "成员"), edge("workflow", "right", "task", "left", "冻结快照"),
-      edge("task", "bottom", "run", "top", "创建 Run"), edge("run", "bottom", "trace", "top", "1:N Trace", { position: .22 }),
+      edge("team", "left", "agent", "right", $t("成员")), edge("workflow", "right", "task", "left", $t("冻结快照")),
+      edge("task", "bottom", "run", "top", $t("创建 Run")), edge("run", "bottom", "trace", "top", "1:N Trace", { position: .22 }),
       edge("run", "bottom", "message", "top", "conversationId", { position: .32 }), edge("run", "bottom", "decision", "top", "traceId", { position: .45 }),
-      edge("run", "bottom", "artifact", "top", "验收文件", { position: .75 }),
-      edge("trace", "bottom", "artifact", "left", "输出关联", { position: .58 }), edge("artifact", "bottom", "files", "top", "storagePath"),
-      edge("message", "bottom", "dispatch", "top", "触发 / 答复唤醒"),
+      edge("run", "bottom", "artifact", "top", $t("验收文件"), { position: .75 }),
+      edge("trace", "bottom", "artifact", "left", $t("输出关联"), { position: .58 }), edge("artifact", "bottom", "files", "top", "storagePath"),
+      edge("message", "bottom", "dispatch", "top", $t("触发 / 答复唤醒")),
     ],
   },
   "system-architecture": {
     nodes: [
-      boundary("browser-boundary", 24, 32, 178, 356, "① Browser boundary", "读模型 · HTTP 命令 · SSE", "var(--bg-subtle)"),
-      boundary("control-boundary", 222, 32, 460, 356, "② Baton Node.js boundary", "传输 · 状态 · 编排 · 本机 Runtime", "var(--bg-subtle)"),
-      boundary("persistence-boundary", 702, 32, 228, 356, "③ Local persistence boundary", "metadata 与 Run 文件分离", "var(--bg-subtle)"),
-      card("web", 43, 184, 140, 78, "web/ Console", ["路由 · 渲染 · 命令", "不写领域状态"], "agent"),
-      card("http", 246, 104, 170, 78, "server/index.mjs", ["auth.guard → HTTP / SSE", "登录鉴权 · 协议边界"], "task"),
-      card("store", 246, 266, 170, 82, "server/store.mjs", ["状态机 · ID · Event", "唯一状态写入"], "flow"),
-      card("orchestrator", 466, 184, 192, 82, "server/orchestrator.mjs", ["候选节点 · 推进 · 验收", "仅通过 Store 写入"], "agent"),
-      card("runtime", 466, 286, 192, 62, "server/runtime/", ["Claude / Codex · JSONL 规范化"], "default"),
-      card("sqlite", 725, 118, 180, 78, "SQLite", ["metadata 与状态", "不保存 Trace 内容"], "storage"),
-      card("files", 725, 270, 180, 78, "Run Files", ["Trace · 结果 · 文件快照", "受限预览"], "storage"),
+      boundary("browser-boundary", 24, 32, 178, 356, "① Browser boundary", $t("读模型 · HTTP 命令 · SSE"), "var(--bg-subtle)"),
+      boundary("control-boundary", 222, 32, 460, 356, "② Baton Node.js boundary", $t("传输 · 状态 · 编排 · 本机 Runtime"), "var(--bg-subtle)"),
+      boundary("persistence-boundary", 702, 32, 228, 356, "③ Local persistence boundary", $t("metadata 与 Run 文件分离"), "var(--bg-subtle)"),
+      card("web", 43, 184, 140, 78, "web/ Console", [$t("路由 · 渲染 · 命令"), $t("不写领域状态")], "agent"),
+      card("http", 246, 104, 170, 78, "server/index.mjs", ["auth.guard → HTTP / SSE", $t("登录鉴权 · 协议边界")], "task"),
+      card("store", 246, 266, 170, 82, "server/store.mjs", [$t("状态机 · ID · Event"), $t("唯一状态写入")], "flow"),
+      card("orchestrator", 466, 184, 192, 82, "server/orchestrator.mjs", [$t("候选节点 · 推进 · 验收"), $t("仅通过 Store 写入")], "agent"),
+      card("runtime", 466, 286, 192, 62, "server/runtime/", [$t("Claude / Codex · JSONL 规范化")], "default"),
+      card("sqlite", 725, 118, 180, 78, "SQLite", [$t("metadata 与状态"), $t("不保存 Trace 内容")], "storage"),
+      card("files", 725, 270, 180, 78, "Run Files", [$t("Trace · 结果 · 文件快照"), $t("受限预览")], "storage"),
     ],
     edges: [
-      edge("web", "right", "http", "left", "HTTP 命令", { router: "normal" }),
+      edge("web", "right", "http", "left", $t("HTTP 命令"), { router: "normal" }),
       edge("http", "left", "web", "top", "SSE", { dashed: true, position: .22, router: "normal", vertices: [{ x: 216, y: 143 }, { x: 216, y: 82 }, { x: 113, y: 82 }] }),
-      edge("http", "bottom", "store", "top", "校验 / 查询", { router: "normal" }),
-      edge("http", "right", "orchestrator", "top", "启动 / 恢复", { position: .4, router: "normal", vertices: [{ x: 440, y: 143 }, { x: 440, y: 160 }, { x: 562, y: 160 }] }),
+      edge("http", "bottom", "store", "top", $t("校验 / 查询"), { router: "normal" }),
+      edge("http", "right", "orchestrator", "top", $t("启动 / 恢复"), { position: .4, router: "normal", vertices: [{ x: 440, y: 143 }, { x: 440, y: 160 }, { x: 562, y: 160 }] }),
       edge("orchestrator", "left", "store", "right", "Store command", { router: "normal", vertices: [{ x: 440, y: 225 }, { x: 440, y: 307 }] }),
-      edge("orchestrator", "bottom", "runtime", "top", "启动 / 续接成员 CLI", { router: "normal" }),
+      edge("orchestrator", "bottom", "runtime", "top", $t("启动 / 续接成员 CLI"), { router: "normal" }),
       edge("store", "bottom", "sqlite", "left", "metadata", { position: .32, router: "normal", vertices: [{ x: 331, y: 370 }, { x: 694, y: 370 }, { x: 694, y: 157 }] }),
       edge("orchestrator", "right", "files", "left", "Trace / Artifact", { router: "normal", vertices: [{ x: 684, y: 225 }, { x: 684, y: 309 }] }),
     ],
   },
   "task-flow": {
     nodes: [
-      boundary("control-lane", 24, 32, 1042, 132, "① 创建、调度与交付主路径", "项目经理从全部职责中选择当前最需要的协作；Trace 是唯一执行记录", "var(--bg-subtle)"),
-      boundary("exception-lane", 24, 194, 1042, 258, "② 回路与质量收束", "澄清答复与临时错误恢复原投递；后续协作由项目经理选择职责", "var(--bg-subtle)"),
-      card("task", 48, 78, 145, 58, "创建 Task", ["冻结流程与分配"], "task"),
-      card("eligible", 250, 78, 162, 58, "职责定义", ["交接提示 · 不存节点状态"], "flow"),
-      card("manager", 470, 78, 162, 58, "项目经理 Trace", ["选择 nextNodeId"], "agent"),
-      card("agent", 690, 78, 162, 58, "业务 Agent", ["真实 Provider Trace"], "agent"),
-      card("accept", 910, 68, 132, 78, "验收", ["node_result", "文件 → Artifact"], "task"),
-      card("consult", 60, 276, 172, 68, "角色咨询", ["Message · 团队内答复"], "warm"),
-      card("human", 280, 276, 172, 68, "等待人类", ["仅团队不能回答时"], "warm"),
-      card("retry", 500, 276, 172, 68, "自动重试", ["失败 Trace 保留", "五分钟无活跃角色巡检"], "danger"),
-      card("requeue", 500, 374, 172, 54, "恢复原 Dispatch", ["原成员续接 · 新 Trace"], "flow"),
-      card("quality", 740, 262, 172, 68, "协作反馈", ["问题 / 处理 / 验证结果"], "default"),
-      card("reflection", 740, 374, 172, 54, "经理提交人类验收", ["按成员交接决定下一步"], "flow"),
-      card("done", 942, 374, 116, 54, "待人类验收", ["确认后完成"], "storage"),
+      boundary("control-lane", 24, 32, 1042, 132, $t("① 创建、调度与交付主路径"), $t("项目经理从全部职责中选择当前最需要的协作；Trace 是唯一执行记录"), "var(--bg-subtle)"),
+      boundary("exception-lane", 24, 194, 1042, 258, $t("② 回路与质量收束"), $t("澄清答复与临时错误恢复原投递；后续协作由项目经理选择职责"), "var(--bg-subtle)"),
+      card("task", 48, 78, 145, 58, $t("创建 Task"), [$t("冻结流程与分配")], "task"),
+      card("eligible", 250, 78, 162, 58, $t("职责定义"), [$t("交接提示 · 不存节点状态")], "flow"),
+      card("manager", 470, 78, 162, 58, $t("项目经理 Trace"), [$t("选择 nextNodeId")], "agent"),
+      card("agent", 690, 78, 162, 58, $t("业务 Agent"), [$t("真实 Provider Trace")], "agent"),
+      card("accept", 910, 68, 132, 78, $t("验收"), ["node_result", $t("文件 → Artifact")], "task"),
+      card("consult", 60, 276, 172, 68, $t("角色咨询"), [$t("Message · 团队内答复")], "warm"),
+      card("human", 280, 276, 172, 68, $t("等待人类"), [$t("仅团队不能回答时")], "warm"),
+      card("retry", 500, 276, 172, 68, $t("自动重试"), [$t("失败 Trace 保留"), $t("五分钟无活跃角色巡检")], "danger"),
+      card("requeue", 500, 374, 172, 54, $t("恢复原 Dispatch"), [$t("原成员续接 · 新 Trace")], "flow"),
+      card("quality", 740, 262, 172, 68, $t("协作反馈"), [$t("问题 / 处理 / 验证结果")], "default"),
+      card("reflection", 740, 374, 172, 54, $t("经理提交人类验收"), [$t("按成员交接决定下一步")], "flow"),
+      card("done", 942, 374, 116, 54, $t("待人类验收"), [$t("确认后完成")], "storage"),
     ],
     edges: [
-      edge("task", "right", "eligible", "left", "创建", { router: "normal" }),
-      edge("eligible", "right", "manager", "left", "职责与证据", { router: "normal" }),
+      edge("task", "right", "eligible", "left", $t("创建"), { router: "normal" }),
+      edge("eligible", "right", "manager", "left", $t("职责与证据"), { router: "normal" }),
       edge("manager", "right", "agent", "left", "nextNodeId", { router: "normal" }),
       edge("agent", "right", "accept", "left", "Trace + node_result", { router: "normal" }),
-      edge("agent", "bottom", "consult", "top", "业务问题", { position: .24, router: "normal", vertices: [{ x: 771, y: 190 }, { x: 146, y: 190 }] }),
+      edge("agent", "bottom", "consult", "top", $t("业务问题"), { position: .24, router: "normal", vertices: [{ x: 771, y: 190 }, { x: 146, y: 190 }] }),
       edge("agent", "bottom", "human", "top", "needsHuman", { position: .52, router: "normal", vertices: [{ x: 771, y: 218 }, { x: 366, y: 218 }] }),
-      edge("agent", "bottom", "retry", "top", "临时错误", { position: .72, router: "normal", vertices: [{ x: 771, y: 246 }, { x: 586, y: 246 }] }),
-      edge("consult", "right", "requeue", "left", "答复后", { router: "normal", vertices: [{ x: 260, y: 310 }, { x: 260, y: 401 }] }),
-      edge("human", "right", "requeue", "left", "回答后", { router: "normal", vertices: [{ x: 476, y: 310 }, { x: 476, y: 401 }] }),
-      edge("retry", "bottom", "requeue", "top", "巡检后", { router: "normal" }),
-      edge("requeue", "right", "agent", "bottom", "续接原成员", { dashed: true, position: .45, router: "normal", vertices: [{ x: 704, y: 401 }, { x: 704, y: 176 }, { x: 771, y: 176 }] }),
-      edge("accept", "bottom", "quality", "top", "交付与问题反馈", { router: "normal", vertices: [{ x: 976, y: 214 }, { x: 826, y: 214 }] }),
-      edge("quality", "bottom", "reflection", "top", "成员反馈结果", { router: "normal" }),
+      edge("agent", "bottom", "retry", "top", $t("临时错误"), { position: .72, router: "normal", vertices: [{ x: 771, y: 246 }, { x: 586, y: 246 }] }),
+      edge("consult", "right", "requeue", "left", $t("答复后"), { router: "normal", vertices: [{ x: 260, y: 310 }, { x: 260, y: 401 }] }),
+      edge("human", "right", "requeue", "left", $t("回答后"), { router: "normal", vertices: [{ x: 476, y: 310 }, { x: 476, y: 401 }] }),
+      edge("retry", "bottom", "requeue", "top", $t("巡检后"), { router: "normal" }),
+      edge("requeue", "right", "agent", "bottom", $t("续接原成员"), { dashed: true, position: .45, router: "normal", vertices: [{ x: 704, y: 401 }, { x: 704, y: 176 }, { x: 771, y: 176 }] }),
+      edge("accept", "bottom", "quality", "top", $t("交付与问题反馈"), { router: "normal", vertices: [{ x: 976, y: 214 }, { x: 826, y: 214 }] }),
+      edge("quality", "bottom", "reflection", "top", $t("成员反馈结果"), { router: "normal" }),
       edge("reflection", "right", "done", "left", "pass", { router: "normal" }),
-      edge("reflection", "bottom", "eligible", "bottom", "rework · 重选职责", { dashed: true, position: .5, router: "normal", vertices: [{ x: 826, y: 444 }, { x: 440, y: 444 }, { x: 440, y: 164 }, { x: 331, y: 164 }] }),
+      edge("reflection", "bottom", "eligible", "bottom", $t("rework · 重选职责"), { dashed: true, position: .5, router: "normal", vertices: [{ x: 826, y: 444 }, { x: 440, y: 444 }, { x: 440, y: 164 }, { x: 331, y: 164 }] }),
     ],
   },
 };
 
 function requireX6() {
-  if (!globalThis.X6?.Graph) throw new Error("关系图引擎未加载；请刷新页面后重试。");
+  if (!globalThis.X6?.Graph) throw new Error($t("关系图引擎未加载；请刷新页面后重试。"));
   return globalThis.X6;
 }
 function requireElk() {
-  if (typeof globalThis.ELK !== "function") throw new Error("关系图布局引擎未加载；请刷新页面后重试。");
+  if (typeof globalThis.ELK !== "function") throw new Error($t("关系图布局引擎未加载；请刷新页面后重试。"));
   return new globalThis.ELK();
 }
 function updateScale(key, onViewport) { const item = instances.get(key); if (item) onViewport?.(item.graph.zoom()); }

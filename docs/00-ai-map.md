@@ -94,6 +94,7 @@ CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，�
 | `server/communication*.mjs` | 长期会话与消息投递 | [沟通](17-communication.md) |
 | `server/auth.mjs` | 管理员、会话、Origin 与登录限流 | [认证](14-console-authentication.md) |
 | `client/console-projections.mjs` | 无副作用的共享展示投影 | [client](../client/README.md) |
+| `client/i18n.mjs`、`client/locales/` | 界面多语言：简体源文本为键，繁体/英文目录 | [client](../client/README.md) |
 | `web/app.js` | 任务、员工、团队、工作流与文件界面 | [web](../web/README.md) |
 | `web/settings.mjs` | 外观、Runtime、仓库和 CLI 设置 | [配置](15-employee-runtime-configuration.md) |
 | `apps/electron/` | 桌面窗口、自有后台和受限宿主接口 | [桌面](18-electron-client.md) |
@@ -337,3 +338,5 @@ Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedT
 设计稿复核（纸张期，现以石墨为准）：侧栏命令/导航分组（web/index.html）、员工卡片（web/app.js）、协作消息与输入卡片（web/app.js、styles.css）、沟通成员（styles.css）；仅展示无CLI协议变化。验收 test-redesign、test-collaboration-flow；审查范围见 docs/development/paper-alignment-review.md。
 
 控制台实时阅读由 `web/console-stream.mjs` 统一：任务 SSE/可见控制台5秒补查、沟通2秒轮询持续收新记录；上滚只停止自动滚动。稳定行锚点/ResizeObserver 处理增量、延迟正文与窄屏布局，现有 before 分页补齐断线和突发窗口。入口 app.js/communication.js；验收 scripts/test-console-live.mjs，HTTP/CLI/执行状态协议不变。
+
+界面多语言：`client/i18n.mjs` 以简体中文源文本为键（zh-CN 恒等），`client/locales/{en,zh-TW}.json` 提供英文与繁体；renderer 用 `$t`，服务端/系统文字只在展示时经 `$tm` 精确或模板匹配翻译，未知文本（业务内容）原样显示。Electron 宿主菜单、托盘、对话框、通知与 CLI 安装确认同步翻译；业务数据、提示词、冻结工作流说明、CLI 输出与存储历史不翻译。语言默认跟随 macOS，设置 → 常规可切换并重新加载。完整性与模式校验见 `tests/i18n.test.mjs`。

@@ -66,3 +66,13 @@ runtime-providers 思考集合同步新增六项；OpenCode 可用档位是模�
 ## 共享协作输入与报告通知
 
 合并经理报告以 coalescedSourceMessageIds 明确关联全部来源，每条消息展示同一个真实 Dispatch/Trace 的处理状态；不把背景阅读当业务投递，不推断正文来源。Web/Electron 与 CLI 继续共用 collaborationRecords。
+
+## 界面多语言
+
+`i18n.mjs` 是 renderer 与 Electron 宿主共用的翻译层：键为简体中文源文本，zh-CN 不需要目录、恒等返回；`locales/en.json` 与 `locales/zh-TW.json` 提供英文和繁体（台湾用语）。`$t(源文本, 参数)` 支持 `{0}` 位置参数或命名参数，英文复数写作 `{one, other}`，按 `count` 或首个数字参数选择；同字不同义使用 `文字@@上下文` 键（如 `启用@@status`），源语言只显示 `@@` 之前的文字。
+
+`$tm(text)` 用于服务端错误、系统事件与暂停原因等外部文字：先精确匹配，再用含 `{0}` 且至少 4 个汉字的目录键作模板匹配，捕获片段递归翻译；未知文本（含业务内容）原样返回，结果有界缓存。`localizeStatic(root)` 一次性翻译静态 HTML 文本节点与 title/aria/placeholder/alt 属性。
+
+浏览器启动时经 `batonDesktop.getLocale()` 取宿主已解析的语言，再读取 `/client/locales/<locale>.json`；读取失败保持源语言，不阻塞界面。Node 端（服务、CLI、单测）保持 zh-CN。业务数据、AI 提示词、冻结工作流说明（`workflow-description.mjs` 输出及其预览）、CLI 输出与存储历史从不翻译；客户端发往服务端的系统原因保持源文字，仅在展示时翻译。
+
+新增界面文字时以 `$t("…")` 双引号字面量书写，并在两份目录补齐；`tests/i18n.test.mjs` 校验所有 `$t` 键与静态 HTML 均有译文、占位符一致、译文不新增 `< > & "`，英文无汉字、繁体无常见简体字。

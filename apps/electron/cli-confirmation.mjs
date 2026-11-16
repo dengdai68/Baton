@@ -1,3 +1,4 @@
+import { $t, currentLocale } from "../../client/i18n.mjs";
 import { fileURLToPath } from "node:url";
 
 // This window belongs to main, not to the authenticated Console renderer. The
@@ -7,6 +8,14 @@ export function confirmCliInstallation({ BrowserWindow, parent, status, signal, 
   const page = new URL("./cli-confirmation.html", import.meta.url);
   page.searchParams.set("commandPath", status.commandPath);
   for (const path of status.profilePaths) page.searchParams.append("profilePath", path);
+  // The local page has no translator of its own; main passes the translated wording.
+  page.searchParams.set("lang", currentLocale());
+  page.searchParams.set("messages", JSON.stringify({
+    title: $t("安装 Baton CLI"), allow: $t("允许在当前用户的 Shell 中使用 {0}？"), launcher: $t("受管启动器"),
+    path: $t("PATH 配置"), pathDescription: $t("仅添加 Baton 标记块，保留原有配置。"),
+    note: $t("不使用 sudo，不覆盖其他同名命令，不改变 CLI 登录。安装后请新开终端；移动客户端后需重新安装。"),
+    cancel: $t("取消"), install: $t("安装 CLI"),
+  }));
   const allowedFiles = new Set([
     new URL("./cli-confirmation.html", import.meta.url).href,
     new URL("./cli-confirmation.js", import.meta.url).href,
@@ -16,7 +25,7 @@ export function confirmCliInstallation({ BrowserWindow, parent, status, signal, 
   const dialog = new BrowserWindow({
     parent, modal: true, show: false, width: 560, height: 470,
     minWidth: 420, minHeight: 360, resizable: true, minimizable: false,
-    maximizable: false, fullscreenable: false, title: "安装 Baton CLI",
+    maximizable: false, fullscreenable: false, title: $t("安装 Baton CLI"),
     backgroundColor, autoHideMenuBar: true,
     webPreferences: { nodeIntegration: false, contextIsolation: true, sandbox: true,
       webSecurity: true, webviewTag: false, partition: "baton-cli-confirmation" },

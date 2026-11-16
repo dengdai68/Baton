@@ -226,3 +226,5 @@ runtimes models 的新增目标返回原生可选模型与逐模型 levels，非
 可选 Skill 元信息 allowed-tools/allowedTools 不再触发平台不兼容；App 详情检查兼容性与 CLI plugins check-compatibility ID 同步刷新旧目录摘要，保留同一安装 ID、源文件和既有绑定。get、导入、员工/角色选择共用当前兼容性结果，不新增参数，也不改变其他输入/失败规则。
 
 任务和沟通的系统通知属于 Electron 原生呈现，CLI 不新增通知命令或宿主权限。App/CLI 仍通过相同认证 HTTP/Store 触发业务操作；只要客户端在线且登录有效，CLI 产生的同类已提交事件也走同一通知订阅，离线不补发历史。创建、启动、查询、沟通的参数、schema 与成功/失败语义保持不变。
+
+CLI 输出、帮助与错误保持简体中文，不读取客户端界面语言；界面语言是客户端宿主偏好，不属于 CLI 可配置能力，App/CLI 业务语义不变。

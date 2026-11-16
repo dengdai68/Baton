@@ -1,3 +1,4 @@
+import { $t } from "../../client/i18n.mjs";
 export function isPreferencesSender(event, contents, origin) {
   return isSettingsSender(event, contents, origin, "/settings/general");
 }
@@ -30,9 +31,9 @@ export async function health(origin, instanceId, fetcher = fetch) {
 
 export async function initialRoute(origin, fetcher = fetch) {
   const response = await fetcher(`${origin}/api/auth/bootstrap-status`, { signal: AbortSignal.timeout(5000), redirect: "error" });
-  if (!response.ok) throw new Error("无法读取工作区管理员状态，请重试连接。");
+  if (!response.ok) throw new Error($t("无法读取工作区管理员状态，请重试连接。"));
   const status = await response.json();
   if (status.configured === true) return "/";
   if (status.configured === false && status.available === true) return "/setup";
-  throw new Error("客户端首次设置不可用，请查看本机服务日志。");
+  throw new Error($t("客户端首次设置不可用，请查看本机服务日志。"));
 }

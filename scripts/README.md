@@ -262,3 +262,5 @@ MCP 编辑回归：`test-market-catalog.mjs` 覆盖详情读取失败后通过�
 MCP 详情编辑验收：test-market-catalog.mjs 同时核对共享抽屉标题栏的原生 no-drag 命中区域与键盘编辑，详情/工具失败均可进入表单；真实鼠标命中需在安装包实际点击右上编辑、更多及关闭，不能仅凭 DOM click 或可访问性激活判定。mcp-tools 单测用16秒初始化服务验证45秒默认发现预算，另保留自定义短超时及清理失败路径。
 
 `test-console-live.mjs` 在临时 HOME/工作目录的暂停任务与私聊中验证实时增量、重复 SSE、旧行 DOM、向上阅读锚点、延迟长正文、最新定位、75条突发补页、读取失败保留与关闭停止轮询，并核对1320/760px及两主题的分页居中。事件/网络故障为展示夹具，不调用 Provider。BATON_CONSOLE_LIVE_APP 指定独立包；BATON_CONSOLE_PREVIEW=1 成功后保留隔离演示窗口，不替换当前安装。
+
+`test-i18n.mjs` 在隔离 HOME/Store 夹具与禁用 Provider 的 Electron 中，以 `BATON_LOCALE=en` 逐页（待我处理、任务、自动化、团队、工作流、员工、角色、插件、MCP、沟通、全部设置页、开发手册、任务工作区）检查可见文字与 title/aria/placeholder：英文不得残留界面中文、繁体不得出现常见简体字，业务数据（API 返回的中文内容）不计入；同时核对宿主菜单、登录页、设置 → 常规切换繁体后的重载与 `desktop-preferences.json` 持久化、重启后显式选择优先于系统语言以及“跟随系统”恢复。截图（英文宽/窄、繁体宽）与 evidence.json 写入 `.data/i18n-acceptance/`。`BATON_I18N_APP=/path/Baton.app` 可验收打包版本。

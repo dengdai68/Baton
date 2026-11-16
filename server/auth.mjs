@@ -178,7 +178,9 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
         revoke(request); response.setHeader("Set-Cookie", cookie(sessionCookieName, "", 0, request.headers.origin)); json(response, 200, { ok: true }); return true;
       }
       // Pre-auth pages render brand assets too; icons/vendor are inert presentation files.
-      if (request.method === "GET" && (["/login", "/login.js", "/login.css", "/api/health"].includes(path) || path.startsWith("/icons/") || path.startsWith("/vendor/"))) return false;
+      // The interface translator and its static catalogs are equally inert and let
+      // login/setup appear in the operator's language.
+      if (request.method === "GET" && (["/login", "/login.js", "/login.css", "/api/health", "/client/i18n.mjs"].includes(path) || /^\/client\/locales\/[A-Za-z-]+\.json$/.test(path) || path.startsWith("/icons/") || path.startsWith("/vendor/"))) return false;
       const current = session(request);
       if (!current) {
         if (path.startsWith("/api/")) json(response, 401, { error: "authentication_required" });

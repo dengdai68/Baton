@@ -12,13 +12,13 @@
 </head>
 <body class="cli-confirmation">
   <main aria-labelledby="confirmation-title">
-    <header><h1 id="confirmation-title">安装 Baton CLI</h1><p>允许在当前用户的 Shell 中使用 <code>baton</code>？</p></header>
+    <header><h1 id="confirmation-title" data-text="title">安装 Baton CLI</h1><p data-allow>允许在当前用户的 Shell 中使用 <code>baton</code>？</p></header>
     <div class="confirmation-content">
-      <section><h2>受管启动器</h2><p class="confirmation-path" data-command-path></p></section>
-      <section><h2>PATH 配置</h2><p class="confirmation-description">仅添加 Baton 标记块，保留原有配置。</p><div data-profile-paths></div></section>
-      <p class="confirmation-note">不使用 sudo，不覆盖其他同名命令，不改变 CLI 登录。安装后请新开终端；移动客户端后需重新安装。</p>
+      <section><h2 data-text="launcher">受管启动器</h2><p class="confirmation-path" data-command-path></p></section>
+      <section><h2 data-text="path">PATH 配置</h2><p class="confirmation-description" data-text="pathDescription">仅添加 Baton 标记块，保留原有配置。</p><div data-profile-paths></div></section>
+      <p class="confirmation-note" data-text="note">不使用 sudo，不覆盖其他同名命令，不改变 CLI 登录。安装后请新开终端；移动客户端后需重新安装。</p>
     </div>
-    <footer><button class="ghost-button" type="button" data-choice="cancel" autofocus>取消</button><button class="primary-button" type="button" data-choice="install">安装 CLI</button></footer>
+    <footer><button class="ghost-button" type="button" data-choice="cancel" autofocus data-text="cancel">取消</button><button class="primary-button" type="button" data-choice="install" data-text="install">安装 CLI</button></footer>
   </main>
 </body>
 </html>

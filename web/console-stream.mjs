@@ -1,3 +1,4 @@
+import { $t } from "../client/i18n.mjs";
 // Console reception and reading position are independent: scrolling up never
 // unsubscribes from new records. One reader follows async body/layout growth.
 const readers = new WeakMap();
@@ -74,7 +75,7 @@ export async function readConsoleTail(current, fetchPage, limit = 200) {
   let events = page.events, traces = page.traces || [];
   const cursors = new Set();
   while (known.size && events.length && !events.some(event => known.has(event.id)) && page.hasMore && page.nextBefore && events.length < limit) {
-    if (cursors.has(page.nextBefore)) throw new Error('控制台分页游标未推进，请刷新重试。');
+    if (cursors.has(page.nextBefore)) throw new Error($t("控制台分页游标未推进，请刷新重试。"));
     cursors.add(page.nextBefore);
     page = await fetchPage(page.nextBefore);
     events = [...new Map([...page.events, ...events].map(event => [event.id, event])).values()];
