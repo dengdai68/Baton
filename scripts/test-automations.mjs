@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { createAuth } from '../server/auth.mjs';
 import { createStore } from '../server/store.mjs';
 await mkdir('.data',{recursive:true});
-const root=await mkdtemp(resolve('.data/automations-ui-')),home=join(root,'home'),data=process.env.BATON_AUTOMATIONS_APP?join(home,'.baton','desktop'):join(root,'client');await mkdir(home,{recursive:true});
+const root=await mkdtemp(resolve('.data/automations-ui-')),home=join(root,'home'),data=process.env.BATON_AUTOMATIONS_APP?join(home, '.baton'):join(root,'client');await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('automation-qa',password);auth.close();
 const store=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});
 const input={managerAgentId:'system_project_manager',title:'验收自动化',objective:'只用于隔离界面检查',memberAgentIds:['system_project_manager','agent_analyst'],workflowTemplateId:'content_delivery',cron:'0 9 * * 1-5',enabled:false};

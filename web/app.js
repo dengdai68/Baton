@@ -13,7 +13,7 @@ import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect,
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
-import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
+import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
 
 /* Baton Console：任务空间信息架构 + 轻盈视觉系统。
    视图：overview / tasks / teams / agents / workspace（普通任务与自动化共用任务空间）。 */
@@ -1700,6 +1700,10 @@ async function openCollaborationTurn(traceId, startMessageId) {
   consolePage(runId, trace.agentId).browsingHistory = true;
   await hydratePromptSnapshots([...prompt.querySelectorAll("[data-prompt-snapshot]")]);
   prompt.scrollIntoView({ block: "start" });
+  // A deliberate jump to history stops following the tail. Otherwise a prompt
+  // near the end still reads as "latest" and later body growth pulls it away.
+  const stream = prompt.closest("#trace-stream");
+  if (stream) restoreConsoleReading(stream, { ...captureConsoleReading(stream), following: false });
   prompt.querySelector("summary")?.focus({ preventScroll: true });
 }
 
@@ -2474,6 +2478,8 @@ function renderCollaboration(workspace, agents) {
     following: previousList.scrollHeight - previousList.scrollTop - previousList.clientHeight < 48,
   };
   const reading = view.jumpLatest ? null : view.collaborationScroll;
+  const prepending = view.collaborationPrependReading;
+  view.collaborationPrependReading = null;
   view.disclosures ||= {};
   view.attachments ||= [];
   view.outbox ||= new Map();
@@ -2502,8 +2508,8 @@ function renderCollaboration(workspace, agents) {
     <div class="collaboration-toolbar"><button class="small-button" data-collaboration-latest>↓ 最新</button></div>
 
     <div class="human-message-list">
-      ${view.collaborationError ? `<div class="collaboration-read-error" role="alert">${esc(view.collaborationError)}<button type="button" class="text-action" data-retry-collaboration>重试</button></div>` : ''}
-      ${view.collaborationHasMore ? '<button class="small-button" data-collaboration-older>加载更早协作记录</button>' : ""}
+      ${view.collaborationError ? `<div class="collaboration-read-error" role="alert">${esc(view.collaborationError)}<button type="button" class="text-action" data-retry-collaboration ${view.collaborationLoading ? 'disabled' : ''}>重试</button></div>` : ''}
+      ${view.collaborationHasMore ? `<div class="collaboration-history-loader"><button class="small-button" data-collaboration-older ${view.collaborationLoading ? 'disabled aria-busy="true"' : ''}>${view.collaborationLoading ? '正在加载…' : '加载更早协作记录'}</button></div>` : ""}
       ${records.length ? visibleRecords.map((item, index) => {
         // Sender identity is saved with the Message. Frozen participants also
         // cover historical members missing from the compact latest Trace page.
@@ -2513,7 +2519,7 @@ function renderCollaboration(workspace, agents) {
         const divider = !index || new Date(visibleRecords[index - 1].timestamp).toDateString() !== day ? `<div class="communication-day-divider"><time datetime="${esc(item.timestamp)}">${esc(communicationDayLabel(item.timestamp))}</time></div>` : "";
         return `${divider}<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}"${item.outgoing ? ` data-outgoing-state="${esc(item.outgoing.status)}"` : ''} data-tone="${esc(item.tone)}" data-sender-color="${esc(sender.color || 'system')}" data-record-status="${esc(item.statusCode)}">
         ${item.senderType === "human" ? "" : `<span class="agent-card-avatar collaboration-avatar ${esc(roleColor(sender))}" aria-hidden="true">${esc(initialsOf(sender))}</span>`}<div class="collaboration-message-main">
-        <header><strong>${esc(item.from)}</strong><span class="collaboration-kind">${esc(item.title)}${item.to ? ` <span aria-label="交给">→</span> ${esc(item.to)}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(new Date(item.timestamp).toLocaleTimeString("zh-CN", {hour:"2-digit", minute:"2-digit", hour12:false}))}</time>${item.status ? `<span class="collaboration-status">${esc(item.status)}</span>` : ""}</header>
+        <header><strong>${esc(item.from)}</strong><span class="collaboration-kind">${esc(item.title)}${item.to ? ` <span aria-label="交给">→</span> ${esc(item.to)}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(formatMessageTime(item.timestamp))}</time>${item.status ? `<span class="collaboration-status">${esc(item.status)}</span>` : ""}</header>
         <div class="collaboration-content">
           ${item.canReply ? '<div class="collaboration-question-heading">需要你回答</div>' : ""}${body(item.content, item.id)}${item.outgoing ? outgoingAttachmentMarkup(item.outgoing) : messageAttachments(item.attachments || [], run.id, "runs")}
           ${item.reason ? `<p>${esc(item.reason)}</p>` : ""}
@@ -2555,7 +2561,11 @@ function renderCollaboration(workspace, agents) {
   dock.querySelector('[data-collaboration-latest]')?.addEventListener('click',readingIntent);
   dock.querySelector('[data-collaboration-older]')?.addEventListener('click',readingIntent);
   const restoreReading = () => {
-    if (messageList?.isConnected && messageList.clientHeight && (view.collaborationReadingRevision || 0)===readingRevision) messageList.scrollTop = !reading || reading.following ? messageList.scrollHeight : reading.top;
+    if (!messageList?.isConnected || !messageList.clientHeight || (view.collaborationReadingRevision || 0)!==readingRevision) return;
+    if (prepending) {
+      const anchor = [...messageList.querySelectorAll('[data-collaboration-record]')].find(row => row.dataset.collaborationRecord === prepending.anchorId);
+      messageList.scrollTop = anchor ? messageList.scrollTop + anchor.getBoundingClientRect().top - messageList.getBoundingClientRect().top - prepending.offset : prepending.top + messageList.scrollHeight - prepending.height;
+    } else messageList.scrollTop = !reading || reading.following ? messageList.scrollHeight : reading.top;
   };
   restoreReading();
   requestAnimationFrame(restoreReading);
@@ -2571,22 +2581,32 @@ function renderCollaboration(workspace, agents) {
 async function loadCollaboration(runId=state.selectedRunId,{older=false,latest=false,render:paint=true}={}) {
   if(!runId || state.currentView!=='workspace' || state.selectedRunId!==runId)return;
   const view=workspaceView(runId);
-  if(latest){view.collaborationRequest=(view.collaborationRequest||0)+1;view.collaborationPending=null;view.collaborationRefreshQueued=false;view.collaborationBrowsing=false;}
+  if(latest){view.collaborationRequest=(view.collaborationRequest||0)+1;view.collaborationPending=null;view.collaborationRefreshQueued=false;view.collaborationBrowsing=false;view.collaborationPrependReading=null;}
   if(view.collaborationPending){if(!older)view.collaborationRefreshQueued=true;return view.collaborationPending;}
   const query=new URLSearchParams({limit:'30',human:'false'});
   if(older&&view.collaborationBefore)query.set('before',view.collaborationBefore);
   const token=(view.collaborationRequest||0)+1;view.collaborationRequest=token;
-  view.collaborationLoading=true;view.collaborationError=null;
+  view.collaborationLoading=true;if(!older)view.collaborationError=null;
   const current=()=>state.currentView==='workspace' && state.selectedRunId===runId && token===view.collaborationRequest;
   const pending=(async()=>{
     try {
       const result=await api(`/api/runs/${runId}/collaboration?${query}`);
       if(!current())return;
-      // A historical page is a bounded window. Live updates never replace it while reading.
+      // Keep loaded history together. Live refresh cannot replace a reader's range.
       if(!older && view.collaborationBrowsing && view.collaborationItems?.length)return;
-      view.collaborationItems=result.items;view.collaborationLoaded=true;
+      if(older){
+        const list=$('#collaboration-panel .human-message-list');
+        if(list?.clientHeight){
+          const bounds=list.getBoundingClientRect(),anchor=[...list.querySelectorAll('[data-collaboration-record]')].find(row=>{const rect=row.getBoundingClientRect();return rect.bottom>bounds.top && rect.top<bounds.bottom;});
+          view.collaborationPrependReading={top:list.scrollTop,height:list.scrollHeight,anchorId:anchor?.dataset.collaborationRecord,offset:anchor ? anchor.getBoundingClientRect().top-bounds.top : 0};
+        }
+        view.collaborationItems=[...new Map([...result.items,...(view.collaborationItems || [])].map(item=>[item.id,item])).values()];
+      }else view.collaborationItems=result.items;
+      view.collaborationLoaded=true;
+      view.collaborationError=null;
+      view.collaborationRetryOlder=false;
       view.collaborationHasMore=result.hasMore;view.collaborationBefore=result.nextBefore;view.collaborationBrowsing=older;
-    } catch(error) {if(current())view.collaborationError=error.message;}
+    } catch(error) {if(current()){view.collaborationError=error.message;view.collaborationRetryOlder=older;}}
     finally {
       if(token===view.collaborationRequest){
         view.collaborationLoading=false;view.collaborationPending=null;
@@ -3448,7 +3468,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-task-workflow-details]"))) return workflowDetails(state.workspace.run.task.workflowSnapshot, { frozen: true });
   if ((target = el("[data-ws-tab]"))) { workspaceView().jumpLatest = true; workspaceView().tab = target.dataset.wsTab; renderWorkspace(); if(target.dataset.wsTab==='collaboration')return loadCollaboration().catch(error=>toast(error.message,true)); if (target.dataset.wsTab === "diff" && workspaceView().changes && !workspaceView().changesLoading) return loadWorkingChanges(state.selectedRunId); if (target.dataset.wsTab === "directory" && workspaceView().directory && !workspaceView().directoryLoading) return loadWorkingDirectory(state.selectedRunId); return; }
   if ((target = el("[data-reload-workspace]"))) return loadWorkspace();
-  if ((target = el('[data-retry-collaboration]'))) return loadCollaboration();
+  if ((target = el('[data-retry-collaboration]'))) return loadCollaboration(undefined,{older:Boolean(workspaceView().collaborationRetryOlder)});
   if ((target = el("[data-load-directory]"))) return loadWorkingDirectory(state.selectedRunId,{path:target.dataset.loadDirectory});
   if ((target = el("[data-load-more-directory]"))) return loadWorkingDirectory(state.selectedRunId,{path:target.dataset.loadMoreDirectory,more:true});
   if ((target = el("[data-console-older]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { older: true });

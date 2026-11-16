@@ -1,5 +1,13 @@
 # 工程脚本
 
+媒体专项：node scripts/test-communication-media.mjs 在本机临时目录的隔离 HOME 中验证沟通/协作直接图片预览、等高待发卡片、横竖比例/小图不放大、有界预览/关闭/下载、损坏图片及收起侧栏无计数；两主题×宽窄窗口，不调用 Provider。设置 BATON_MEDIA_APP=/绝对路径/Baton.app 验证打包版。保留自动化触发/配置布局检查。
+
+协作呈现回归 `node scripts/test-collaboration-flow.mjs` 覆盖向前累加、可见锚点、居中入口、月日时间、App/CLI 历史信封正文一致、回复成功/失败及宽窄布局；使用本机临时目录中的隔离 Store 素材，不调用 Provider。仅运行分页与回复滚动可设置 BATON_COLLABORATION_SCROLL_ONLY=1。
+
+打包 UI 夹具使用隔离 HOME 的 `~/.baton` 平铺配置根；旧 `desktop` 仅用于 configuration-root-migration 专项验证。生产配置根变化不改变源码显式隔离目录、Provider 调用或业务资料布局。
+
+配置目录升级验收：设置 `BATON_CONFIG_OLD_APP`、`BATON_CONFIG_NEW_APP` 为旧、新安装包的 `.app` 路径，运行 `node scripts/test-configuration-root.mjs`。脚本在隔离 HOME 中验证旧版登录、新版活动实例拒绝、搬迁后的登录与配置保留、默认 CLI 连接、重复启动和目录冲突；不调用 Provider，不操作真实实例。
+
 App/CLI 核心对齐验收：node scripts/test-app-cli-parity.mjs 使用临时 HOME/数据和真实 Electron/HTTP/CLI，验证流程图高级字段往返、25个真实 stdio MCP 工具的搜索分页/schema、群聊管理、文件读取下载与越界拒绝。BATON_PARITY_REAL=1 增加真实 Codex 任务暂停/继续、文件/控制台读取、客户端验收、归档恢复，以及真实私聊/去重/已读。BATON_PARITY_APP 指定隔离安装包；不会替换操作者安装。
 
 画布/任务/沟通本轮验收：test-workflow-editor 先让拖线吸附目标节点的另一个端口再在目标端口松手（修复前稳定失败），核对焦点回到画布、Delete 只删新连线、重复连线被拒及保存端口；test-directory-headers 在两主题宽窄窗口核对草稿行「启动」「⋯」未悬停即可见且左对齐；test-communication-workbench 核对齿轮按钮尺寸与可读名称、编辑群聊底部删除位置、确认框取消/确认、删除后列表隐藏、私聊 DELETE 被拒，以及两主题宽窄的群聊设置截图。
@@ -166,17 +174,17 @@ test-automations.mjs 同步验证任务标题列、当地时分秒格式、App/C
 
 `BATON_TASK_PARALLEL_REAL=1 node scripts/test-task-parallel-real.mjs`：真实 Claude、隔离 Electron/HOME/数据库/工作区，经理同时派 A/B，A 返回后派 C 且 B 尚未结束；核对每员工会话串行、CLI 全量进度、宽窄窗口以及最终人类确认。测试屏障只写隔离文件，证据保存在忽略的 `.data/task-parallel-real-*`。若验收工具中断，可用 `BATON_TASK_PARALLEL_RESUME=.data/task-parallel-real-...` 恢复该隔离实例，结果明确标识重启续接，不覆盖首次证据。
 
-`node scripts/test-communication-media.mjs`：隔离 Electron、HOME/数据/下载目录，不启动 Provider；验证图片/文件入口、缩略图、全窗口预览与 Esc 焦点返回、损坏图片、认证 preview 原字节及 401/415、原名文件下载、两主题宽窄自动化表格与描述背景。证据保存在忽略的 `.data/communication-media-*`；`BATON_MEDIA_BASELINE=1` 只记录现状。
+`node scripts/test-communication-media.mjs`：隔离 Electron、HOME/数据/下载目录，不启动 Provider；验证图片/文件入口、缩略图、有界图片预览与 Esc 焦点返回、损坏图片、认证 preview 原字节及 401/415、原名文件下载、两主题宽窄自动化表格与描述背景。证据保存在本机临时目录 `baton-media-*`，`BATON_MEDIA_APP` 可验证打包版。
 
 `node scripts/test-task-drafts.mjs` 在隔离 Electron 中验证两主题宽窄创建/保存/列表/筛选，草稿持久化无 Run、启动拒绝仍保留草稿、保存并开始，以及 CLI 创建/筛选与 App 互查。`BATON_DRAFT_REAL=1` 追加真实 Claude 启动到人类确认；`BATON_DRAFT_BASELINE=1` 只采集原界面。证据存于忽略的 `.data/task-drafts-*`，不覆盖已安装实例。
 
 `node scripts/test-market-catalog.mjs`：隔离 Electron/HTTP/CLI 导入45插件、450 Skill、45 MCP，验证数据库分页/搜索、两主题宽窄界面、插件文件暂不可读时列表仍可读且详情报错、App/CLI软删除全员工解绑、历史冻结及文件保留；证据在忽略的 .data/market-catalog-*。
 
-test-task-attachments.mjs：隔离 Electron 宽窄主题下上传图片/文件、无文字精确澄清、全窗口预览、下载和 CLI 二进制回读。BATON_ATTACHMENTS_REAL=1 使用现有 Claude 账号执行真实索取附件→读取随机验证串与图片→人类确认任务，产出仅在 .data。
+test-task-attachments.mjs：隔离 Electron 宽窄主题下上传图片/文件、无文字精确澄清、有界图片预览、下载和 CLI 二进制回读。BATON_ATTACHMENTS_REAL=1 使用现有 Claude 账号执行真实索取附件→读取随机验证串与图片→人类确认任务，产出仅在 .data。
 
 附件输入呈现验收：`test-task-attachments.mjs` 与 `test-communication-media.mjs` 在两主题宽窄窗口实际上传，核对图片包含在输入框内、文件卡片与图片同排置于文字区上方，图片 hover 无边框、纯图标入口、预览关闭及文本草稿保留；任务脚本继续验证空正文附件澄清发送，沟通脚本检查分别移除图片与文件。
 
-附件呈现验收同时核对待发送图片/文件48px同高，以及发送后图片无名称/大小、图片和文件可横向同排。
+附件呈现验收同时核对待发送图片/文件56px同高，以及发送后图片无名称/大小、图片和文件可横向同排。
 
 test-roles-ui 验证角色扩展选择及多选控件固定高度；test-automations 验证成员/模板随正文滚动及停用自动化级联删除，均使用隔离实例。
 
@@ -191,7 +199,7 @@ test-roles-ui 验证角色扩展选择及多选控件固定高度；test-automat
 
 工作流分支：nodes.type=process/condition，edges.condition为自然语言条件（最多2000字符），默认流程/空条件；App/CLI同协议并冻结。编辑画布的条件节点为紫色虚线圆角卡片，只读完整图仍为菱形；经理选择满足条件的一条分支。test-workflow-editor覆盖预览反复切换、宽窄布局、类型切换与分支保存回读。
 
-`BATON_WORKFLOW_EDITOR_APP=/absolute/path/Baton.app node scripts/test-workflow-editor.mjs` 对构建包运行同一工作流验收；packaged数据放隔离HOME的.baton/desktop，并隔离旧Chromium目录。覆盖标题位置、两字段属性栏、2/3节点、连续添加不移动旧图/不重叠、画布删除、键盘连线、隐藏补充字段不丢失、文本预览和CLI回读。
+`BATON_WORKFLOW_EDITOR_APP=/absolute/path/Baton.app node scripts/test-workflow-editor.mjs` 对构建包运行同一工作流验收；packaged数据放隔离HOME的.baton，并隔离旧Chromium目录。覆盖标题位置、两字段属性栏、2/3节点、连续添加不移动旧图/不重叠、画布删除、键盘连线、隐藏补充字段不丢失、文本预览和CLI回读。
 
 `test-workflow-editor.mjs`核对全视口编辑器、标题输入360px上限、176×80px节点、220px提示词区、顶栏保存/放弃、两主题与1320/760窗口画布交互；REAL模式通过CLI tasks create --workflow NAME --start执行真实条件分支，并在客户端验收。
 

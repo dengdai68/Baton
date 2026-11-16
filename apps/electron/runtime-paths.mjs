@@ -3,13 +3,13 @@ import { isAbsolute, join, resolve } from "node:path";
 import { defaultTaskWorkspaceRoot } from "../../server/data-home.mjs";
 import {storageBusinessRoot} from '../../server/storage-layout.mjs';
 
-// Application-controlled desktop state lives under ~/.baton, isolated per
-// instance kind, including Chromium-managed cookies, cache and preferences.
+// Installed configuration lives directly under ~/.baton; source development
+// stays isolated, including Chromium-managed cookies, cache and preferences.
 export function desktopDataHome(home = homedir()) { return join(home, ".baton"); }
 
 export function resolveDesktopDataRoot({ packaged, env = {}, home = homedir() } = {}) {
   if (!packaged && typeof env.BATON_DESKTOP_DATA_ROOT === "string" && env.BATON_DESKTOP_DATA_ROOT) return env.BATON_DESKTOP_DATA_ROOT;
-  return join(desktopDataHome(home), packaged ? "desktop" : "desktop-dev");
+  return packaged ? desktopDataHome(home) : join(desktopDataHome(home), "desktop-dev");
 }
 
 export function desktopBrowserPaths(dataRoot) {

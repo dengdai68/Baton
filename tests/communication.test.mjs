@@ -19,11 +19,14 @@ test('attachment HEAD failures keep the HTTP status without parsing an empty bod
   await assert.rejects(downloadAttachment({href:'http://fixture/attachment'}),/附件下载失败（HTTP 404）/);
 });
 
-test('images read as compact chips like documents, and clicking opens the preview',()=>{
-  assert.match(messageAttachments([{id:'image',name:'photo.png',bytes:2048}],'chat'),/data-attachment-image/);
-  assert.match(messageAttachments([{id:'image',name:'photo.png',bytes:2048}],'chat'),/communication-attachment/);
+test('images render inline previews while documents retain download cards',()=>{
+  const image=messageAttachments([{id:'image',name:'photo.png',bytes:2048}],'chat');
+  assert.match(image,/<figure class="communication-image-item">/);assert.match(image,/data-chat-image/);
+  assert.match(image,/<img src="\/api\/communications\/chat\/attachments\/image\?preview=1"/);
+  assert.doesNotMatch(image,/data-attachment-download|data-attachment-image/);
   const bmp=messageAttachments([{id:'image',name:'photo.BMP',bytes:2048}],'chat');
-  assert.match(bmp,/data-attachment-image/);
+  assert.match(bmp,/data-chat-image/);
+  assert.match(messageAttachments([{id:'file',name:'model.3mf',bytes:2048}],'run','runs'),/data-attachment-download/);
 });
 
 test('shutdown while waiting for execution resources preserves a recoverable communication delivery',async()=>{
@@ -61,7 +64,7 @@ test('communication dates use local calendar days across month and year boundari
   const today = new Date(2026, 0, 1, 0, 15);
   assert.equal(communicationDayLabel(new Date(2026, 0, 1, 0, 1), today), '今天');
   assert.equal(communicationDayLabel(new Date(2025, 11, 31, 23, 59), today), '昨天');
-  assert.equal(communicationDayLabel(new Date(2025, 11, 30, 23, 59), today), '12月30日');
+  assert.equal(communicationDayLabel(new Date(2025, 11, 30, 23, 59), today), '2025年12月30日');
   assert.equal(communicationDayLabel(new Date(2026, 2, 8, 12), new Date(2026, 2, 9, 0, 5)), '昨天');
 });
 

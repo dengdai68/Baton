@@ -5,8 +5,8 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { join, dirname, isAbsolute } from "node:path";
 import { userInfo, homedir } from "node:os";
-import { lstat, mkdir, rename, unlink, writeFile, readFile } from "node:fs/promises";
-import { mkdirSync } from "node:fs";
+import { lstat, mkdir, rename, unlink, writeFile, readFile, realpath, mkdtemp } from "node:fs/promises";
+import { mkdirSync, rmSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { isConsoleURL, isExternalURL, isPreferencesSender, isCliSender, isUpdateSender, health, initialRoute } from "./policy.mjs";
 import { desktopBrowserPaths, desktopControlPlaneEnvironment, desktopStoragePaths, legacyDesktopDataRoot, resolveDesktopDataRoot,defaultDesktopLocation } from "./runtime-paths.mjs";
@@ -21,6 +21,7 @@ import { confirmCliInstallation } from "./cli-confirmation.mjs";
 import { createCliInstallation } from "./cli-installation.mjs";
 import { showAppDialog } from "./app-dialog.mjs";
 import { createApplicationUpdates, fetchLatestRelease, downloadReleaseInstaller } from "./updates.mjs";
+import {migrateDesktopConfiguration} from './configuration-root-migration.mjs';
 
 // Shared dialog context: every app-styled dialog gets the screen work area so
 // it can size to its content without ever clipping (no parent-ratio cap).
@@ -61,17 +62,32 @@ const desktopNotifications=createDesktopNotifications({
   onDiagnostic:(event,fields)=>diagnostic('desktop.notification_'+event,fields)
 });
 app.setName("Baton");
-const controlRoot=resolveDesktopDataRoot({ packaged: app.isPackaged, env: process.env });
+let controlRoot=resolveDesktopDataRoot({ packaged: app.isPackaged, env: process.env });
+let configurationMigration,configurationMigrationError;
+try { if(app.isPackaged){configurationMigration=await migrateDesktopConfiguration();try{controlRoot=await realpath(controlRoot);}catch(error){if(error.code!=='ENOENT')throw error;}} }
+catch(error) { configurationMigrationError=error; }
 let storage = desktopStoragePaths(controlRoot,{controlRoot,instance:app.isPackaged?'desktop':'desktop-dev'});
 const previousUserData = app.getPath('userData');
 // Set before the single-instance lock and before any Electron session exists.
-for(const [name,path] of Object.entries(desktopBrowserPaths(controlRoot))) { mkdirSync(path,{recursive:true,mode:0o700}); app.setPath(name,path); }
+if(!configurationMigrationError)for(const [name,path] of Object.entries(desktopBrowserPaths(controlRoot))) { mkdirSync(path,{recursive:true,mode:0o700}); app.setPath(name,path); }
 const endpointFile = join(controlRoot, "desktop-endpoint.json");
 const cliSessionFile = join(controlRoot, "desktop-cli-session.json");
 let cliSessionSync = Promise.resolve(), publishedCliParent = null;
 const preferencesFile = join(controlRoot, "desktop-preferences.json");
 installProcessDiagnostics("desktop", { instancePath: storage.BATON_AUTH_DB_PATH });
-if (!app.requestSingleInstanceLock()) app.quit();
+if(configurationMigration?.migrated)diagnostic('desktop.configuration_migrated',{from:configurationMigration.previousRoot,to:controlRoot,entries:configurationMigration.entries});
+if(configurationMigrationError){
+  diagnostic('desktop.configuration_migration_failed',{error:configurationMigrationError});
+  // The shared notice has an ephemeral partition; a failed cutover must never
+  // open the persistent browser profile, authentication or an empty instance.
+  app.whenReady().then(async()=>{
+    const errorProfile=await mkdtemp(join(app.getPath('temp'),'baton-configuration-error-'));
+    for(const [name,path]of Object.entries(desktopBrowserPaths(errorProfile))){mkdirSync(path,{recursive:true,mode:0o700});app.setPath(name,path);}
+    app.once('quit',()=>{try{rmSync(errorProfile,{recursive:true,force:true});}catch(error){diagnostic('desktop.configuration_notice_cleanup_failed',{error});}});
+    await appDialog({kind:'error',title:'配置目录迁移未完成',message:'现有配置已保留，客户端未按空实例启动。',detail:configurationMigrationError.message,buttons:['退出'],cancelIndex:0});app.quit();
+  }).catch(error=>{diagnostic('desktop.configuration_notice_failed',{error});app.quit();});
+}
+else if (!app.requestSingleInstanceLock()) app.quit();
 else {
   app.on("second-instance", showWindow);
   app.whenReady().then(start).catch(async error => {

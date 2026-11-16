@@ -11,7 +11,7 @@ import {createAuth} from '../server/auth.mjs';
 import {createCatalogFixtureStore} from '../tests/fixture-store.mjs';
 import {execute as cli} from '../cli/main.mjs';
 const real=process.env.BATON_WORKFLOW_EDITOR_REAL==='1',bundle=process.env.BATON_WORKFLOW_EDITOR_APP;
-await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/workflow-editor-')),home=join(root,'home'),data=bundle?join(home,'.baton/desktop'):join(root,'client');await mkdir(home,{recursive:true});
+await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/workflow-editor-')),home=join(root,'home'),data=bundle?join(home,'.baton'):join(root,'client');await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('canvas-qa',password);auth.close();
 const seed=createCatalogFixtureStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});
 const seeded=seed.createWorkflowTemplate({name:'画布验收',description:'工作流编辑与文件化验收',nodes:[{id:'a',title:'整理内容',description:'原始节点正文',staffingGuidance:'保留人员要求',deliverable:'保留交付要求',artifactPaths:['reports/a/'],position:{x:40,y:70}},{id:'b',type:'condition',title:'独立检查',description:'检查交付',position:{x:350,y:70}}],edges:[]});

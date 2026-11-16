@@ -10,7 +10,7 @@ import {createStore} from '../server/store.mjs';
 import {createAuth} from '../server/auth.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
-const root=await mkdtemp(join(tmpdir(),'af-desktop-notifications-')),home=join(root,'home'),data=join(home,'.baton/desktop'),workspace=join(root,'work');
+const root=await mkdtemp(join(tmpdir(),'af-desktop-notifications-')),home=join(root,'home'),data=join(home,'.baton'),workspace=join(root,'work');
 await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('notice-qa',password);auth.close();
 const real=process.env.BATON_NOTIFICATIONS_REAL==='1',native=process.env.BATON_NOTIFICATIONS_NATIVE==='1';

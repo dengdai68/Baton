@@ -14,7 +14,7 @@ import { createMarketplace } from '../server/runtime/marketplace.mjs';
 await mkdir('.data',{recursive:true});
 const root=await mkdtemp(resolve('.data/task-creation-')),home=join(root,'home');
 const bundle=process.env.BATON_TASK_CREATION_APP;
-const data=bundle?join(home,'.baton/desktop'):join(root,'client');
+const data=bundle?join(home,'.baton'):join(root,'client');
 await mkdir(home,{recursive:true,mode:0o700});
 const password=randomBytes(24).toString('hex');
 const auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('task-form-qa',password);auth.close();

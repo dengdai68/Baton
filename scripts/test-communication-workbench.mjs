@@ -18,7 +18,7 @@ if (real && packaged) throw new Error('真实 Provider 在源码隔离客户端�
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/communication-workbench-'));
 const home = join(root, 'home'); await mkdir(home, { mode: 0o700 });
-const data = packaged ? join(home, '.baton/desktop') : join(root, 'client');
+const data = packaged ? join(home, '.baton') : join(root, 'client');
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('communication-qa', password); auth.close();

@@ -1,5 +1,9 @@
 # CLI
 
+tasks collaboration 与桌面共用报告投影：已知 summary/handoff 信封只输出报告正文，包含边界完整但正文引号未转义的历史两字段信封。原始消息、路由与执行事实不变；未知内容保留原文。列表分页、--all、时间戳和字段不变，视觉累加及本地时间标签只属于 App。
+
+安装版默认 endpoint 为 `~/.baton/desktop-endpoint.json`，宿主委托授权在同一目录。旧 `~/.baton/desktop` 由安装版首次启动停机搬迁，CLI 不访问认证数据库、不自行迁移或回退旧目录。storage get 输出的 configurationRoot、命令帮助和连接校验同步新位置。
+
 任务与长期沟通统一调用桌面认证 HTTP；cli/workspace.mjs 负责沟通命令、控制台持续读取和文件命令，client.mjs 流式下载不覆盖目标文件。现有配置 CRUD 保留，恢复资格、会话和路径规则由服务判定。完整命令矩阵见 docs/21；验证 tests/cli-workspace.test.mjs 与 scripts/test-app-cli-parity.mjs。
 
 任务协作正文与 App 共用保存结果：原生回复含正文和唯一尾部协调 JSON 时，前文与其中非空、不同的 summary 按原顺序保留，相同文本只显示一次。既有消息不重写；完整原始回复仍可从对应控制台读取。命令、输入 schema、输出字段及任务状态语义不变。

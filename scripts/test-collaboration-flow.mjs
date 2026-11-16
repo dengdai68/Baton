@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { _electron as electron } from 'playwright-core';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import {tmpdir} from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { Readable } from 'node:stream';
 import { createFixtureStore } from '../tests/fixture-store.mjs';
@@ -13,13 +14,13 @@ import { createAuth } from '../server/auth.mjs';
 import { execute as cli } from '../cli/main.mjs';
 import { executionContent, promptSnapshot } from '../server/runtime/local-cli.mjs';
 
-await mkdir('.data', { recursive: true });
-const root = await mkdtemp(resolve('.data/collaboration-flow-'));
+const root = await mkdtemp(join(tmpdir(),'baton-collaboration-flow-'));
 process.env.BATON_LOG_DIR = join(root, 'logs');
 const appBundle = process.env.BATON_COLLABORATION_APP;
 const home = join(root, 'home');
-const data = appBundle ? join(home, '.baton/desktop') : join(root, 'client');
+const data = appBundle ? join(home, '.baton') : join(root, 'client');
 await mkdir(home, { recursive: true });
+await mkdir(data,{recursive:true,mode:0o700});
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('flow-qa', password); auth.close();
@@ -54,6 +55,8 @@ s.claimDispatch(run.id); const t2 = trace(work, analyst);
 const handoffResult = {status:'completed',node:'requirements',handoff:'docs/handoff.json'};
 const handoffReport = '# FLOW_HANDOFF\n\n**需求分析和验收标准已经交付。**\n\n' + Array.from({length:10},(_,i)=>`- 第 ${i+1} 条验收要求`).join('\n');
 const handoff = s.addMessage({ runId: run.id, traceId: t2.id, sender: actor(analyst), kind: 'handoff', content: JSON.stringify({...handoffResult,rawResponse:handoffReport+'\n\n```json\n'+JSON.stringify(handoffResult)+'\n```'}) });
+const malformedReport='FLOW_MALFORMED：按"0.3s 到 60°"写。\n\n**未验证，等待审片。**';
+const malformedHandoff=s.addMessage({runId:run.id,traceId:t2.id,sender:actor(analyst),kind:'handoff',content:'```json\n'+JSON.stringify({summary:malformedReport,handoff:{recipientAgentId:run.manager.id}}).replace('\\"0.3s 到 60°\\"','"0.3s 到 60°"')+'\n```'});
 s.completeTrace(t2.id); s.completeDispatch(work.id);
 const followup = s.enqueueDispatch(run.id, { recipientAgentId: run.manager.id, workflowNodeId: 'requirements', purpose: 'manager', dedupeKey: 'delivery:' + work.id });
 s.claimDispatch(run.id); const tManager = trace(followup, run.manager);
@@ -84,7 +87,7 @@ s.addMessage({ runId: run.id, sender: { type: 'system', id: 'baton', name: 'Bato
 s.confirmRunCompletion(run.id);
 s.addEvent({ type: 'run.failed', runId: run.id, message: 'FLOW_FAILURE_NOTICE：执行失败', data: { error: 'FLOW_OLD_ERROR：一次临时故障' } });
 const scrollRuns = [];
-for (const width of [1320, 760]) {
+for (const theme of ['light','dark']) for (const width of [1320, 760]) {
   const task = s.createTask({managerAgentId:'system_project_manager',title:`协作回复滚动 ${width}`,objective:'隔离界面回归，不调用 Provider',memberAgentIds:['system_project_manager', analyst.id]});
   const current = s.createRun(task.id);
   s.initializeDispatches(current.id);
@@ -92,11 +95,13 @@ for (const width of [1320, 760]) {
   s.enqueueDispatch(current.id,{recipientAgentId:analyst.id,workflowNodeId:dispatch.workflowNodeId,purpose:'instruction',dedupeKey:'scroll-second-question'});
   const peer = s.claimDispatch(current.id);
   for (let index=0;index<65;index++) s.addMessage({runId:current.id,sender:actor(analyst),recipientAgentId:current.manager.id,kind:'handoff',content:`SCROLL_HISTORY_${width}_${index}\n\n${'历史记录内容。'.repeat(20)}`});
+  const report=s.addMessage({runId:current.id,sender:actor(analyst),recipientAgentId:current.manager.id,kind:'handoff',content:'```json\n'+JSON.stringify({summary:malformedReport,handoff:{recipientAgentId:current.manager.id}}).replace('\\"0.3s 到 60°\\"','"0.3s 到 60°"')+'\n```'});
   const question = s.askQuestion(dispatch.id,{audience:'human',question:`SCROLL_QUESTION_${width}：请确认回复内容。`},null);
   s.askQuestion(peer.id,{audience:'human',question:`SCROLL_SECOND_QUESTION_${width}：请再确认一次。`},null);
   s.pauseRun(current.id,'隔离界面回归；回复不能启动 Provider');
-  scrollRuns.push({runId:current.id,width,questionId:question.id});
+  scrollRuns.push({runId:current.id,taskId:task.id,width,questionId:question.id,theme,reportId:report.id});
 }
+const timeChat=s.openCommunication({kind:'agent',targetId:analyst.id});s.sendCommunication(timeChat.id,{content:'沟通日期显示回归',clientRequestId:'message-time-fixture'});s.completeCommunication(timeChat.id,s.claimCommunication(timeChat.id).id,'消息保留月日和时分。');
 s.close();
 
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});
@@ -156,7 +161,7 @@ try {
     await startPrompt.waitFor();await page.waitForFunction(id=>document.querySelector(`[data-turn-message-id="${id}"]`)?.open,t0.inputMessageId);
     assert.ok(await startPrompt.evaluate((node,id)=>{const card=node.closest('.console-execution');return card?.open && card.dataset.consoleExecution.startsWith(id+':');},t0.id),'precise reply opens the real Trace card as well as its prompt');
     await startPrompt.locator('.prompt-snapshot-text').waitFor().catch(async error=>{console.error('Prompt fixture diagnostics:',await startPrompt.innerText());throw error;});
-    assert.ok(await startPrompt.evaluate(e=>{const stream=e.closest('.chat-stream');return e.getBoundingClientRect().top>=stream.getBoundingClientRect().top && e.getBoundingClientRect().top<stream.getBoundingClientRect().top+140;}),'link targets the prompt even with paginated logs');
+    await page.waitForFunction(id=>{const e=document.querySelector(`[data-turn-message-id="${id}"]`),stream=e?.closest('.chat-stream');return stream && e.getBoundingClientRect().top>=stream.getBoundingClientRect().top && e.getBoundingClientRect().top<stream.getBoundingClientRect().top+140;},t0.inputMessageId);
     await page.locator('#collaboration-mode').click();
     while(await page.locator('[data-collaboration-older]').count()){const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before='));await page.locator('[data-collaboration-older]').click();await response;await page.waitForTimeout(150);}
 
@@ -193,7 +198,9 @@ try {
     const appendEvent = {id:'ui-append-probe',runId:run.id,timestamp:new Date(Date.now()+1000).toISOString(),type:'runtime.event',actor:{type:'agent',id:recovered.agentId,name:'工程师'},message:'APPEND_PROBE',data:{auditVersion:2,traceId:recovered.id,presentation:'text'}};
     await page.evaluate(event => window.flowRunListener({data:JSON.stringify(event)}),appendEvent);
     await page.waitForTimeout(200);
-    assert.equal(await page.locator('#trace-stream').getByText('APPEND_PROBE',{exact:true}).count(),0,'reading history defers live events');
+    // Reception is independent of reading: live records keep arriving while the
+    // reader stays on history (position, bodies and selection are asserted below).
+    await page.locator('#trace-stream').getByText('APPEND_PROBE',{exact:true}).waitFor();
     assert.ok(await page.evaluate(() => document.querySelector('#trace-stream') === window.flowConsoleStream && window.flowConsoleRow.isConnected && window.flowConsoleBody.isConnected),'append retains stream and existing hydrated bodies');
     assert.ok(await page.evaluate(() => getSelection().toString() === window.flowSelectedText),'append keeps selected text');
     assert.equal(await page.locator('#trace-stream').evaluate(el=>el.scrollTop),0,'append does not pull reader away from history');
@@ -266,6 +273,12 @@ try {
     const records = await cli(['tasks', 'collaboration', run.taskId, '--all', ...args]);
     assert.ok(records.items.some(r => r.dispatchId === work.id && r.to === analyst.name));
     assert.ok(records.items.some(r => r.content === handoffReport),'CLI projects the same human report');
+    assert.ok(records.items.some(r=>r.id===malformedHandoff.id && r.content===malformedReport),'CLI shares malformed historical envelope display extraction');
+    const malformedRow=page.locator(`[data-collaboration-record="${malformedHandoff.id}"]`);
+    // The list was reset to the latest page above; load history until the record is present.
+    while(!await malformedRow.count() && await page.locator('[data-collaboration-older]:not([disabled])').count()){const response=page.waitForResponse(r=>r.url().includes('/collaboration?')&&r.url().includes('before='));await page.locator('[data-collaboration-older]').click();await response;await page.waitForTimeout(150);}
+    await malformedRow.waitFor();
+    assert.equal(await malformedRow.locator('pre').count(),0);assert.equal(await malformedRow.locator('strong').last().innerText(),'未验证，等待审片。');
     assert.ok(records.items.every(r => r.category === 'message' && r.senderType !== 'system'));
     assert.ok(!records.items.some(r => r.content.includes('FLOW_NOTICE')));
     assert.ok(records.items.some(r => r.deliveries?.some(d => d.history.some(h => h.content?.includes('FLOW_RETRY')))), 'CLI retains execution facts');
@@ -326,7 +339,9 @@ try {
     await page.screenshot({ path: join(root, `prompt-session-${theme}-${width}.png`), fullPage: true });
   }
   }
-  for (const {runId,width,questionId} of scrollRuns) {
+  for (const {runId,taskId,width,questionId,theme,reportId} of scrollRuns) {
+    console.log(`CHECK ${theme} ${width}: collaboration history and message dates`);
+    await page.goto(origin+'/settings/appearance');await page.locator(`[name=theme][value=${theme}]`).check();
     await app.evaluate(({BrowserWindow},{origin,width})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().startsWith(origin)).setContentSize(width,800),{origin,width});
     await page.waitForFunction(width=>innerWidth===width,width);
     await page.goto(origin+'/runs/'+runId);
@@ -338,9 +353,25 @@ try {
     assert.ok((await page.locator('#instruction-text').boundingBox()).height<=50,'composer starts with two readable lines');
     assert.equal(await page.locator('label[for="instruction-text"]').getAttribute('class'),'sr-only','composer keeps its accessible name');
     await page.locator('.collaboration-markdown').first().waitFor();
-    await page.locator('[data-collaboration-older]').click();
-    await page.waitForFunction(()=>!document.querySelector('.human-message-list')?.textContent.includes('SCROLL_QUESTION_'));
+    const malformed=page.locator(`[data-collaboration-record="${reportId}"]`);assert.equal(await malformed.locator('pre').count(),0);assert.equal(await malformed.locator('strong').last().innerText(),'未验证，等待审片。');
+    const cliRecords=await cli(['tasks','collaboration',taskId,'--all','--endpoint-file',join(data,'desktop-endpoint.json')],{home});assert.ok(cliRecords.items.some(item=>item.id===reportId && item.content===malformedReport),'CLI and App display the same historical report');
+    const latestIds=await page.locator('[data-collaboration-record]').evaluateAll(rows=>rows.map(row=>row.dataset.collaborationRecord));
+    const older=page.locator('[data-collaboration-older]');await older.scrollIntoViewIfNeeded();
+    const center=await older.evaluate(button=>{const a=button.getBoundingClientRect(),list=button.closest('.human-message-list'),b=list.getBoundingClientRect();return Math.abs(a.x+a.width/2-b.x-list.clientLeft-list.clientWidth/2);});
+    assert.ok(center<2,`load earlier is horizontally centered in the scrollable area (${center})`);
+    const failOlder=route=>new URL(route.request().url()).searchParams.has('before') ? route.fulfill({status:503,json:{error:'CONTROLLED_OLDER_READ_FAILURE'}}) : route.continue();
+    await page.route('**/api/runs/'+runId+'/collaboration?*',failOlder);await older.click();await page.getByText('CONTROLLED_OLDER_READ_FAILURE',{exact:false}).waitFor();
+    assert.equal(await page.locator('[data-collaboration-record]').count(),latestIds.length,'failed older request preserves every current row');
+    await page.unroute('**/api/runs/'+runId+'/collaboration?*',failOlder);
+    const anchorId=latestIds[0],anchor=page.locator(`[data-collaboration-record="${anchorId}"]`);
+    const anchorTop=await anchor.evaluate(row=>row.getBoundingClientRect().top-row.closest('.human-message-list').getBoundingClientRect().top);
+    await page.locator('[data-retry-collaboration]').click();
+    await page.waitForFunction(count=>document.querySelectorAll('[data-collaboration-record]').length>count,latestIds.length);
     await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    assert.deepEqual(await page.locator('[data-collaboration-record]').evaluateAll((rows,ids)=>rows.map(row=>row.dataset.collaborationRecord).filter(id=>ids.includes(id)),latestIds),latestIds,'previously visible records remain after prepending');
+    const anchorAfter=await anchor.evaluate(row=>row.getBoundingClientRect().top-row.closest('.human-message-list').getBoundingClientRect().top);
+    assert.ok(Math.abs(anchorAfter-anchorTop)<2,`visible anchor stays in place (${width}: ${anchorTop} → ${anchorAfter})`);
+    assert.match(await anchor.locator('header time').innerText(),/\d+月\d+日 \d{2}:\d{2}/);
     const firstRecord = await page.locator('.collaboration-row').first().getAttribute('data-collaboration-record');
     const historyTop = await page.locator('.human-message-list').evaluate(el=>{el.scrollTop=120;return el.scrollTop;});
     assert.ok(historyTop>0,'fixture has scrollable history');
@@ -357,7 +388,7 @@ try {
     const unconfirmed=page.locator('[data-outgoing-feedback=unconfirmed]').filter({hasText:'发送未确认'});
     await unconfirmed.waitFor();
     await unconfirmed.getByText('SCROLL_EXPECTED_FAILURE').waitFor();
-    await page.screenshot({path:join(root,`reply-failure-${width}.png`)});
+    await page.screenshot({path:join(root,`reply-failure-${theme}-${width}.png`)});
     assert.equal(await page.locator('.collaboration-row').first().getAttribute('data-collaboration-record'),firstRecord,'failed reply keeps the historical page');
     const failureTop = await page.locator('.human-message-list').evaluate(el=>el.scrollTop);
     assert.ok(Math.abs(failureTop-historyTop)<2,`failed reply preserves the reading position (${width}: ${historyTop} → ${failureTop})`);
@@ -371,8 +402,10 @@ try {
     const workspace = await (await page.request.get(origin+'/api/runs/'+runId+'/workspace?view=compact')).json();
     assert.equal(workspace.run.status,'paused','scroll verification does not start execution');
     assert.equal(workspace.run.traceCount,0,'no Provider is invoked');
-    await page.locator('[data-collaboration-older]').click();
-    await page.waitForFunction(reply=>!document.querySelector('.human-message-list')?.textContent.includes(reply),reply);
+    await page.waitForFunction(()=>!document.querySelector('[data-collaboration-older]')?.disabled);
+    const beforeOlder=await page.locator('[data-collaboration-record]').count();await page.locator('[data-collaboration-older]').click();
+    await page.waitForFunction(count=>document.querySelectorAll('[data-collaboration-record]').length>count,beforeOlder);
+    assert.equal(await page.locator('.collaboration-row.from-human').filter({hasText:reply}).count(),1,'new reply remains when older history is added');
     await page.locator('[data-collaboration-latest]').click();
     await page.locator('.collaboration-row.from-human').filter({hasText:reply}).waitFor();
     await page.waitForFunction(()=>{const el=document.querySelector('.human-message-list');return el&&el.scrollHeight-el.scrollTop-el.clientHeight<2;});
@@ -383,7 +416,12 @@ try {
     await page.waitForFunction(()=>{const el=document.querySelector('.human-message-list');return el&&el.scrollHeight-el.scrollTop-el.clientHeight<2;});
     const after = await (await page.request.get(origin+'/api/runs/'+runId+'/workspace?view=compact')).json();
     assert.equal(after.run.status,'paused');assert.equal(after.run.traceCount,0);
-    await page.screenshot({path:join(root,`reply-latest-${width}.png`)});
+    await page.screenshot({path:join(root,`reply-latest-${theme}-${width}.png`)});
+    await page.goto(origin+'/communication/'+timeChat.id);await page.locator('[data-chat-message]').first().waitFor();
+    for(const label of await page.locator('[data-chat-message] header time').allTextContents())assert.match(label,/\d+月\d+日 \d{2}:\d{2}/);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'dated chat timestamps fit the narrow layout');
+    await page.screenshot({path:join(root,`message-time-${theme}-${width}.png`)});
+    console.log(`PASS ${theme} ${width}: retained pages, anchor, dated messages, malformed report, CLI, reply failure/success`);
   }
   console.log('PASS' + ' ' + (appBundle ? 'packaged' : 'source') + (process.env.BATON_COLLABORATION_SCROLL_ONLY ? ' collaboration reply scroll' : ' collaboration flow') + '; evidence: ' + root);
 } finally {

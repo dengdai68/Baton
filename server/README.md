@@ -1,5 +1,7 @@
 # 控制面
 
+安装版认证、配置与 Runtime 默认根为 `~/.baton`，CLI/宿主共用新定位。配置目录搬迁由 Electron 的 configuration-root-migration 在业务初始化前完成，不由 Store 改写历史。storage-layout 与 data-reset 仅允许配置根内专用 workspace/workspace-dev 业务子树；其他私有资源仍受保护。
+
 扩展目录内容变化不再触发整树 SHA256 拒绝；插件详情、员工绑定和任务启动与 App 共用该规则，既有冻结引用也生效。清单文件摘要、执行计划和路径读取规则仍校验；命令参数、输入 schema 与输出字段不变。
 
 群聊删除由 `communication-store.mjs` 的 `deleteCommunication` 拥有：仅群聊、成员回复 claimed/running 时拒绝，排队/失败回复取消并记审计，会话写入 `status=deleted`、`deletedAt` 后从列表、未读和全部会话操作中排除（「群聊已删除」），消息、附件、原生会话、事件与工作目录保留为历史；删除后的 pump 领取为空即结束。`index.mjs` 提供认证 `DELETE /api/communications/:id`，`persistence.mjs` 的会话目录查询同步排除已删除群聊。

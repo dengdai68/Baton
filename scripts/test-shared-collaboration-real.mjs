@@ -14,7 +14,7 @@ await mkdir('.data',{recursive:true});
 const resume=process.env.BATON_SHARED_COLLABORATION_RESUME;
 if(resume && (dirname(resolve(resume))!==resolve('.data') || !/^shared-collaboration-[A-Za-z0-9]+$/.test(basename(resume)))) throw Error('Resume requires this test’s isolated evidence directory');
 const bundle=process.env.BATON_SHARED_COLLABORATION_APP;
-const root=resume?resolve(resume):await mkdtemp(resolve('.data/shared-collaboration-')),home=join(root,'home'),data=bundle?join(home,'.baton','desktop'):join(root,'client');
+const root=resume?resolve(resume):await mkdtemp(resolve('.data/shared-collaboration-')),home=join(root,'home'),data=bundle?join(home, '.baton'):join(root,'client');
 const previous=resume?JSON.parse(await readFile(join(root,'evidence.json'),'utf8')):null;
 await mkdir(home,{recursive:true});
 if(resume && bundle)await cp(join(root,'client'),data,{recursive:true});

@@ -406,7 +406,7 @@ test('app dialog accepts only exact local main-frame choices, sizes to content a
   const module = await readFile(new URL('../apps/electron/app-dialog.mjs', import.meta.url), 'utf8');
   assert.match(module, /Math\.max\(document\.documentElement\.scrollHeight, document\.body\.scrollHeight\)/);
   const main = await readFile(new URL('../apps/electron/main.mjs', import.meta.url), 'utf8');
-  assert.equal((main.match(/appDialog\(\{/g) || []).length, 9, 'system dialog scenes, notification draft protection, About, legacy refusal and storage relocation errors use the shared app dialog');
+  assert.equal((main.match(/appDialog\(\{/g) || []).length, 10, 'system dialog scenes, notification draft protection, About, configuration cutover refusal, legacy refusal and storage relocation errors use the shared app dialog');
   assert.match(main, /需要先搬迁实例数据/);
   assert.doesNotMatch(main, /role:\s*["']about["']/, 'the macOS menu no longer triggers the system About panel');
   assert.match(main, /关于 Baton/);
@@ -587,11 +587,11 @@ test("packaged Electron keeps mutable control-plane data outside its resources",
 });
 test("desktop data roots default under ~/.baton with per-instance isolation", () => {
   const home = "/private/var/fixture-home";
-  assert.equal(resolveDesktopDataRoot({ packaged: true, env: {}, home }), "/private/var/fixture-home/.baton/desktop");
+  assert.equal(resolveDesktopDataRoot({ packaged: true, env: {}, home }), "/private/var/fixture-home/.baton");
   assert.equal(resolveDesktopDataRoot({ packaged: false, env: {}, home }), "/private/var/fixture-home/.baton/desktop-dev");
   assert.equal(resolveDesktopDataRoot({ packaged: false, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/isolated/e2e");
   // The packaged instance never follows an inherited development override.
-  assert.equal(resolveDesktopDataRoot({ packaged: true, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/private/var/fixture-home/.baton/desktop");
+  assert.equal(resolveDesktopDataRoot({ packaged: true, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, home }), "/private/var/fixture-home/.baton");
   assert.equal(legacyDesktopDataRoot({ packaged: true, userData: "/legacy/userData", env: {}, sourceRoot: "/repo" }), "/legacy/userData");
   assert.equal(legacyDesktopDataRoot({ packaged: false, env: {}, sourceRoot: "/repo" }), "/repo/.data/desktop-dev");
   assert.equal(legacyDesktopDataRoot({ packaged: false, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, sourceRoot: "/repo" }), null);
@@ -775,8 +775,8 @@ test("workspace opening resolves only the authenticated current Run directory", 
 });
 
 test("all Chromium persistent and diagnostic paths stay in the instance data root",async()=>{
-  const paths=desktopBrowserPaths('/fixture/.baton/desktop');
-  assert.deepEqual(paths,{userData:'/fixture/.baton/desktop/browser',sessionData:'/fixture/.baton/desktop/browser',logs:'/fixture/.baton/desktop/electron-logs',crashDumps:'/fixture/.baton/desktop/crash-dumps'});
+  const paths=desktopBrowserPaths('/fixture/.baton');
+  assert.deepEqual(paths,{userData:'/fixture/.baton/browser',sessionData:'/fixture/.baton/browser',logs:'/fixture/.baton/electron-logs',crashDumps:'/fixture/.baton/crash-dumps'});
   assert.throws(()=>desktopBrowserPaths('relative'),/绝对路径/);
   const source=await readFile(new URL('../apps/electron/main.mjs',import.meta.url),'utf8');
   assert.ok(source.indexOf('app.setPath(name,path)')<source.indexOf('app.whenReady'));

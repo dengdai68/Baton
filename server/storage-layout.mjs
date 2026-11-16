@@ -52,11 +52,17 @@ export function runtimeStorageReferences(runtime,options) {
 }
 
 const within=(root,path)=>{const part=relative(root,path);return !part||(!part.startsWith('..'+sep)&&part!=='..'&&!isAbsolute(part));};
+// The flat configuration root also owns two dedicated business namespaces.
+// They may be reset/relocated without including credentials or browser state.
+export function configurationOverlapsWorkspace(configurationRoot,workspaceRoot){
+  const config=resolve(configurationRoot),work=resolve(workspaceRoot);
+  return within(work,config)||(within(config,work)&&!['workspace','workspace-dev'].some(name=>within(join(config,name),work)));
+}
 export async function validateStorageDestination({sourceRoot,workspaceRoot,instance='desktop',configurationRoot=null}){
   workspaceRoot=assertStorageRoot(workspaceRoot);sourceRoot=assertStorageRoot(sourceRoot);
   sourceRoot=await realpath(sourceRoot);
   await mkdir(workspaceRoot,{recursive:true,mode:0o700});workspaceRoot=await realpath(workspaceRoot);
-  if(configurationRoot){const config=await realpath(configurationRoot);if(within(config,workspaceRoot)||within(workspaceRoot,config))throw new Error('工作目录不能覆盖或位于私有配置目录中');}
+  if(configurationRoot){const config=await realpath(configurationRoot);if(configurationOverlapsWorkspace(config,workspaceRoot))throw new Error('工作目录不能覆盖私有配置目录；仅允许专用 workspace/workspace-dev 子目录');}
   const target=storageBusinessRoot(workspaceRoot,instance);
   if(target===sourceRoot)return {workspaceRoot,businessRoot:target,unchanged:true};
   if(within(sourceRoot,target)||within(target,sourceRoot))throw new Error('新旧数据位置不能相互嵌套');

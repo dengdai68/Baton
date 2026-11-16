@@ -1,5 +1,9 @@
 # CLI 指南
 
+任务协作报告使用与 App 相同的 collaborationContent 投影：summary/handoff 信封提取正文，历史中边界完整但正文引号错误的两字段信封可仅作展示提取；不执行或修正交接，未知或不完整内容保留原文。CLI 保留原时间戳、分页与 --all；App 的累加历史及本地时间标签不新增命令或权限。
+
+安装版配置直接位于 `~/.baton`，默认连接文件为 `~/.baton/desktop-endpoint.json`，委托授权同目录。安装版首次启动负责用户授权的旧 `desktop` 配置搬迁，CLI 不自行迁移、不回退旧路径、不读取认证数据库；命令、schema 与 HTTP 语义不变，storage get 的 configurationRoot 为新根。
+
 ## App 与 CLI 共用业务接口
 
 CLI 只调用桌面现有的受认证 HTTP 接口；Store、Orchestrator、Run Files 继续拥有状态、恢复资格、路径和文件规则。人类最终确认完成仍仅在客户端。没有新的数据库访问、Provider 调用入口或批量操作协议。

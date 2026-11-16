@@ -1,3 +1,4 @@
+import { formatMessageTime } from '../client/console-projections.mjs';
 import { communicationDayLabel } from '../web/communication.js';
 import {runtimeLabel,RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import test from "node:test";
@@ -48,9 +49,25 @@ test('storage HTTP validates before its single restart request and refuses busy 
 test('collaboration aligns by sender, never by the human recipient or human filter',async()=>{
   const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8'),start=source.indexOf('function confirmTaskOutgoing('),end=source.indexOf('/* ---------- 任务空间数据与动作',start),dock={querySelector(){return null;},querySelectorAll(){return [];}};
   const messages=[{id:'human',createdAt:'2026-01-01T00:00:00Z',sender:{type:'human',name:'操作者'},recipient:{type:'agent',name:'员工'},content:'HUMAN-CONTENT'},{id:'employee',createdAt:'2026-01-01T00:00:01Z',sender:{type:'agent',name:'员工'},recipient:{type:'human',name:'操作者'},content:'AGENT-TO-HUMAN'}];
-  const render=runWithCache(`${source.slice(start,end)};renderCollaboration`,{$:selector=>selector==='#collaboration-panel'?dock:{addEventListener(){}},state:{workspace:{pendingQuestions:[]}},workspaceView:()=>({draft:'',collaborationItems:collaborationRecords({messages})}),collaborationRecords,communicationDayLabel,acceptanceReview:()=>null,esc:String,exactTime:String,roleColor:()=> 'color-system',initialsOf:agent=>agent.name?.slice(0,1)||'?',collaborationMessageMarkup:content=>content,sendInstruction(){},refreshCollaborationBodies(){},messageAttachments(){return "";},draftAttachments(){return "";},attachmentControls(){return "";},outgoingMessageFeedback(){return '';},outgoingAttachmentMarkup(){return '';},bindTaskAttachments(){},requestAnimationFrame:callback=>callback()});
+  const render=runWithCache(`${source.slice(start,end)};renderCollaboration`,{$:selector=>selector==='#collaboration-panel'?dock:{addEventListener(){}},state:{workspace:{pendingQuestions:[]}},workspaceView:()=>({draft:'',collaborationItems:collaborationRecords({messages})}),collaborationRecords,communicationDayLabel,formatMessageTime,acceptanceReview:()=>null,esc:String,exactTime:String,roleColor:()=> 'color-system',initialsOf:agent=>agent.name?.slice(0,1)||'?',collaborationMessageMarkup:content=>content,sendInstruction(){},refreshCollaborationBodies(){},messageAttachments(){return "";},draftAttachments(){return "";},attachmentControls(){return "";},outgoingMessageFeedback(){return '';},outgoingAttachmentMarkup(){return '';},bindTaskAttachments(){},requestAnimationFrame:callback=>callback()});
   render({run:{id:'run',status:'paused',task:{}},messages},[]);
   const articles=dock.innerHTML.match(/<article[\s\S]*?<\/article>/g);assert.equal(articles.length,2);assert.match(articles[0],/class="collaboration-row from-human/);assert.match(articles[1],/AGENT-TO-HUMAN/);assert.doesNotMatch(articles[1],/from-human/);
+});
+test('collaboration history accumulates pages, preserves failure state and rejects stale pages after latest',async()=>{
+  const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8'),start=source.indexOf('async function loadCollaboration('),end=source.indexOf('async function loadWorkspace(',start);
+  const state={currentView:'workspace',selectedRunId:'run'},view={tab:'collaboration'},requests=[];
+  const load=runWithCache(source.slice(start,end)+';loadCollaboration',{URLSearchParams,state,workspaceView:()=>view,$:()=>null,renderWorkspace(){},api:path=>new Promise((resolve,reject)=>requests.push({path,resolve,reject}))});
+  let pending=load('run',{render:false});requests.at(-1).resolve({items:[{id:'new'}],hasMore:true,nextBefore:'new'});await pending;
+  pending=load('run',{older:true,render:false});assert.match(requests.at(-1).path,/before=new/);requests.at(-1).resolve({items:[{id:'old'},{id:'new'}],hasMore:true,nextBefore:'old'});await pending;
+  assert.equal(JSON.stringify(view.collaborationItems.map(x=>x.id)),JSON.stringify(['old','new']));
+  pending=load('run',{older:true,render:false});requests.at(-1).reject(Error('controlled read failure'));await pending;
+  assert.equal(JSON.stringify(view.collaborationItems.map(x=>x.id)),JSON.stringify(['old','new']));assert.equal(view.collaborationBefore,'old');assert.equal(view.collaborationError,'controlled read failure');assert.equal(view.collaborationRetryOlder,true);
+  pending=load('run',{render:false});requests.at(-1).resolve({items:[{id:'latest'}],hasMore:true,nextBefore:'latest'});await pending;
+  assert.equal(JSON.stringify(view.collaborationItems.map(x=>x.id)),JSON.stringify(['old','new']),'background refresh preserves the accumulated range');
+  const stale=load('run',{older:true,render:false}),staleRequest=requests.at(-1);
+  pending=load('run',{latest:true,render:false});requests.at(-1).resolve({items:[{id:'latest'}],hasMore:true,nextBefore:'latest'});await pending;
+  staleRequest.resolve({items:[{id:'ancient'}],hasMore:false,nextBefore:null});await stale;
+  assert.equal(JSON.stringify(view.collaborationItems.map(x=>x.id)),JSON.stringify(['latest']));assert.equal(view.collaborationBrowsing,false);
 });
 test('plugin and MCP empty/error states are outside their card grid, and search transitions remain truthful',async t=>{
   for(const createUI of [createMarketplaceUI,createMcpMarketplaceUI]) {

@@ -1,5 +1,7 @@
 # 共享展示投影
 
+协作的 summary/handoff 信封由 `collaborationContent` 提取报告正文，包含历史中边界完整但正文引号未转义的两字段信封；未知或不完整内容保留原文。HTTP 与 CLI 共享此投影，不改写 Message，不执行或修正交接。`formatMessageTime` 为任务协作和沟通消息显示本地月日、时分，非当年包含年份。
+
 mcp-tool-page.mjs 是桌面与 CLI 共用的纯 MCP 工具搜索/20条分页投影，不发请求、不调用工具；schema 保留完整返回。
 
 `collaborationRecords` 保留 Message 的真实 `senderId`，供 renderer 按冻结成员身份选择头像和同色 Markdown 强调；CLI 文本/JSON 保留该发送者引用，不按姓名或 Trace 反推。该投影将任务 Message 的可选 `clientRequestId` 原样透出，供 renderer 和 CLI 精确确认逻辑发送；不按正文或时间归并消息，内部请求摘要/回执不进入该展示投影。

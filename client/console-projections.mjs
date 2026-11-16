@@ -278,6 +278,14 @@ export function formatExactTime(iso) {
   return new Date(iso).toLocaleString("zh-CN", { hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
+export function formatMessageTime(iso, now = new Date()) {
+  if (!iso) return '';
+  const day = new Date(iso);
+  if (!Number.isFinite(day.getTime())) return '';
+  const year = day.getFullYear() === now.getFullYear() ? '' : `${day.getFullYear()}年`;
+  return `${year}${day.getMonth() + 1}月${day.getDate()}日 ${day.toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false})}`;
+}
+
 export function classifyEvent(event = {}) {
   if (event.type === "node.completed") return "deliver";
   if (event.type !== "runtime.event") return "system";
@@ -450,7 +458,22 @@ function collaborationContent(message) {
   const content = message.content || "";
   if (message.kind !== "handoff" || message.sender?.type !== "agent") return content;
   let envelope;
-  try { envelope = JSON.parse(content); } catch { return content; }
+  const source = content.trim().replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i, '$1').trim();
+  try { envelope = JSON.parse(source); } catch {
+    // Some recorded handoffs contain unescaped prose quotes inside summary.
+    // Recover only this closed two-field display shape, never routing fields.
+    const match = source.match(/^\{\s*"summary"\s*:\s*"([\s\S]*)",\s*"handoff"\s*:\s*(\{[^{}]*\})\s*\}$/);
+    if (!match) return content;
+    try {
+      const handoff = JSON.parse(match[2]);
+      if (Object.keys(handoff).length !== 1 || typeof handoff.recipientAgentId !== 'string' || !handoff.recipientAgentId.trim()) return content;
+      const report = JSON.parse('"' + match[1].replace(/\\[\s\S]|"/g, token => token === '"' ? '\\"' : token) + '"');
+      return report.trim() ? report : content;
+    } catch { return content; }
+  }
+  if (envelope && !Array.isArray(envelope) && typeof envelope.summary === 'string' && envelope.summary.trim() &&
+      Object.keys(envelope).every(key => ['summary','handoff','managerDecision','consultation','deliveryReview','artifacts','decisions','kind','rawResponse'].includes(key)) &&
+      ['handoff','managerDecision','consultation','deliveryReview'].some(key => envelope[key] && typeof envelope[key] === 'object' && !Array.isArray(envelope[key]))) return envelope.summary;
   if (!envelope || Array.isArray(envelope) || typeof envelope.rawResponse !== "string" ||
       !(typeof envelope.status === "string" || typeof envelope.node === "string" || envelope.kind === "node_result")) return content;
   const raw = envelope.rawResponse.trim();

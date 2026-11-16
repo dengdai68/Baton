@@ -20,7 +20,7 @@ import { Readable } from "node:stream";
 await mkdir(".data", { recursive: true });
 await mkdir("screenshots", { recursive: true });
 const directory = await mkdtemp(resolve(".data/electron-e2e-"));
-const storage = desktopStoragePaths(join(directory,'.baton','desktop'), { home: directory });
+const storage = desktopStoragePaths(join(directory,'.baton'), { home: directory });
 const password = randomBytes(24).toString("hex");
 const auth = createAuth({ databasePath: storage.BATON_AUTH_DB_PATH });
 await auth.setAdministrator("desktop-test", password);

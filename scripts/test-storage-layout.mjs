@@ -12,7 +12,7 @@ import {createMarketplace,readExtensionFile} from '../server/runtime/marketplace
 import {storageBusinessRoot,writeStorageLocation} from '../server/storage-layout.mjs';
 import {execute} from '../cli/main.mjs';
 const real=process.env.BATON_STORAGE_REAL==='1',bundle=process.env.BATON_STORAGE_APP,instance=bundle?'desktop':'desktop-dev';
-const fixtureParent=resolve(process.env.BATON_STORAGE_TEST_ROOT || '.data');await mkdir(fixtureParent,{recursive:true});const root=await realpath(await mkdtemp(join(fixtureParent,'storage-layout-'))),home=join(root,'home'),control=join(home,'.baton/desktop'),beforeWork=join(root,'before'),afterWork=join(root,'after'),before=storageBusinessRoot(beforeWork,instance);
+const fixtureParent=resolve(process.env.BATON_STORAGE_TEST_ROOT || '.data');await mkdir(fixtureParent,{recursive:true});const root=await realpath(await mkdtemp(join(fixtureParent,'storage-layout-'))),home=join(root,'home'),control=join(home,'.baton'),beforeWork=join(root,'before'),afterWork=join(root,'after'),before=storageBusinessRoot(beforeWork,instance);
 await mkdir(home,{recursive:true});const password=randomBytes(24).toString('hex');const auth=createAuth({databasePath:join(control,'auth.sqlite')});await auth.setAdministrator('storage-qa',password);auth.close();
 await writeStorageLocation(control,{version:1,workspaceRoot:beforeWork,previousRuntimeRoots:[]});
 const plugin=join(root,'source-plugin');await mkdir(join(plugin,'.claude-plugin'),{recursive:true});await mkdir(join(plugin,'skills/storage-fact'),{recursive:true});await writeFile(join(plugin,'.claude-plugin/plugin.json'),JSON.stringify({name:'storage-proof',version:'1.0.0'}));

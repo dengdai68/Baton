@@ -69,7 +69,7 @@ export function validateInput(value, schema, path = 'input', partial = false) {
 function privateStat(info) {
   return (!process.getuid || info.uid === process.getuid()) && (info.mode & 0o077) === 0;
 }
-export function defaultEndpointFile(home = homedir()) { return join(home, '.baton', 'desktop', 'desktop-endpoint.json'); }
+export function defaultEndpointFile(home = homedir()) { return join(home, '.baton', 'desktop-endpoint.json'); }
 export async function resolveEndpoint(endpointFile = defaultEndpointFile(), fetcher = fetch, onInstance) {
   if (!isAbsolute(endpointFile)) throw usage('--endpoint-file 必须是绝对路径');
   let file;
@@ -91,6 +91,7 @@ export async function resolveEndpoint(endpointFile = defaultEndpointFile(), fetc
   } finally { await file?.close(); }
 }
 export function createClient({ endpointFile, sessionFile, fetcher = fetch, home = homedir() } = {}) {
+  endpointFile ||= defaultEndpointFile(home);
   const useDesktop = sessionFile === undefined;
   sessionFile ||= join(home, '.baton', 'cli-session.json');
   if (!isAbsolute(sessionFile)) throw usage('--session-file 必须是绝对路径');

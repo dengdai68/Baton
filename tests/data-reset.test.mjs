@@ -33,3 +33,10 @@ test('uncommitted intent never deletes live data and committed intent cannot nam
  await writeFile(path,JSON.stringify({version:1,workspaceRoot:'/wrong/root'}),{mode:0o600});await assert.rejects(reset.recover(),/归属无效/);assert.equal(await readFile(join(options.workspaceRoot,'sentinel'),'utf8'),'kept');
 });
 test('Store refuses reset while execution is active',t=>{const store=createStore();t.after(()=>store.close());const worker=store.listAgents().find(item=>item.kind!=='manager');const task=store.createTask({managerAgentId:worker.id,memberAgentIds:[worker.id],title:'Reset guard',objective:'fixture',workspacePath:tmpdir()});store.createRun(task.id);assert.throws(()=>store.prepareDataReset(),/停止正在执行/);});
+
+test('flat configuration reset owns its default workspace only and retains credentials and login',async t=>{
+ const {root}=await fixture(t),configurationRoot=join(root,'.baton'),workspaceRoot=join(configurationRoot,'workspace');await mkdir(workspaceRoot,{recursive:true});
+ const auth=join(configurationRoot,'auth.sqlite');await writeFile(auth,'unchanged-auth');await writeFile(join(workspaceRoot,'result.md'),'remove only business files');
+ const reset=createDataReset({configurationRoot,workspaceRoot});await reset.begin();await reset.recover();assert.deepEqual(await readdir(workspaceRoot),[]);assert.equal(await readFile(auth,'utf8'),'unchanged-auth');
+ for(const name of ['credentials','browser','runtime-configs','other'])await assert.rejects(createDataReset({configurationRoot,workspaceRoot:join(configurationRoot,name)}).begin(),/受保护/);
+});

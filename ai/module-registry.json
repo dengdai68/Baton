@@ -64,6 +64,88 @@
   ],
   "modules": [
     {
+      "id": "scripts.configuration-root",
+      "path": "scripts/test-configuration-root.mjs",
+      "kind": "verification",
+      "owner": "client-platform",
+      "purpose": "Real packaged old-to-new configuration cutover in an isolated HOME: saved login, preferences, MCP catalog, paused task, default CLI discovery, conflict refusal and restart. Never calls a Provider or operator configuration.",
+      "sourceOfTruth": [
+        "docs/30-storage-layout.md",
+        "docs/18-electron-client.md"
+      ],
+      "tests": [
+        "scripts/test-configuration-root.mjs"
+      ],
+      "allowedDependencies": [
+        "node:*",
+        "playwright-core",
+        "server/store.mjs",
+        "server/auth.mjs",
+        "server/runtime/marketplace.mjs",
+        "cli/main.mjs",
+        "scripts/run-tests.mjs"
+      ],
+      "forbiddenDependencies": [
+        "operator credentials",
+        "operator business data",
+        "Provider execution"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "ai/module-registry.json",
+          "docs/00-ai-map.md",
+          "scripts/README.md",
+          "docs/30-storage-layout.md"
+        ],
+        "reviewIf": [
+          "filesystem",
+          "authentication",
+          "packaging"
+        ]
+      }
+    },
+    {
+      "id": "apps.configuration-root-migration",
+      "path": "apps/electron/configuration-root-migration.mjs",
+      "kind": "desktop-configuration",
+      "owner": "client-platform",
+      "purpose": "One-time authorized installed-client cutover from ~/.baton/desktop to ~/.baton before opening authentication or Chromium. Same-volume renames preserve bytes, a private journal resumes interruption, conflicts and live legacy instances refuse without creating an empty configuration. Existing Runtime roots remain read aliases; business records stay in the configured workspace.",
+      "sourceOfTruth": [
+        "docs/30-storage-layout.md",
+        "docs/18-electron-client.md"
+      ],
+      "tests": [
+        "tests/configuration-root-migration.test.mjs"
+      ],
+      "allowedDependencies": [
+        "node:*",
+        "server/data-home.mjs",
+        "server/storage-layout.mjs"
+      ],
+      "forbiddenDependencies": [
+        "Store",
+        "Provider",
+        "business database mutation",
+        "credential output"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "ai/module-registry.json",
+          "docs/00-ai-map.md",
+          "apps/electron/README.md",
+          "docs/18-electron-client.md",
+          "docs/30-storage-layout.md",
+          "CHANGELOG.md"
+        ],
+        "reviewIf": [
+          "filesystem",
+          "startup",
+          "authentication",
+          "recovery"
+        ]
+      }
+    },
+    {
       "id": "apps.application-updates",
       "path": "apps/electron/updates.mjs",
       "kind": "desktop-host",
@@ -301,7 +383,9 @@
       "bareSkillImport": "Root SKILL.md or skills/<directory>/SKILL.md without plugin manifests is wrapped per Skill with exact name/full description, original source retained and generated manifest only in private installation. Same URL/path imports, source identity, Git updates, bindings, frozen history and Runtime compatibility; no Skill CRUD resource.",
       "optionalSkillTools": "Skill allowed-tools/allowedTools metadata is preserved and never gates target compatibility. Other field/Hook/subagent/integrity rules remain; existing installation detail/resolve and App/CLI explicit compatibility cache refresh share current rules, without reinstall or frozen-history rewrite.",
       "humanMessageIdempotency": "tasks message/reply expose --client-request-id and the same run-scoped retry/conflict semantics as the App; collaboration output retains clientRequestId. Attachment-path retries compare saved attachment metadata before reusing IDs, through bounded collaboration pages rather than full workspaces.",
-      "appParity": "Task pause/resume/retry/archive and long-term chat directly use existing desktop HTTP endpoints; all existing configuration groups retain shared input/state semantics. Detailed matrix in docs/21."
+      "appParity": "Task pause/resume/retry/archive and long-term chat directly use existing desktop HTTP endpoints; all existing configuration groups retain shared input/state semantics. Detailed matrix in docs/21.",
+      "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe.",
+      "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged."
     },
     {
       "id": "server.data-reset",
@@ -318,7 +402,8 @@
         "tests/data-reset.test.mjs"
       ],
       "allowedDependencies": [
-        "node:*"
+        "node:*",
+        "server/storage-layout.mjs"
       ],
       "forbiddenDependencies": [
         "Provider",
@@ -336,7 +421,8 @@
           "security",
           "recovery"
         ]
-      }
+      },
+      "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe."
     },
     {
       "id": "server.data-home",
@@ -375,7 +461,8 @@
           "recovery"
         ]
       },
-      "workspaceDefault": "defaultTaskWorkspaceRoot(home) resolves ~/.baton/workspace; explicit configured roots win. New Task/Run paths are under tasks/, communication business cwd under communications/, private content remains in Run Files."
+      "workspaceDefault": "defaultTaskWorkspaceRoot(home) resolves ~/.baton/workspace; explicit configured roots win. New Task/Run paths are under tasks/, communication business cwd under communications/, private content remains in Run Files.",
+      "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe."
     },
     {
       "id": "server.diagnostics",
@@ -547,7 +634,8 @@
       "applicationUpdates": "Stable-only GitHub latest discovery, explicit download, SHA-256 DMG fallback for ad-hoc installs and native MacUpdater for Developer ID builds. Auto-download and install-on-quit disabled. Native restart acquires an atomic idle lease from the owned child, blocking writes/schedulers until quit or release.",
       "draftAssetsUpload": "The manual ad-hoc workflow may build an immutable existing tag and replace all six verified assets only on an existing draft. This mode never publishes; signed stable certificate gates remain separate.",
       "interfaceConsistency": "Settings model/effort controls share 13px/37.5px; selection/focus and previews use current tokens. Shared native renderer dialog preserves form drafts and returns focus; reduced-motion and coarse-pointer rules retain desktop density. Workspace refresh is an icon in the file source row; diff controls live in the viewer header. No host command or CLI contract change.",
-      "interface-graphite": "石墨设计系统（2026-11-13 替代纸张，规范 .interface-design/system.md）：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化 48px 标题栏（图标+标题+计数）、44px 工具栏、34px 浅底分组头、38px 行。共享 tokens 位于 web/tokens.css（冷灰中性色、蓝色主操作），组件位于 web/styles.css 且只引用 tokens，compact.css 只保留密度（控件28/行38/导航28）。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。"
+      "interface-graphite": "石墨设计系统（2026-11-13 替代纸张，规范 .interface-design/system.md）：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化 48px 标题栏（图标+标题+计数）、44px 工具栏、34px 浅底分组头、38px 行。共享 tokens 位于 web/tokens.css（冷灰中性色、蓝色主操作），组件位于 web/styles.css 且只引用 tokens，compact.css 只保留密度（控件28/行38/导航28）。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。",
+      "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe."
     },
     {
       "id": "server.communication-store",
@@ -1122,7 +1210,8 @@
       },
       "sharedCollaboration": "Unread public Run messages are caught up on each legitimate member invocation, separate from current work IDs. Only untouched manager tail report notifications coalesce, preserving all source references and idempotency; App/CLI share those references. Native prose and a distinct nonempty summary in one trailing coordination envelope are both preserved in order; identical report text appears once; no enforced discussion count or review.",
       "humanMessageIdempotency": "Collaboration records retain the saved clientRequestId reference for exact App/CLI acknowledgement reconciliation; presentation adds no send or dispatch rules.",
-      "senderIdentity": "collaborationRecords preserves senderId as a stable identity reference for both App and CLI; it adds no routing or execution rules."
+      "senderIdentity": "collaborationRecords preserves senderId as a stable identity reference for both App and CLI; it adds no routing or execution rules.",
+      "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged."
     },
     {
       "id": "web.console",
@@ -1131,7 +1220,7 @@
       "cliStatusPresentation": "CLI settings navigation/title use CLI, omit installation/login hints and preserve host install/refresh plus quick-start commands. Automation latest status clears the shared inset shadow along with background/radius; shared status semantics and interactive focus-visible remain unchanged. No CLI/HTTP/Store contract change.",
       "workflowEditorPresentation": "Full-viewport editor with 176x80 rounded process nodes and diamond condition nodes; four ports follow shape vertices. Display geometry remains separate from domain fields. Explicit ports remain authoritative after routing, save/reopen and movement; arrow tips terminate at target port centers in editor and read-only graphs. Hollow magnets retain center and edge pointer hits. 312/272px properties become a 280px narrow overlay; geometry, routing, keyboard links, error drafts and immutable snapshots remain covered by test-workflow-editor.",
       "workspaceFocusPresentation": "Task details list all frozen workflow nodes from existing delivery Traces and workflowFocus, retain manual collapse state, and distinguish handoff/current/running/failed without completion judgments. Detail drawers float with 8px margins and shared radius/shadow, returning to full-screen at 760px; no HTTP/Store/CLI changes.",
-      "messageAndDirectoryPresentation": "沟通使用共享28px成员头像及本地日历天分隔；团队整行进入编辑，仅群聊按钮进入群聊，保留成员头像与更多菜单；工作流按真实边绘制预览。员工/角色/插件/MCP抽屉点击外部或Escape关闭，内部候选菜单不误关，居中表单显式退出。纯交互呈现，无App/CLI/HTTP/Store协议变化；test-redesign与directory-headers/workflow-editor覆盖。",
+      "messageAndDirectoryPresentation": "沟通使用共享28px成员头像及本地日历天分隔；身份栏、记录区与输入卡片水平留白统一为20px（--sp-7），≤860px为12px（--sp-5），头像与分隔线对齐外缘，正文仍跟随姓名缩进，任务协作留白不变；团队整行进入编辑，仅群聊按钮进入群聊，保留成员头像与更多菜单；工作流按真实边绘制预览。员工/角色/插件/MCP抽屉点击外部或Escape关闭，内部候选菜单不误关，居中表单显式退出。纯交互呈现，无App/CLI/HTTP/Store协议变化；test-redesign与directory-headers/workflow-editor覆盖。",
       "inboxPresentation": "Rich semantic grouped rows hydrate visible pages through bounded compact workspace reads. State-specific previews use existing collaboration context, precise replyToMessageId messaging, acceptance criteria/artifact counts, failure and pause facts. Polling preserves live composer/drafts; send-and-next selects the next clarification, send-only retains a receipt. Recent combines this session's same-day answers and the latest 20 done tasks (directory has no date filter). No App/CLI/HTTP/Store contract change; settings tests cover state previews, tickets, failed sends and selection.",
       "taskGroupedList": "Graphite grouped rows (34px tinted sticky group heads, single-line 38px rows) with semantic icons, frozen workflow tags, member stacks and existing next/more actions. Filled chips and debounced search share exact HTTP status/workflow/search queries; composite client filters collect existing pages before local pagination and contextual counts. Archive tables, board, human confirmations and CLI protocols remain unchanged. Group headings use shared page padding; child rows add 24px of indentation, matching the inbox hierarchy at wide and narrow widths.",
       "iconSource": "Unchanged owner master (SHA-256 530b81a4b34e489a9886d289c27151d1359fa2d8ebc3118c8d3c89adf46f38c9) generates a clean UI tile, an 824/1024 Dock tile and matching ICNS; separate 18/36px monochrome menu-bar templates follow native light/dark appearance.",
@@ -1230,7 +1319,9 @@
       "compactTaskForms": "Task and automation member pickers share the 28px empty control height with workflow select and grow naturally for wrapped chips. Automation schedule presents one Cron field without preset/preview requests; live task and communication member chips wrap and remain visible.",
       "progressiveDirectories": "Inbox task rows paint before four concurrent compact summaries, with truthful preview loading and stale-visit guards. Marketplace requests the current HTTP page rather than collecting every page; auxiliary usage/employee metadata hydrates separately. Existing counts and CLI query semantics remain authoritative.",
       "consoleLiveReading": "Task SSE and chat polling append while history is being read. Shared console-stream retains a visible-row anchor, disclosure DOM and sticky bottom across body hydration. Task reconciles every five seconds while visible/open, chat every two; reconnect and page overlap catch up at most 200 raw events. Latest explicitly resumes following. History paging is centered; closed/hidden views do not poll. Existing HTTP/CLI/state contracts remain unchanged.",
-      "coreCliParity": "Workflow editor exposes all business fields; MCP details share tool search/paging projection with CLI and disclose schema. Existing routes and domain rules unchanged."
+      "coreCliParity": "Workflow editor exposes all business fields; MCP details share tool search/paging projection with CLI and disclose schema. Existing routes and domain rules unchanged.",
+      "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged.",
+      "mediaPresentation": "Shared task/chat images render authenticated inline previews, max 320px height/container width with aspect ratio and no upscaling. Draft images cover 56px square tiles matching file-card height. Bounded native dialog preserves margins, download, Esc/outside close and focus. Both responsive and manual collapsed sidebar hide counts. No HTTP/CLI/Store attachment contract changes; source/packaged isolated media acceptance covers both themes and widths."
     },
     {
       "id": "web.manual-graphs",
@@ -2268,7 +2359,8 @@
           "privacy",
           "lifecycle"
         ]
-      }
+      },
+      "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe."
     },
     {
       "id": "apps.storage-relocation",

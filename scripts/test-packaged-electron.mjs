@@ -26,7 +26,7 @@ const profile = join(evidenceRoot, "profile");
 // operator's real ~/.baton; Chromium-managed files stay in --user-data-dir.
 const home = join(evidenceRoot, "home");
 await mkdir(home, { mode: 0o700 });
-const controlRoot=join(home,".baton","desktop");
+const controlRoot=join(home, '.baton');
 const storage = desktopStoragePaths(controlRoot, { home });
 const endpointFile = join(controlRoot, "desktop-endpoint.json");
 const urlFor = (page, path) => new URL(path, page.url()).href;
@@ -853,7 +853,7 @@ try {
   const reuseShell = join(evidenceRoot, 'reuse-shell'), expectedLoad = join(reuseShell, 'shell-loaded');
   await mkdir(reuseShell);
   await writeFile(join(reuseShell, '.zshrc'), `print loaded > '${expectedLoad}'\n`);
-  // A second desktop with its own HOME owns an isolated ~/.baton/desktop instance.
+  // A second desktop with its own HOME owns an isolated ~/.baton instance.
   const reusedHome = join(evidenceRoot, 'reused-home');
   await mkdir(reusedHome, { mode: 0o700 });
   const reused = await electron.launch({ ...launchOptions, args: [`--user-data-dir=${join(evidenceRoot, 'reused-profile')}`], env: { ...launchOptions.env, HOME: reusedHome, ZDOTDIR: reuseShell } });
@@ -1078,7 +1078,7 @@ if (process.platform === "darwin") {
   // This pre-navigation instance gets its own HOME so its data root is fresh.
   const slowHome = join(evidenceRoot, 'cancel-home');
   await mkdir(slowHome, { mode: 0o700 });
-  const slowDatabase = join(slowHome, 'baton', '.baton', 'desktop', 'baton.sqlite');
+  const slowDatabase = join(slowHome, '.baton', 'workspace', 'records', 'baton.sqlite');
   const shellPidFile = join(slowShell, 'shell.pid'), lateFile = join(slowShell, 'late-marker');
   await writeFile(join(slowShell, '.zshenv'), `print -r -- $$ > '${shellPidFile}'\n/bin/sleep 30\nprint late > '${lateFile}'\n`);
   // Playwright's app connection waits for the first navigated page. For this

@@ -1,3 +1,4 @@
+import { formatMessageTime } from '../client/console-projections.mjs';
 import { communicationDayLabel } from '../web/communication.js';
 import test from "node:test";
 import { workflowConnections } from "../client/workflow-description.mjs";
@@ -1882,7 +1883,7 @@ test("collaboration is chronological without pinned acceptance duplicates and un
     if (!elements.has(id)) elements.set(id, { innerHTML: "", addEventListener() {}, querySelector(){return null;}, querySelectorAll(){return [];} });
     return elements.get(id);
   };
-  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", "roleColor", "initialsOf", "communicationDayLabel", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback(), agent => 'color-'+(agent.color || 'system'), agent => agent.name?.slice(0,1) || '?', communicationDayLabel);
+  const render = new Function("$", "state", "workspaceView", "collaborationRecords", "collaborationMessageMarkup", "exactTime", "esc", "sendInstruction", "refreshCollaborationBodies", "messageAttachments", "bindTaskAttachments", "draftAttachments", "attachmentControls", "requestAnimationFrame", "roleColor", "initialsOf", "communicationDayLabel", "formatMessageTime", `${renderSource}; return renderCollaboration;`)(select, { workspace }, () => view, collaborationRecords, text => `<p>${esc(text)}</p>`, String, esc, () => {}, () => {}, () => "", () => {}, () => "", () => "", callback=>callback(), agent => 'color-'+(agent.color || 'system'), agent => agent.name?.slice(0,1) || '?', communicationDayLabel, formatMessageTime);
   workspace.run.task.archivedAt = null;
   workspace.messages = [
     { id: 'manager-final', kind: 'manager_decision', sender: { type: 'agent', name: '经理' }, recipient: { type: 'team', name: '团队' }, content: '最终交接结论', createdAt: '2026-10-19T00:00:00Z' },

@@ -13,7 +13,7 @@ import {createAuth} from '../server/auth.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
 const real=process.env.BATON_TASK_DRAFTS_REAL==='1',bundle=process.env.BATON_TASK_DRAFTS_APP;
-const root=await mkdtemp(join(tmpdir(),'baton-task-drafts-')),home=join(root,'home'),data=bundle?join(home,'.baton/desktop'):join(root,'config');await mkdir(home,{mode:0o700});
+const root=await mkdtemp(join(tmpdir(),'baton-task-drafts-')),home=join(root,'home'),data=bundle?join(home,'.baton'):join(root,'config');await mkdir(home,{mode:0o700});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('draft-qa',password);auth.close();
 const options={databasePath:join(root,'work/records/baton.sqlite'),workspaceRoot:join(root,'work'),configurationDirectory:data};
 const store=createStore(options);

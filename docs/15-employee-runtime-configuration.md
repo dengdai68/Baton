@@ -41,7 +41,7 @@ HTTP/CLI 拒绝 `skillIds`、员工 `mcpJson`、连接字段、手工路径及�
 ## 安装与详情
 
 - 插件首页只列已安装项。HTTPS Git 仓库或本机绝对目录直接一次安装全部条目。识别 `.claude-plugin/marketplace.json`、`.agents/plugins/marketplace.json`、`.claude-plugin/plugin.json`、`.codex-plugin/plugin.json` 和根 `plugin.json`。市场支持相对目录、Codex `local/path`、`url` 的同仓库 `./` 来源，以及 HTTPS `github`、`url`、`git-subdir` 远程来源。远程来源按 URL+ref/sha 复用检出，sha 优先；记录真实仓库与提交 ID。不提供读取来源/单插件选择/信任勾选。npm/archive/command 来源尚不支持，明确整批拒绝，不跳过条目或执行清单命令。
-- 安装复制完整插件及支持文件到 Runtime 根下 `installed-plugins/<批次ID>/plugins/<版本ID>/plugin/`，拆分 MCP 在同批次 `mcps/<版本ID>/`，独立手动 MCP 在 `marketplace/<版本ID>/`。根位于 `~/.baton/<实例>/runtime-configs/`；Git 托管凭据独立放在认证实例的 `credentials/`。更换根保留安装字节与冻结摘要，通过受管旧地址解析读取新位置，不重新导入或改写历史（docs/30）。准备完整批次后一次 rename 发布，失败清理临时批次，不暴露部分已安装项。版本不可变，保存 manifest 及完整目录摘要；受管副本篡改会拒绝执行。
+- 安装复制完整插件及支持文件到 Runtime 根下 `installed-plugins/<批次ID>/plugins/<版本ID>/plugin/`，拆分 MCP 在同批次 `mcps/<版本ID>/`，独立手动 MCP 在 `marketplace/<版本ID>/`。安装版根位于 `~/.baton/runtime-configs/`，开发实例为 `~/.baton/desktop-dev/runtime-configs/`；Git 托管凭据独立放在同一配置根的 `credentials/`。旧 desktop 配置首次启动搬迁时保留安装字节与冻结摘要，通过受管旧地址解析读取新位置，不重新导入或改写历史（docs/30）。准备完整批次后一次 rename 发布，失败清理临时批次，不暴露部分已安装项。版本不可变，保存 manifest 及完整目录摘要；受管副本篡改会拒绝执行。
 - 配置根的祖先目录允许 macOS `/tmp` → `/private/tmp`、卷挂载等正常别名，先解析实际位置再创建与记录路径；配置根本身及受管子目录仍拒绝符号链接，运行中实际位置改变则报错。目录错误在诊断中保留具体路径和错误码，不自动删除或重建真实数据。
 - 导入不运行安装脚本、Hook、依赖安装或 MCP；首次安装不自动绑定员工，重复导入按本页覆盖规则更新已有选择。拆分时解析默认或声明的 MCP JSON，把插件根变量替换成已安装目录；清空加载副本的默认 MCP 文件并移除 manifest 的 MCP 声明，避免 Provider 自动启用。选中员工实际执行 Hook，以本机用户权限运行；bypass 不是沙箱。
 - 插件卡片、详情及员工选择器分别标记九种 Runtime 支持情况；详情给出不兼容原因，组件标记适用 Runtime。列表只给组件数量与兼容性；详情按需读取 Skill、Subagent、Hook 元信息及 manifest。支持表示静态组件可加载，不代表本机 CLI、依赖、模型账号已实测。在线市场浏览本轮不提供。

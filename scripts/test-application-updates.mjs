@@ -11,7 +11,7 @@ import { createCatalogFixtureStore } from '../tests/fixture-store.mjs';
 
 await mkdir('.data',{recursive:true});
 const root=await mkdtemp(resolve('.data/application-updates-')),home=join(root,'home'),bundle=process.env.BATON_UPDATES_APP;
-const data=bundle?join(home,'.baton/desktop'):join(root,'client');
+const data=bundle?join(home,'.baton'):join(root,'client');
 await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});
 await auth.setAdministrator('updates-qa',password);auth.close();

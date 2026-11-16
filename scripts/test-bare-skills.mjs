@@ -16,7 +16,7 @@ import {gitOrigin} from '../tests/plugin-git-fixture.mjs';
 import {testEnvironment} from './run-tests.mjs';
 const cleanups=[],sourceOrigin=await gitOrigin({after:fn=>cleanups.push(fn)},{keep:true}),root=sourceOrigin.root;
 const bundle=process.env.BATON_BARE_SKILLS_APP,real=process.env.BATON_BARE_SKILLS_REAL==='1',reference=process.env.BATON_BARE_SKILLS_REFERENCE;
-const home=join(root,'home'),data=bundle?join(home,'.baton/desktop'):join(root,'config'),workspace=join(root,'work');await mkdir(home,{mode:0o700});
+const home=join(root,'home'),data=bundle?join(home,'.baton'):join(root,'config'),workspace=join(root,'work');await mkdir(home,{mode:0o700});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('skill-qa',password);auth.close();const seed=createStore({databasePath:join(workspace,'records/baton.sqlite'),workspaceRoot:workspace,configurationDirectory:data});seed.close();await writeStorageLocation(data,{version:1,workspaceRoot:workspace,previousRuntimeRoots:[]});
 const skill=join(sourceOrigin.source,'skills/source-proof'),before=randomBytes(12).toString('hex'),after=randomBytes(12).toString('hex');await mkdir(join(skill,'references'),{recursive:true});
 const body=description=>'---\nname: source-proof\ndescription: '+JSON.stringify(description)+'\nallowed-tools: Bash, Read\n---\nUse this Skill when asked to verify a source fact. Read references/fact.txt in this Skill directory and write the exact complete value to the requested task output file. Never guess the value. Read the output back to verify. Do not access external services.';

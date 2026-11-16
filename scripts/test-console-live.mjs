@@ -9,7 +9,7 @@ import {createAuth} from '../server/auth.mjs';
 import {createFixtureStore} from '../tests/fixture-store.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
-const root=await mkdtemp(join(tmpdir(),'baton-console-live-')),home=join(root,'home'),data=join(home,'.baton/desktop'),work=join(root,'workspace');await mkdir(home,{mode:0o700});
+const root=await mkdtemp(join(tmpdir(),'baton-console-live-')),home=join(root,'home'),data=join(home,'.baton'),work=join(root,'workspace');await mkdir(home,{mode:0o700});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('console-preview',password);auth.close();
 const store=createFixtureStore({databasePath:join(work,'records/baton.sqlite'),configurationDirectory:data,workspaceRoot:work});
 const run=store.createRun(store.listTasks()[0].id),agent=store.getRunAgent(run.id,'agent_engineer'),trace=store.createTrace(run.id,{agentId:agent.id,type:'node',workflowNodeId:'requirements'});store.completeTrace(trace.id);store.pauseRun(run.id,'控制台优化预览：隔离演示，不启动员工。');

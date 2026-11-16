@@ -1,5 +1,13 @@
 # 代码导航
 
+附件与收起侧栏：web/communication.js 共用图片按钮（持久附件和本地发送反馈均直接显示图片），web/styles.css 统一56px待发卡片、320px消息图片上限及有界预览；≤1000px自动收起与手动收起都隐藏计数。验收 scripts/test-communication-media.mjs 覆盖源/包内、横竖小图、失败回退、下载、任务/沟通、两主题宽窄及零 Provider；HTTP/CLI 附件协议无变化。
+
+协作历史连续读取：web/app.js 向前累加旧页、按 ID 去重并恢复可见消息锚点，web/styles.css 居中加载入口；任务与沟通消息共用 client/console-projections.mjs 的月日/跨年时间标签。collaborationContent 展示已知 summary/handoff 报告（含历史引号错误），App/CLI 共用，不改历史、路由或执行。验收：client-projections/settings/communication tests、test-collaboration-flow。
+
+配置根扁平化：apps/electron/configuration-root-migration.mjs 在认证/浏览器打开前搬迁旧 ~/.baton/desktop 到 ~/.baton，私有 journal 记录原 inode 并恢复中断，冲突与活动旧实例拒绝；main/runtime-paths、server/data-home 与 cli/client 共用新根。storage.json 保留工作根并追加旧 Runtime 根读取映射；默认 workspace 子树仍可安全整理/清除，业务数据不搬迁。契约 docs/30、18、21；回归 configuration-root-migration/data-home/storage-layout/data-reset 与打包隔离 HOME 验收。
+
+沟通留白：`web/styles.css` 的身份栏、消息记录与输入卡片统一使用 `--sp-7`（20px），≤860px 为 `--sp-5`（12px），消息头像/分隔线与头部、输入卡片外缘对齐；正文缩进和任务协作留白保留。仅样式调整，App/CLI/HTTP/Store 协议不变；设计事实见 docs/06 与 .interface-design/system.md，宽窄/主题及输入回归复用隔离 Electron 验证。
+
 App/CLI 对齐：cli/main.mjs 将任务暂停/恢复/重试/归档映射到现有 HTTP，cli/workspace.mjs 提供长期沟通、控制台游标持续读取及文件命令；client.mjs 流式下载，最终确认仍仅客户端。MCP 工具搜索分页共用 client/mcp-tool-page.mjs，workflow-editor 补齐高级业务字段。契约 docs/21、17、06；隔离验收 scripts/test-app-cli-parity.mjs、tests/cli-workspace.test.mjs。
 
 MCP 超时与详情编辑：server/runtime/mcp-tools.mjs 使用45秒发现预算；web/styles.css 的 directory-detail-header 显式 no-drag，确保抽屉覆盖宿主标题栏时的真实鼠标命中。CLI tools 帮助与 docs/15、21 同步，字段不变；tests/mcp-tools.test.mjs 覆盖超过旧15秒的初始化。

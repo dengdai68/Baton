@@ -19,7 +19,7 @@ await mkdir(join(origin.source,'.claude-plugin'));await mkdir(join(origin.source
 await writeFile(join(origin.source,'.claude-plugin/plugin.json'),JSON.stringify({name:'release-check',version:'1.0.0'}));
 await writeFile(join(origin.source,'skills/current/SKILL.md'),'---\nname: current-facts\ndescription: 核验本机当前事实，生成可追溯简报。\n---\n实际读取此技能目录中的 facts.txt，将完整原值写入用户要求的交付文档，并注明真实读取来源。不能猜测。');
 await writeFile(join(origin.source,'skills/current/facts.txt'),before);await origin.commit();await origin.git('-C',join(root,'repos/repo.git'),'symbolic-ref','HEAD','refs/heads/main');
-const home=join(root,'home'),data=packaged?join(home,'.baton/desktop'):join(root,'client');await mkdir(home);
+const home=join(root,'home'),data=packaged?join(home,'.baton'):join(root,'client');await mkdir(home);
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('update-qa',password);auth.close();
 const store=createStore({databasePath:join(root,'work/records/baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});store.close();
 await writeStorageLocation(data,{version:1,workspaceRoot:join(root,'work'),previousRuntimeRoots:[]});

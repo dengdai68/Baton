@@ -2,6 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "../client/console-projections.mjs";
+import { formatMessageTime } from '../client/console-projections.mjs';
+
+test('message times always identify the local date and identify other years', () => {
+  const now=new Date(2026,0,1,0,5);
+  assert.equal(formatMessageTime(new Date(2026,0,1,0,1),now),'1月1日 00:01');
+  assert.equal(formatMessageTime(new Date(2025,11,31,23,59),now),'2025年12月31日 23:59');
+  assert.equal(formatMessageTime(new Date(2027,0,1,12,30),now),'2027年1月1日 12:30');
+  assert.equal(formatMessageTime('bad',now),'');assert.equal(formatMessageTime(null,now),'');
+});
 
 test("console history keeps adjacent content, bounds both directions and never bridges a missed page", () => {
   const rows = (from, to) => Array.from({ length: to - from }, (_, i) => ({ id: `event-${from + i}`, timestamp: '2026-11-07T00:00:00.000Z' }));
@@ -512,6 +521,18 @@ test("worker result projection shows the recorded Markdown report without duplic
   assert.equal(project({...message,sender:{type:"human"}}),message.content);
   assert.equal(project({...message,kind:"instruction"}),message.content);
   assert.equal(project({...message,content:JSON.stringify({...result,rawResponse:JSON.stringify(result)})}),"状态：completed\n\n交接文件：docs/handoff.json");
+});
+
+test('worker handoff summaries display Markdown even when prose quotes broke the recorded JSON', () => {
+  const summary='【已暂停】**未完成**。\n\n按"0.3s 到 60°"写；路径 `C:\\take`。\n\n```json\n{"example":true}\n```';
+  const envelope=JSON.stringify({summary,handoff:{recipientAgentId:'manager'}});
+  const broken=envelope.replace('\\"0.3s 到 60°\\"','"0.3s 到 60°"');
+  const message={id:'report',kind:'handoff',sender:{type:'agent'},content:envelope};
+  const project=content=>collaborationRecords({messages:[{...message,content}]})[0].content;
+  for(const content of [envelope,broken,'```json\n'+envelope+'\n```','```json\n'+broken+'\n```'])assert.equal(project(content),summary);
+  for(const content of [broken+'\n不属于信封的正文',broken.replace('"manager"','null'),broken.replace('"handoff"','"example"'),JSON.stringify({summary,example:true}),'{bad json'])assert.equal(project(content),content,'unrecognized or ambiguous data remains intact');
+  assert.equal(collaborationRecords({messages:[{...message,sender:{type:'human'},content:broken}]})[0].content,broken);
+  assert.equal(message.content,envelope,'original report is never rewritten');
 });
 
 

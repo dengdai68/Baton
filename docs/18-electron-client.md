@@ -1,5 +1,7 @@
 # Electron 客户端
 
+协作呈现与 renderer 共用：加载更早记录向前累加、去重、保留可见锚点，显式最新回到最新范围。任务/沟通时间显示月日、非当年包含年；summary/handoff 报告展示与 CLI 共用投影，原始历史及控制台不改写。
+
 任务与沟通输入在renderer按Run/会话保留发送中或未确认记录，使用服务器保存的message ID/clientRequestId精确合并；任务请求标识与CLI共享HTTP/Store契约。宿主不保存消息、不重试派工，界面切换与后续输入不被延迟回执覆盖。
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
@@ -51,7 +53,7 @@ Electron 使用本仓库 renderer 界面，宿主代码位于 `apps/electron/`�
 | 安装版业务资料 | `~/.baton/workspace/records/` |
 | 开发版业务资料 | `~/.baton/workspace-dev/records/` |
 | 任务文件 | `<配置根>/task_<uuid>/run_<id>/` |
-| 认证/启动定位/宿主 profile | `~/.baton/desktop/` 或 `desktop-dev/` |
+| 认证/启动定位/宿主 profile | 安装版直接使用 `~/.baton/`；开发实例使用 `~/.baton/desktop-dev/` |
 | 日志 | `~/.baton/logs/<实例标识>/` |
 
 启动由私有 `storage.json` 定位业务根，不依赖先读取业务数据库。数据盘不可访问时拒绝启动，不回退到系统盘创建空实例。Chromium userData/sessionData 保持在认证实例的 `browser/`，日志与崩溃目录仍属宿主日志；原生 CLI 自身全局认证与会话不由此功能搬动。
@@ -172,4 +174,4 @@ DeepSeek Harness 为第三个固定 Runtime，设置与员工选择复用现有�
 页面 toast 使用 `web/toast.mjs` 的手动 Popover 顶层，后来打开的 dialog/popover 会重新置顶通知；不靠提高 z-index 绕过浏览器顶层规则，不抢焦点或拦截点击。隔离验收：`node scripts/test-desktop-notifications.mjs`；安装包设 `BATON_NOTIFICATIONS_APP=/path/Baton.app`，真实系统显示另设 `BATON_NOTIFICATIONS_NATIVE=1`，真实模型另设 `BATON_NOTIFICATIONS_REAL=1`。所有模式使用隔离 HOME、工作目录、认证和浏览器资料。
 
 
-Baton使用com.baton.desktop、Baton.app及baton命令；首次切换需要用现有管理员重新登录，认证数据库和任务历史保留。默认配置根为~/.baton/desktop，数据根仍由显式locator确定；用户既有目录与冻结路径不按品牌词改写。见development/baton-identity-cutover.md。
+Baton使用com.baton.desktop、Baton.app及baton命令；认证数据库和任务历史保留。安装版配置根直接为 `~/.baton`，首次启动在打开认证和持久浏览器之前完成用户授权的旧 `desktop` 配置目录搬迁；中断可继续、冲突或旧实例活动则拒绝启动，错误使用独立内存 partition 的共享提示窗，不创建空实例。数据根仍由显式locator确定，冻结扩展旧地址通过已有映射读取。CLI 使用新根的 endpoint/委托授权；详见 docs/30 与 development/baton-identity-cutover.md。

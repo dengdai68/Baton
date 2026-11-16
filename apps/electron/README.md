@@ -1,5 +1,7 @@
 # Electron
 
+安装版配置直接放在 `~/.baton`，开发实例仍隔离在 `desktop-dev`。`configuration-root-migration.mjs` 在打开认证库与持久浏览器前，将已授权的旧 `desktop` 配置逐项 rename 到父目录；私有意图记录支持中断恢复，冲突/旧实例活动明确拒绝，错误提示使用共享内存 partition，不启动空实例。Runtime 旧根仅追加到 locator 的读取映射；工作目录和业务记录原位保留。
+
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
 
 仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。

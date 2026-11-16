@@ -13,7 +13,7 @@ await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/progressive-loading-')), home = join(root, 'home');
 await mkdir(home);
 const bundle = process.env.BATON_PACKAGED_APP;
-const data = bundle ? join(home, '.baton/desktop') : join(root, 'client'), work = join(root, 'work');
+const data = bundle ? join(home, '.baton') : join(root, 'client'), work = join(root, 'work');
 const password = randomBytes(24).toString('hex'), auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('loading-qa', password); auth.close();
 const store = createCatalogFixtureStore({ databasePath: join(work, 'records/baton.sqlite'), configurationDirectory: data, workspaceRoot: work });

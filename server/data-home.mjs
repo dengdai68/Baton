@@ -7,7 +7,7 @@ import { lstat } from "node:fs/promises";
 import {storageBusinessRoot} from './storage-layout.mjs';
 
 export function batonDataHome(home = homedir()) { return join(home, ".baton"); }
-export function desktopServiceDataRoot(home = homedir()) { return join(batonDataHome(home), "desktop"); }
+export function desktopServiceDataRoot(home = homedir()) { return batonDataHome(home); }
 export function defaultTaskWorkspaceRoot(home = homedir()) { return join(batonDataHome(home), "workspace"); }
 
 export function desktopServiceStoragePaths({ home = homedir(), env = process.env } = {}) {

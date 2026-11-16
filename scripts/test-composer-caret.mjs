@@ -10,7 +10,7 @@ import { createAuth } from '../server/auth.mjs';
 import { writeStorageLocation } from '../server/storage-layout.mjs';
 
 const root = await mkdtemp(join(tmpdir(), 'baton-composer-caret-'));
-const home = join(root, 'home'), data = join(home, '.baton/desktop'), workspace = join(root, 'work');
+const home = join(root, 'home'), data = join(home, '.baton'), workspace = join(root, 'work');
 await mkdir(home, { recursive: true });
 const password = randomBytes(20).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });

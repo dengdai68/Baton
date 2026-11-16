@@ -1,7 +1,7 @@
 import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
 import { runtimeLabel } from '../client/runtime-providers.mjs';
 import { ByteCache } from "../client/byte-cache.mjs";
-import { consoleEventWindow } from "../client/console-projections.mjs";
+import { consoleEventWindow, formatMessageTime } from "../client/console-projections.mjs";
 
 // Let the browser own ordinary line breaks, caret following and undo. Other
 // modifier+Enter shortcuts need an explicit insertion on macOS Chromium.
@@ -47,6 +47,11 @@ export function openAttachmentImage(trigger, onClose = () => {}) {
     };
     dialog.querySelector('img').onerror = event => { event.target.hidden = true; dialog.querySelector('[role=status]').hidden = false; };
     dialog.querySelector('.communication-image-stage').onclick = event => { if (event.target.classList.contains('communication-image-stage')) dialog.close(); };
+    dialog.onclick = event => {
+      if (event.target !== dialog) return;
+      const bounds = dialog.getBoundingClientRect();
+      if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) dialog.close();
+    };
     dialog.onclose = () => { dialog.remove(); if (trigger.isConnected) trigger.focus({preventScroll:true}); onClose(); };
     document.body.append(dialog); dialog.showModal(); return dialog;
 }
@@ -71,7 +76,7 @@ export function communicationDayLabel(value, today = new Date()) {
   yesterday.setDate(yesterday.getDate() - 1);
   if (messageDayKey(day) === messageDayKey(today)) return '今天';
   if (messageDayKey(day) === messageDayKey(yesterday)) return '昨天';
-  return `${day.getMonth() + 1}月${day.getDate()}日`;
+  return `${day.getFullYear() === today.getFullYear() ? '' : `${day.getFullYear()}年`}${day.getMonth() + 1}月${day.getDate()}日`;
 }
 const shortTime = value => value ? new Date(value).toLocaleTimeString('zh-CN', {hour:'2-digit', minute:'2-digit', hour12:false}) : '';
 const consoleIcon = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="m7 9 3 3-3 3m6 0h4" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
@@ -99,8 +104,7 @@ export function messageAttachments(files, conversationId, scope = "communication
   if (!files.length) return '';
   return `<div class="communication-attachment-list">${files.map(file => {
     const url = `/api/${scope}/${encodeURIComponent(conversationId)}/attachments/${encodeURIComponent(file.id)}`;
-    // Images read as compact chips like documents; clicking still opens the preview.
-    if (imageAttachment(file.name)) return `<a class="communication-attachment" href="${url}" download="${escapeHtml(file.name)}" data-attachment-image data-image-url="${escapeHtml(url + '?preview=1')}" data-image-name="${escapeHtml(file.name)}" aria-label="放大查看 ${escapeHtml(file.name)}">${pictureIcon}<span>${escapeHtml(file.name)}</span><small>${attachmentSize(file.bytes)}</small></a>`;
+    if (imageAttachment(file.name)) return `<figure class="communication-image-item">${imageButton(url + '?preview=1', file.name)}</figure>`;
     return `<a class="communication-attachment" href="${url}" download="${escapeHtml(file.name)}" data-attachment-download>${attachmentIcon}<span>${escapeHtml(file.name)}</span><small>${attachmentSize(file.bytes)}</small></a>`;
   }).join('')}</div>`;
 }
@@ -163,7 +167,7 @@ export function outgoingMessageFeedback(entry, scope) {
 }
 
 export function outgoingAttachmentMarkup(entry) {
-  return entry?.attachments?.length ? `<div class="communication-attachment-list outgoing-attachments">${entry.attachments.map(item=>`<span class="communication-attachment">${imageAttachment(item.file.name) ? pictureIcon : attachmentIcon}<span>${escapeHtml(item.file.name)}</span><small>${attachmentSize(item.file.size)}</small></span>`).join('')}</div>` : '';
+  return entry?.attachments?.length ? `<div class="communication-attachment-list outgoing-attachments">${entry.attachments.map(item=>item.previewURL && imageAttachment(item.file.name) ? `<figure class="communication-image-item">${imageButton(item.previewURL,item.file.name)}</figure>` : `<span class="communication-attachment">${imageAttachment(item.file.name) ? pictureIcon : attachmentIcon}<span>${escapeHtml(item.file.name)}</span><small>${attachmentSize(item.file.size)}</small></span>`).join('')}</div>` : '';
 }
 
 export function createCommunicationUI({ api, navigate, notify, confirmDialog = async () => false, prepareContent = async () => {}, renderContent = escapeHtml, renderConsole = () => {}, renderAvatar = () => '', onRead = () => {} }) {
@@ -252,7 +256,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const attachments = message.outgoing ? outgoingAttachmentMarkup(message.outgoing) : messageAttachments(message.attachments || [], currentId);
       const failed = [...state.deliveries.values()].filter(item => item.messageId === message.id && item.status === 'failed');
       const recovery = failed.map(item => `<div class="communication-recovery"><span>${escapeHtml(state.conversation.members.find(member=>member.id===item.agentId)?.name || '员工')} 回复失败</span><button type="button" class="text-action" data-chat-failure-console="${escapeHtml(item.agentId)}">查看控制台</button><button type="button" class="text-action" data-retry-chat-delivery="${escapeHtml(item.id)}">重试</button></div>`).join('');
-      return `${dayDivider}<article class="communication-message ${human ? "from-human" : ""}" data-chat-message="${escapeHtml(message.id)}"${message.outgoing ? ` data-outgoing-state="${escapeHtml(message.outgoing.status)}"` : ''} data-tone="${communicationSenderTone(message.sender)}" data-sender-color="${escapeHtml(member.color || 'system')}"><header>${avatar}<strong>${escapeHtml(message.sender.name)}</strong><time title="${escapeHtml(date(message.createdAt))}" datetime="${escapeHtml(message.createdAt)}">${escapeHtml(new Date(message.createdAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }))}</time></header><div class="communication-body communication-markdown">${content}</div>${attachments ? `<div class="communication-message-attachments">${attachments}</div>` : ''}${outgoingMessageFeedback(message.outgoing, 'chat')}${recovery}</article>`;
+      return `${dayDivider}<article class="communication-message ${human ? "from-human" : ""}" data-chat-message="${escapeHtml(message.id)}"${message.outgoing ? ` data-outgoing-state="${escapeHtml(message.outgoing.status)}"` : ''} data-tone="${communicationSenderTone(message.sender)}" data-sender-color="${escapeHtml(member.color || 'system')}"><header>${avatar}<strong>${escapeHtml(message.sender.name)}</strong><time title="${escapeHtml(date(message.createdAt))}" datetime="${escapeHtml(message.createdAt)}">${escapeHtml(formatMessageTime(message.createdAt))}</time></header><div class="communication-body communication-markdown">${content}</div>${attachments ? `<div class="communication-message-attachments">${attachments}</div>` : ''}${outgoingMessageFeedback(message.outgoing, 'chat')}${recovery}</article>`;
     }).join("") || `<div class="communication-empty">${state.latestError ? "聊天记录读取失败，正在重连。" : state.loaded ? "从一句话开始沟通。消息将持续保留。" : "正在读取聊天记录…"}</div>`;
     const running = (state.conversation?.members || []).filter(member => member.running);
     const rendered = html + (running.length ? `<div class="communication-typing" role="status"><span class="communication-member-avatar">${renderAvatar(running[0])}<span class="member-running-dot" aria-hidden="true"></span></span><span>${escapeHtml(running.map(member => member.name).join('、'))}正在回复…</span></div>` : '');
@@ -561,8 +565,6 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('.communication-messages').onclick = async event => {
       const image = event.target.closest('[data-chat-image]');
       if (image) { openImage(image); return; }
-      const imageChip = event.target.closest('[data-attachment-image]');
-      if (imageChip) { event.preventDefault(); openImage(imageChip); return; }
       const consoleButton = event.target.closest('[data-chat-failure-console]');
       if (consoleButton) { openMemberConsole(consoleButton.dataset.chatFailureConsole); return; }
       const retry = event.target.closest('[data-retry-chat-delivery]');

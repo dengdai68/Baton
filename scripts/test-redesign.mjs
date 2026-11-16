@@ -19,7 +19,7 @@ const shots = join(root, 'shots');
 await mkdir(shots, { recursive: true });
 const home = join(root, 'home');
 const bundle=process.env.BATON_REDESIGN_APP;
-const data = bundle?join(home,'.baton','desktop'):join(root, 'client');
+const data = bundle?join(home, '.baton'):join(root, 'client');
 await mkdir(home, { recursive: true });
 process.env.BATON_LOG_DIR = join(root, 'logs');
 

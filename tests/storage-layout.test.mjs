@@ -64,3 +64,11 @@ test('host paths derive records solely from workspaceRoot in production and deve
   assert.equal(Object.hasOwn(location,'businessRoot'),false);assert.equal(location.workspaceRoot,packaged?'/fixture/.baton/workspace':'/fixture/.baton/workspace-dev');
  }
 });
+
+test('flat configuration permits dedicated default workspaces but still protects configuration resources',async t=>{
+ const {root,source}=await fixture(t),control=join(root,'.baton');await mkdir(control,{mode:0o700});
+ for(const name of ['workspace','workspace-dev','workspace/projects']){
+  const target=join(control,name),result=await validateStorageDestination({sourceRoot:source,workspaceRoot:target,configurationRoot:control});assert.equal(result.workspaceRoot,target);
+ }
+ for(const target of [control,root,join(control,'credentials'),join(control,'browser'),join(control,'runtime-configs'),join(control,'other')])await assert.rejects(validateStorageDestination({sourceRoot:source,workspaceRoot:target,configurationRoot:control}),/私有配置/);
+});

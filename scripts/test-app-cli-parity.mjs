@@ -13,7 +13,7 @@ import {createAuth} from '../server/auth.mjs';
 import {writeStorageLocation} from '../server/storage-layout.mjs';
 import {testEnvironment} from './run-tests.mjs';
 const real=process.env.BATON_PARITY_REAL==='1',bundle=process.env.BATON_PARITY_APP;
-const root=await mkdtemp(join(tmpdir(),'baton-app-cli-parity-')),home=join(root,'home'),data=join(home,'.baton',bundle?'desktop':'desktop-dev'),work=join(root,'work');
+const root=await mkdtemp(join(tmpdir(),'baton-app-cli-parity-')),home=join(root,'home'),data=bundle?join(home,'.baton'):join(home,'.baton','desktop-dev'),work=join(root,'work');
 await mkdir(home,{recursive:true,mode:0o700});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('parity-qa',password);auth.close();
 const seed=createStore({databasePath:join(work,'records/baton.sqlite'),workspaceRoot:work,configurationDirectory:data});

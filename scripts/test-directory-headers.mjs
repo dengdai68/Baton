@@ -13,7 +13,7 @@ const packaged = process.env.BATON_DIRECTORY_HEADERS_PACKAGED === '1';
 await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/directory-headers-')), home = join(root, 'home');
 await mkdir(home, { mode: 0o700 });
-const data = packaged ? join(home, '.baton/desktop') : join(root, 'client');
+const data = packaged ? join(home, '.baton') : join(root, 'client');
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('directory-qa', password); auth.close();

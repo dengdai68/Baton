@@ -2,7 +2,7 @@
 
 当前产品名为Baton，GitHub来源为https://github.com/dengdai68/Baton。应用包Baton.app、Bundle ID com.baton.desktop、CLI命令baton、环境变量BATON_*、宿主桥window.baton及认证cookie baton_session统一使用当前身份。旧输入不提供别名。
 
-私有配置根为~/.baton/desktop，开发实例为desktop-dev；默认工作根为~/.baton/workspace，当前业务库为<工作根>/records/baton.sqlite。配置JSON、认证数据库、Runtime及扩展继续遵循docs/30的归属；名称变化不增加服务、依赖或状态层。
+私有配置根为~/.baton，开发实例为desktop-dev；默认工作根为~/.baton/workspace，当前业务库为<工作根>/records/baton.sqlite。配置JSON、认证数据库、Runtime及扩展继续遵循docs/30的归属；名称变化不增加服务、依赖或状态层。
 
 本轮本机安装是一次显式切换：确认任务/沟通/插件更新空闲并关闭旧宿主，将现有私有配置复制到新控制目录；保留原工作根，在服务关闭后切换业务数据库文件名，追加已有runtime根的位置引用，安装Baton并核验同一历史。保留旧文件以便人工回退，不在源码增加自动迁移、备份或双版本兼容逻辑。若目标已有资料或存在未完成配置发布，停止切换，禁止覆盖或初始化空实例。
 

@@ -21,7 +21,7 @@ const packaged = process.env.BATON_PROMPT_E2E_PACKAGED === '1';
 const nativeSkills = process.env.BATON_NATIVE_SKILLS_REAL === '1';
 const taskOnly = process.env.BATON_PROMPT_E2E_TASK_ONLY === '1';
 const membership = process.env.BATON_MEMBERSHIP_REAL === '1';
-const home = join(root, 'home'), data = packaged ? join(home, '.baton/desktop') : join(root, 'client'); await mkdir(home, { recursive: true, mode: 0o700 });
+const home = join(root, 'home'), data = packaged ? join(home, '.baton') : join(root, 'client'); await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') }); await auth.setAdministrator('prompt-qa', password); auth.close();
 const store = createStore({ databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data, workspaceRoot: join(root, 'work') }); store.updateWorkspaceSettings({ workspaceRoot: join(root, 'work') });

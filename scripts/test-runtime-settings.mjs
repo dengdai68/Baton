@@ -14,7 +14,7 @@ import { createAuth } from '../server/auth.mjs';
 
 await mkdir('.data',{recursive:true});
 const root = await mkdtemp(resolve('.data/runtime-settings-')), home = join(root,'home');
-const bundle = process.env.BATON_SETTINGS_APP, data = bundle ? join(home,'.baton/desktop') : join(root,'client');
+const bundle = process.env.BATON_SETTINGS_APP, data = bundle ? join(home,'.baton') : join(root,'client');
 const missing = process.env.BATON_SETTINGS_MISSING === '1';
 const real = process.env.BATON_SETTINGS_REAL === '1', password = randomBytes(20).toString('hex');
 await mkdir(home,{recursive:true,mode:0o700});

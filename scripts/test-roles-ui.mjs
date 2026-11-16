@@ -15,7 +15,7 @@ await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/roles-ui-'));
 assert.equal(dirname(root), resolve('.data')); assert.match(basename(root), /^roles-ui-[a-zA-Z0-9]+$/);
 const bundle=process.env.BATON_ROLES_APP;
-const home = join(root, 'home'), data = bundle?join(home,'.baton','desktop'):join(root, 'client');
+const home = join(root, 'home'), data = bundle?join(home, '.baton'):join(root, 'client');
 await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });

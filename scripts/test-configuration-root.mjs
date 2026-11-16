@@ -1,0 +1,64 @@
+// Packaged old-to-new upgrade acceptance. Isolated HOME, no Provider calls.
+import assert from 'node:assert/strict';
+import {_electron as electron} from 'playwright-core';
+import {mkdtemp,mkdir,readFile,writeFile,lstat,rm,realpath} from 'node:fs/promises';
+import {join,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
+import {randomBytes,createHash} from 'node:crypto';
+import {createAuth} from '../server/auth.mjs';
+import {createStore} from '../server/store.mjs';
+import {createMarketplace} from '../server/runtime/marketplace.mjs';
+import {writeStorageLocation,readStorageLocation} from '../server/storage-layout.mjs';
+import {execute as cli} from '../cli/main.mjs';
+import {testEnvironment} from './run-tests.mjs';
+import {saveAppearance} from '../apps/electron/preferences.mjs';
+
+const oldBundle=process.env.BATON_CONFIG_OLD_APP,newBundle=process.env.BATON_CONFIG_NEW_APP;
+if(!oldBundle||!newBundle)throw Error('Set BATON_CONFIG_OLD_APP and BATON_CONFIG_NEW_APP to packaged Baton.app paths');
+const root=await realpath(await mkdtemp(join(tmpdir(),'baton-config-upgrade-'))),home=join(root,'home'),control=join(home,'.baton'),legacy=join(control,'desktop'),work=join(root,'work');
+await mkdir(home,{mode:0o700});await mkdir(legacy,{recursive:true,mode:0o700});const password=randomBytes(24).toString('hex');
+const auth=createAuth({databasePath:join(legacy,'auth.sqlite')});await auth.setAdministrator('cutover-qa',password);auth.close();
+const market=createMarketplace(join(legacy,'runtime-configs')),mcp=await market.add({kind:'mcp',name:'migration-mcp',description:'Private isolated metadata; never invoked.',content:JSON.stringify({mcpServers:{proof:{command:'/usr/bin/true',args:[]}}})});
+const store=createStore({databasePath:join(work,'records/baton.sqlite'),configurationDirectory:legacy,workspaceRoot:work});store.registerExtensions([mcp]);
+const agent=store.createAgent({name:'迁移前员工',runtime:{profileId:'runtime_codex',...await market.resolve({pluginIds:[],mcpIds:[mcp.id]},'codex')}});
+const task=store.createTask({title:'保留的暂停任务',objective:'Isolated configuration upgrade fixture.',managerAgentId:agent.id,memberAgentIds:[agent.id]});const run=store.createRun(task.id);store.pauseRun(run.id);
+const chat=store.openCommunication({kind:'agent',targetId:agent.id});store.sendCommunication(chat.id,{content:'只用于界面展示的素材。',clientRequestId:'cutover-fixture'});store.completeCommunication(chat.id,store.claimCommunication(chat.id).id,'迁移前已保存的回复应完整保留。');store.close();
+await writeStorageLocation(legacy,{version:1,workspaceRoot:work,previousRuntimeRoots:[]});
+await mkdir(join(legacy,'credentials'),{mode:0o700});await writeFile(join(legacy,'credentials','proof.txt'),'opaque fixture credential',{mode:0o600});
+await saveAppearance(join(legacy,'desktop-preferences.json'),'light');
+const evidence={root,cases:[],errors:[]},hash=async path=>createHash('sha256').update(await readFile(path)).digest('hex');
+const env=extra=>({...testEnvironment(process.env),HOME:home,ZDOTDIR:home,XDG_CONFIG_HOME:join(home,'.config'),BATON_LOG_DIR:join(root,'logs'),...extra});
+const waitFor=async(check,label)=>{for(let i=0;i<100;i++){if(await check())return;await new Promise(resolve=>setTimeout(resolve,100));}throw Error('Timed out: '+label);};
+const apps=new Set();
+const launch=async(bundle,extra={})=>{const app=await electron.launch({executablePath:join(resolve(bundle),'Contents/MacOS/Baton'),args:[],env:env(extra),timeout:120000});apps.add(app);return app;};
+const close=async app=>{await app.close();apps.delete(app);};
+const pageFor=async app=>{const page=await app.firstWindow({timeout:120000});page.setDefaultTimeout(45000);page.on('pageerror',error=>evidence.errors.push(error.message));return page;};
+try{
+ const oldApp=await launch(oldBundle),oldPage=await pageFor(oldApp);await oldPage.waitForURL(/^http:\/\/127\.0\.0\.1:/);await oldPage.locator('#username').waitFor();await oldPage.waitForLoadState('load');
+ await oldPage.locator('#username').fill('cutover-qa');await oldPage.locator('#password').fill(password);await oldPage.getByRole('button',{name:'登录',exact:true}).click();await oldPage.waitForFunction(()=>document.querySelector('#account-name')?.textContent.includes('cutover-qa'));
+ const oldOrigin=new URL(oldPage.url()).origin;await oldPage.goto(oldOrigin+'/settings/appearance');await oldPage.locator('[name=theme][value=light]').check();
+ const whileRunning=await launch(newBundle),refusal=await pageFor(whileRunning);await refusal.getByText('现有配置已保留，客户端未按空实例启动。',{exact:true}).waitFor();await refusal.getByText(/旧 Baton 客户端仍在运行/).waitFor();
+ await assert.rejects(lstat(join(control,'auth.sqlite')),{code:'ENOENT'});await assert.rejects(lstat(join(control,'browser')),{code:'ENOENT'});await close(whileRunning);evidence.cases.push('active old instance refused before configuration or browser initialization');
+ await close(oldApp);await waitFor(()=>fetch(oldOrigin+'/api/health').then(()=>false,()=>true),'old owned service exit');
+ const tracked=['configuration.json','desktop-preferences.json','credentials/proof.txt'],before=Object.fromEntries(await Promise.all(tracked.map(async name=>[name,await hash(join(legacy,name))]))),authInode=(await lstat(join(legacy,'auth.sqlite'),{bigint:true})).ino;
+ const newApp=await launch(newBundle),page=await pageFor(newApp);await page.waitForURL(/^http:\/\/127\.0\.0\.1:/);await page.waitForFunction(()=>document.querySelector('#account-name')?.textContent.includes('cutover-qa'));
+ const origin=new URL(page.url()).origin;
+ assert.equal(await newApp.evaluate(({app})=>app.getPath('userData')),join(control,'browser'));
+ assert.equal((await lstat(join(control,'auth.sqlite'),{bigint:true})).ino,authInode);
+ for(const name of tracked)assert.equal(await hash(join(control,name)),before[name],name+' bytes preserved');
+ await assert.rejects(lstat(legacy),{code:'ENOENT'});await assert.rejects(lstat(join(control,'.configuration-root-migration.json')),{code:'ENOENT'});
+ const location=await readStorageLocation(control,{});assert.equal(location.workspaceRoot,work);assert.ok(location.previousRuntimeRoots.includes(join(legacy,'runtime-configs')));
+ await waitFor(()=>readFile(join(control,'desktop-cli-session.json'),'utf8').then(text=>JSON.parse(text).origin===origin,()=>false),'new desktop delegation');
+ const storage=await cli(['storage','get'],{home});assert.equal(storage.configurationRoot,control);assert.equal(storage.workspaceRoot,work);assert.equal(storage.businessRoot,join(work,'records'));
+ assert.equal((await cli(['auth','status'],{home})).username,'cutover-qa');
+ assert.equal((await cli(['mcps','get',mcp.id],{home})).id,mcp.id);
+ const progress=await cli(['tasks','progress',task.id],{home});assert.equal(progress.runId,run.id);assert.equal(progress.runStatus,'paused');
+ await page.goto(origin+'/communication/'+chat.id);await page.getByLabel('聊天记录',{exact:true}).getByText('迁移前已保存的回复应完整保留。',{exact:true}).waitFor();await page.screenshot({path:join(root,'upgraded-chat.png'),animations:'disabled',scale:'css'});
+ await page.goto(origin+'/settings/workspace');await page.getByText(control,{exact:false}).first().waitFor();await page.screenshot({path:join(root,'upgraded-configuration.png'),animations:'disabled',scale:'css'});
+ evidence.cases.push('login, preference bytes, credentials, MCP, frozen paused Run, chat and default CLI retained');
+ await close(newApp);const reopened=await launch(newBundle),reopenedPage=await pageFor(reopened);await reopenedPage.waitForURL(/^http:\/\/127\.0\.0\.1:/);await reopenedPage.waitForFunction(()=>document.querySelector('#account-name')?.textContent.includes('cutover-qa'));await close(reopened);evidence.cases.push('repeat startup uses flat root without recreating desktop');
+ const conflictHome=join(root,'conflict-home'),conflictRoot=join(conflictHome,'.baton');await mkdir(join(conflictRoot,'desktop'),{recursive:true,mode:0o700});await writeFile(join(conflictRoot,'auth.sqlite'),'other configuration',{mode:0o600});await writeFile(join(conflictRoot,'desktop','auth.sqlite'),'legacy configuration',{mode:0o600});
+ const conflict=await launch(newBundle,{HOME:conflictHome,ZDOTDIR:conflictHome}),conflictPage=await pageFor(conflict);await conflictPage.getByText('现有配置已保留，客户端未按空实例启动。',{exact:true}).waitFor();await conflictPage.getByText(/新配置目录已有配置/).waitFor();await assert.rejects(lstat(join(conflictRoot,'browser')),{code:'ENOENT'});assert.equal(await readFile(join(conflictRoot,'auth.sqlite'),'utf8'),'other configuration');assert.equal(await readFile(join(conflictRoot,'desktop','auth.sqlite'),'utf8'),'legacy configuration');await close(conflict);evidence.cases.push('conflict notice keeps both configurations and creates no persistent profile');
+ assert.deepEqual(evidence.errors,[]);evidence.status='passed';console.log(JSON.stringify(evidence));
+}catch(error){evidence.status='failed';evidence.error=error.message;for(const app of apps)for(const [i,page] of app.windows().entries()){await page.screenshot({path:join(root,`failure-${app.process().pid}-${i}.png`)}).catch(()=>{});await writeFile(join(root,`failure-${app.process().pid}-${i}.txt`),await page.locator('body').innerText().catch(()=>''));}throw error;}
+finally{await Promise.allSettled([...apps].map(app=>app.close()));await writeFile(join(root,'evidence.json'),JSON.stringify(evidence,null,2));}

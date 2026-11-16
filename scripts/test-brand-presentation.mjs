@@ -12,7 +12,7 @@ await mkdir('.data', { recursive: true });
 const root = await mkdtemp(resolve('.data/brand-presentation-'));
 const bundle = process.env.BATON_BRAND_APP, home = join(root, 'home');
 const iconsOnly = process.env.BATON_BRAND_ICONS_ONLY === '1';
-const data = bundle ? join(home, '.baton/desktop') : join(root, 'client');
+const data = bundle ? join(home, '.baton') : join(root, 'client');
 await mkdir(home, { recursive: true });
 const password = randomBytes(24).toString('hex');
 const auth = createAuth({ databasePath: join(data, 'auth.sqlite') });

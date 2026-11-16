@@ -16,15 +16,17 @@
 
 ```text
 ~/.baton/
-  desktop/                         # 正式实例的私有配置命名空间
-    storage.json                   # 工作目录定位，启动唯一来源
-    configuration.json             # Runtime 设置、插件/MCP 摘要清单与软删除标记
-    runtime-configs/                # 导入插件、MCP 原文和不可变执行配置
-    credentials/                   # Git 凭据
-    auth.sqlite                    # 登录、认证、会话
-    desktop-preferences.json        # 界面偏好
-    browser/                       # 本机认证浏览器资料
-    updates/                       # 已验证更新缓存
+  storage.json                     # 工作目录定位，启动唯一来源
+  configuration.json               # Runtime 设置、插件/MCP 摘要清单与软删除标记
+  runtime-configs/                  # 导入插件、MCP 原文和不可变执行配置
+  credentials/                     # Git 凭据
+  auth.sqlite                      # 登录、认证、会话
+  desktop-preferences.json          # 界面偏好
+  desktop-endpoint.json             # CLI 发现当前宿主，不包含登录凭据
+  desktop-cli-session.json          # 宿主委托给 CLI 的私有授权
+  browser/                         # 本机认证浏览器资料
+  updates/                         # 已验证更新缓存
+  desktop-dev/                     # 源码开发的独立配置，不与正式实例混用
   logs/                            # 当前实例诊断日志
   workspace/                       # 未配置时的默认工作目录
 
@@ -40,6 +42,16 @@
 ```
 
 账号、凭据不返回目录查询；原生 CLI 自主管理的全局登录位置由 Provider 决定，本应用不复制其凭据。员工/角色的扩展关联是业务事实，保存在业务数据库；插件/MCP 清单和设置的主数据只在 JSON，源内容在配置目录文件。冻结任务继续保留自己的运行配置、内容摘要和会话，不重写历史。
+
+## 本次配置目录调整
+
+安装版首次启动、打开认证库和持久浏览器资料之前，将用户已授权的旧 `~/.baton/desktop` 配置搬到 `~/.baton`。先确认旧宿主与后台已退出，再逐项同盘 rename；认证库及其侧文件、登录浏览器、偏好、Runtime/插件/MCP、Git 凭据和更新缓存保留原字节。业务工作目录、数据库、任务、沟通和执行内容不搬迁、不重置。开发实例仍使用 `desktop-dev`，显式隔离配置根不参与搬迁。
+
+私有 `.configuration-root-migration.json` 记录目标和原 inode 身份，中断后继续；同名配置、活动旧实例、链接和不可信记录明确拒绝，不合并或覆盖另一份配置，也不启动空实例。完成后移除旧空目录和迁移记录，不建立自动备份。`storage.json` 保留原工作目录，并追加旧 `desktop/runtime-configs` 地址到 `previousRuntimeRoots`，让冻结扩展引用在读取边界映射到新位置；不改写配置清单、业务快照或提示词。
+
+CLI 默认连接 `~/.baton/desktop-endpoint.json` 并读取同目录宿主委托授权；不回退旧目录，不直接迁移配置或读取认证数据库。安装版完成搬迁并启动后，App 与 CLI 的 `storage get` 返回同一个 `configurationRoot`。本次仅为已授权的目录调整，不引入旧配置内容协议兼容。
+
+验收使用 `scripts/test-configuration-root.mjs`，通过 `BATON_CONFIG_OLD_APP` / `BATON_CONFIG_NEW_APP` 指定旧、新打包客户端。隔离 HOME 先在旧版登录，再验证升级保留登录、偏好、MCP、冻结 Run 和沟通记录，CLI 默认连接新根；同时覆盖活动旧实例和目标冲突拒绝，重复启动不再创建 `desktop`。
 
 ## JSON 与业务事务
 
@@ -59,7 +71,7 @@ App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主�
 
 客户端当前密码及明确文字确认后，删除**整个当前工作目录**，包括其中用户自行放入的文件。保留配置目录、账号/登录、Runtime 设置、插件/MCP 清单与源文件、Git 凭据、偏好和诊断日志；不返回首次管理员设置。重新创建业务数据库和工作目录。员工/角色/团队/工作流/自动化/任务/沟通及其关联均重置。
 
-清除意图写在配置目录，删除中断后启动继续完成；不跟随工作目录符号链接，不允许清除 Home、配置命名空间、仓库或它们的祖先。默认工作目录虽在 `~/.baton` 下，但与 `desktop`、`logs` 是独立子目录。历史冻结在当前工作目录之外的旧任务文件不扩展删除范围。真实实例整理不调用清除功能。
+清除意图写在配置目录，删除中断后启动继续完成；不跟随工作目录符号链接，不允许清除 Home、配置目录、仓库或它们的祖先。配置根内只允许专用 `workspace` / `workspace-dev` 业务子树作为工作目录；清除这些目录不包含同级的认证、浏览器、凭据、Runtime 或日志。其他配置子目录仍受保护。历史冻结在当前工作目录之外的旧任务文件不扩展删除范围。真实实例整理不调用清除功能。
 
 ## 员工进程启动目录
 

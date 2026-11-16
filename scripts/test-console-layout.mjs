@@ -12,7 +12,7 @@ import {createRunFiles} from '../server/run-files.mjs';
 
 await mkdir('.data',{recursive:true});
 const root=await mkdtemp(resolve('.data/console-layout-')),bundle=process.env.BATON_CONSOLE_LAYOUT_APP;
-const storage=desktopStoragePaths(join(root,'.baton','desktop'),{home:root}),password=randomBytes(24).toString('hex');
+const storage=desktopStoragePaths(join(root,'.baton'),{home:root}),password=randomBytes(24).toString('hex');
 const auth=createAuth({databasePath:storage.BATON_AUTH_DB_PATH});await auth.setAdministrator('layout-test',password);auth.close();
 const store=createStore({databasePath:storage.BATON_DB_PATH,configurationDirectory:storage.BATON_DESKTOP_CONTROL_ROOT,workspaceRoot:storage.BATON_WORKSPACE_ROOT});
 const task=store.createTask({managerAgentId:'system_project_manager',title:'Console layout verification',objective:'Isolated visual check',memberAgentIds: store.listTeams()[0].memberAgentIds,workflowTemplateId:'software_delivery'}),run=store.createRun(task.id);

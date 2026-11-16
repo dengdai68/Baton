@@ -14,7 +14,7 @@ import { createStore } from '../server/store.mjs';
 if (process.env.BATON_DSH_REAL !== '1') throw new Error('Requires BATON_DSH_REAL=1; real model calls, never a Provider fixture');
 await mkdir('.data', { recursive: true });
 const bundle = process.env.BATON_DSH_APP;
-const root = await mkdtemp(resolve('.data/dsh-real-')), home = join(root, 'home'), data = bundle ? join(home, '.baton', 'desktop') : join(root, 'client');
+const root = await mkdtemp(resolve('.data/dsh-real-')), home = join(root, 'home'), data = bundle ? join(home, '.baton') : join(root, 'client');
 await mkdir(home, { recursive: true, mode: 0o700 });
 const password = randomBytes(24).toString('hex'), auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('dsh-qa', password); auth.close();

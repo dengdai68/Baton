@@ -8,12 +8,12 @@ import { batonDataHome, legacyDataRequiresMigration, migrationGuidance, desktopS
 test("business storage follows the work root while authentication stays private", () => {
   const home = "/fixture-home";
   assert.equal(batonDataHome(home), "/fixture-home/.baton");
-  assert.equal(desktopServiceDataRoot(home), "/fixture-home/.baton/desktop");
+  assert.equal(desktopServiceDataRoot(home), "/fixture-home/.baton");
   const storage = desktopServiceStoragePaths({ home, env: {} });
   assert.equal(storage.databasePath, "/fixture-home/.baton/workspace/records/baton.sqlite");
-  assert.equal(storage.authDatabasePath, "/fixture-home/.baton/desktop/auth.sqlite");
+  assert.equal(storage.authDatabasePath, "/fixture-home/.baton/auth.sqlite");
   assert.equal(storage.runFilesRoot, "/fixture-home/.baton/workspace/records");
-  assert.equal(storage.runtimeConfigRoot, "/fixture-home/.baton/desktop/runtime-configs");
+  assert.equal(storage.runtimeConfigRoot, "/fixture-home/.baton/runtime-configs");
   assert.equal(storage.workspaceRoot, "/fixture-home/.baton/workspace");
 });
 

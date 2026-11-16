@@ -16,7 +16,7 @@ const videoProof=process.env.BATON_VIDEO_PROOF==='1';
 const real=process.env.BATON_PORTABLE_REAL || '',bundle=process.env.BATON_PORTABLE_APP,extensionProof=process.env.BATON_PORTABLE_EXTENSIONS==='1',agentProof=process.env.BATON_PORTABLE_AGENT_PROOF==='1';
 if(agentProof&&(!extensionProof||!real))throw Error('Agent proof requires real provider and extensions');
 if(real&&!PORTABLE_RUNTIME_IDS.includes(real))throw Error('Unknown real Provider');
-await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-runtimes-')),home=join(root,'home'),bin=join(home,'bin'),data=bundle?join(home,'.baton/desktop'):join(root,'client');await mkdir(bin,{recursive:true});
+await mkdir('.data',{recursive:true});const root=await mkdtemp(resolve('.data/portable-runtimes-')),home=join(root,'home'),bin=join(home,'bin'),data=bundle?join(home,'.baton'):join(root,'client');await mkdir(bin,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('portable-qa',password);auth.close();
 const seed=createStore({databasePath:join(root,'work','records','baton.sqlite'),configurationDirectory:data,workspaceRoot:join(root,'work')});seed.updateWorkspaceSettings({workspaceRoot:join(root,'work')});seed.close();
 const fixtureBody=provider=>`#!/usr/bin/env node

@@ -51,6 +51,16 @@ function connected(command, args, options = {}) {
 const execute = (args, options) => connected(executeCommand, args, options);
 const run = (args, options) => connected(runCommand, args, options);
 
+test('default CLI discovers only the flat HOME configuration and reuses its verified desktop delegation',async t=>{
+ const home=await mkdtemp(join(tmpdir(),'baton-cli-flat-'));t.after(()=>rm(home,{recursive:true,force:true}));
+ const root=join(home,'.baton');await mkdir(root,{mode:0o700});
+ const endpoint=JSON.stringify({origin,instanceId});await mkdir(join(root,'desktop'),{mode:0o700});await writeFile(join(root,'desktop','desktop-endpoint.json'),endpoint,{mode:0o600});
+ const fetcher=async(url,options)=>{if(url.endsWith('/api/health'))return new Response(JSON.stringify({service:'baton-control-plane',instanceId}));assert.equal(options.headers.Cookie,cookie);return new Response(JSON.stringify({authenticated:true}));};
+ await assert.rejects(createClient({home,fetcher}).request('/api/auth/session'),error=>error.code==='CLIENT_UNAVAILABLE');
+ await writeFile(defaultEndpointFile(home),endpoint,{mode:0o600});await writeFile(join(root,'desktop-cli-session.json'),JSON.stringify({origin,instanceId,cookie,expiresAt:null}),{mode:0o600});
+ const result=await createClient({home,fetcher}).request('/api/auth/session');assert.equal(result.authenticated,true);
+});
+
 test('storage commands share authenticated HTTP and report an accepted restart without claiming completion',async()=>{
  const f=await fixture();let calls=0,busy=false;
  const fetcher=async(url,init)=>{calls++;assert.equal(url,origin+'/api/settings/workspace');assert.equal(init.headers.Cookie,cookie);
@@ -213,7 +223,7 @@ test('desktop CLI verifies its private live endpoint and never falls back to Web
   await assert.rejects(resolveEndpoint(endpointFile, fetcher), error => error.code === 'CLIENT_UNAVAILABLE');
   await chmod(endpointFile, 0o600);
   await assert.rejects(resolveEndpoint(join(directory, 'missing.json'), fetcher), error => error.code === 'CLIENT_UNAVAILABLE');
-  assert.equal(defaultEndpointFile('/fixture-home'), '/fixture-home/.baton/desktop/desktop-endpoint.json');
+  assert.equal(defaultEndpointFile('/fixture-home'), '/fixture-home/.baton/desktop-endpoint.json');
 });
 async function captured(args, options = {}) {
   let stdout = '', stderr = '';

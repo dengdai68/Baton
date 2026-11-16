@@ -1,7 +1,7 @@
 // Isolated UI/API/CLI acceptance. No real model calls or operator instance writes.
 import{mkdtemp,mkdir,writeFile}from'node:fs/promises';import{resolve,join}from'node:path';import{randomBytes}from'node:crypto';import{_electron as electron}from'playwright-core';import{createAuth}from'../server/auth.mjs';import assert from'node:assert/strict';
 const packaged=process.env.BATON_MCP_EDIT_APP;
-const root=await mkdtemp(resolve('.data/mcp83-ui-'));await mkdir(join(root,'home'));const password=randomBytes(16).toString('hex');const auth=createAuth({databasePath:(packaged?join(root,'home/.baton/desktop/auth.sqlite'):join(root,'auth.sqlite'))});await auth.setAdministrator('edit-qa',password);auth.close();
+const root=await mkdtemp(resolve('.data/mcp83-ui-'));await mkdir(join(root,'home'));const password=randomBytes(16).toString('hex');const auth=createAuth({databasePath:(packaged?join(root,'home/.baton/auth.sqlite'):join(root,'auth.sqlite'))});await auth.setAdministrator('edit-qa',password);auth.close();
 const app=await electron.launch({...(packaged?{executablePath:resolve(packaged,'Contents/MacOS/Baton')}:{}),args:packaged?[]:['apps/electron/main.mjs'],env:{...process.env,HOME:join(root,'home'),BATON_DESKTOP_DATA_ROOT:root},timeout:90000});
 try{
 const page=await app.firstWindow({timeout:90000});await page.waitForURL(/^http:\/\/127\.0\.0\.1:/,{timeout:60000});const origin=new URL(page.url()).origin;

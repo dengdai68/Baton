@@ -15,7 +15,7 @@ const root=resumed?resolve(process.env.BATON_WORKSPACE_RESUME):await mkdtemp(joi
 assert.equal(dirname(root),resolve(tmpdir()),'resume only an isolated fixture in the system temporary directory');
 assert.match(basename(root),/^af-workspace-case-[A-Za-z0-9]+$/);
 if(resumed){const previous=JSON.parse(await readFile(join(root,'evidence.json'),'utf8'));assert.equal(previous.root,root);assert.equal(previous.real,true);assert.equal(previous.result,'FAIL','resume only a failed acceptance, without rerunning its model task');}
-const home=join(root,'home'),data=join(home,'.baton/desktop');await mkdir(home,{recursive:true});
+const home=join(root,'home'),data=join(home,'.baton');await mkdir(home,{recursive:true});
 const password=randomBytes(24).toString('hex'),auth=createAuth({databasePath:join(data,'auth.sqlite')});await auth.setAdministrator('workspace-qa',password);auth.close();
 const actual=process.env.BATON_WORKSPACE_CLAUDE || execFileSync('/usr/bin/which',['claude'],{encoding:'utf8'}).trim();
 const wrapper=join(root,'real-claude');await writeFile(wrapper,'#!/bin/sh\nHOME='+JSON.stringify(homedir())+' exec '+JSON.stringify(actual)+' "$@"\n',{mode:0o700});
