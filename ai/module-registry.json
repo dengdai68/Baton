@@ -2857,7 +2857,8 @@
    ],
    "tests": [
     "tests/i18n.test.mjs",
-    "scripts/test-i18n.mjs"
+    "scripts/test-i18n.mjs",
+    "scripts/test-packaged-electron.mjs"
    ],
    "allowedDependencies": [
     "Intl",
