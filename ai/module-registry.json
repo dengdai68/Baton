@@ -2850,7 +2850,7 @@
    "path": "client/i18n.mjs",
    "kind": "presentation-core",
    "owner": "client-platform",
-   "purpose": "Interface translation shared by the renderer and Electron host: Simplified Chinese source text is the key and zh-CN is identity; zh-TW/en catalogs, plural {one, other}, text@@context keys, $tm display translation of server/system text and localizeStatic for static markup. Never translates business data, prompts, frozen workflow text, CLI output or stored history.",
+   "purpose": "Interface translation shared by the renderer and Electron host: Simplified Chinese source text is the key and zh-CN is identity; zh-TW/en catalogs, plural {one, other}, text@@context keys, $tm display translation of server/system text and localizeStatic for static markup. The browser selects its locale while the module evaluates from the preload's synchronous batonDesktop.locale (no top-level await, so Node can require ESM graphs that import it). Never translates business data, prompts, frozen workflow text, CLI output or stored history.",
    "sourceOfTruth": [
     "docs/18-electron-client.md",
     "docs/06-design-system.md"
@@ -2884,14 +2884,15 @@
      "pre-auth static allowlist",
      "host language IPC"
     ]
-   }
+   },
+   "reviewIfSynchronousHandoff": "desktop:locale:get is the only ipcMain.on channel; it returns language/locale/catalog to the console main frame only and null elsewhere."
   },
   {
    "id": "client.locales",
    "path": "client/locales/",
    "kind": "data",
    "owner": "client-platform",
-   "purpose": "zh-TW and en catalogs keyed by the Simplified Chinese source text; public static JSON served before sign-in and read by the Electron host for menus, dialogs and notifications.",
+   "purpose": "zh-TW and en catalogs keyed by the Simplified Chinese source text; read by the Electron host for menus, dialogs and notifications and handed to console pages through the preload. Not served over HTTP before sign-in.",
    "sourceOfTruth": [
     "client/README.md"
    ],

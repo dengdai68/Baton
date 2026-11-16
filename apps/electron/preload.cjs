@@ -1,5 +1,11 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// Read once per page load, before page scripts run: the interface translator needs the
+// language synchronously. A failure keeps the source language.
+function readLocale() {
+  try { return ipcRenderer.sendSync("desktop:locale:get"); } catch { return null; }
+}
+
 // Closed host operations. Main validates frame/route; install requires native consent.
 if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) {
   // Native tray clicks do not enter Chromium's pointer modality. Suppress only
@@ -30,7 +36,7 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
     getPreferences: () => ipcRenderer.invoke("desktop:preferences:get"),
     setCloseMode: (mode) => ipcRenderer.invoke("desktop:preferences:set", mode),
     setAppearance: (theme) => ipcRenderer.invoke("desktop:appearance:set", theme),
-    getLocale: () => ipcRenderer.invoke("desktop:locale:get"),
+    locale: readLocale(),
     setLanguage: (language) => ipcRenderer.invoke("desktop:language:set", language),
     getCliInstallation: () => ipcRenderer.invoke("desktop:cli:status"),
     installCli: () => ipcRenderer.invoke("desktop:cli:install"),

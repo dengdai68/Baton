@@ -8,7 +8,7 @@ Baton当前认证cookie为baton_session，实例定位与CLI委托在~/.baton的
 
 客户端首次启动在应用内设置管理员，没有默认密码或公开注册。服务要求客户端 IPC 与一次性 bootstrap 信息；不提供终端管理员初始化。
 
-HTTP 页面、API、静态脚本、SSE 与文件预览经过统一认证。公开入口限登录资源、健康检查、品牌图标与 vendor 静态资源（/icons/*、/vendor/*，供登录页等未认证页面渲染）、界面翻译模块与目录（`/client/i18n.mjs`、`/client/locales/<locale>.json`，仅公开静态文字）和受限的首次设置状态。
+HTTP 页面、API、静态脚本、SSE 与文件预览经过统一认证。公开入口限登录资源、健康检查、品牌图标与 vendor 静态资源（/icons/*、/vendor/*，供登录页等未认证页面渲染）、界面翻译模块 `/client/i18n.mjs`（无凭据的静态脚本；译文目录由桌面 preload 交付，不经 HTTP 公开）和受限的首次设置状态。
 
 ## 持久会话
 

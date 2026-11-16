@@ -8,7 +8,7 @@
 
 - 服务端错误、暂停/失败原因、自动化记录、更新状态与 Runtime 审计文字保持源语言产生与存储，在界面展示时按当前语言翻译；业务内容、AI 提示词、冻结工作流说明及其预览、CLI 输出与历史记录不翻译。日期时间按语言格式化，简体中文格式不变。
 
-- 登录与首次设置页在登录前即可读取公开的 `/client/i18n.mjs` 与 `/client/locales/*.json`；宿主只新增 `getLocale` 与仅限常规设置的 `setLanguage` 两条受限通道，CLI 输出保持简体中文。
+- 宿主在每个控制台页面脚本运行前，经 preload 的同步只读数据 `batonDesktop.locale` 交付已解析语言与目录（仅主窗口控制台页面，其他框架得到空值），翻译模块不使用顶层 await，Node 仍可 require 包含它的 ESM；登录与首次设置页登录前只额外公开 `/client/i18n.mjs`。另新增仅限常规设置的 `setLanguage`；CLI 输出保持简体中文。
 
 - 新增英文 README（`README.en.md`），中英文 README 互相链接；`tests/i18n.test.mjs` 校验全部界面文字的英文/繁体译文、占位符与复数，`scripts/test-i18n.mjs` 在隔离 Electron 中逐页验收英文与繁体界面、宿主菜单及语言切换持久化。
 

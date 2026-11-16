@@ -130,18 +130,15 @@ export function createClosePreferenceUI(panel, desktop) {
 export function createLanguagePreferenceUI(panel, desktop, reload = () => globalThis.location?.reload()) {
   const form = panel.querySelector('[data-language-form]'), select = form.querySelector('[name="language"]');
   const status = panel.querySelector('[data-language-status]');
-  let saved = null, busy = false, disposed = false, request = 0;
+  let saved = null, busy = false, disposed = false;
   const sync = () => { select.disabled = busy || saved === null; };
-  async function refresh() {
+  function refresh() {
     if (disposed || busy) return;
-    if (!desktop?.getLocale) { form.hidden = true; status.textContent = $t("客户端宿主接口不可用，请重新打开应用。"); return; }
-    const id = ++request; busy = true; sync();
-    try {
-      const value = await desktop.getLocale();
-      if (disposed || id !== request) return;
-      saved = LANGUAGE_PREFERENCES.includes(value?.language) ? value.language : "system"; select.value = saved;
-    } catch { if (!disposed && id === request) status.textContent = $t("读取客户端偏好失败，请重试。"); }
-    finally { if (!disposed && id === request) { busy = false; sync(); } }
+    if (!desktop?.setLanguage) { form.hidden = true; status.textContent = $t("客户端宿主接口不可用，请重新打开应用。"); return; }
+    // The preload supplied the saved choice with this page; a change reloads the page.
+    const value = desktop.locale;
+    if (!value) { status.textContent = $t("读取客户端偏好失败，请重试。"); return; }
+    saved = LANGUAGE_PREFERENCES.includes(value.language) ? value.language : "system"; select.value = saved; sync();
   }
   select.onchange = async () => {
     if (busy || select.value === saved) return;
@@ -150,7 +147,7 @@ export function createLanguagePreferenceUI(panel, desktop, reload = () => global
     catch { if (!disposed) { select.value = saved; status.textContent = $t("保存失败，已恢复原设置；请重新选择。"); busy = false; sync(); } }
   };
   sync();
-  return { refresh, dispose() { disposed = true; ++request; } };
+  return { refresh, dispose() { disposed = true; } };
 }
 
 export function createCliInstallationUI(panel, desktop) {

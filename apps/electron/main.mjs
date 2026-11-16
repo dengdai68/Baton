@@ -44,11 +44,14 @@ function systemLanguages() {
   if (process.env.BATON_LOCALE) return [process.env.BATON_LOCALE];
   try { return app.getPreferredSystemLanguages(); } catch { return [app.getLocale()]; }
 }
+// The parsed catalog is also handed to each console page by the preload (see desktop:locale:get).
+let localeMessages = null;
 function applyLanguage() {
   const locale = resolveLocale(language, systemLanguages());
+  localeMessages = null;
   if (locale === "zh-CN") return setLocale(locale);
-  try { return setLocale(locale, JSON.parse(readFileSync(fileURLToPath(new URL(`../../client/locales/${locale}.json`, import.meta.url)), "utf8"))); }
-  catch (error) { diagnostic("desktop.locale_catalog_failed", { locale, error }); return setLocale("zh-CN"); }
+  try { localeMessages = JSON.parse(readFileSync(fileURLToPath(new URL(`../../client/locales/${locale}.json`, import.meta.url)), "utf8")); return setLocale(locale, localeMessages); }
+  catch (error) { localeMessages = null; diagnostic("desktop.locale_catalog_failed", { locale, error }); return setLocale("zh-CN"); }
 }
 let applicationUpdates = null, restartReservation = null;
 const shellEnvironmentAbort = new AbortController();
@@ -502,9 +505,12 @@ async function start() {
       return applicationUpdates[method]();
     });
   }
-  ipcMain.handle("desktop:locale:get", event => {
-    if (event.sender !== contents || event.senderFrame !== contents.mainFrame || !isConsoleURL(event.senderFrame?.url, controlOrigin)) throw new Error($t("仅允许应用主窗口读取语言"));
-    return { language, locale: currentLocale() };
+  // Synchronous on purpose: the preload gives the page its language and catalog before any
+  // interface module evaluates, so translated module constants need no top-level await.
+  // Other frames and origins receive null and keep the source language.
+  ipcMain.on("desktop:locale:get", event => {
+    const allowed = event.sender === contents && event.senderFrame === contents.mainFrame && isConsoleURL(event.senderFrame?.url, controlOrigin);
+    event.returnValue = allowed ? { language, locale: currentLocale(), messages: localeMessages } : null;
   });
   ipcMain.handle("desktop:language:set", (event, value) => {
     if (!isPreferencesSender(event, contents, controlOrigin)) throw new Error($t("仅允许客户端常规设置访问"));

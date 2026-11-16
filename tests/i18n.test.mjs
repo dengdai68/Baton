@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { createRequire } from "node:module";
 import { $t, $tm, LOCALES, normalizeLanguage, resolveLocale, setLocale, currentLocale, intlLocale } from "../client/i18n.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
@@ -136,4 +137,13 @@ test("English has no Chinese text and Traditional Chinese has no common Simplifi
   const leftovers = Object.entries(catalogs["zh-TW"]).filter(([, value]) => simplifiedOnly.test(value));
   if (leftovers.length) console.log(`zh-TW leftovers: ${leftovers.slice(0, 10).map(([, value]) => value).join(" | ")}`);
   assert.deepEqual(leftovers.map(([key]) => key), []);
+});
+
+test("the translator has no top-level await, so Node can require ESM graphs that import it", () => {
+  const require = createRequire(import.meta.url);
+  for (const path of ["../client/i18n.mjs", "../client/console-projections.mjs", "../client/runtime-providers.mjs", "../server/runtime/marketplace.mjs"]) {
+    const loaded = require(path);
+    console.log(`require(${path}) -> ${Object.keys(loaded).length} exports`);
+    assert.ok(Object.keys(loaded).length > 0);
+  }
 });

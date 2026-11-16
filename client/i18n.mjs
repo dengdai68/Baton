@@ -147,23 +147,15 @@ export function localizeStatic(root) {
   if (document.title && Object.hasOwn(catalog, document.title)) document.title = $t(document.title);
 }
 
-// The renderer resolves its locale before any importing module evaluates, so
-// translated module-level constants are correct. A failed catalog read keeps
-// the source language instead of blocking the interface.
-async function bootstrapBrowser() {
-  let locale = null, preference = 'system', system = navigator.languages?.length ? navigator.languages : [navigator.language];
-  try {
-    const selection = await globalThis.batonDesktop?.getLocale?.();
-    if (LOCALES.includes(selection?.locale)) locale = selection.locale;
-    else if (normalizeLanguage(selection?.language)) preference = selection.language;
-  } catch { /* Outside the desktop host, follow the browser languages. */ }
-  locale ||= resolveLocale(preference, system);
-  if (locale !== SOURCE_LOCALE) {
-    try {
-      const response = await fetch(`/client/locales/${locale}.json`, { cache: 'no-store' });
-      if (response.ok) setLocale(locale, await response.json());
-    } catch { /* Keep the source language when the catalog is unavailable. */ }
-  }
+// The desktop preload hands every console page its resolved language and catalog
+// synchronously (window.batonDesktop.locale), so this module selects the locale while
+// it evaluates, before any importing module builds translated constants. No top-level
+// await: Node may require() ESM graphs that include this module. Without the host,
+// or when the catalog is missing, the source language stays.
+function bootstrapBrowser() {
+  const selection = globalThis.batonDesktop?.locale;
+  const messages = selection?.messages;
+  if (LOCALES.includes(selection?.locale) && selection.locale !== SOURCE_LOCALE && messages && typeof messages === 'object') setLocale(selection.locale, messages);
   document.documentElement.lang = current;
 }
-if (typeof window !== 'undefined' && typeof document !== 'undefined' && typeof fetch === 'function' && !globalThis.process?.versions?.node) await bootstrapBrowser();
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && !globalThis.process?.versions?.node) bootstrapBrowser();

@@ -112,4 +112,4 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 ## 界面语言
 
-宿主偏好 `desktop-preferences.json` 新增 `language`（`system` / `zh-CN` / `zh-TW` / `en`，与 closeMode、appearance 合并写入）。启动时按偏好或 macOS 首选语言（`BATON_LOCALE` 可覆盖系统语言，供隔离验收）解析语言，读取 `client/locales/<locale>.json` 后构建应用菜单、托盘、原生对话框、系统通知与 CLI 安装确认窗。renderer 只有两条新增受限通道：`getLocale`（`desktop:locale:get`，主窗口控制台页面读取已解析语言）与 `setLanguage`（`desktop:language:set`，仅设置 → 常规可写）；切换后立即重建菜单与托盘。配置迁移与更新状态文字保持源语言，在显示时翻译。
+宿主偏好 `desktop-preferences.json` 新增 `language`（`system` / `zh-CN` / `zh-TW` / `en`，与 closeMode、appearance 合并写入）。启动时按偏好或 macOS 首选语言（`BATON_LOCALE` 可覆盖系统语言，供隔离验收）解析语言，读取 `client/locales/<locale>.json` 后构建应用菜单、托盘、原生对话框、系统通知与 CLI 安装确认窗。renderer 只有两条新增受限通道：preload 在页面脚本运行前以 `ipcRenderer.sendSync("desktop:locale:get")` 读取一次只读数据 `batonDesktop.locale`（语言、已解析 locale 与目录；仅主窗口控制台页面，其他框架得到 null），以及 `setLanguage`（`desktop:language:set`，仅设置 → 常规可写）；同步读取让翻译模块无需顶层 await。切换后立即重建菜单与托盘。配置迁移与更新状态文字保持源语言，在显示时翻译。

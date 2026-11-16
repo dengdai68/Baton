@@ -129,11 +129,11 @@ test("tray restore suppresses only navigation focus until the next interaction",
     const document = { activeElement: null, addEventListener: (name, callback) => dom.set(name, callback) };
     const window = { addEventListener: (name, callback) => dom.set(name, callback) };
     vm.runInNewContext(source, { process: { isMainFrame: mainFrame }, location: { origin }, document, window,
-      require: () => ({ ipcRenderer: { on: (name, callback) => handlers.set(name, callback), invoke() {} }, contextBridge: { exposeInMainWorld: (_name, value) => { exposed = value; } } }) });
+      require: () => ({ ipcRenderer: { on: (name, callback) => handlers.set(name, callback), invoke() {}, sendSync: () => null }, contextBridge: { exposeInMainWorld: (_name, value) => { exposed = value; } } }) });
     return document;
   };
   const document = fixture();
-  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getLocale", "getPreferences", "installAppUpdate", "installCli", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode", "setLanguage"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode", "setLanguage"]);
   const attributes = new Map(), navigation = { matches: selector => selector === ".nav-item", setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), blur: () => assert.fail("must not move focus") };
   const restore = handlers.get("desktop:tray-restore"), marked = () => attributes.has("data-desktop-restored-focus");
   document.activeElement = navigation;
@@ -225,15 +225,18 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(source, /nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true/);
   assert.doesNotMatch(source, /createStore/);
-  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 11);
+  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 10);
+  assert.equal((source.match(/ipcMain\.on\(/g) || []).length, 1, "only the synchronous locale read uses ipcMain.on");
   assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   assert.equal((source.match(/isCliSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   const preload = await readFile(new URL("../apps/electron/preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /process.isMainFrame && \/\^http:/);
   assert.match(preload, /getPreferences: \(\) => ipcRenderer.invoke\("desktop:preferences:get"\)/);
   assert.match(preload, /setCloseMode: \(mode\) => ipcRenderer.invoke\("desktop:preferences:set", mode\)/);
-  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 13);
-  assert.match(preload, /getLocale: \(\) => ipcRenderer.invoke\("desktop:locale:get"\)/);
+  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 12);
+  assert.equal((preload.match(/ipcRenderer\.sendSync\(/g) || []).length, 1);
+  assert.match(preload, /ipcRenderer\.sendSync\("desktop:locale:get"\)/);
+  assert.match(preload, /locale: readLocale\(\)/);
   assert.match(preload, /setLanguage: \(language\) => ipcRenderer.invoke\("desktop:language:set", language\)/);
   assert.match(preload, /getCliInstallation: \(\) => ipcRenderer.invoke\("desktop:cli:status"\)/);
   assert.match(preload, /installCli: \(\) => ipcRenderer.invoke\("desktop:cli:install"\)/);
@@ -788,3 +791,25 @@ test("all Chromium persistent and diagnostic paths stay in the instance data roo
 });
 
 async function readPresentation() { const [tokens,shared,density]=await Promise.all(["../web/tokens.css","../web/styles.css","../apps/electron/compact.css"].map(path=>readFile(new URL(path,import.meta.url),"utf8")));return tokens+shared.slice(shared.indexOf("/* The html anchor"))+density; }
+
+test("locale handoff gives the catalog only to the console main frame and keeps failures silent", async () => {
+  const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
+  const code = source.slice(source.indexOf('  ipcMain.on("desktop:locale:get"'), source.indexOf('  ipcMain.handle("desktop:language:set"'));
+  const controlOrigin = "http://127.0.0.1:51983", mainFrame = { url: `${controlOrigin}/tasks` }, contents = { mainFrame };
+  const messages = { "确认": "Confirm" };
+  let handler;
+  vm.runInNewContext(code, { ipcMain: { on: (name, fn) => { assert.equal(name, "desktop:locale:get"); handler = fn; } }, contents, controlOrigin, isConsoleURL, language: "system", localeMessages: messages, currentLocale: () => "en" });
+  const read = event => { handler(event); return event.returnValue; };
+  const allowed = read({ sender: contents, senderFrame: mainFrame });
+  console.log("console main frame receives", JSON.stringify({ ...allowed, messages: Object.keys(allowed.messages).length }));
+  assert.deepEqual({ ...allowed }, { language: "system", locale: "en", messages });
+  assert.equal(allowed.messages, messages, "the parsed host catalog is handed over as is");
+  assert.equal(read({ sender: contents, senderFrame: { url: `${controlOrigin}/tasks` } }), null, "subframes get nothing");
+  assert.equal(read({ sender: {}, senderFrame: mainFrame }), null, "other web contents get nothing");
+  assert.equal(read({ sender: contents, senderFrame: { ...mainFrame, url: "https://example.com/" } }), null, "foreign origins get nothing");
+  const preload = await readFile(new URL("../apps/electron/preload.cjs", import.meta.url), "utf8");
+  let exposed;
+  vm.runInNewContext(preload, { process: { isMainFrame: true }, location: { origin: controlOrigin }, document: { addEventListener() {} }, window: { addEventListener() {} },
+    require: () => ({ ipcRenderer: { on() {}, invoke() {}, sendSync: () => { throw new Error("host closed"); } }, contextBridge: { exposeInMainWorld: (_name, value) => { exposed = value; } } }) });
+  assert.equal(exposed.locale, null, "a failed synchronous read keeps the source language");
+});
