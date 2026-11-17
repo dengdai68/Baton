@@ -34,8 +34,7 @@
     "package:mac": "electron-builder --mac --arm64 --publish never",
     "package:mac:check": "node scripts/test-packaged-electron.mjs",
     "mac:check": "npm run desktop:check",
-    "mac:run": "npm run desktop",
-    "setup:hooks": "git config core.hooksPath .githooks"
+    "mac:run": "npm run desktop"
   },
   "engines": {
     "node": ">=22.12"
