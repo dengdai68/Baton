@@ -53,7 +53,7 @@ CLI 仅连接运行中的客户端；源码/安装版统一通过私有 endpoint
 `roles` 组管理员工可共用的纯文本提示词角色（list/get/create/update/delete，update 部分更新，delete 需 `--yes` 且被绑定时拒绝）；员工经 `agents create/update` 的 有序 `roleIds` 数组绑定多个角色，[] 全部解绑；旧 roleId 输入拒绝。角色文本并入应用系统/developer 指令，冻结任务保持原文本；语义详见 docs/03、22。
 
 
-根帮助列命令组，操作帮助列字段，`--json` 返回机器输出。默认复用客户端授权；独立登录才持久保存 CLI 自己的会话。CLI 不读取浏览器 Cookie 或 SQLite。密码仅隐藏交互输入或显式 stdin，不作命令参数。
+根帮助列命令组，操作帮助列字段，`--json` 返回机器输出。根目录由 `output.mjs` 的有序 `catalog` 生成，须包含全部已注册命令组和 `auth`（测试校验）；非配置类命令组（任务、沟通）的操作说明来自 `groupOperations`，其余使用通用说明。所有 list 与记录读取（协作记录、待答问题、交付记录、触发记录、`communications get`）默认每页 20、最新在前，`--page N | --all` 翻页；`communications get` 沿服务端游标翻页并拒绝已移除的 `--before`。Runtime 与 MCP 工具没有时间字段，保持固定顺序。默认复用客户端授权；独立登录才持久保存 CLI 自己的会话。CLI 不读取浏览器 Cookie 或 SQLite。密码仅隐藏交互输入或显式 stdin，不作命令参数。
 
 任务命令经过同一 HTTP；创建和启动分开，写入不自动重试。最终验收确认保留在 客户端。完整命令和失败语义见 [CLI 指南](../docs/21-configuration-cli.md)。
 

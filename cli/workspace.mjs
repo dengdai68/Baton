@@ -8,6 +8,8 @@ const fields=(value,keys)=>Object.fromEntries(keys.filter(key=>Object.hasOwn(val
 const conversationView=value=>({...fields(value,['id','kind','targetId','name','workspacePath','unreadCount','createdAt','updatedAt','preview','pending']),members:value.members?.map(member=>fields(member,['id','name','status','running'])) || []});
 const chatView=value=>({...value,...(value.conversation?{conversation:conversationView(value.conversation)}:{})});
 export const resourceId=value=>typeof value==='string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+// communications get pages match other CLI record pages; --all reads larger windows.
+const MESSAGE_PAGE_SIZE=20, ALL_MESSAGES_WINDOW=200;
 
 // Upload through the same authenticated endpoint as the renderer. Keyed retries
 // reuse saved attachments after checking the original local bytes.
@@ -46,14 +48,18 @@ export async function executeCommunication(client,operation,id,flags,page,stdin,
     return {...pagination,items:items.map(conversationView),...(flags.all?{page:null,pageSize:null,hasMore:false}:{})};
   }
   if(operation==='get') {
-    const query=new URLSearchParams({limit:'100'});if(flags.before)query.set('before',flags.before);
-    const result=chatView(await client.request(`${base}?${query}`));
-    if(flags.all) {
-      let cursor=result;
-      while(cursor.hasMore){query.set('before',cursor.nextBefore);cursor=await client.request(`${base}?${query}`);result.messages.unshift(...cursor.messages);result.deliveries=[...new Map([...result.deliveries,...cursor.deliveries].map(row=>[row.id,row])).values()];}
-      result.hasMore=false;result.nextBefore=cursor.nextBefore;
-    }
-    return result;
+    // Paged like task collaboration: 20 messages per page, newest first. --page N
+    // follows the server's before-cursor N-1 times; --all reads every window.
+    const query=new URLSearchParams({limit:String(flags.all?ALL_MESSAGES_WINDOW:MESSAGE_PAGE_SIZE)});
+    const first=await client.request(`${base}?${query}`),windows=[first];
+    let current=1,last=first;
+    while(last.hasMore&&(flags.all||current<page)){query.set('before',last.nextBefore);last=await client.request(`${base}?${query}`);windows.push(last);current++;}
+    const selected=flags.all?windows:current===page?[last]:[];
+    const {messages,deliveries,hasMore,nextBefore,...thread}=chatView(first);
+    return {...thread,
+      messages:selected.flatMap(window=>[...window.messages].reverse()),
+      deliveries:[...new Map(selected.flatMap(window=>window.deliveries).map(row=>[row.id,row])).values()],
+      page:flags.all?null:page,pageSize:flags.all?null:MESSAGE_PAGE_SIZE,hasMore:!flags.all&&current===page&&last.hasMore};
   }
   if(operation==='delete') {
     if(!flags.yes)throw usage('删除群聊需要显式 --yes');

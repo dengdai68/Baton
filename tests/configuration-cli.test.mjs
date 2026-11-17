@@ -241,7 +241,20 @@ test('default CLI help progressively discloses root, groups and operation detail
     for (const hidden of ['典型交付流程', '核心概念', 'SQLite', '--password-stdin', '建议配置顺序', 'JSON 输入模板']) assert.ok(!result.stdout.includes(hidden), hidden);
     assert.ok(result.stdout.length < 1000 && result.stdout.split('\n').length < 24, 'root is a short directory, not the entire manual');
     assert.ok(result.stdout.split('\n')[0].endsWith('而不只是聊天回复。'), 'product purpose is one logical line');
+    // The directory is written by hand; a group registered later must still be listed.
+    for (const group of [...Object.keys(resources), 'auth']) assert.match(result.stdout, new RegExp(`^  ${group} +\\S`, 'm'), `root directory lists ${group}`);
   }
+  // Conversations are neither configuration nor searchable: their summaries say what each command reads or changes.
+  const chats = (await captured(['communications'], { columns: 160 })).stdout;
+  const chatCommands = chats.split('\n').filter(line => /^  [a-z-]+ +\S/.test(line));
+  console.log('communications subcommands:\n' + chatCommands.join('\n'));
+  assert.equal(chatCommands.length, resources.communications.operations.length);
+  for (const [operation, summary] of [['list', '列出私聊与群聊'], ['get', '读取会话消息与投递状态'], ['create', '打开私聊或新建群聊'], ['update', '修改群聊名称或成员'], ['delete', '删除群聊']]) {
+    assert.ok(chatCommands.includes(`  ${operation.padEnd(14)} ${summary}`), operation);
+    const usage = (await captured(['communications', operation, '--help'], { columns: 160 })).stdout.split('\n').find(line => line.startsWith(`  baton communications ${operation}`));
+    assert.ok(usage?.endsWith(` — ${summary}`), `${operation} usage: ${usage}`);
+  }
+  assert.ok(chatCommands.every(line => !/搜索|配置/.test(line)), 'no conversation command claims search or configuration');
   for (const group of Object.keys(resources)) {
     const result = await captured(['help', group], { columns: 160 });
     assert.equal(result.code, 0);

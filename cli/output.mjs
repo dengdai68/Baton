@@ -23,6 +23,23 @@ function paragraph(value, columns, indent = '') {
 const groups = { communications:'沟通', storage:'数据存储', automations: '自动化', tasks: '任务', agents: '数字员工', roles: '角色', teams: '团队', workflows: '工作流', runtimes: 'Runtime', plugins: '插件', mcps: 'MCP' };
 const operations = {pause:'暂停当前执行',resume:'继续原执行','retry-now':'立即重试待恢复投递','retry-failed-node':'恢复原失败节点','retry-orchestration':'恢复原协调执行',archive:'归档已完成任务',unarchive:'恢复归档任务',console:'读取脱敏控制台事件','console-content':'读取已保存执行正文',files:'浏览工作目录',file:'读取文件内容',download:'下载文件原始字节',changes:'读取工作区变更',diff:'读取文件差异',artifact:'读取交付快照',attachment:'下载附件',message:'发送消息与附件',read:'标记会话已读',retry:'重试原失败回复',tools:'查询 MCP 工具','check-compatibility':'刷新扩展兼容性', trigger: '立即执行自动化', triggers: '分页查询触发记录', list: '列出与搜索配置', get: '读取完整详情', create: '创建配置', update: '更新配置', delete: '删除允许删除的配置', test: '真实测试模型连接', import: '安装来源中的全部插件', models: '查询 Provider 可用模型与思考档位' };
 Object.assign(operations, {updates:'查询插件更新状态','check-updates':'立即检查Git插件更新'});
+// Groups whose operations are not configuration records keep their own wording:
+// tasks have a run lifecycle, and conversations page like the desktop list
+// without search.
+const groupOperations = {
+  tasks: { list: '搜索任务列表', get: '读取任务目标与要求', create: '创建待启动任务', update: '编辑尚未启动的任务草稿', start: '启动真实任务执行', terminate: '终止执行并保留记录', delete: '永久删除任务及本地记录', progress: '读取当前执行进度与下一步', collaboration: '查看完整协作记录（消息、派工与状态）', questions: '查询未答人类澄清', message: '向一位指定成员发送指令', reply: '按问题 ID 精确回复澄清', artifacts: '查询已接纳交付信息', members: '查询或修改当前执行成员' },
+  communications: { list: '列出私聊与群聊', get: '读取会话消息与投递状态', create: '打开私聊或新建群聊', update: '修改群聊名称或成员', delete: '删除群聊' }
+};
+/** One-line summary of an operation: the group's own wording first, then the shared one. */
+const operationLabel = (group, operation) => groupOperations[group]?.[operation] || operations[operation];
+// Root directory in reading order. It must name every registered command group
+// plus auth; tests/configuration-cli.test.mjs fails when one is missing.
+const catalog = [
+  ['tasks', '任务 / 进度 / 协作 / 澄清'], ['communications', '私聊 / 群聊 / 消息与附件'], ['automations', '自动化 / 定时执行 / 触发记录'],
+  ['agents', '数字员工'], ['roles', '角色（共用系统提示词）'], ['mcps', 'MCP 市场'], ['plugins', '插件市场'], ['workflows', '工作流'], ['teams', '团队'],
+  ['runtimes', 'Runtime 配置与连接查询'], ['storage', '数据目录 / 搬运与重启'], ['auth', '登录 / 会话状态 / 退出登录']
+];
+const catalogWidth = Math.max(...catalog.map(([name]) => name.length));
 const labels = { startMessageId: '本轮输入消息 ID', dispatchId: '投递 ID', sourceMessageId: '来源消息 ID', recipientAgentId: '接手成员 ID', workflowNodeId: '节点 ID', workflowNodeName: '节点', executionTraceId: '接手执行 Trace ID', attempts: '尝试次数', nextRetryAt: '下次重试', error: '失败原因', relatedDispatchIds: '关联投递 ID', eventType: '协作事件', senderType: '发起者类型', purpose: '投递用途', replacements: '覆盖版本', id: 'ID', name: '名称', description: '说明', kind: '类型', status: '状态', provider: 'Provider', enabled: '可用', model: '模型', executable: 'CLI 路径', profile: 'Codex profile', profileId: 'Runtime 配置 ID', runtime: '执行配置', systemPrompt: '执行与协作提示词', roleIds: '绑定角色 ID', prompt: '共用系统提示词', capabilities: '能力', memberAgentIds: '员工 ID', managerAgentId: '项目经理 ID', mission: '团队目标', nodes: '工作流节点', staffingGuidance: '人员需求', dependsOn: '前置节点', handoffFrom: '交接来源', deliverable: '交付要求', artifactPaths: '建议交付位置', inheritedExtensionSelection: '角色继承扩展', extensionSelection: '直接扩展选择', pluginIds: '整插件版本 ID', mcpIds: 'MCP 版本 ID', username: '管理员', expiresAt: '会话到期时间', sessionFile: '私有会话文件', system: '系统配置', createdAt: '创建时间', updatedAt: '更新时间', logPath: '本机日志', testId: '连接测试 ID', unsupported: '未加载组件', plugins: '插件', skills: '技能', entries: '组件', effort: '思考等级', levels: '可选档位', models: '模型', notes: '来源说明', source: '来源', current: '当前生效', resolvedTo: '解析到模型', supportedInApi: 'API 可用', default: '默认档位' };
 Object.assign(labels, { deleted: '已删除', historyRetained: '历史文件保留' });
 Object.assign(labels, { senderId: '发送者 ID', clientRequestId: '发送请求 ID', replayed: '返回已保存回执' });
@@ -57,7 +74,7 @@ function details(value, columns, indent = '', key = '') {
   }).join('\n');
 }
 export function commandUsage(group, operation) {
-  if(group==='communications')return `baton communications ${operation}${['list','create'].includes(operation)?'':' CONVERSATION_ID'}${['create','update','message','read','retry'].includes(operation)?' --file FILE.json':''}${operation==='delete'?' --yes':''}${operation==='get'?' [--before MESSAGE_ID] [--all]':operation==='list'?' [--page N | --all]':''}${operation==='console'?' [--agent ID] [--before ID | --follow]':operation==='console-content'?' --event EVENT_ID':operation==='attachment'?' --attachment ID --output FILE':operation==='artifact'?' --artifact ID [--output FILE]':''}`;
+  if(group==='communications')return `baton communications ${operation}${['list','create'].includes(operation)?'':' CONVERSATION_ID'}${['create','update','message','read','retry'].includes(operation)?' --file FILE.json':''}${operation==='delete'?' --yes':''}${['get','list'].includes(operation)?' [--page N | --all]':''}${operation==='console'?' [--agent ID] [--before ID | --follow]':operation==='console-content'?' --event EVENT_ID':operation==='attachment'?' --attachment ID --output FILE':operation==='artifact'?' --artifact ID [--output FILE]':''}`;
   if(group==='tasks' && ['pause','resume','retry-now','retry-failed-node','retry-orchestration','archive','unarchive','console','console-content','files','file','download','changes','diff','attachment','artifact'].includes(operation))return `baton tasks ${operation} TASK_ID${['archive','unarchive'].includes(operation)?'':' [--run RUN_ID]'}${operation==='retry-failed-node'?' --file FILE.json':operation==='console'?' --agent ID [--before ID | --follow]':operation==='console-content'?' --event ID':operation==='files'?' [--path DIR] [--offset N]':operation==='file'?' --path FILE':operation==='download'?' --path FILE --output FILE':operation==='diff'?' [--path FILE] [--full]':operation==='attachment'?' --attachment ID --output FILE':operation==='artifact'?' --artifact ID [--output FILE]':''}`;
 
   if(group==='storage')return `baton storage ${operation}${operation==='update'?' --file FILE.json':''}`;
@@ -88,14 +105,14 @@ function applicableFlags(group, ops) {
     const extra={console:['--agent ID：任务必填，沟通选填；按成员读取。','--before EVENT_ID：向前分页；与 --follow 互斥。','--follow：每2秒补齐增量；--json 为逐行 envelope，Ctrl+C 停止。'],'console-content':['--event EVENT_ID：必填，读取已保存脱敏正文。'],files:['--path DIR：可选相对目录；--offset N：非负偏移。'],file:['--path FILE：必填，工作目录相对文件路径。'],download:['--path FILE --output LOCAL：必填，不覆盖已有目的文件。'],diff:['--path FILE：相对文件路径；--full：读取完整差异。'],artifact:['--artifact ID：必填；--output LOCAL：选填，下载原始快照字节。'],attachment:['--attachment ID --output LOCAL：必填，下载该任务/会话附件。'],'retry-failed-node':['--file PATH | -：必填，JSON 对象字段 workflowNodeId。']}[ops[0]] || [];
     return [...guide.flags.filter(([flag])=>['--help','--json','--session-file PATH','--endpoint-file PATH'].includes(flag)).map(([flag,description])=>`${flag}：${description}`),...extra,...(group==='tasks'&&!['archive','unarchive'].includes(ops[0])?['--run RUN_ID：选择同任务执行；默认最新。']:[])];
   }
-  if(group==='communications')return ['--file PATH | -：create/update/message/read/retry 的 JSON 对象。','--page N | --all：list 分页；get --all 读取全部历史，可用 --before MESSAGE_ID 向前分页。','--yes：删除群聊必须显式指定。','--client-request-id ID：message 可用此选项提供发送去重标识。',...guide.flags.filter(([flag])=>['--help','--json','--session-file PATH','--endpoint-file PATH'].includes(flag)).map(([flag,description])=>`${flag}：${description}`)];
+  if(group==='communications')return ['--file PATH | -：create/update/message/read/retry 的 JSON 对象。','--page N | --all：list 与 get 默认每页 20 项、最新在前（会话按最近活动，消息按时间）；--page N 读取第 N 页，--all 读取全部，二者不可混用。','--yes：删除群聊必须显式指定。','--client-request-id ID：message 可用此选项提供发送去重标识。',...guide.flags.filter(([flag])=>['--help','--json','--session-file PATH','--endpoint-file PATH'].includes(flag)).map(([flag,description])=>`${flag}：${description}`)];
   if (group === 'tasks') return [
     ...(ops.some(op=>['create','update'].includes(op)) ? ['--workflow ID_OR_NAME：选择当前工作流的精确 ID 或唯一名称。','--start：创建或修改保存成功后立即启动，与 App 保存并开始等价；失败保留任务 ID，请查询状态，勿重复提交。'] : []),
     ...(ops.some(op => ['terminate', 'delete'].includes(op)) ? ['--yes：显式确认终止执行或永久删除任务及本地交付记录；活跃任务须先 terminate。'] : []),
     ...guide.flags.filter(([flag]) => ['--help', '--json', '--session-file PATH', '--endpoint-file PATH'].includes(flag)).map(([flag, description]) => `${flag}：${description}`),
     ...(ops.some(op => ['create', 'update', 'message', 'reply', 'members'].includes(op)) ? ['--file PATH | -：JSON 对象文件；- 从 stdin 读取，最多1MiB；字段与示例见下方。'] : []),
     ...(ops.includes('list') ? ['--search TEXT：任务名称不区分大小写包含匹配。', '--status STATUS：精确任务状态：backlog（草稿）/planning/running/awaiting_human/review/awaiting_acceptance/paused/blocked/failed/done/cancelled。', '--workflow ID_OR_NAME：按工作流精确 ID 或唯一名称筛选（含任务冻结名称），与名称、状态组合后分页。', '--archived：仅查询已归档任务，默认只显示未归档。'] : []),
-    ...(ops.some(op => ['list', 'collaboration', 'questions', 'artifacts'].includes(op)) ? ['--page N | --all：默认每页20项；--all 显式读取全部，不可与 --page 混用。协作记录最新在前。'] : []),
+    ...(ops.some(op => ['list', 'collaboration', 'questions', 'artifacts'].includes(op)) ? ['--page N | --all：默认每页20项、最新在前（任务按最近更新，协作记录、待答问题与交付记录按时间）；--all 显式读取全部，不可与 --page 混用。'] : []),
     ...(ops.some(op => ['progress', 'collaboration', 'questions', 'artifacts', 'message', 'reply', 'terminate', 'members'].includes(op)) ? ['--run RUN_ID：可选，选择同一任务的指定执行；默认最新执行，输出回显所选 runId。'] : [])
   ];
   if(['plugins','mcps'].includes(group) && ops.includes('list')) return ['--usage all|unused：默认 all；unused 为未被当前员工或角色使用，与搜索组合后分页。', ...guide.flags.filter(([flag])=>['--help','--json','--search TEXT','--page N | --all','--session-file PATH','--endpoint-file PATH'].includes(flag)).map(([flag,description])=>`${flag}：${description}`)];
@@ -118,11 +135,7 @@ function applicableFlags(group, ops) {
 function help(data, columns, { schema = false } = {}) {
   if (!data.group) return [
     text(data.product.summary),
-    section('命令目录', [
-      '  tasks      任务 / 进度 / 协作 / 澄清', '  automations 自动化 / 定时执行 / 触发记录', '  agents     数字员工', '  roles      角色（共用系统提示词）', '  mcps       MCP 市场', '  plugins    插件市场',
-      '  workflows  工作流', '  teams      团队', '  runtimes   Runtime 配置与连接查询',
-      '  storage    数据目录 / 搬运与重启', '  auth       登录 / 会话状态 / 退出登录'
-    ].join('\n')),
+    section('命令目录', catalog.map(([name, summary]) => `  ${name.padEnd(catalogWidth)} ${summary}`).join('\n')),
     '查看具体操作参数：在命令后加 --help，例如 baton agents get --help。'
   ].join('\n\n');
   if (!data.operation && (!schema || data.group === 'auth')) return [
@@ -130,7 +143,7 @@ function help(data, columns, { schema = false } = {}) {
     ...(data.group === 'auth' ? [] : [paragraph(data.description, columns)]),
     section('子命令', (data.group === 'auth' ? [
       ['login', '登录已有管理员账号'], ['status', '验证本 CLI 会话状态'], ['logout', '退出本 CLI 会话']
-    ] : data.operations.map(op => [op, data.group === 'tasks' ? ({ list: '搜索任务列表', get: '读取任务目标与要求', create: '创建待启动任务', update: '编辑尚未启动的任务草稿', start: '启动真实任务执行', terminate: '终止执行并保留记录', delete: '永久删除任务及本地记录', progress: '读取当前执行进度与下一步', collaboration: '查看完整协作记录（消息、派工与状态）', questions: '查询未答人类澄清', message: '向一位指定成员发送指令', reply: '按问题 ID 精确回复澄清', artifacts: '查询已接纳交付信息', members: '查询或修改当前执行成员' })[op] || operations[op] : operations[op]])).map(([op, description]) => `  ${op.padEnd(14)} ${description}`).join('\n')),
+    ] : data.operations.map(op => [op, operationLabel(data.group, op)])).map(([op, description]) => `  ${op.padEnd(14)} ${description}`).join('\n')),
     `查看具体操作参数：在命令后加 --help，例如 baton ${data.group} ${data.group === 'auth' ? 'login' : data.group==='storage'?'get':'list'} --help。`
   ].join('\n\n');
   if (data.group === 'auth') return [
@@ -153,7 +166,7 @@ function help(data, columns, { schema = false } = {}) {
     `Baton CLI — ${groups[data.group]}${data.operation ? ' / ' + data.operation : ''}`,
     paragraph(data.description, columns),
     ...(data.disclosure ? [paragraph(data.disclosure, columns)] : []),
-    section('用法', ops.map(op => `  ${commandUsage(data.group, op)}${data.group !== 'tasks' && operations[op] ? ' — ' + operations[op] : ''}`).join('\n')),
+    section('用法', ops.map(op => `  ${commandUsage(data.group, op)}${data.group !== 'tasks' && operationLabel(data.group, op) ? ' — ' + operationLabel(data.group, op) : ''}`).join('\n')),
     section('参数与前置条件', bullets([guide.transport, ...(id ? ['ID：必填精确资源ID，从本组 list/get 返回值获取；不能使用名称或路径。'] : []), ...applicableFlags(data.group, ops), '认证会话与客户端独立。用法未列的专用参数不可混用。'], columns)),
     ...(writing ? [section('输入模式', paragraph(data.inputMode, columns, '  ')), section('完整字段说明', fields(data.schema, columns).join('\n')), section('JSON 输入模板（替换占位 ID 后保存到 FILE.json）', JSON.stringify(data.example, null, 2).split('\n').map(line => '  ' + line).join('\n'))] : []),
     ...((data.group === 'tasks' ? data.notes : notes).length ? [section('行为、限制与更新语义', bullets(data.group === 'tasks' ? data.notes : notes, columns))] : []),

@@ -166,3 +166,36 @@ test('compact collaboration pages preserve answered questions, delivery links an
     assert.throws(()=>store.getRunCollaboration(run.id,{before:'foreign'}),/游标/);
   } finally {store.close();rmSync(root,{recursive:true,force:true});}
 });
+
+test('configuration directories page newest created first; tasks keep latest activity first',async()=>{
+  const {createStore}=await import('../server/store.mjs');
+  const root=mkdtempSync(join(tmpdir(),'af-directory-order-'));
+  const store=createStore({databasePath:join(root,'db.sqlite'),workspaceRoot:join(root,'work')});
+  try {
+    const agents=Array.from({length:23},(_,index)=>store.createAgent({name:`顺序员工${index+1}`}).id);
+    const roles=['甲','乙','丙'].map(name=>store.createRole({name:'顺序角色'+name,prompt:'fixture'}).id);
+    const teams=['甲','乙','丙'].map(name=>store.createTeam({name:'顺序团队'+name,memberAgentIds:[agents[0]]}).id);
+    const workflows=['甲','乙','丙'].map(name=>store.createWorkflowTemplate({name:'顺序流程'+name,nodes:[{id:'work',title:'工作'}]}).id);
+    const order=name=>store.queryDirectory(name,{pageSize:100}).items.map(item=>item.id);
+    for(const [name,created] of Object.entries({agents,roles,teams,workflowTemplates:workflows})) {
+      const ids=order(name);
+      console.log(`${name}: ${ids.slice(0,4).join(',')} … (${ids.length})`);
+      assert.deepEqual(ids.slice(0,created.length),[...created].reverse(),`${name}: newest created first, built-in items after`);
+      // Default pages of 20 continue exactly where the previous page ended.
+      const pages=[];for(let page=1;page<=store.queryDirectory(name).totalPages;page++)pages.push(...store.queryDirectory(name,{page}).items.map(item=>item.id));
+      assert.deepEqual(pages,ids,`${name}: 20-item pages concatenate to the full order`);
+    }
+    assert.equal(store.queryDirectory('agents').pageSize,20);assert.equal(store.queryDirectory('agents').items.length,20);
+    // Editing keeps a configuration record in place: order is by creation.
+    store.updateRole(roles[0],{name:'顺序角色甲（已编辑）',prompt:'edited'});
+    assert.deepEqual(order('roles').slice(0,3),[...roles].reverse());
+    // Tasks remain ordered by latest activity: editing the older draft moves it first.
+    const older=store.createTask({managerAgentId:agents[0],title:'较早任务',objective:'fixture',memberAgentIds:[agents[0]]});
+    await new Promise(resolve=>setTimeout(resolve,5));
+    const newer=store.createTask({managerAgentId:agents[0],title:'较新任务',objective:'fixture',memberAgentIds:[agents[0]]});
+    assert.deepEqual(order('tasks').slice(0,2),[newer.id,older.id]);
+    await new Promise(resolve=>setTimeout(resolve,5));
+    store.updateTask(older.id,{title:'较早任务（刚编辑）'});
+    assert.deepEqual(order('tasks').slice(0,2),[older.id,newer.id],'tasks follow updatedAt, not creation');
+  } finally {store.close();rmSync(root,{recursive:true,force:true});}
+});

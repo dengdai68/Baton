@@ -25,7 +25,7 @@ CLI 只调用桌面现有的受认证 HTTP 接口；Store、Orchestrator、Run F
 
 普通命令 `--json` 输出单个 `{ok,data}` 或 `{ok:false,error}`；`console --follow --json` 输出逐行 envelope，每个增量一行。任务控制台的 --agent 使用 tasks progress 返回的 Run 参与者 ID；任务经理拥有独立的 Run 标识，不能直接使用目录员工 ID。初始读取最近100条，随后每2秒沿现有 before 游标补齐新增事件；跨页突增不跳过，已有事件不重复输出。Ctrl+C 停止读取，CLI 退出130；认证/读取失败明确结束，不自动切换实例或无限重试。`--follow` 与 `--before` 互斥。
 
-沟通 create 输入：私聊 `{kind:"agent",targetId:"员工ID"}` 复用长期私聊；群聊 `{kind:"group",memberAgentIds:["员工ID"],name:"可选名称"}` 每次新建独立会话。update 部分更新群名称或完整成员数组，`[]` 清空；私聊不能编辑/删除，群聊正在回复时不能删除，均由 Store 拒绝。get 读取最近100条及投递状态，`--before` 向前分页，`--all` 读取全部；list 支持 `--page/--all`，与桌面一样不提供搜索。读操作不自动标记已读，read 输入 `{messageId}` 显式确认。retry 输入 `{deliveryId}` 继续原失败回复。
+沟通 create 输入：私聊 `{kind:"agent",targetId:"员工ID"}` 复用长期私聊；群聊 `{kind:"group",memberAgentIds:["员工ID"],name:"可选名称"}` 每次新建独立会话。update 部分更新群名称或完整成员数组，`[]` 清空；私聊不能编辑/删除，群聊正在回复时不能删除，均由 Store 拒绝。get 默认读取最新 20 条消息及其投递状态、最新在前，`--page N` 向更早翻页，`--all` 读取全部，输出含 `page`/`pageSize`/`hasMore`；`--before` 已移除，传入时提示改用 `--page`。list 支持 `--page/--all`，最近活动在前，与桌面一样不提供搜索。读操作不自动标记已读，read 输入 `{messageId}` 显式确认。retry 输入 `{deliveryId}` 继续原失败回复。
 
 沟通 message 输入 `{content,clientRequestId,mentionAgentIds?,attachmentPaths?,attachmentIds?}`；`clientRequestId` 必填，可用 `--client-request-id` 替代输入字段，原请求重试沿用，变更内容使用新 ID。群聊空 @ 列表表示全部可用成员；私聊发送给唯一员工。成功表示消息已保存/入队，不代表员工已回复；附件通过同一 HTTP 上传，有键重试核对原文件摘要并复用已保存附件。成员关联只输出 ID/名称/状态，不展开职责和角色提示词。
 
@@ -103,7 +103,9 @@ TTY 隐藏输入密码；脚本使用显式 `--password-stdin`。没有密码命
 
 ## 配置
 
-命令组包含员工、角色、团队、工作流、Runtime、插件和 MCP。根帮助列组，组帮助列操作，操作 `--help` 和 `schema` 提供字段与 JSON 模板。默认可读文本，机器消费者显式 `--json`。
+命令组包含任务、沟通（私聊/群聊）、自动化、员工、角色、MCP、插件、工作流、团队、Runtime 和数据存储，另有 `auth` 会话命令。根帮助的命令目录列出全部命令组，`tests/configuration-cli.test.mjs` 校验新注册的命令组不会漏列；组帮助列操作，操作 `--help` 和 `schema` 提供字段与 JSON 模板。沟通的 list/get/create/update/delete 按会话说明（列出私聊与群聊、读取会话消息与投递状态、打开私聊或新建群聊、修改群聊名称或成员、删除群聊），列表与桌面一样不提供搜索。默认可读文本，机器消费者显式 `--json`。
+
+分页与顺序统一规则：所有 list，以及 tasks collaboration/questions/artifacts、automations triggers、communications get，默认每页 20、最新在前；`--page N` 读取第 N 页，`--all` 读取全部，二者不可混用。任务、沟通会话、自动化按最近活动；员工、角色、团队、工作流按创建（最新创建在前，编辑不改变位置，App 目录页同序）；插件和 MCP 按安装时间；协作记录、待答问题、交付记录、触发记录和沟通消息按时间。Runtime（固定 9 个 Provider，与设置页同序）与 MCP 工具没有时间字段，保持固定顺序。
 
 角色：`roles list/get/create/update/delete` 管理共用名称、提示词及插件/MCP选择的角色；list `--search` 与界面一致，按名称和提示词匹配。update 为部分更新（至少 name/prompt/extensionSelection 一项），delete 需要 `--yes` 且仍有员工（含停用）绑定时拒绝并列出员工。员工以有序、不重复的 `roleIds` 数组绑定一组角色，省略保持不变、[] 全部解绑；旧 roleId/null 输入明确拒绝；角色提示词并入该员工沟通与任务执行的应用系统/developer 指令，不进入每轮用户消息。角色编辑只影响之后创建的任务与后续沟通投递，冻结 Task/Run 快照保持原文本；删除角色不改写历史快照。
 

@@ -340,3 +340,7 @@ Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedT
 控制台实时阅读由 `web/console-stream.mjs` 统一：任务 SSE/可见控制台5秒补查、沟通2秒轮询持续收新记录；上滚只停止自动滚动。稳定行锚点/ResizeObserver 处理增量、延迟正文与窄屏布局，现有 before 分页补齐断线和突发窗口。入口 app.js/communication.js；验收 scripts/test-console-live.mjs，HTTP/CLI/执行状态协议不变。
 
 界面多语言：`client/i18n.mjs` 以简体中文源文本为键（zh-CN 恒等），`client/locales/{en,zh-TW}.json` 提供英文与繁体；renderer 用 `$t`，服务端/系统文字只在展示时经 `$tm` 精确或模板匹配翻译，未知文本（业务内容）原样显示；记录中平台写入的默认工作流与“你”等参与方名称经 `workflowDisplay` / `partyName` 展示翻译，成员与自定义工作流不翻译。Electron 宿主菜单、托盘、对话框、通知与 CLI 安装确认同步翻译；业务数据、提示词、冻结工作流说明、CLI 输出与存储历史不翻译。语言默认跟随 macOS，设置 → 常规可切换并重新加载。宿主经 preload 同步交付 `batonDesktop.locale`（语言与目录），翻译模块不含顶层 await，Node 仍可 require 包含它的 ESM 图。完整性、同步加载与模式校验见 `tests/i18n.test.mjs`，隔离实机验收见 `scripts/test-i18n.mjs`；打包验收 `scripts/test-packaged-electron.mjs` 核对宿主桥接口清单含只读 `locale` 数据与 `setLanguage`。
+
+CLI 根帮助：`cli/output.mjs` 的有序 `catalog` 生成命令目录，须覆盖 `cli/commands.mjs` 注册的全部命令组与 `auth`，`tests/configuration-cli.test.mjs` 校验遗漏；任务与沟通的操作说明来自 `groupOperations`，沟通列表与桌面一样不提供搜索。仅帮助文字，命令、参数、输出与 HTTP 不变。
+
+列表分页与顺序：CLI 所有 list 与记录读取默认每页 20、最新在前（规则见 docs/21）。`server/persistence.mjs` 的 queryEntities 让员工/角色/团队/工作流按写入位置倒序（最新创建在前，App 目录页同序），任务与沟通会话按最近活动；`cli/workspace.mjs` 的 communications get 沿 before 游标每页 20 条、最新在前，拒绝已移除的 `--before`；`cli/main.mjs` 的 tasks questions 按 createdAt 倒序。验收见 tests/state-journal、tests/cli-workspace 与 scripts/test-app-cli-parity.mjs；Runtime 与 MCP 工具无时间字段，保持固定顺序。

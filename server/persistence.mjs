@@ -5,6 +5,8 @@ import { DatabaseSync } from "node:sqlite";
 import {createConfigurationStore,configurationValues,CONFIGURATION_COLLECTIONS} from './configuration-store.mjs';
 
 const SNAPSHOT_ID = 1;
+// Configuration directories listed newest-created first (reverse write position).
+const NEWEST_CREATED_FIRST = new Set(['agents', 'roles', 'teams', 'workflowTemplates']);
 
 // Cold rows retain identities/order only; bodies are loaded when a command reads them.
 // A bounded clean-row cache is safe because dirty rows stay pinned until commit.
@@ -291,7 +293,10 @@ export function createSqlitePersistence(databasePath = ":memory:", { onSaveDiagn
       if(role){clauses.push(`EXISTS(SELECT 1 FROM json_each(value_json,'$.roleIds') WHERE value=?)`);values.push(role);}
       const where=clauses.join(' AND '), total=database.prepare(`SELECT COUNT(*) total FROM workspace_entities WHERE ${where}`).get(...values).total;
       const totalPages=Math.max(1,Math.ceil(total/pageSize));page=Math.min(page,totalPages);
-      const order=collection==='tasks'?`${field(archived?'archivedAt':'updatedAt')} DESC,id`:collection==='communicationConversations'?`${field('updatedAt')} DESC,id`:'position';
+      // Directories read newest first, shared by the App and CLI: tasks and
+      // conversations by latest activity, configuration records by creation
+      // (their write position, which edits keep; workflows carry no timestamps).
+      const order=collection==='tasks'?`${field(archived?'archivedAt':'updatedAt')} DESC,id`:collection==='communicationConversations'?`${field('updatedAt')} DESC,id`:NEWEST_CREATED_FIRST.has(collection)?'position DESC':'position';
       const items=database.prepare(`SELECT id FROM workspace_entities WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`).all(...values,pageSize,(page-1)*pageSize).map(row=>row.id);
       return {items,total,page,pageSize,totalPages,hasMore:page<totalPages};
     },

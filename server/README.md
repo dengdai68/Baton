@@ -189,6 +189,8 @@ Store.subscribeNotifications 发布未来已提交的任务待验收/完成及�
 
 任务交接正文：orchestrator.parseEmployeeResponse 合并原生正文与尾部 JSON 内不同的完整 summary，避免“提交验收：”等短前言覆盖真实报告；相同正文去重。原始 rawResponse 保留，既有消息不回填或改写，App/CLI 共用保存后的正文。
 
+目录顺序：`persistence.queryEntities` 让员工、角色、团队、工作流按写入位置倒序（最新创建在前），任务与沟通会话按最近活动倒序；`/api/{agents,roles,teams,workflow-templates}?page=` 的 App 目录页与 CLI list 因此同序。不带 `page` 的完整列表保持原有顺序，HTTP 参数与字段不变。
+
 ## 多语言边界
 
 服务端错误、事件与系统消息继续以简体中文源文字产生和存储，不随界面语言变化；客户端在展示点用 `$tm` 翻译已知文字，未知文字原样显示；默认工作流快照（`id: null`）与消息中的操作者/全体团队名称同样以源文字冻结，只在展示时翻译。认证守卫允许未登录读取 `/client/i18n.mjs`（不含凭据的静态脚本）；译文目录由桌面宿主经 preload 交付，不经 HTTP 公开。

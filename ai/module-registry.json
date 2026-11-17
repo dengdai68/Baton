@@ -385,7 +385,9 @@
    "humanMessageIdempotency": "tasks message/reply expose --client-request-id and the same run-scoped retry/conflict semantics as the App; collaboration output retains clientRequestId. Attachment-path retries compare saved attachment metadata before reusing IDs, through bounded collaboration pages rather than full workspaces.",
    "appParity": "Task pause/resume/retry/archive and long-term chat directly use existing desktop HTTP endpoints; all existing configuration groups retain shared input/state semantics. Detailed matrix in docs/21.",
    "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe.",
-   "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged."
+   "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged.",
+   "helpDirectory": "Root help renders the ordered catalog in cli/output.mjs, which must name every group registered in cli/commands.mjs plus auth (configuration-cli test). groupOperations gives tasks and communications their own summaries; communications list pages without search like the desktop. Help text only: commands, flags, output and HTTP are unchanged.",
+   "recordPaging": "Every list and the record reads (tasks collaboration/questions/artifacts, automations triggers, communications get) default to 20 per page, newest first, with --page N | --all. communications get walks the server before-cursor with limit 20 (200 for --all), returns messages newest first with page/pageSize/hasMore and rejects --before. Runtimes and MCP tools have no timestamps and keep their fixed order."
   },
   {
    "id": "server.data-reset",
@@ -922,7 +924,8 @@
     ]
    },
    "startupLoading": "Authentication/connection ready is independent of business SQLite. First business request or configured ten-second recovery tick shares one initialization; JSON configuration reads remain independent. Collection identities/order and bodies are lazy; untouched history stays cold through unrelated commits. Update readiness never treats unknown state as idle.",
-   "communicationDirectory": "The paged communication directory excludes status=deleted group chats alongside private chats of deleted employees; no schema change or migration."
+   "communicationDirectory": "The paged communication directory excludes status=deleted group chats alongside private chats of deleted employees; no schema change or migration.",
+   "directoryOrder": "Paged directories read newest first: tasks by updatedAt (archive by archivedAt) and conversations by updatedAt; agents, roles, teams and workflow templates by reverse write position, i.e. newest created first (edits keep position; workflows have no timestamps). App directory pages and CLI lists share it; unpaged lists, HTTP parameters and fields are unchanged."
   },
   {
    "id": "server.run-files",

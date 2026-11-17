@@ -59,6 +59,18 @@ try {
   await cli(['communications','update',chat.id],{name:'已从 CLI 编辑'});assert.equal((await api('/api/communications/'+chat.id)).data.conversation.name,'已从 CLI 编辑');
   await page.goto(origin+'/communication');await page.locator(`[data-chat-id="${chat.id}"]`).waitFor({state:'attached'});
   await cli(['communications','delete',chat.id,'--yes']);assert.equal((await api('/api/communications/'+chat.id)).status,400);console.log('CHECKPOINT '+evidence.cases.length);evidence.cases.push('CLI group create/edit/delete reflected in real desktop; history retained');
+  // Directory order: App pages and CLI lists share one server order, newest created first.
+  const newest={agents:(await cli(['agents','create'],{name:'顺序员工乙'})).agent.id,roles:(await cli(['roles','create'],{name:'顺序角色甲',prompt:'隔离验证'}),await cli(['roles','create'],{name:'顺序角色乙',prompt:'隔离验证'})).role.id,teams:(await cli(['teams','create'],{name:'顺序团队乙',memberAgentIds:[agent.id]})).team.id,workflows:flow.id};
+  for(const [group,[route,row,target,attribute]] of Object.entries({agents:['/agents','.employee-card','[data-agent-detail]','data-agent-detail'],roles:['/roles','.role-directory-row','[data-edit-role]','data-edit-role'],teams:['/teams','.team-directory-row','[data-edit-team]','data-edit-team'],workflows:['/workflows','.workflow-title-button','','data-edit-workflow']})) {
+    const listed=(await cli([group,'list'])).items;
+    await page.goto(origin+route);await page.locator(row).first().waitFor();
+    const shown=await page.locator(row).evaluateAll((rows,{target,attribute})=>rows.map(row=>(target?row.querySelector(target):row)?.getAttribute(attribute)),{target,attribute});
+    console.log(`${group}: App ${shown.join(',')} | CLI ${listed.map(item=>item.id).join(',')}`);
+    assert.deepEqual(shown,listed.map(item=>item.id),`${group}: App directory order equals CLI list order`);
+    assert.equal(listed[0].id,newest[group],`${group}: the most recently created item comes first`);
+    const times=listed.map(item=>item.createdAt).filter(Boolean);assert.deepEqual(times,[...times].sort().reverse(),`${group}: createdAt never increases down the list`);
+  }
+  console.log('CHECKPOINT '+evidence.cases.length);evidence.cases.push('employee/role/team/workflow directories: App order equals CLI list order, newest created first');
   const files=await cli(['tasks','files',task.id]);assert.ok(JSON.stringify(files).includes('readme.txt'));
   assert.match(JSON.stringify(await cli(['tasks','file',task.id,'--path','readme.txt'])),/同一文件/);const output=join(root,'download.txt');await cli(['tasks','download',task.id,'--path','readme.txt','--output',output]);assert.equal(await readFile(output,'utf8'),'CLI 与桌面同一文件\n');
   await assert.rejects(cli(['tasks','file',task.id,'--path','../records/baton.sqlite']));console.log('CHECKPOINT '+evidence.cases.length);evidence.cases.push('real HTTP file listing/read/download and traversal rejection');

@@ -100,7 +100,7 @@ resources.communications = {description:'长期私聊与独立群聊；与桌面
   message:{schema:chatMessage,example:{content:'请分析这个问题',clientRequestId:'chat_request_001',mentionAgentIds:[]}},
   read:{schema:object({messageId:str('本会话已显示的消息 ID；标记已读，不发送消息。')},['messageId']),example:{messageId:'<消息ID>'}},
   retry:{schema:object({deliveryId:str('本会话失败投递 ID；从 get 的 deliveries 查询。')},['deliveryId']),example:{deliveryId:'<投递ID>'}}
-},notes:['list [--page N | --all] 与桌面会话列表同一分页；get ID [--before MESSAGE_ID] [--all] 读取历史及投递状态，不自动标记已读。成员仅返回 ID/名称/状态，不展开职责提示词。', 'create --file：kind=agent 配 targetId，复用该员工长期私聊；kind=group 配 memberAgentIds，可选 name，每次新建独立群聊。update 仅群聊名称和完整成员集合，省略保持；delete ID --yes 仅删除群聊，正在回复时拒绝，历史保留。', 'message ID --file 使用客户端生成并持久保存的 clientRequestId；重试原输入沿用同 ID，服务返回原消息，不重复唤醒。附件字段与任务相同；成功回执为已保存/入队，不表示员工已回复。retry ID --file 指定失败 deliveryId，沿用原消息及会话。', 'read ID --file 指定 messageId 标记已读；不隐式修改读取状态。', 'console ID [--agent AGENT_ID] [--before EVENT_ID] [--follow] 与任务控制台同一分页/持续读取语义；console-content ID --event EVENT_ID 读取已保存脱敏正文；attachment ID --attachment ID --output LOCAL 下载本会话附件，不覆盖本机文件。']};
+},notes:['list [--page N | --all] 与桌面会话列表同一分页，最近活动在前；get ID [--page N | --all] 每页 20 条消息及投递状态、最新在前，--page 向更早翻页，不自动标记已读。成员仅返回 ID/名称/状态，不展开职责提示词。', 'create --file：kind=agent 配 targetId，复用该员工长期私聊；kind=group 配 memberAgentIds，可选 name，每次新建独立群聊。update 仅群聊名称和完整成员集合，省略保持；delete ID --yes 仅删除群聊，正在回复时拒绝，历史保留。', 'message ID --file 使用客户端生成并持久保存的 clientRequestId；重试原输入沿用同 ID，服务返回原消息，不重复唤醒。附件字段与任务相同；成功回执为已保存/入队，不表示员工已回复。retry ID --file 指定失败 deliveryId，沿用原消息及会话。', 'read ID --file 指定 messageId 标记已读；不隐式修改读取状态。', 'console ID [--agent AGENT_ID] [--before EVENT_ID] [--follow] 与任务控制台同一分页/持续读取语义；console-content ID --event EVENT_ID 读取已保存脱敏正文；attachment ID --attachment ID --output LOCAL 下载本会话附件，不覆盖本机文件。']};
 
 export const guide = {
   title: 'Baton — AI 团队操作系统', version: 9,
@@ -129,14 +129,14 @@ export const guide = {
   input: 'create/update/import/message/reply 仅用--file JSON文件或--file - stdin对象；最多1MiB；不接受内联秘密。list默认每页20项，--all显式全部，--search仅过滤名称/说明。',
   readBeforeWrite: 'get含只读id/system/color/createdAt/employeeCount等元信息，不要原样回写整个读模型；按schema.properties构造输入。员工runtime只返回profileId/extensionSelection，不回写派生执行路径或manifest。',
   flags: [
-    ['--agent ID / --event ID / --before ID', 'console 的成员筛选、正文事件与向前分页游标；tasks console 必填 --agent，console-content 必填 --event。communications get 支持 --before。'],
+    ['--agent ID / --event ID / --before ID', 'console 的成员筛选、正文事件与向前分页游标；tasks console 必填 --agent，console-content 必填 --event。'],
     ['--follow', '仅 console：持续读取新事件；--json 改为每个增量一行 JSON envelope，Ctrl+C 退出。不能与 --before 混用。'],
     ['--path PATH / --offset N / --output PATH / --attachment ID', '工作目录相对路径、目录偏移、显式下载目的文件及附件 ID；download/attachment 不覆盖已有文件。'],
     ['--help', '查看根、分组或当前命令的详细说明；不需要服务或登录。'],
     ['--json', '显式机器输出；普通命令输出单个 JSON envelope，console --follow 每个增量一行；交互密码提示仅写 stderr。可放在命令前后，管道不会自动启用。'],
     ['--file PATH | -', 'create/update/import 的 JSON 对象文件；- 表示从 stdin 读取，最多 1MiB。帮助中的模板需替换占位 ID；不要提交含凭据的文件。'],
     ['--yes', 'delete/test 的明确确认；不会自动获得外部操作权限。Runtime 测试真实调用模型且可能消耗额度。'],
-    ['--page N | --all', 'list / mcps tools：默认每页 20 项，N 为正整数；--all 返回所有匹配项，不可与 --page 混用。'],
+    ['--page N | --all', 'list / mcps tools：默认每页 20 项、最新在前（Runtime 与 MCP 工具没有时间字段，保持固定顺序），N 为正整数；--all 返回所有匹配项，不可与 --page 混用。'],
     ['--refresh', 'runtimes models 忽略30秒模型缓存；mcps tools 忽略60秒工具缓存；均复用正在执行的同一查询。'],
     ['--workflow ID_OR_NAME', 'tasks create：选择当前工作流并冻结节点/分支说明；配合 --start 立即执行。tasks list：按工作流过滤。名称必须唯一。'],
     ['--role ID_OR_NAME', '仅 agents list：按绑定角色精确 ID 或唯一名称过滤，再分页；重名需使用 ID。'],

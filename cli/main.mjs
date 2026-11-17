@@ -62,7 +62,8 @@ async function executeParsed({ args, flags }, { stdin = process.stdin, stderr = 
     if(group==='communications') {
       if(['message','read','retry'].includes(operation))allowed.push('file');
       if(operation==='message')allowed.push('client-request-id');
-      if(operation==='get')allowed.push('before','all');
+      if(operation==='get')allowed.push('page','all');
+      if(operation==='get' && flags.before!==undefined)throw usage('communications get 已改用 --page 翻页', '默认读取最新 20 条、最新在前；--page N 读取更早的第 N 页，--all 读取全部。');
     }
     if (group === 'tasks') {
       if (['create','update'].includes(operation)) allowed.push('start', 'workflow');
@@ -208,6 +209,8 @@ async function readDirectoryPages(client,path,key,query,all) {
 }
 
 const reference = (id, name) => id ? { id, name: name || null } : null;
+/** Comparator for record pages: later createdAt first; untimed records keep their order after timed ones. */
+const newestFirst = (a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
 function taskView(task, { summary = false } = {}) {
   const base = { id: task.id, title: task.title, status: task.status, workflow: {id: task.workflowTemplateId || null, name: task.workflowSnapshot?.name || "默认协作"}, memberCount: task.memberAgentIds?.length || (task.memberSnapshots?.length || 0) + (task.managerSnapshot ? 1 : 0), updatedAt: task.updatedAt, archivedAt: task.archivedAt };
   if (summary) return base;
@@ -360,7 +363,8 @@ async function executeTaskCommand(client, operation, id, flags, page, stdin, opt
     return { taskId: id, runId: run.id, message: { ...keyFields(result.message, ['id', 'clientRequestId', 'kind', 'replyToMessageId', 'createdAt', 'attachments']), recipient: reference(result.message.recipient?.id, result.message.recipient?.name) }, ...keyFields(result, ['queued', 'resumed', 'interactionOnly', 'replayed']) };
   }
   if (['questions', 'artifacts', 'collaboration'].includes(operation)) {
-    const items = operation === 'questions' ? questions.map(question => ({ ...keyFields(question, ['id', 'content', 'questionType', 'createdAt']), sender: reference(question.sender?.id, question.sender?.name), recipient: reference(question.recipient?.id, question.recipient?.name) })) : operation === 'artifacts' ? workspace.artifacts : collaborationRecords(workspace).reverse().map(({ tone, statusCode, ...record }) => record);
+    // Like every list and record page: newest first.
+    const items = operation === 'questions' ? [...questions].sort(newestFirst).map(question => ({ ...keyFields(question, ['id', 'content', 'questionType', 'createdAt']), sender: reference(question.sender?.id, question.sender?.name), recipient: reference(question.recipient?.id, question.recipient?.name) })) : operation === 'artifacts' ? workspace.artifacts : collaborationRecords(workspace).reverse().map(({ tone, statusCode, ...record }) => record);
     return { taskId: id, runId: run?.id || null, ...paginate(items) };
   }
   const backoffDispatch = workspace.dispatches.find(dispatch => dispatch.status === 'queued' && dispatch.lastError && dispatch.nextRetryAt && Date.parse(dispatch.nextRetryAt) > Date.now());
