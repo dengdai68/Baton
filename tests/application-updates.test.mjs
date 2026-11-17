@@ -6,7 +6,7 @@ import { request as httpRequest } from 'node:http';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createApplicationUpdates, selectRelease, fetchLatestRelease, downloadReleaseInstaller, RELEASE_ROOT } from '../apps/electron/updates.mjs';
+import { createApplicationUpdates, selectRelease, pickRelease, normalizeUpdateChannel, fetchLatestRelease, fetchReleases, downloadReleaseInstaller, RELEASE_ROOT } from '../apps/electron/updates.mjs';
 import { isUpdateSender } from '../apps/electron/policy.mjs';
 import { createAuth } from '../server/auth.mjs';
 
@@ -150,4 +150,61 @@ test('manual installer follows the active data root after verified relocation',a
   const service=createApplicationUpdates(options({cacheRoot:()=>root,downloadInstaller:async(_release,cache)=>{downloadedAt=cache;return join(cache,'verified.dmg');},openInstaller:async path=>{opened=path;return '';}}));
   await service.check();await service.download();assert.equal(downloadedAt,'/before/updates');
   root='/after/updates';await service.install();assert.equal(opened,'/after/updates/verified.dmg');service.stop();
+});
+
+test('beta channel takes vX.Y.Z-beta.N prereleases and releases, highest version first, never downgrading', () => {
+  const beta = (version, extra) => release(version, { prerelease: true, ...extra });
+  // Drafts, malformed suffixes and mismatched prerelease flags never qualify, even on beta.
+  for (const item of [beta('2.0.0-beta.1',{draft:true}),beta('2.0.0-beta.01'),beta('2.0.0-rc.1'),beta('2.0.0-beta'),release('2.0.0-beta.1'),beta('2.0.0')]) assert.equal(selectRelease(item,'0.1.0','arm64','beta'),null,item.tag_name);
+  assert.equal(selectRelease(beta('2.0.0-beta.1'),'0.1.0','arm64'),null,'the stable channel ignores betas');
+  const picked = selectRelease(beta('2.0.0-beta.1'),'0.1.0','arm64','beta');
+  assert.deepEqual({version:picked.version,channel:picked.channel,installer:picked.installer?.name},{version:'2.0.0-beta.1',channel:'beta',installer:'Baton-2.0.0-beta.1-arm64.dmg'});
+  assert.equal(selectRelease(release('2.0.0'),'0.1.0','arm64','beta').channel,'stable');
+  // GitHub lists by date; versions decide, and a release outranks its own betas.
+  const list = [beta('1.2.0-beta.2'),release('1.1.0'),beta('1.2.0-beta.3'),beta('1.1.0-beta.9')];
+  console.log('beta channel picks:', pickRelease(list,'1.1.0','arm64','beta').version, '| with 1.2.0:', pickRelease([...list,release('1.2.0')],'1.1.0','arm64','beta').version);
+  assert.equal(pickRelease(list,'1.1.0','arm64','beta').version,'1.2.0-beta.3');
+  assert.equal(pickRelease([...list,release('1.2.0')],'1.1.0','arm64','beta').version,'1.2.0');
+  assert.equal(pickRelease(list,'1.1.0','arm64','stable'),null,'stable keeps to releases');
+  assert.equal(pickRelease(list,'1.2.0-beta.3','arm64','beta'),null,'nothing equal or older');
+  assert.equal(pickRelease([release('1.1.0')],'1.2.0-beta.3','arm64','stable'),null,'back on stable, a beta install is never downgraded');
+  assert.equal(normalizeUpdateChannel('beta'),'beta');assert.equal(normalizeUpdateChannel('stable'),'stable');assert.equal(normalizeUpdateChannel('nightly'),null);
+});
+
+test('beta channel reads the published release list with the same bounds and errors', async () => {
+  const list = await fetchReleases(async (url, init) => {
+    assert.equal(url,'https://api.github.com/repos/dengdai68/Baton/releases?per_page=30');assert.equal(init.redirect,'error');
+    return Response.json([release('1.2.0-beta.1',{prerelease:true})]);
+  });
+  assert.equal(list[0].tag_name,'v1.2.0-beta.1');
+  assert.deepEqual(await fetchReleases(async()=>new Response('',{status:404})),[]);
+  await assert.rejects(fetchReleases(async()=>Response.json({message:'not a list'})),/版本列表/);
+  await assert.rejects(fetchReleases(async()=>new Response('',{status:403})),/GitHub/);
+});
+
+test('stable default never reads betas; switching saves first, re-checks and refuses while downloading', async () => {
+  const saved = []; let lists = 0;
+  const service = createApplicationUpdates(options({currentVersion:'1.1.0',readLatest:async()=>release('1.1.0'),
+    readAll:async()=>{lists++;return [release('1.2.0-beta.1',{prerelease:true}),release('1.1.0')];},saveChannel:async value=>{saved.push(value);}}));
+  const stable = await service.check();
+  assert.deepEqual({channel:stable.channel,phase:stable.phase,version:stable.version},{channel:'stable',phase:'current',version:null});assert.equal(lists,0);
+  const beta = await service.setChannel('beta');
+  console.log('after switching to beta:', beta.phase, beta.version, beta.releaseChannel, beta.message);
+  assert.deepEqual({channel:beta.channel,phase:beta.phase,version:beta.version,releaseChannel:beta.releaseChannel,canDownload:beta.canDownload},{channel:'beta',phase:'available',version:'1.2.0-beta.1',releaseChannel:'beta',canDownload:true});
+  assert.equal(beta.message,'发现测试版 1.2.0-beta.1');assert.deepEqual(saved,['beta']);assert.equal(lists,1);
+  await assert.rejects(service.setChannel('nightly'),/更新渠道无效/);assert.deepEqual(saved,['beta']);
+  const back = await service.setChannel('stable');
+  assert.deepEqual({channel:back.channel,phase:back.phase,version:back.version,releaseChannel:back.releaseChannel},{channel:'stable',phase:'current',version:null,releaseChannel:null});
+  assert.deepEqual(saved,['beta','stable']);service.stop();
+  // A failed save changes nothing.
+  const failing = createApplicationUpdates(options({saveChannel:async()=>{throw new Error('disk full');}}));
+  await assert.rejects(failing.setChannel('beta'),/disk full/);assert.equal(failing.snapshot().channel,'stable');failing.stop();
+  // A running download keeps its channel until it finishes.
+  let finish;const downloading = createApplicationUpdates(options({downloadInstaller:()=>new Promise(resolve=>{finish=resolve;})}));
+  await downloading.check();const pending = downloading.download();
+  await assert.rejects(downloading.setChannel('beta'),/下载或安装进行中/);finish('/isolated/verified.dmg');assert.equal((await pending).phase,'downloaded');downloading.stop();
+  // A saved beta choice starts on beta and reports an empty list truthfully.
+  const restored = createApplicationUpdates(options({channel:'beta',readAll:async()=>[]}));
+  assert.deepEqual({channel:restored.snapshot().channel,message:restored.snapshot().message},{channel:'beta',message:'启动后自动检查正式版和测试版。'});
+  assert.equal((await restored.check()).message,'尚未发布可用版本。');restored.stop();
 });

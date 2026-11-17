@@ -4,9 +4,13 @@
 
 应用更新属于 Electron 宿主生命周期，与 Git 插件更新、Store 领域配置及 CLI 无关。采用现有 electron-builder 对应的 `electron-updater` 6.x 与显式 `semver` 依赖，复用 Squirrel.Mac 的下载校验和签名安装，不自建替换正在运行应用的脚本或系统服务。控制器为 `apps/electron/updates.mjs`，renderer 只调用有限的状态、检查、下载、安装及打开 Release 命令，不提供 URL、文件或进程参数。
 
-## 正式版规则与交互
+## 更新渠道与交互
 
-仅查询公开仓库 `dengdai68/Baton` 的 GitHub latest Release。不读取本机 GitHub 凭据。draft/prerelease 为 true，或标签不是严格 `v?主.次.补丁` 的版本，均不参与更新；按 SemVer 比较，禁止降级。同版本正式版高于其 Beta，当前 Beta 也只接收正式版。404 表示尚无正式版，网络错误不冒充“已是最新”。
+设置 → 更新 → 应用提供“更新渠道”：**稳定版（正式版，默认）** 与 **Beta 版（测试版）**。选择保存在配置根 `desktop-preferences.json` 的 `updateChannel`（`stable` / `beta`），缺失或无效即稳定版；只有设置 → 更新页可经关闭式 `setAppUpdateChannel` 修改。切换时控制器先保存选择，保存失败则不变；成功后清空旧候选并立即重新检查。下载或安装进行中拒绝切换。
+
+- 稳定版：仅查询公开仓库 `dengdai68/Baton` 的 GitHub latest Release。draft/prerelease 为 true，或标签不是严格 `v?主.次.补丁` 的版本，均不参与更新。404 表示尚无正式版。
+- Beta 版：读取最近 30 个公开 Release（匿名读取不含草稿），只接受 prerelease=false 的 `v主.次.补丁` 与 prerelease=true 的 `v主.次.补丁-beta.N`（N 为无前导零的正整数），按 SemVer 取最高者；标签与 prerelease 标记不一致、其他后缀一律忽略。GitHub 列表按日期排序，由客户端比较版本。
+- 两个渠道都按 SemVer 比较、禁止降级，同版本正式版高于其 Beta。从 Beta 切回稳定版时保留已装测试版，直到出现更高的正式版。不读取本机 GitHub 凭据；网络错误不冒充“已是最新”。状态文字按渠道区分（测试版候选显示“发现测试版 X”），稳定版文字保持原样。
 
 安装版启动约 20 秒后自动检查，运行期间每 6 小时检查；离线失败保留现状，下次周期或用户手动重试。检查不会自动下载或重启。发现更新只在设置 → 更新 → 应用更新区域显示版本信息和更新按钮；不创建通知卡、弹窗或自动跳转。应用菜单“检查更新…”可主动打开该区域，更新 Tab 直接展示应用更新与插件更新两个配置区，不重复“更新”标题；GitHub 文字链接位于当前版本后，不单独展示长地址或“发布说明与下载”按钮。用户点击下载后展示进度，完成后明确提示重启安装或打开安装包。原生安装器关闭自动退出安装，普通退出不会暗中安装。
 
@@ -14,9 +18,9 @@ macOS Developer ID 签名的安装版使用原生自动安装。当前 ad-hoc �
 
 ## 发布契约
 
-正式版标签、package.json 与锁文件版本必须一致，标签不得有预发布后缀。Release 至少上传同次构建的 DMG、ZIP、`latest-mac.yml`、blockmap（如生成）和 `SHA256SUMS.txt`。签名正式发布工作流使用 Developer ID、Apple 公证凭据，签名安装要求相同 Apple Team；私钥仅由 CI secrets 提供，不能进入应用、日志或仓库。
+正式版标签、package.json 与锁文件版本必须一致，标签不得有预发布后缀。测试版标签为 `v主.次.补丁-beta.N` 且 Release 标记为 prerelease（非 latest），版本一致性要求相同。Release 至少上传同次构建的 DMG、ZIP、`latest-mac.yml`、blockmap（如生成）和 `SHA256SUMS.txt`；测试版构建同样生成 `latest-mac.yml`，Beta 渠道据此使用相同的下载与校验流程。签名正式发布工作流使用 Developer ID、Apple 公证凭据，签名安装要求相同 Apple Team；私钥仅由 CI secrets 提供，不能进入应用、日志或仓库。
 
-原生更新器固定 latest channel、allowPrerelease=false、allowDowngrade=false，使用选中正式 Release 的固定标签地址，不让后续 Beta 抢占下载。更新元数据版本必须与选中 Release 相同。手动 DMG 下载仅接受本仓库该标签下的固定文件名，流式落入宿主私有更新缓存，按 GitHub asset SHA-256 digest 或同 Release 的校验清单验证大小与内容，成功后原子完成；失败不暴露半成品，不关闭 TLS、签名或 Gatekeeper 校验。
+原生更新器使用选中 Release 的固定标签地址与 latest channel，allowDowngrade=false，allowPrerelease 仅在选中候选为测试版时开启；固定地址保证不会被其他 Release 抢占下载。更新元数据版本必须与选中 Release 相同。手动 DMG 下载仅接受本仓库该标签下的固定文件名，流式落入宿主私有更新缓存，按 GitHub asset SHA-256 digest 或同 Release 的校验清单验证大小与内容，成功后原子完成；失败不暴露半成品，不关闭 TLS、签名或 Gatekeeper 校验。
 
 ## 重启边界
 

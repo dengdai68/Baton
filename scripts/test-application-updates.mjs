@@ -25,6 +25,7 @@ try{
   await page.goto(origin+'/login');await page.locator('#username').fill('updates-qa');await page.locator('#password').fill(password);await page.getByRole('button',{name:'登录',exact:true}).click();await page.locator('#account-name').waitFor();
   await page.goto(origin+'/tasks');
   assert.match(await page.evaluate(()=>window.batonDesktop.checkAppUpdate().then(()=>'',e=>e.message)),/设置.*更新/,'production command rejects wrong route');
+  assert.match(await page.evaluate(()=>window.batonDesktop.setAppUpdateChannel('beta').then(()=>'',e=>e.message)),/设置.*更新/,'production channel switch rejects wrong route');
   const moduleRoot=bundle?resolve(bundle,'Contents/Resources/app.asar'):resolve('.');
   // Inject fixture adapters into the real controller, not replacement DOM.
   await desktop.evaluate(async({ipcMain,BrowserWindow},{moduleRoot,root,origin})=>{
@@ -42,15 +43,22 @@ try{
       if(channel==='desktop:updates:changed' && args[0]?.currentVersion!=='1.0.0-beta.1')return;
       return send(channel,...args);
     };
+    const published=version=>({tag_name:'v'+version,draft:false,prerelease:version.includes('-'),assets:[`Baton-${version}-arm64.dmg`,'latest-mac.yml'].map(name=>({name,state:'uploaded',size:bytes.length,digest:'sha256:'+digest,browser_download_url:`${RELEASE_ROOT}/download/v${version}/${name}`}))});
+    state.channel='stable';state.saved=[];
     state.reset=()=>{
       state.controller?.stop();
-      const controller=createApplicationUpdates({currentVersion:'1.0.0-beta.1',packaged:true,arch:'arm64',nativeInstall:state.native,cacheRoot:join(root,'updates'),
+      const controller=createApplicationUpdates({currentVersion:'1.0.0-beta.1',packaged:true,arch:'arm64',nativeInstall:state.native,cacheRoot:join(root,'updates'),channel:state.channel,
         readLatest:async()=>{
           if(state.mode==='offline')throw Error('离线检查失败');
           if(state.mode==='none')return null;
-          const version=state.mode==='beta'?'2.0.0-beta.2':'1.0.0';
-          return {tag_name:'v'+version,draft:false,prerelease:state.mode==='beta',assets:[`Baton-${version}-arm64.dmg`,'latest-mac.yml'].map(name=>({name,state:'uploaded',size:bytes.length,digest:'sha256:'+digest,browser_download_url:`${RELEASE_ROOT}/download/v${version}/${name}`}))};
+          return published(state.mode==='beta'?'2.0.0-beta.2':'1.0.0');
         },
+        // The beta channel reads GitHub's list: a newer beta next to the older release.
+        readAll:async()=>{
+          if(state.mode==='offline')throw Error('离线检查失败');
+          return state.mode==='none'?[]:['1.0.0','2.0.0-beta.2'].map(published);
+        },
+        saveChannel:async value=>{state.saved.push(value);state.channel=value;},
         downloadInstaller:async(release,cache,progress,options)=>{
           state.progress=progress;progress({percent:25});await new Promise(resolve=>{state.finish=resolve;});
           return downloadReleaseInstaller(release,cache,progress,{...options,fetcher:async()=>new Response(bytes)});
@@ -70,6 +78,10 @@ try{
         if(!allowed)throw Error('请在设置 → 更新中操作');return state.controller[method]();
       });
     }
+    ipcMain.removeHandler('desktop:updates:channel');
+    ipcMain.handle('desktop:updates:channel',(event,value)=>{
+      if(!isUpdateSender(event,contents,origin))throw Error('请在设置 → 更新中操作');return state.controller.setChannel(value);
+    });
   },{moduleRoot,root,origin});
   await page.goto(origin+'/settings/updates');await page.locator('[data-app-version]').filter({hasText:'1.0.0-beta.1'}).waitFor();
   assert.equal(await page.locator('[data-settings-page="updates"]').innerText(),'更新');
@@ -90,6 +102,22 @@ try{
     assert.equal(await page.locator('[data-app-update-download]').isVisible(),false);evidence.cases.push(mode);
     assert.equal(await page.locator('[data-app-update-progress]').isVisible(),false);
   }
+  // Channel: stable is the default; beta also offers the newer beta, and switching back hides it again.
+  const channel=page.getByLabel('更新渠道',{exact:true});
+  assert.equal(await channel.inputValue(),'stable');assert.equal(await channel.isEnabled(),true);
+  assert.deepEqual(await channel.locator('option').allInnerTexts(),['稳定版（正式版）','Beta 版（测试版）']);
+  await desktop.evaluate(()=>{globalThis.batonUpdateFixture.mode='beta';});
+  await channel.selectOption('beta');
+  await page.locator('[data-app-update-status]').filter({hasText:'发现测试版 2.0.0-beta.2'}).waitFor();
+  assert.match(await page.locator('[data-app-version]').innerText(),/最新测试版 2\.0\.0-beta\.2/);
+  assert.match(await page.locator('[data-app-update-note]').innerText(),/正式版和测试版|手动安装/);
+  assert.equal(await page.locator('[data-app-update-download]').isVisible(),true);
+  await page.screenshot({path:join(root,'beta-channel.png')});
+  await channel.selectOption('stable');
+  await page.locator('[data-app-update-status]').filter({hasText:'没有可用'}).waitFor();
+  assert.equal(await page.locator('[data-app-update-download]').isVisible(),false,'back on stable the beta is not offered');
+  assert.equal(await channel.inputValue(),'stable');
+  assert.deepEqual(await desktop.evaluate(()=>globalThis.batonUpdateFixture.saved),['beta','stable']);evidence.cases.push('channel stable → beta → stable, saved in order');
   await desktop.evaluate(()=>{globalThis.batonUpdateFixture.mode='stable';});await check();
   await page.locator('[data-app-update-status]').filter({hasText:'发现正式版 1.0.0'}).waitFor();
   assert.equal(await page.locator('.app-update-notice').count(),0,'available update is displayed only in update settings');

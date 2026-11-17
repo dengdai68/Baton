@@ -69,7 +69,7 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 应用图标保留用户原始 PNG；侧栏使用清理边缘的彩色圆角图，Dock/安装包使用相同的 824/1024 图形比例及透明留白，避免图标过大或白色底板。顶部菜单栏使用独立的 18pt/2x 单色 A 模板，随 macOS 明暗背景和选中状态变色。详见 web/icons/README.md；无 CLI/API 或任务协议变化。
 
-应用更新由 updates.mjs 管理，仅检查公开仓库 latest 正式 Release；Beta/draft/预发布标签排除，启动20秒及每6小时检查，用户点击才下载。主进程限定 settings/updates 的检查/下载/安装 IPC，状态订阅只发主窗口。Developer ID 安装版使用 electron-updater/Squirrel.Mac，临时签名版流式下载并校验 DMG 后手动安装。原生重启需自有服务的原子空闲锁，繁忙/未知拒绝，失败或30秒超时释放；普通退出不自动安装。详见 docs/24-desktop-updates.md。
+应用更新由 updates.mjs 管理：默认稳定版渠道只检查公开仓库 latest 正式 Release；Beta 渠道读取最近 Release 列表，另接受标记为 prerelease 的 `vX.Y.Z-beta.N`，按 SemVer 取最高、禁止降级；draft 与其他标签始终排除。启动20秒及每6小时检查，用户点击才下载。渠道由 preferences.mjs 保存为 `desktop-preferences.json` 的 `updateChannel`（与其他偏好合并写入），控制器 `setChannel` 先保存再重新检查，下载/安装中拒绝。主进程限定 settings/updates 的检查/下载/安装/渠道 IPC，状态订阅只发主窗口。Developer ID 安装版使用 electron-updater/Squirrel.Mac，临时签名版流式下载并校验 DMG 后手动安装。原生重启需自有服务的原子空闲锁，繁忙/未知拒绝，失败或30秒超时释放；普通退出不自动安装。详见 docs/24-desktop-updates.md。
 
 更新信息仅在设置/updates 区域展示，不创建全局通知卡；主进程继续检查并保存进程内状态，用户打开该区域时读取最新值，区域内订阅状态和进度。HTTP/CLI、下载及重启安装协议不变。
 

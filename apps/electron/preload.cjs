@@ -44,6 +44,7 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
     checkAppUpdate: () => ipcRenderer.invoke("desktop:updates:check"),
     downloadAppUpdate: () => ipcRenderer.invoke("desktop:updates:download"),
     installAppUpdate: () => ipcRenderer.invoke("desktop:updates:install"),
+    setAppUpdateChannel: (channel) => ipcRenderer.invoke("desktop:updates:channel", channel),
     onAppUpdate: (listener) => {
       if (typeof listener !== 'function') return () => {};
       const handler = (_event, value) => listener(value);

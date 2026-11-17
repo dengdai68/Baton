@@ -16,12 +16,12 @@ import {relocateStorage,finishStorageRelocation} from './storage-relocation.mjs'
 import { diagnostic, diagnostics, installProcessDiagnostics } from "../../server/diagnostics.mjs";
 import { legacyDataRequiresMigration, migrationGuidance } from "../../server/data-home.mjs";
 import { createInterface } from "node:readline";
-import { closeModes, normalizeAppearance, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage } from "./preferences.mjs";
+import { closeModes, normalizeAppearance, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel } from "./preferences.mjs";
 import { loadLoginShellEnvironment } from "./login-shell-env.mjs";
 import { confirmCliInstallation } from "./cli-confirmation.mjs";
 import { createCliInstallation } from "./cli-installation.mjs";
 import { showAppDialog } from "./app-dialog.mjs";
-import { createApplicationUpdates, fetchLatestRelease, downloadReleaseInstaller } from "./updates.mjs";
+import { createApplicationUpdates, fetchLatestRelease, fetchReleases, downloadReleaseInstaller } from "./updates.mjs";
 import {migrateDesktopConfiguration} from './configuration-root-migration.mjs';
 
 // Shared dialog context: every app-styled dialog gets the screen work area so
@@ -395,9 +395,13 @@ async function startApplicationUpdates() {
     } catch (error) { diagnostic('desktop.update_signature_check_failed',{error}); }
   }
   const currentVersion = app.isPackaged ? app.getVersion() : JSON.parse(await readFile(join(sourceRoot,'package.json'),'utf8')).version;
+  // An unreadable preference file keeps the default stable channel rather than blocking updates.
+  const channel = await readUpdateChannel(preferencesFile).catch(error => { diagnostic('desktop.update_channel_read_failed',{error}); return 'stable'; });
   applicationUpdates = createApplicationUpdates({ currentVersion, packaged: app.isPackaged && process.platform === 'darwin',
-    nativeInstall, cacheRoot: () => join(controlRoot,'updates'), prepareRestart: prepareUpdateRestart, releaseRestart: releaseUpdateRestart,
+    nativeInstall, channel, cacheRoot: () => join(controlRoot,'updates'), prepareRestart: prepareUpdateRestart, releaseRestart: releaseUpdateRestart,
     readLatest: () => fetchLatestRelease((url, options) => net.fetch(url, options)),
+    readAll: () => fetchReleases((url, options) => net.fetch(url, options)),
+    saveChannel: value => saveUpdateChannel(preferencesFile, value),
     downloadInstaller: (release, cache, progress, options) => downloadReleaseInstaller(release, cache, progress, { ...options, fetcher: (url, init) => net.fetch(url, init) }),
     openInstaller: path => shell.openPath(path), onDiagnostic: error => diagnostic('desktop.update_failed',{error}),
     createNativeUpdater(release, onProgress, onFailure) {
@@ -406,12 +410,13 @@ async function startApplicationUpdates() {
         async download(version) {
           const {default: module} = await import('electron-updater');
           updater = new module.MacUpdater({provider:'generic',url:release.feedUrl});
-          updater.channel = 'latest'; updater.allowPrerelease = false; updater.allowDowngrade = false;
+          // Every Release (beta included) ships latest-mac.yml under its own fixed tag URL.
+          updater.channel = 'latest'; updater.allowPrerelease = release.channel === 'beta'; updater.allowDowngrade = false;
           updater.autoDownload = false; updater.autoInstallOnAppQuit = false;
           updater.on('error', onFailure);
           updater.on('download-progress', onProgress);
           const result = await updater.checkForUpdates();
-          if (!result || result.updateInfo.version !== version) throw new Error($t("正式版更新元数据不一致，请前往 Release 核对"));
+          if (!result || result.updateInfo.version !== version) throw new Error($t("更新元数据与所选版本不一致，请前往 Release 核对"));
           await updater.downloadUpdate();
         },
         install() { if (!updater) throw new Error($t("原生更新器尚未就绪")); updater.quitAndInstall(false,true); }
@@ -505,6 +510,11 @@ async function start() {
       return applicationUpdates[method]();
     });
   }
+  // Channel choice: settings → updates only; the controller validates, saves and re-checks.
+  ipcMain.handle('desktop:updates:channel', (event, ...args) => {
+    if (args.length !== 1 || connecting || !isUpdateSender(event,contents,controlOrigin) || !applicationUpdates) throw new Error($t("请在设置 → 更新中操作"));
+    return applicationUpdates.setChannel(args[0]);
+  });
   // Synchronous on purpose: the preload gives the page its language and catalog before any
   // interface module evaluates, so translated module constants need no top-level await.
   // Other frames and origins receive null and keep the source language.

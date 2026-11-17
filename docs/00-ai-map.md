@@ -344,3 +344,5 @@ Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedT
 CLI 根帮助：`cli/output.mjs` 的有序 `catalog` 生成命令目录，须覆盖 `cli/commands.mjs` 注册的全部命令组与 `auth`，`tests/configuration-cli.test.mjs` 校验遗漏；任务与沟通的操作说明来自 `groupOperations`，沟通列表与桌面一样不提供搜索。仅帮助文字，命令、参数、输出与 HTTP 不变。
 
 列表分页与顺序：CLI 所有 list 与记录读取默认每页 20、最新在前（规则见 docs/21）。`server/persistence.mjs` 的 queryEntities 让员工/角色/团队/工作流按写入位置倒序（最新创建在前，App 目录页同序），任务与沟通会话按最近活动；`cli/workspace.mjs` 的 communications get 沿 before 游标每页 20 条、最新在前，拒绝已移除的 `--before`；`cli/main.mjs` 的 tasks questions 按 createdAt 倒序。验收见 tests/state-journal、tests/cli-workspace 与 scripts/test-app-cli-parity.mjs；Runtime 与 MCP 工具无时间字段，保持固定顺序。
+
+应用更新渠道：`apps/electron/updates.mjs` 的 `selectRelease`/`pickRelease` 按渠道选版本——稳定版（默认）只看 GitHub latest 正式版，Beta 版读取最近 Release 列表并另接受 prerelease 的 `vX.Y.Z-beta.N`，取 SemVer 最高、禁止降级；`setChannel` 先经 `preferences.mjs` 保存 `updateChannel` 再重新检查。宿主 `desktop:updates:channel` 仅限设置 → 更新页，preload 暴露 `setAppUpdateChannel`，`web/settings.mjs` 渲染渠道下拉。规则见 docs/24，验收 tests/application-updates、tests/electron 与 scripts/test-application-updates.mjs；CLI 不涉及应用更新。

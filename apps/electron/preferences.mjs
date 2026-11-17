@@ -1,6 +1,7 @@
 import { $t, normalizeLanguage } from "../../client/i18n.mjs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { normalizeUpdateChannel } from "./updates.mjs";
 
 export const closeModes = { quit: $t("退出程序"), tray: $t("保留在菜单栏") };
 // Mirrors the renderer presentation choice so native windows match it at launch.
@@ -21,7 +22,7 @@ let pendingWrite = Promise.resolve();
 function writePreference(path, patch) {
   const write = pendingWrite.then(async () => {
     const current = await readPreferenceFile(path);
-    const next = { closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, ...patch };
+    const next = { closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, updateChannel: normalizeUpdateChannel(current.updateChannel) ?? undefined, ...patch };
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const pending = `${path}.tmp`;
     await writeFile(pending, JSON.stringify(next), { mode: 0o600 });
@@ -46,4 +47,10 @@ export async function readLanguage(path) { return normalizeLanguage((await readP
 export async function saveLanguage(path, language) {
   if (!normalizeLanguage(language)) throw new Error($t("语言无效"));
   await writePreference(path, { language });
+}
+/** Application update channel; missing or unknown values mean the default stable channel. */
+export async function readUpdateChannel(path) { return normalizeUpdateChannel((await readPreferenceFile(path)).updateChannel) || "stable"; }
+export async function saveUpdateChannel(path, channel) {
+  if (!normalizeUpdateChannel(channel)) throw new Error($t("更新渠道无效"));
+  await writePreference(path, { updateChannel: channel });
 }

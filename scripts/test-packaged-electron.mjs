@@ -892,7 +892,7 @@ try {
   if (process.platform === "darwin") {
     await page.goto(urlFor(page, "/settings/general"));
     await page.getByText("尚未设置；首次关闭窗口时会询问，取消不会保存选择。", { exact: true }).waitFor();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.batonDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode", "setLanguage"]);
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.batonDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage"]);
     // The read-only language handoff is plain data for the console main frame, never a function.
     assert.deepEqual(await page.evaluate(() => { const value = window.batonDesktop.locale; return { type: typeof value, locale: value?.locale, language: value?.language }; }), { type: "object", locale: "zh-CN", language: "system" });
     await page.locator('[data-settings-page="cli"]').click();

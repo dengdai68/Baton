@@ -185,7 +185,8 @@
      "lifecycle",
      "release packaging"
     ]
-   }
+   },
+   "updateChannels": "Settings → Updates offers stable (default: GitHub latest release only) and beta (the 30 most recent public releases; also prerelease-marked vX.Y.Z-beta.N), picking the highest SemVer above the current version and never downgrading; drafts, other suffixes and mismatched prerelease flags are ignored. The choice persists as desktop-preferences updateChannel; setChannel saves first (a failed save changes nothing), drops the old candidate and re-checks, and refuses while downloading or installing. Native installs keep the fixed tag URL with latest-mac.yml; allowPrerelease is on only for beta candidates."
   },
   {
    "id": "server.plugin-updates",
@@ -637,7 +638,8 @@
    "draftAssetsUpload": "The manual ad-hoc workflow may build an immutable existing tag and replace all six verified assets only on an existing draft. This mode never publishes; signed stable certificate gates remain separate.",
    "interfaceConsistency": "Settings model/effort controls share 13px/37.5px; selection/focus and previews use current tokens. Shared native renderer dialog preserves form drafts and returns focus; reduced-motion and coarse-pointer rules retain desktop density. Workspace refresh is an icon in the file source row; diff controls live in the viewer header. No host command or CLI contract change.",
    "interface-graphite": "石墨设计系统（2026-11-13 替代纸张，规范 .interface-design/system.md）：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化 48px 标题栏（图标+标题+计数）、44px 工具栏、34px 浅底分组头、38px 行。共享 tokens 位于 web/tokens.css（冷灰中性色、蓝色主操作），组件位于 web/styles.css 且只引用 tokens，compact.css 只保留密度（控件28/行38/导航28）。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。",
-   "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe."
+   "configurationRoot": "Installed configuration is directly ~/.baton. A one-time authorized startup rename from desktop runs before auth/Chromium, journals interruptions, refuses live legacy instances and collisions, and retains Runtime address aliases. CLI uses the new endpoint without legacy fallback; business records stay in workspaceRoot/records and dedicated workspace/workspace-dev subtrees remain safe.",
+   "updateChannelBridge": "preload setAppUpdateChannel invokes desktop:updates:channel, accepted only from settings/updates (isUpdateSender) with exactly one argument; preferences.mjs reads/saves updateChannel (stable when missing or unknown) and merges it with closeMode, appearance and language so no write drops another choice."
   },
   {
    "id": "server.communication-store",
@@ -1326,7 +1328,8 @@
    "consoleLiveReading": "Task SSE and chat polling append while history is being read. Shared console-stream retains a visible-row anchor, disclosure DOM and sticky bottom across body hydration. Task reconciles every five seconds while visible/open, chat every two; reconnect and page overlap catch up at most 200 raw events. Latest explicitly resumes following. History paging is centered; closed/hidden views do not poll. Existing HTTP/CLI/state contracts remain unchanged.",
    "coreCliParity": "Workflow editor exposes all business fields; MCP details share tool search/paging projection with CLI and disclose schema. Existing routes and domain rules unchanged.",
    "collaborationHistoryPresentation": "Older App pages prepend and deduplicate without removing loaded records, preserving the visible anchor and expansion. Task/chat message labels include local month/day and other years. Shared HTTP/CLI projection extracts known summary/handoff reports including closed historical quote errors; immutable messages, routing and Runtime behavior are unchanged.",
-   "mediaPresentation": "Shared task/chat images render authenticated inline previews, max 320px height/container width with aspect ratio and no upscaling. Draft images cover 56px square tiles matching file-card height. Bounded native dialog preserves margins, download, Esc/outside close and focus. Both responsive and manual collapsed sidebar hide counts. No HTTP/CLI/Store attachment contract changes; source/packaged isolated media acceptance covers both themes and widths."
+   "mediaPresentation": "Shared task/chat images render authenticated inline previews, max 320px height/container width with aspect ratio and no upscaling. Draft images cover 56px square tiles matching file-card height. Bounded native dialog preserves margins, download, Esc/outside close and focus. Both responsive and manual collapsed sidebar hide counts. No HTTP/CLI/Store attachment contract changes; source/packaged isolated media acceptance covers both themes and widths.",
+   "updateChannelSettings": "Settings → Updates shows an update-channel select (稳定版（正式版） default / Beta 版（测试版）) driven by the host snapshot channel/releaseChannel: the version line names the latest stable or beta, the select is disabled while checking/downloading or on hosts without the bridge, and a failed switch re-renders the saved channel."
   },
   {
    "id": "web.manual-graphs",

@@ -53,30 +53,36 @@ export function createAppUpdateUI(panel, desktop) {
   const check = panel.querySelector('[data-app-update-check]'), download = panel.querySelector('[data-app-update-download]');
   const install = panel.querySelector('[data-app-update-install]'), progress = panel.querySelector('progress');
   const progressRow = panel.querySelector('[data-app-update-progress]'), percent = panel.querySelector('[data-app-update-percent]');
-  const note = panel.querySelector('[data-app-update-note]');
+  const note = panel.querySelector('[data-app-update-note]'), channel = panel.querySelector('[data-app-update-channel]');
   let disposed = false, observed;
   function accept(value) {
     if (disposed) return; observed = value;
-    version.textContent = $t("当前版本 {0}{1}", [value.currentVersion || '—', value.version ? ` · ${$t("最新正式版 {0}", [value.version])}` : '']);
+    const latest = value.version ? ` · ${value.releaseChannel === 'beta' ? $t("最新测试版 {0}", [value.version]) : $t("最新正式版 {0}", [value.version])}` : '';
+    version.textContent = $t("当前版本 {0}{1}", [value.currentVersion || '—', latest]);
     status.textContent = $tm(value.message) || $t("正在读取更新状态…");
     const busy = ['checking','downloading'].includes(value.phase);
     check.disabled = busy; check.textContent = value.phase === 'checking' ? $t("正在检查…") : $t("检查更新");
+    // Older hosts report no channel and cannot switch; they only ever check stable releases.
+    channel.value = value.channel === 'beta' ? 'beta' : 'stable'; channel.disabled = busy || !desktop?.setAppUpdateChannel;
     download.hidden = !value.canDownload; download.disabled = busy;
     install.hidden = !value.canInstall; install.textContent = value.installMode === 'native' ? $t("重启并安装") : $t("打开安装包");
     progressRow.hidden = value.phase !== 'downloading'; progress.value = value.percent || 0;
     percent.textContent = `${Math.floor(value.percent || 0)}%`;
     note.hidden = value.phase === 'downloading';
-    note.textContent = value.version && value.installMode === 'manual' ? $t("当前版本或发布包不满足原生自动安装条件；下载后手动安装。") : $t("启动后及运行期间自动检查正式版；不会自动下载或打断任务重启。");
+    note.textContent = value.version && value.installMode === 'manual' ? $t("当前版本或发布包不满足原生自动安装条件；下载后手动安装。")
+      : value.channel === 'beta' ? $t("启动后及运行期间自动检查正式版和测试版；不会自动下载或打断任务重启。") : $t("启动后及运行期间自动检查正式版；不会自动下载或打断任务重启。");
   }
-  async function run(method) {
+  async function run(method, ...args) {
     if (disposed) return;
-    check.disabled = download.disabled = install.disabled = true;
-    try { accept(await desktop[method]()); }
+    check.disabled = download.disabled = install.disabled = channel.disabled = true;
+    try { accept(await desktop[method](...args)); }
     catch (error) { if (!disposed) { if (observed) accept(observed); status.textContent = hostErrorText(error) || $t("更新操作失败，请重试"); } }
     finally { if (!disposed) install.disabled = false; }
   }
   const unsubscribe = desktop?.onAppUpdate?.(accept);
   check.onclick = () => run('checkAppUpdate'); download.onclick = () => run('downloadAppUpdate'); install.onclick = () => run('installAppUpdate');
+  // A failed switch re-renders the last host state, which restores the saved channel.
+  channel.onchange = () => run('setAppUpdateChannel', channel.value);
   return { async refresh() {
     if (disposed || panel.hidden) return;
     if (!desktop?.getAppUpdateState) { status.textContent = $t("请使用支持应用更新的客户端版本。"); check.disabled = true; return; }
@@ -535,8 +541,8 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
             <h3 id="repositories-title">${$t("仓库访问")}</h3><p class="settings-description">${$t("Token 仅用于拉取私有仓库，保存后不回显。")}</p><div id="git-credential-config" class="repository-access-grid settings-box" aria-live="polite"></div>
           </section>
           <section class="settings-section" data-settings-panel="updates" hidden>
-            <h3>${$t("更新")}</h3><p class="settings-description">${$t("只检查正式版；不会自动下载，也不会打断正在执行的任务。")}</p>
-            <section class="settings-group settings-update-module" aria-labelledby="app-update-title"><h4 id="app-update-title">${$t("应用")}</h4><div class="settings-box"><div class="settings-row"><img src="/icons/application-ui.png" alt="" width="28" height="28"><div class="settings-row-text"><strong>Baton</strong><small><span data-app-version>${$t("正在读取当前版本…")}</span> · <a data-app-github href="https://github.com/dengdai68/Baton" target="_blank" rel="noopener noreferrer">GitHub</a></small></div><button type="button" class="small-button" data-app-update-check>${$t("检查更新")}</button></div><div class="settings-row"><div class="settings-row-text"><small data-app-update-status role="status" aria-live="polite">${$t("正在读取更新状态…")}</small></div><div class="settings-row-controls"><button type="button" class="primary-button compact" data-app-update-download hidden>${$t("下载更新")}</button><button type="button" class="primary-button compact" data-app-update-install hidden>${$t("重启并安装")}</button></div></div><div class="app-update-progress-row" data-app-update-progress hidden><progress class="app-update-progress" max="100" value="0" aria-label="${$t("安装包下载进度")}"></progress><span data-app-update-percent aria-hidden="true">0%</span></div></div><p class="field-hint" data-app-update-note>${$t("只检查正式版，Beta 不参与更新。")}</p></section>
+            <h3>${$t("更新")}</h3><p class="settings-description">${$t("按所选渠道检查更新；不会自动下载，也不会打断正在执行的任务。")}</p>
+            <section class="settings-group settings-update-module" aria-labelledby="app-update-title"><h4 id="app-update-title">${$t("应用")}</h4><div class="settings-box"><div class="settings-row"><img src="/icons/application-ui.png" alt="" width="28" height="28"><div class="settings-row-text"><strong>Baton</strong><small><span data-app-version>${$t("正在读取当前版本…")}</span> · <a data-app-github href="https://github.com/dengdai68/Baton" target="_blank" rel="noopener noreferrer">GitHub</a></small></div><button type="button" class="small-button" data-app-update-check>${$t("检查更新")}</button></div><form class="settings-row" data-app-update-channel-form><div class="settings-row-text"><strong><label for="settings-update-channel">${$t("更新渠道")}</label></strong><small>${$t("稳定版只接收正式版；Beta 版同时接收测试版。切换后立即检查，不会降级。")}</small></div><select id="settings-update-channel" name="updateChannel" data-app-update-channel disabled><option value="stable">${$t("稳定版（正式版）")}</option><option value="beta">${$t("Beta 版（测试版）")}</option></select></form><div class="settings-row"><div class="settings-row-text"><small data-app-update-status role="status" aria-live="polite">${$t("正在读取更新状态…")}</small></div><div class="settings-row-controls"><button type="button" class="primary-button compact" data-app-update-download hidden>${$t("下载更新")}</button><button type="button" class="primary-button compact" data-app-update-install hidden>${$t("重启并安装")}</button></div></div><div class="app-update-progress-row" data-app-update-progress hidden><progress class="app-update-progress" max="100" value="0" aria-label="${$t("安装包下载进度")}"></progress><span data-app-update-percent aria-hidden="true">0%</span></div></div><p class="field-hint" data-app-update-note></p></section>
           </section>
           <section class="settings-section" data-settings-panel="logs" hidden>
             <h3>${$t("运行日志")}</h3><p class="settings-description">${$t("任务、私聊、群聊与本机服务的详细诊断写入本机文件，这里只显示路径。")}</p>

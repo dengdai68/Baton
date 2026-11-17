@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { isConsoleURL, isExternalURL, isPreferencesSender, isCliSender, health, initialRoute } from "../apps/electron/policy.mjs";
 import { desktopBrowserPaths, desktopControlPlaneEnvironment, desktopStoragePaths, legacyDesktopDataRoot, resolveDesktopDataRoot } from "../apps/electron/runtime-paths.mjs";
-import { normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode, saveAppearance, saveCloseMode } from "../apps/electron/preferences.mjs";
+import { normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel } from "../apps/electron/preferences.mjs";
 import { confirmCliInstallation } from "../apps/electron/cli-confirmation.mjs";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
@@ -108,6 +108,16 @@ test("host appearance mirrors only light/dark/system and never drops the close p
   await writeFile(path, JSON.stringify({ closeMode: "tray", appearance: "warm" }));
   assert.equal(await readAppearance(path), null, "retired theme ids are rejected, not migrated");
   assert.equal(await readCloseMode(path), "tray");
+  // Update channel: missing or unknown means stable; it survives and keeps the other choices.
+  assert.equal(await readUpdateChannel(path), "stable");
+  for (const invalid of ["nightly", "Beta", "", null, {}, ["beta"]]) await assert.rejects(saveUpdateChannel(path, invalid), /更新渠道无效/);
+  await Promise.all([saveUpdateChannel(path, "beta"), saveLanguage(path, "en")]);
+  await saveCloseMode(path, "quit");
+  console.log("saved desktop preferences with channel:", await readFile(path, "utf8"));
+  assert.equal(await readUpdateChannel(path), "beta", "later writes of other keys keep the channel");
+  assert.equal(await readLanguage(path), "en"); assert.equal(await readCloseMode(path), "quit");
+  await writeFile(path, JSON.stringify({ updateChannel: "nightly" }));
+  assert.equal(await readUpdateChannel(path), "stable", "an unknown saved channel falls back to stable");
   const main = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(main, /ipcMain\.handle\("desktop:appearance:set", \(event, value\) => \{\n    if \(event\.sender !== contents \|\| event\.senderFrame !== contents\.mainFrame \|\| !isConsoleURL/);
   assert.match(main, /nativeTheme\.themeSource = appearance;/);
@@ -133,7 +143,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
     return document;
   };
   const document = fixture();
-  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppearance", "setCloseMode", "setLanguage"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage"]);
   const attributes = new Map(), navigation = { matches: selector => selector === ".nav-item", setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), blur: () => assert.fail("must not move focus") };
   const restore = handlers.get("desktop:tray-restore"), marked = () => attributes.has("data-desktop-restored-focus");
   document.activeElement = navigation;
@@ -225,7 +235,9 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(source, /nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true/);
   assert.doesNotMatch(source, /createStore/);
-  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 10);
+  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 11);
+  // The update channel is settings → updates only, like the other update commands.
+  assert.match(source, /ipcMain\.handle\('desktop:updates:channel', \(event, \.\.\.args\) => \{\n\s+if \(args\.length !== 1 \|\| connecting \|\| !isUpdateSender\(event,contents,controlOrigin\)/);
   assert.equal((source.match(/ipcMain\.on\(/g) || []).length, 1, "only the synchronous locale read uses ipcMain.on");
   assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   assert.equal((source.match(/isCliSender\(event, contents, controlOrigin\)/g) || []).length, 3);
@@ -233,7 +245,8 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   assert.match(preload, /process.isMainFrame && \/\^http:/);
   assert.match(preload, /getPreferences: \(\) => ipcRenderer.invoke\("desktop:preferences:get"\)/);
   assert.match(preload, /setCloseMode: \(mode\) => ipcRenderer.invoke\("desktop:preferences:set", mode\)/);
-  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 12);
+  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 13);
+  assert.match(preload, /setAppUpdateChannel: \(channel\) => ipcRenderer.invoke\("desktop:updates:channel", channel\)/);
   assert.equal((preload.match(/ipcRenderer\.sendSync\(/g) || []).length, 1);
   assert.match(preload, /ipcRenderer\.sendSync\("desktop:locale:get"\)/);
   assert.match(preload, /locale: readLocale\(\)/);
