@@ -9,9 +9,9 @@
 
 From software development, research and analysis to knowledge work and content production, you can define each agent's responsibilities, prompt, model and tools, talk with a single virtual employee, or form a team to carry out tasks together. Baton keeps members, collaboration, execution records and delivered files in one local workspace.
 
-[![Task workspace: handoff records between the manager, research, content editing and independent review](docs/media/workspace-collaboration.png)](docs/media/workspace-collaboration.png)
+[![Task workspace: handoff records between the manager, research, content editing and independent review](docs/media/workspace-collaboration.en.png)](docs/media/workspace-collaboration.en.png)
 
-*Task workspace: follow assignments, handoffs and human review in one place. Screenshots and the animation come from an isolated v0.1.10 instance with public sample data and no model calls, and show the Simplified Chinese interface; click a screenshot to see the full image.*
+*Task workspace: follow assignments, handoffs and human review in one place. Screenshots and the animation show the English interface in an isolated instance with public sample data and no model calls; click a screenshot to see the full image.*
 
 ## What it does
 
@@ -29,14 +29,14 @@ From software development, research and analysis to knowledge work and content p
 
 | Employees | Team chat |
 | :---: | :---: |
-| [![Employee cards: responsibilities, roles and runtime](docs/media/employees.png)](docs/media/employees.png) | [![Team group chat: @ the analyst, editor and reviewer directly](docs/media/team-chat.png)](docs/media/team-chat.png) |
+| [![Employee cards: responsibilities, roles and runtime](docs/media/employees.en.png)](docs/media/employees.en.png) | [![Team group chat: @ the analyst, editor and reviewer directly](docs/media/team-chat.en.png)](docs/media/team-chat.en.png) |
 | Assign responsibilities and reuse roles and tool configuration. | Discuss requirements in direct or group chats and @ the members who should reply. |
 
 ## Quick start
 
 **Create employees → create a task → follow assignments and handoffs in the collaboration record → check the files and confirm delivery.**
 
-![Interface tour: employees, task creation, collaboration handoffs, file preview and group chat](docs/media/quickstart.gif)
+![Interface tour: employees, task creation, collaboration handoffs, file preview and group chat](docs/media/quickstart.en.gif)
 
 *A looping 15-second tour made from real app screenshots to show where things are.*
 
@@ -47,7 +47,7 @@ From software development, research and analysis to knowledge work and content p
 
 | Create a task | Check the real files |
 | :---: | :---: |
-| [![New task: goal, acceptance criteria, members and the manager for this task](docs/media/task-create.png)](docs/media/task-create.png) | [![Working directory: file list and Markdown preview](docs/media/workspace-files.png)](docs/media/workspace-files.png) |
+| [![New task: goal, acceptance criteria, members and the manager for this task](docs/media/task-create.en.png)](docs/media/task-create.en.png) | [![Working directory: file list and Markdown preview](docs/media/workspace-files.en.png)](docs/media/workspace-files.en.png) |
 
 Ready-to-copy employee prompts and task material are in the [first-use tutorial](docs/quickstart.md) (Chinese).
 
