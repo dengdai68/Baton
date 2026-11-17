@@ -1,6 +1,6 @@
 {
   "name": "baton-app",
-  "version": "0.1.11-beta.2",
+  "version": "0.1.11-beta.3",
   "private": true,
   "license": "Apache-2.0",
   "description": "Local AI teams, collaborative tasks and scheduled automation",

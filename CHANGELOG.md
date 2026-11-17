@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.11-beta.3] - 2026-11-18
+
 - 设置 → 更新 → 应用新增“更新渠道”：默认稳定版（只接收正式版），可切换为 Beta 版同时接收测试版（`vX.Y.Z-beta.N`），按版本号取最新且不降级；选择保存在 `desktop-preferences.json` 的 `updateChannel`，切换后立即重新检查，下载或安装中不能切换。宿主新增仅限更新设置页的 `setAppUpdateChannel`，打包验收同步核对；CLI 不涉及应用更新。
 
 - CLI 列表与记录统一默认每页 20、最新在前：员工、角色、团队、工作流改为最新创建在前（App 对应目录页同步，内置项目经理等最早创建的项排到最后，编辑不改变位置）；`communications get` 改为每页 20 条消息、最新在前，`--page N` 向更早翻页、`--all` 读取全部，输出新增 `page`/`pageSize`/`hasMore`，原 `--before` 移除并提示改用 `--page`；`tasks questions` 改为最新在前。任务、沟通会话、自动化、插件/MCP、协作记录与交付记录原本已是最新在前；Runtime 与 MCP 工具没有时间字段，保持固定顺序。HTTP 接口与字段不变。
