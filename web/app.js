@@ -14,7 +14,7 @@ import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect,
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
-import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
+import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, partyName, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workflowDisplay, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
 
 /* Baton Console：任务空间信息架构 + 轻盈视觉系统。
    视图：overview / tasks / teams / agents / workspace（普通任务与自动化共用任务空间）。 */
@@ -710,7 +710,7 @@ async function renderInboxPreview(task) {
       answerContext = context;
       const name = agent?.name || $t("任务成员"), draftKey = `${run.id}:${question.id}`;
       headline = $t("{0} 需要你的澄清", [name]);
-      const workflowNode = run.task?.workflowSnapshot?.nodes?.find(item => item.id === question.workflowNodeId);
+      const workflowNode = workflowDisplay(run.task?.workflowSnapshot)?.nodes?.find(item => item.id === question.workflowNodeId);
       const node = workflowNode?.title || workflowNode?.name || question.workflowNodeId || '';
       body = `<div class="inbox-breadcrumb"><span>${esc(node)}</span><time title="${esc(exactTime(question.createdAt))}">${timeAgo(question.createdAt)}</time></div><blockquote class="inbox-context"><strong>${$t("上下文{0}", [context?.from ? ` · ${$t("{0} 的交接", [esc(context.from)])}` : ''])}</strong><p>${esc(context?.content || $t("当前分页中没有该问题的原始上文，请打开任务工作区查看完整记录。"))}</p></blockquote><div class="inbox-question"><span class="agent-card-avatar ${esc(roleColor(agent))}" aria-hidden="true">${esc(initialsOf(agent))}</span><div><strong>${esc(name)}</strong><span class="field-hint"> ${$t("向你提问")}</span><p>${esc(question.content)}</p></div></div>`;
       answerMarkup = `<form class="inbox-answer" data-inbox-answer data-run-id="${esc(run.id)}" data-question-id="${esc(question.id)}" data-task-id="${esc(task.id)}"><label class="sr-only" for="inbox-answer-text">${$t("回答 {0} 的问题", [esc(name)])}</label><textarea id="inbox-answer-text" name="content" rows="3" required placeholder="${$t("输入回答，发送后 {0} 会继续执行", [esc(name.split(' · ')[0])])}">${esc(inboxDrafts.get(draftKey) || '')}</textarea><div class="inbox-answer-actions"><span class="field-hint">${$t("Enter 发送 · Shift + Enter 换行")}</span><button type="submit" class="primary-button">${$t("发送回答")}</button></div><p role="alert" data-inbox-answer-error hidden></p></form>`;
@@ -801,8 +801,8 @@ function renderOverview() {
     <div class="panel-header"><div><div class="panel-kicker">SIGNAL</div><h3 class="panel-title">${$t("团队信号")}</h3></div></div>
     <div class="activity-list">${latest.length ? latest.map((event) => `
       <div class="activity-row">
-        <div class="activity-avatar ${roleColor(event.actor)}">${esc((event.actor?.name || "B").slice(0, 1))}</div>
-        <div class="activity-copy"><p><strong>${esc(event.actor?.name || "Baton")}</strong> · ${esc(runtimeAuditText(event).slice(0, 56))}${runtimeAuditText(event).length > 56 ? "…" : ""}</p>
+        <div class="activity-avatar ${roleColor(event.actor)}">${esc((partyName(event.actor?.type, event.actor?.name) || "B").slice(0, 1))}</div>
+        <div class="activity-copy"><p><strong>${esc(partyName(event.actor?.type, event.actor?.name) || "Baton")}</strong> · ${esc(runtimeAuditText(event).slice(0, 56))}${runtimeAuditText(event).length > 56 ? "…" : ""}</p>
         <time>${timeAgo(event.timestamp)} · ${KIND_LABEL[classifyEvent(event)] || esc(event.type)}</time></div>
       </div>`).join("") : `<div class="empty-state" style="margin:0"><strong>${$t("暂无记录")}</strong>${$t("执行事件会出现在这里。")}</div>`}</div>`;
 
@@ -922,7 +922,7 @@ function renderTasks() {
    const groups=[[$t("草稿"),'backlog',task=>task.status==='backlog'],[$t("进行中"),'running',task=>['planning','running','review','paused'].includes(task.status)],[$t("待我处理"),'awaiting_human',task=>task.status!=='paused'&&taskNeedsAttention(task.status)],[$t("已完成"),'done',task=>['done','completed','cancelled'].includes(task.status)]];
    $('#tasks-table').innerHTML=`<div class="task-board">${groups.map(([label,status,match])=>`<section><h3>${inboxStatusIcon(status)}${label} <small>${page.items.filter(match).length}</small></h3>${page.items.filter(match).map(task=>{
      const members = (task.memberAgentIds || []).slice(0,4).map(id => task.memberSnapshots?.find(agent => agent.id === id) || (state.catalogReferences?.agents || state.agents || []).find(agent => agent.id === id)).filter(Boolean);
-     return `<article class="board-task" data-board-task="${esc(task.id)}"><span class="task-workflow">${esc(task.workflowSnapshot?.name || $t("默认协作"))}</span><h4><button class="text-action" ${task.status==='backlog'?`data-edit-task="${esc(task.id)}"`:`data-open-task="${esc(task.id)}"`}>${esc(task.title)}</button></h4><div class="board-task-footer">${['backlog','done','completed'].includes(task.status) ? `<span class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</span>` : `<span class="board-task-status" data-status-tone="${statusTone(task.status)}">${inboxStatusIcon(task.status)}${esc(statusText[task.status] || task.status)}</span>`}<time title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time></div></article>`;
+     return `<article class="board-task" data-board-task="${esc(task.id)}"><span class="task-workflow">${esc(workflowDisplay(task.workflowSnapshot)?.name || $t("默认协作"))}</span><h4><button class="text-action" ${task.status==='backlog'?`data-edit-task="${esc(task.id)}"`:`data-open-task="${esc(task.id)}"`}>${esc(task.title)}</button></h4><div class="board-task-footer">${['backlog','done','completed'].includes(task.status) ? `<span class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</span>` : `<span class="board-task-status" data-status-tone="${statusTone(task.status)}">${inboxStatusIcon(task.status)}${esc(statusText[task.status] || task.status)}</span>`}<time title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time></div></article>`;
    }).join('') || `<p class="field-hint">${$t("本页暂无任务")}</p>`}</section>`).join('')}</div>${paginationMarkup(page,pageKey)}`;
    return;
  }
@@ -943,7 +943,7 @@ function renderTasks() {
        const menu = `${editable ? `<button class="small-button" data-edit-task="${esc(task.id)}">${$t("编辑")}</button>` : ''}${task.status === 'done' ? `<button class="small-button" data-archive-task="${esc(task.id)}">${$t("归档")}</button>` : ''}${task.deletionBlockedBy === null ? `<button class="small-button danger" data-delete-task="${esc(task.id)}">${$t("删除任务")}</button>` : ''}`;
        const next = task.status === 'backlog' ? `<button class="small-button" data-run-task="${esc(task.id)}">${$t("启动")}</button>` : task.status === 'done' ? `<button class="small-button" data-archive-task="${esc(task.id)}">${$t("归档")}</button>` : run ? `<button class="small-button" data-open-task="${esc(task.id)}">${taskActionLabel(task.status)}</button>` : '';
        const members = (task.memberAgentIds || []).slice(0,5).map(id => task.memberSnapshots?.find(agent => agent.id === id) || (state.catalogReferences?.agents || state.agents || []).find(agent => agent.id === id)).filter(Boolean);
-       return `<article class="task-row" data-task-id="${esc(task.id)}"><span class="task-state-icon" data-status-tone="${statusTone(task.status)}" title="${esc(statusText[task.status] || task.status)}" aria-hidden="true">${statusShape(task.status)}</span><div class="task-row-title">${title}<span class="task-workflow">${esc(task.workflowSnapshot?.name || task.workflowTemplateId || '—')}</span></div><div class="task-row-step" data-status-tone="${statusTone(task.status)}">${taskRowStatus(task,run)}</div><div class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</div><time class="task-row-time" title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time><div class="task-row-actions" data-status-tone="${statusTone(task.status)}">${next}${task.deletionBlockedBy === 'active_inquiries' ? `<span class="task-deletion-notice" title="${$t("请等待当前答疑完成后重试删除。")}">${$t("答疑进行中")}</span>` : ''}${actionMenu(menu,$t("任务更多操作"))}</div></article>`;
+       return `<article class="task-row" data-task-id="${esc(task.id)}"><span class="task-state-icon" data-status-tone="${statusTone(task.status)}" title="${esc(statusText[task.status] || task.status)}" aria-hidden="true">${statusShape(task.status)}</span><div class="task-row-title">${title}<span class="task-workflow">${esc(workflowDisplay(task.workflowSnapshot)?.name || task.workflowTemplateId || '—')}</span></div><div class="task-row-step" data-status-tone="${statusTone(task.status)}">${taskRowStatus(task,run)}</div><div class="task-row-members">${members.map(agent => `<span class="stack-avatar ${esc(roleColor(agent))}" title="${esc(agent.name)}">${esc(initialsOf(agent))}</span>`).join('')}</div><time class="task-row-time" title="${esc(exactTime(task.updatedAt))}">${timeAgo(task.updatedAt)}</time><div class="task-row-actions" data-status-tone="${statusTone(task.status)}">${next}${task.deletionBlockedBy === 'active_inquiries' ? `<span class="task-deletion-notice" title="${$t("请等待当前答疑完成后重试删除。")}">${$t("答疑进行中")}</span>` : ''}${actionMenu(menu,$t("任务更多操作"))}</div></article>`;
      }).join('')}</section>`;
    }).join('')}</div>${paginationMarkup(page,pageKey)}`;
    return;
@@ -967,7 +967,7 @@ function renderTasks() {
       const action = `${nextAction}${deletionNotice}${actionMenu(`${editAction}${secondary}`, $t("任务更多操作"))}`;
       return `<tr>
         <td>${run ? `<button class="table-title task-title-link" data-open-task="${task.id}" title="${esc(task.title)}">${esc(task.title)}</button>` : editable ? `<button class="table-title task-title-link" data-edit-task="${task.id}" title="${esc(task.title)}">${esc(task.title)}</button>` : `<span class="table-title">${esc(task.title)}</span>`}</td>
-        <td class="task-workflow">${esc(task.workflowSnapshot?.name || task.workflowTemplateId || "—")}</td>
+        <td class="task-workflow">${esc(workflowDisplay(task.workflowSnapshot)?.name || task.workflowTemplateId || "—")}</td>
         <td>${pill(task.status)}</td>
         <td class="task-updated" title="${esc(archiveView ? exactTime(task.archivedAt) : exactTime(task.updatedAt))}">${archiveView ? exactTime(task.archivedAt) : timeAgo(task.updatedAt)}</td>
         <td><div class="table-actions">${action}</div></td>
@@ -1460,7 +1460,7 @@ function workspaceDetailsMarkup(workspace, { agents, currentFocusNode, view, art
     const previous = nodeTraces.get(trace.workflowNodeId);
     if (!previous || (Date.parse(trace.startedAt) || 0) >= (Date.parse(previous.startedAt) || 0)) nodeTraces.set(trace.workflowNodeId, trace);
   }
-  const focusRows = (run.task.workflowSnapshot.nodes || []).map(node => {
+  const focusRows = (workflowDisplay(run.task.workflowSnapshot).nodes || []).map(node => {
     const trace = nodeTraces.get(node.id);
     const current = run.currentFocus?.nodeId === node.id;
     const waiting = ["waiting_human", "waiting_agent"].includes(focus[node.id]);
@@ -1476,7 +1476,7 @@ function workspaceDetailsMarkup(workspace, { agents, currentFocusNode, view, art
         <div><dt>${$t("状态")}</dt><dd>${pill(run.status)}</dd></div>
         <div><dt>${$t("经理")}</dt><dd>${esc(run.manager?.name || "—")}</dd></div>
         <div><dt>${$t("开始")}</dt><dd><time title="${esc((run.startedAt || run.createdAt ? exactTime(run.startedAt || run.createdAt) : "—"))}">${esc((run.startedAt || run.createdAt ? exactTime(run.startedAt || run.createdAt) : "—"))}</time></dd></div>
-        <div><dt>${$t("工作流@@field")}</dt><dd><button class="text-action task-workflow-link" data-task-workflow-details>${esc(run.task.workflowSnapshot.name || $t("当前工作流"))} ↗</button></dd></div>
+        <div><dt>${$t("工作流@@field")}</dt><dd><button class="text-action task-workflow-link" data-task-workflow-details>${esc(workflowDisplay(run.task.workflowSnapshot).name || $t("当前工作流"))} ↗</button></dd></div>
         <div><dt>${$t("当前执行")}</dt><dd>${esc((workspace.traces || []).filter(trace=>trace.status==="running").map(trace=>agents.find(agent=>agent.id===trace.agentId)?.name || trace.agentId).join("、") || $t("暂无执行成员"))}</dd></div>
         <div><dt>${$t("数字员工")}</dt><dd>${$t("{0} 位", [agents.length])}</dd></div>
         <div><dt>${$t("文件")}</dt><dd><button class="text-action" data-ws-tab="directory">${$t("打开工作目录 ↗")}</button><small> · ${$t("{0} 项交付快照", [artifactCount])}</small></dd></div>
@@ -1572,7 +1572,7 @@ function renderWorkspace() {
         ${scheduledRetries.length ? `<button class="small-button amber" data-retry-scheduled="${run.id}" title="${$t("立即启动等待退避的调用；失败 Trace 与原投递会保留。")}">${$t("立即重试 {0} 项调用", [scheduledRetries.length])}</button>` : ""}
         ${failedRecovery?.type === "orchestration" ? `<button class="small-button amber" data-retry-orchestration="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} title="${$t("重新准备运行环境，继续原失败投递或待执行队列。")}">${$t("修复后重新尝试")}</button>` : ""}
         ${failedRecovery?.type === "node" ? failedRecovery.nodeIds.map((nodeId) => {
-          const node = run.task.workflowSnapshot.nodes.find((item) => item.id === nodeId);
+          const node = workflowDisplay(run.task.workflowSnapshot).nodes.find((item) => item.id === nodeId);
           return `<button class="small-button amber" data-retry-failed-node="${run.id}" ${traces.some(trace=>trace.status==="running") ? "disabled" : ""} data-workflow-node-id="${esc(nodeId)}" title="${$t("由原员工继续失败投递；原会话、历史调用记录 与产物会保留。")}">${$t("从「{0}」恢复", [esc(node?.title || nodeId)])}</button>`;
         }).join("") : ""}
         ${activeStatus ? `<button class="ghost-button" data-pause-run="${run.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="7" y="5" width="3.2" height="14" rx="1"/><rect x="13.8" y="5" width="3.2" height="14" rx="1"/></svg>${$t("暂停")}</button>` : run.status === "paused" ? `<button class="primary-button" data-resume-run="${run.id}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.4-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>${$t("继续执行")}</button>` : ""}
@@ -1902,7 +1902,7 @@ function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
     }
     const trace = traceById.get(group.traceId), start = trace?.startedAt || trace?.createdAt;
     const status = trace?.status ? ({running:$t("执行中"),completed:$t("已结束"),failed:$t("失败"),cancelled:$t("已取消")}[trace.status] || trace.status) : '';
-    const header = `<span class="console-tool-chevron">▶</span><strong>${group.traceId ? $t("执行") : $t("记录")}</strong>${trace?.workflowNodeId ? `<span class="console-execution-node">${esc(state.workspace?.run?.task.workflowSnapshot?.nodes?.find(node=>node.id===trace.workflowNodeId)?.title || trace.workflowNodeId)}</span>` : ''}${start ? `<time title="${esc(exactTime(start))}">${esc(exactTime(start))}</time>` : ''}<small>${$t("当前已加载 {0} 条", [group.rows.filter(row=>!row.prompt && row.key !== 'empty').length])}</small>${status ? `<span class="console-execution-status" data-status="${esc(trace.status)}">${esc(status)}</span>` : ''}`;
+    const header = `<span class="console-tool-chevron">▶</span><strong>${group.traceId ? $t("执行") : $t("记录")}</strong>${trace?.workflowNodeId ? `<span class="console-execution-node">${esc(workflowDisplay(state.workspace?.run?.task.workflowSnapshot)?.nodes?.find(node=>node.id===trace.workflowNodeId)?.title || trace.workflowNodeId)}</span>` : ''}${start ? `<time title="${esc(exactTime(start))}">${esc(exactTime(start))}</time>` : ''}<small>${$t("当前已加载 {0} 条", [group.rows.filter(row=>!row.prompt && row.key !== 'empty').length])}</small>${status ? `<span class="console-execution-status" data-status="${esc(trace.status)}">${esc(status)}</span>` : ''}`;
     const heading = card.querySelector(':scope > summary');
     if (heading.innerHTML !== header) heading.innerHTML = header;
     if (card !== (previousGroup ? previousGroup.nextSibling : stream.firstChild)) stream.insertBefore(card, previousGroup ? previousGroup.nextSibling : stream.firstChild);
@@ -2522,7 +2522,7 @@ function renderCollaboration(workspace, agents) {
         const divider = !index || new Date(visibleRecords[index - 1].timestamp).toDateString() !== day ? `<div class="communication-day-divider"><time datetime="${esc(item.timestamp)}">${esc(communicationDayLabel(item.timestamp))}</time></div>` : "";
         return `${divider}<article class="collaboration-row ${item.senderType === "human" ? "from-human" : ""} ${item.canReply ? "needs-answer" : ""}" data-collaboration-record="${esc(item.id)}"${item.outgoing ? ` data-outgoing-state="${esc(item.outgoing.status)}"` : ''} data-tone="${esc(item.tone)}" data-sender-color="${esc(sender.color || 'system')}" data-record-status="${esc(item.statusCode)}">
         ${item.senderType === "human" ? "" : `<span class="agent-card-avatar collaboration-avatar ${esc(roleColor(sender))}" aria-hidden="true">${esc(initialsOf(sender))}</span>`}<div class="collaboration-message-main">
-        <header><strong>${esc(item.from)}</strong><span class="collaboration-kind">${esc($tm(item.title))}${item.to ? ` <span aria-label="${$t("交给")}">→</span> ${esc(item.to)}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(formatMessageTime(item.timestamp))}</time>${item.status ? `<span class="collaboration-status">${esc($tm(item.status))}</span>` : ""}</header>
+        <header><strong>${esc(partyName(item.senderType, item.from))}</strong><span class="collaboration-kind">${esc($tm(item.title))}${item.to ? ` <span aria-label="${$t("交给")}">→</span> ${esc(partyName(item.recipientType, item.to))}` : ""}</span><time datetime="${esc(item.timestamp)}" title="${esc(exactTime(item.timestamp))}">${esc(formatMessageTime(item.timestamp))}</time>${item.status ? `<span class="collaboration-status">${esc($tm(item.status))}</span>` : ""}</header>
         <div class="collaboration-content">
           ${item.canReply ? `<div class="collaboration-question-heading">${$t("需要你回答")}</div>` : ""}${body(item.content, item.id)}${item.outgoing ? outgoingAttachmentMarkup(item.outgoing) : messageAttachments(item.attachments || [], run.id, "runs")}
           ${item.reason ? `<p>${esc($tm(item.reason))}</p>` : ""}
@@ -3468,7 +3468,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-edit-task-members]"))) return editTaskMembers();
   if ((target = el("[data-task-member-console]"))) { state.selectedAgentId=target.dataset.taskMemberConsole;workspaceView().tab='console';workspaceView().jumpLatest=true;return renderWorkspace(); }
   if ((target = el("[data-task-member-detail]"))) { const member=workspaceAgents(state.workspace,state.agents).find(a=>a.id===target.dataset.taskMemberDetail);if(member)void showEmployeeDetail({...member,taskRole:member.id===state.workspace.run.manager.id ? "manager" : "member"});return; }
-  if ((target = el("[data-task-workflow-details]"))) return workflowDetails(state.workspace.run.task.workflowSnapshot, { frozen: true });
+  if ((target = el("[data-task-workflow-details]"))) return workflowDetails(workflowDisplay(state.workspace.run.task.workflowSnapshot), { frozen: true });
   if ((target = el("[data-ws-tab]"))) { workspaceView().jumpLatest = true; workspaceView().tab = target.dataset.wsTab; renderWorkspace(); if(target.dataset.wsTab==='collaboration')return loadCollaboration().catch(error=>toast(error.message,true)); if (target.dataset.wsTab === "diff" && workspaceView().changes && !workspaceView().changesLoading) return loadWorkingChanges(state.selectedRunId); if (target.dataset.wsTab === "directory" && workspaceView().directory && !workspaceView().directoryLoading) return loadWorkingDirectory(state.selectedRunId); return; }
   if ((target = el("[data-reload-workspace]"))) return loadWorkspace();
   if ((target = el('[data-retry-collaboration]'))) return loadCollaboration(undefined,{older:Boolean(workspaceView().collaborationRetryOlder)});

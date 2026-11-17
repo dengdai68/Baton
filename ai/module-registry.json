@@ -1169,6 +1169,7 @@
    "promptPresentation": "Full prompt rendering uses immutable redacted audit text. Tool phases pair by Trace and native call ID; distinct calls stay separate. Empty tool_progress summaries are hidden, real content remains.",
    "consoleNoise": "buildConsoleEntries suppresses known content-free routine lifecycle/provider notifications before grouping, normalizing the exact Task Provider-type prefix and omitting trace.accepted persistence acknowledgement. Bodies, tools, abnormal/unknown events and all original audit facts remain; raw pagination, HTTP and CLI are unchanged.",
    "recordPresentation": "Collaboration tone/statusCode project message/delivery facts for UI styling and are excluded from CLI; delivery reference and lifecycle fields are shared.",
+   "platformWordingPresentation": "partyName translates only non-member parties (the operator stored as 你, the whole team, system/Baton, event local user); workflowDisplay returns a translated display copy only for the default workflow snapshot frozen without a template id. Member names, template snapshots and stored records stay as written, and model-facing text keeps using the original snapshot. Collaboration records carry recipientType next to senderType (also in CLI --json).",
    "path": "client/",
    "kind": "presentation-core",
    "owner": "client-platform",
@@ -1220,6 +1221,7 @@
    "cliStatusPresentation": "CLI settings navigation/title use CLI, omit installation/login hints and preserve host install/refresh plus quick-start commands. Automation latest status clears the shared inset shadow along with background/radius; shared status semantics and interactive focus-visible remain unchanged. No CLI/HTTP/Store contract change.",
    "workflowEditorPresentation": "Full-viewport editor with 176x80 rounded process nodes and diamond condition nodes; four ports follow shape vertices. Display geometry remains separate from domain fields. Explicit ports remain authoritative after routing, save/reopen and movement; arrow tips terminate at target port centers in editor and read-only graphs. Hollow magnets retain center and edge pointer hits. 312/272px properties become a 280px narrow overlay; geometry, routing, keyboard links, error drafts and immutable snapshots remain covered by test-workflow-editor.",
    "workspaceFocusPresentation": "Task details list all frozen workflow nodes from existing delivery Traces and workflowFocus, retain manual collapse state, and distinguish handoff/current/running/failed without completion judgments. Detail drawers float with 8px margins and shared radius/shadow, returning to full-screen at 760px; no HTTP/Store/CLI changes.",
+   "platformWordingDisplay": "Task list/board/table, overview workflow link, focus rows, node recovery, console node labels, inbox breadcrumb and the frozen workflow details show the default workflow through workflowDisplay; collaboration headers, chat senders and activity actors use partyName. Display only; no HTTP/Store/CLI command change.",
    "messageAndDirectoryPresentation": "沟通使用共享28px成员头像及本地日历天分隔；身份栏、记录区与输入卡片水平留白统一为20px（--sp-7），≤860px为12px（--sp-5），头像与分隔线对齐外缘，正文仍跟随姓名缩进，任务协作留白不变；团队整行进入编辑，仅群聊按钮进入群聊，保留成员头像与更多菜单；工作流按真实边绘制预览。员工/角色/插件/MCP抽屉点击外部或Escape关闭，内部候选菜单不误关，居中表单显式退出。纯交互呈现，无App/CLI/HTTP/Store协议变化；test-redesign与directory-headers/workflow-editor覆盖。",
    "inboxPresentation": "Rich semantic grouped rows hydrate visible pages through bounded compact workspace reads. State-specific previews use existing collaboration context, precise replyToMessageId messaging, acceptance criteria/artifact counts, failure and pause facts. Polling preserves live composer/drafts; send-and-next selects the next clarification, send-only retains a receipt. Recent combines this session's same-day answers and the latest 20 done tasks (directory has no date filter). No App/CLI/HTTP/Store contract change; settings tests cover state previews, tickets, failed sends and selection.",
    "taskGroupedList": "Graphite grouped rows (34px tinted sticky group heads, single-line 38px rows) with semantic icons, frozen workflow tags, member stacks and existing next/more actions. Filled chips and debounced search share exact HTTP status/workflow/search queries; composite client filters collect existing pages before local pagination and contextual counts. Archive tables, board, human confirmations and CLI protocols remain unchanged. Group headings use shared page padding; child rows add 24px of indentation, matching the inbox hierarchy at wide and narrow widths.",
@@ -2862,8 +2864,7 @@
    ],
    "allowedDependencies": [
     "Intl",
-    "fetch (browser bootstrap)",
-    "window.batonDesktop.getLocale"
+    "window.batonDesktop.locale (preload data)"
    ],
    "forbiddenDependencies": [
     "Store",

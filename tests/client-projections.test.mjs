@@ -365,6 +365,7 @@ test("collaboration omits the redundant target when the manager decides to work 
   assert.equal(records.find(item => item.id === "self").to, null, "self assignment never renders 经理决策 → 同一员工");
   assert.equal(records.find(item => item.id === "peer").to, "研发工程师", "real delegation keeps its recipient");
   assert.equal(records.find(item => item.id === "note").to, null, "team records stay untargeted");
+  assert.equal(records.find(item => item.id === "peer").recipientType, "agent");
   assert.deepEqual(records.map(item => item.title), ["经理决策", "经理决策", "经理决策"]);
 });
 
@@ -387,6 +388,9 @@ test("collaboration colors reflect recorded pending/answered status, not busines
   const answer = { id: "a", kind: "clarification_answer", createdAt: "2026-01-02", replyToMessageId: "q", sender: { type: "human", name: "你" }, recipient: { type: "agent", name: "A" }, content: "已确认范围" };
   const records = collaborationRecords({ messages: [question, answer], dispatches });
   assert.equal(records[0].statusCode, "answered"); assert.equal(records[1].tone, "info");
+  // Stored party wording stays in the projection; the type tells the interface it is platform text.
+  assert.equal(records[0].to, "你"); assert.equal(records[0].recipientType, "human");
+  assert.equal(records[1].from, "你"); assert.equal(records[1].senderType, "human"); assert.equal(records[1].recipientType, "agent");
 });
 
 test("collaboration joins only explicit dispatch provenance and preserves each real dispatch", () => {
@@ -396,6 +400,7 @@ test("collaboration joins only explicit dispatch provenance and preserves each r
   const records = collaborationRecords({ run: { participants: [{ id: "analyst", name: "需求分析" }] }, messages: [message, { ...message, id: "same-body" }], dispatches: [dispatch, { ...dispatch, id: "extra-work", status: "cancelled" }, { ...dispatch, id: "old-work", sourceMessageId: null, messageIds: [message.id] }] });
   const joined = records.find(item => item.id === message.id);
   assert.equal(joined.to, "需求分析"); assert.equal(joined.dispatchId, "work");
+  assert.equal(joined.recipientType, "agent", "a team message shown with its real delivery recipient names a member");
   assert.equal(joined.traceId, "manager-trace"); assert.equal(joined.executionTraceId, "worker-trace");
   assert.equal(joined.status, ""); assert.equal(joined.deliveries[0].currentStatus, "执行中"); assert.equal(joined.deliveries[0].attempts, 2);
   assert.equal(records.filter(item => item.content === message.content).length, 2, "identical text is not a duplicate identity");

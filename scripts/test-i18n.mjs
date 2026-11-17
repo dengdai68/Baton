@@ -38,10 +38,22 @@ const run = store.createRun(task.id);
 store.addMessage({ runId: run.id, sender: { type: 'agent', id: run.manager.id, name: run.manager.name }, kind: 'manager_decision', content: '业务消息正文保持原文。' });
 try { store.pauseRun(run.id, '用户在任务空间暂停'); } catch (error) { log('pause skipped', error.message); }
 store.createTask({ managerAgentId: 'system_project_manager', title: '草稿任务', objective: '尚未启动的草稿。', memberAgentIds: members });
+// Platform wording saved in records: the default workflow (frozen without a template id),
+// the operator's own instruction and chat message ("你"). Display translates them.
+const defaultTask = store.createTask({ managerAgentId: 'system_project_manager', title: '默认流程任务', objective: '使用默认工作流。', memberAgentIds: members });
+const defaultRun = store.createRun(defaultTask.id);
+store.addMessage({ runId: defaultRun.id, recipientAgentId: defaultRun.manager.id, kind: 'human_instruction', content: '请先给出摘要。' });
+try { store.pauseRun(defaultRun.id, '用户在任务空间暂停'); } catch (error) { log('pause skipped', error.message); }
+const chat = store.openCommunication({ kind: 'group', name: '多语言讨论组', memberAgentIds: ['agent_analyst', 'agent_designer'] });
+store.sendCommunication(chat.id, { content: '请说明进度。', mentionAgentIds: ['agent_analyst'], clientRequestId: 'i18n_chat' });
+const delivery = store.claimCommunication(chat.id);
+store.completeCommunication(chat.id, delivery.id, '进度正常。');
 store.close?.();
 await writeStorageLocation(data, { version: 1, workspaceRoot: join(root, 'work'), previousRuntimeRoots: [] });
 
-const evidence = { root, pages: {}, leftovers: {}, menus: {}, shots: [], errors: [] };
+const evidence = { root, pages: {}, leftovers: {}, menus: {}, platformWording: {}, shots: [], errors: [] };
+// Server wording saved in records is not business content: it must appear translated.
+const PLATFORM_WORDING = ['默认协作', '完成任务', '全体团队', '本机用户'];
 const launch = locale => electron.launch({ ...(bundle ? { executablePath: resolve(bundle, 'Contents/MacOS/Baton'), args: [] } : { args: ['apps/electron/main.mjs'] }),
   env: { ...process.env, HOME: home, BATON_DESKTOP_DATA_ROOT: data, BATON_LOG_DIR: join(root, 'logs'), BATON_LOCALE: locale }, timeout: 120000 });
 
@@ -59,14 +71,14 @@ const shot = async (page, name) => { const path = join(shots, `${name}.png`); aw
 
 /** All Han strings from authenticated API data: business content that must stay as written. */
 async function businessTexts(page) {
-  return page.evaluate(async runId => {
+  return page.evaluate(async ({ runIds, chatIds }) => {
     const texts = new Set();
     const walk = value => { if (typeof value === 'string') { if (/[一-鿿]/.test(value)) texts.add(value.trim()); } else if (value && typeof value === 'object') Object.values(value).forEach(walk); };
-    for (const path of ['/api/agents', '/api/teams', '/api/workflow-templates', '/api/roles', '/api/tasks', '/api/automations', '/api/communications', `/api/runs/${runId}/workspace`]) {
+    for (const path of ['/api/agents', '/api/teams', '/api/workflow-templates', '/api/roles', '/api/tasks', '/api/automations', '/api/communications', ...chatIds.map(id => `/api/communications/${id}`), ...runIds.map(id => `/api/runs/${id}/workspace`)]) {
       try { const response = await fetch(path); if (response.ok) walk(await response.json()); } catch { /* optional endpoint */ }
     }
     return [...texts].filter(text => text.length >= 2);
-  }, run.id);
+  }, { runIds: [run.id, defaultRun.id], chatIds: [chat.id] }).then(texts => texts.filter(text => !PLATFORM_WORDING.includes(text)));
 }
 
 /** Visible interface text left in the source language: any Han text in English, Simplified-only characters in zh-TW. */
@@ -97,7 +109,33 @@ const overflow = page => page.evaluate(() => [...document.querySelectorAll('.sid
   .map(node => node.textContent.trim().slice(0, 40)));
 
 const PAGES = ['/inbox', '/tasks', '/automations', '/teams', '/workflows', '/agents', '/roles', '/marketplace', '/mcp-marketplace', '/communication',
-  '/settings/general', '/settings/appearance', '/settings/workspace', '/settings/cli', '/settings/repositories', '/settings/runtime', '/settings/updates', '/settings/logs', '/manual/data-model', `/runs/${run.id}`];
+  '/settings/general', '/settings/appearance', '/settings/workspace', '/settings/cli', '/settings/repositories', '/settings/runtime', '/settings/updates', '/settings/logs', '/manual/data-model', `/runs/${run.id}`,
+  `/runs/${defaultRun.id}`, `/communication/${chat.id}`];
+
+/** The default workflow and the operator's own name are shown in the interface language. */
+async function auditPlatformWording(page, origin, locale) {
+  const expected = { en: { you: 'You', workflow: 'Default collaboration', step: 'Complete the task' }, 'zh-TW': { you: '你', workflow: '預設協作', step: '完成任務' } }[locale];
+  const text = locator => locator.first().innerText().then(value => value.trim());
+  await page.goto(origin + '/tasks'); await page.waitForTimeout(600);
+  const listed = await page.locator('.task-workflow').allInnerTexts();
+  await page.goto(origin + `/runs/${defaultRun.id}`); await page.locator('#collaboration-panel').waitFor();
+  await page.locator('.collaboration-row.from-human header strong').first().waitFor();
+  const seen = {
+    taskList: listed.map(value => value.trim()),
+    instructionSender: await text(page.locator('.collaboration-row.from-human header strong')),
+    workflowLink: await text(page.locator('.task-workflow-link')),
+    focusStep: await text(page.locator('.workflow-focus-title')),
+  };
+  await page.goto(origin + `/communication/${chat.id}`); await page.locator('.communication-message.from-human header strong').first().waitFor();
+  seen.chatSender = await text(page.locator('.communication-message.from-human header strong'));
+  evidence.platformWording[locale] = seen;
+  log(locale, 'platform wording', JSON.stringify(seen));
+  assert.ok(seen.taskList.includes(expected.workflow), `${locale}: task list shows the default workflow as ${expected.workflow}`);
+  assert.equal(seen.instructionSender, expected.you, `${locale}: the operator's instruction sender`);
+  assert.equal(seen.workflowLink, `${expected.workflow} ↗`, `${locale}: overview workflow`);
+  assert.equal(seen.focusStep, expected.step, `${locale}: default workflow step`);
+  assert.equal(seen.chatSender, expected.you, `${locale}: the operator's chat messages`);
+}
 
 async function auditLocale(app, page, origin, locale) {
   const business = await businessTexts(page);
@@ -131,6 +169,7 @@ try {
   assert.ok(evidence.menus.en.some(menu => menu.items.includes('Quit Baton') || menu.items.some(label => /Quit/.test(label))), 'host menu is English');
 
   await auditLocale(app, page, origin, 'en');
+  await auditPlatformWording(page, origin, 'en');
   for (const [path, name] of [['/tasks', 'tasks'], ['/inbox', 'inbox'], [`/runs/${run.id}`, 'workspace'], ['/settings/general', 'settings'], ['/agents', 'agents']]) {
     await page.goto(origin + path); await page.waitForTimeout(800); await shot(page, `en-wide-${name}`);
   }
@@ -156,6 +195,7 @@ try {
   evidence.menus['zh-TW'] = await menus(app);
   assert.ok(JSON.stringify(evidence.menus['zh-TW']).includes('結束 Baton'), 'host menu rebuilt in Traditional Chinese');
   await auditLocale(app, page, origin, 'zh-TW');
+  await auditPlatformWording(page, origin, 'zh-TW');
   for (const [path, name] of [['/tasks', 'tasks'], [`/runs/${run.id}`, 'workspace']]) { await page.goto(origin + path); await page.waitForTimeout(800); await shot(page, `zh-TW-wide-${name}`); }
   await app.close();
 

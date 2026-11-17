@@ -7,6 +7,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createRequire } from "node:module";
 import { $t, $tm, LOCALES, normalizeLanguage, resolveLocale, setLocale, currentLocale, intlLocale } from "../client/i18n.mjs";
+import { collaborationRecords, partyName, workflowDisplay } from "../client/console-projections.mjs";
 
 const root = new URL("..", import.meta.url).pathname;
 const readJson = async path => JSON.parse(await readFile(join(root, path), "utf8"));
@@ -83,6 +84,47 @@ test("$t and $tm keep the source language in Node and translate after setLocale"
     setLocale("zh-CN");
   }
   assert.equal($t("确认"), "确认", "resetting returns to the source language");
+});
+
+test("platform wording saved in records is translated for display; members and custom workflows stay as written", () => {
+  // The default workflow exactly as server/store.mjs freezes it into a task (no template id).
+  const defaults = { id: null, name: "默认协作", description: "按任务目标和成员能力协作，由经理推进交接并提交验收。", nodes: [{ id: "delivery", title: "完成任务", staffingGuidance: "经理根据任务目标和成员能力安排执行，成员完成后明确交接；需要更多工作时继续协调，交付后提交验收。", deliverable: "完成用户要求，如实说明交付结果与尚未解决的问题。", artifactPaths: [], dependsOn: [], handoffFrom: [] }] };
+  const custom = { id: "content_delivery", name: "完成任务", description: "用户写的说明", nodes: [{ id: "write", title: "完成任务" }] };
+  const frozen = JSON.stringify(defaults);
+  const records = collaborationRecords({ messages: [
+    { id: "ask", kind: "clarification_question", createdAt: "2026-11-17T00:00:00Z", sender: { type: "agent", id: "pm", name: "项目经理" }, recipient: { type: "human", id: "human_operator", name: "你" }, content: "需要确认范围吗？" },
+    { id: "tell", kind: "human_instruction", createdAt: "2026-11-17T00:00:01Z", sender: { type: "human", id: "human_operator", name: "你" }, recipient: { type: "agent", id: "pm", name: "项目经理" }, content: "先做摘要" },
+  ] });
+  const label = record => `${partyName(record.senderType, record.from)} → ${partyName(record.recipientType, record.to)}`;
+  try {
+    assert.equal(partyName("human", "你"), "你", "the source language shows stored wording");
+    assert.equal(workflowDisplay(defaults).name, "默认协作");
+    setLocale("en", catalogs.en);
+    assert.equal(partyName("human", "你"), "You");
+    assert.equal(partyName("team", "全体团队"), "Whole team");
+    assert.equal(partyName("human", "本机用户"), "Local user", "event actors use the same rule");
+    assert.equal(partyName("system", "Baton"), "Baton");
+    assert.equal(partyName("agent", "项目经理"), "项目经理", "member names stay as written even when they match interface wording");
+    assert.equal(partyName(undefined, "你"), "你", "an untyped party is treated as a member");
+    console.log(`collaboration headers in English: ${records.map(label).join(" | ")}`);
+    assert.deepEqual(records.map(label), ["项目经理 → You", "You → 项目经理"]);
+
+    const shown = workflowDisplay(defaults);
+    console.log(`default workflow in English: ${shown.name} / ${shown.nodes[0].title}`);
+    assert.equal(shown.name, "Default collaboration");
+    assert.equal(shown.description, catalogs.en[defaults.description]);
+    assert.equal(shown.nodes[0].title, "Complete the task");
+    assert.ok(![shown.nodes[0].staffingGuidance, shown.nodes[0].deliverable].some(text => /[一-鿿]/.test(text)), "every default step field is translated");
+    assert.equal(JSON.stringify(defaults), frozen, "the frozen snapshot the employees received is not modified");
+    assert.equal(workflowDisplay(custom), custom, "template snapshots are user content and come back unchanged");
+    assert.equal(workflowDisplay(null), null);
+
+    setLocale("zh-TW", catalogs["zh-TW"]);
+    assert.equal(workflowDisplay(defaults).name, "預設協作");
+    assert.equal(partyName("team", "全体团队"), "全體團隊");
+  } finally {
+    setLocale("zh-CN");
+  }
 });
 
 test("every interface key has English and Traditional Chinese entries", async () => {

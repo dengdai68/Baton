@@ -267,6 +267,29 @@ export function providerLabel(agent) {
   return runtimeLabel(agent?.runtime?.provider || "claude-code");
 }
 
+// Records keep the wording the platform wrote when they were created: employees
+// saw it and the CLI prints it. The interface shows only that platform wording in
+// the reader's language; member names and user-defined workflows stay as written.
+
+/** Display name of a message party: the operator, the whole team and the system are platform parties; members keep their names. */
+export function partyName(type, name) {
+  return type && type !== "agent" ? $tm(name) : name;
+}
+
+/**
+ * Display copy of a frozen workflow. The built-in default workflow is frozen
+ * without a template id and its wording is platform text; template snapshots are
+ * user content and come back unchanged. Never pass the copy to model-facing text.
+ */
+export function workflowDisplay(snapshot) {
+  if (!snapshot || snapshot.id) return snapshot;
+  const text = value => (typeof value === "string" ? $tm(value) : value);
+  return {
+    ...snapshot, name: text(snapshot.name), description: text(snapshot.description),
+    nodes: asArray(snapshot.nodes).map(node => ({ ...node, title: text(node.title), description: text(node.description), staffingGuidance: text(node.staffingGuidance), deliverable: text(node.deliverable) })),
+  };
+}
+
 export function formatRelativeTime(iso, now = Date.now()) {
   const minutes = Math.floor(Math.max(0, now - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return $t("刚刚");
@@ -526,7 +549,7 @@ export function collaborationRecords(workspace = {}) {
     const selfAddressed = item.recipient?.type === "agent" && item.recipient?.id && item.recipient.id === item.sender?.id;
     return {
       id: item.id, ...(item.clientRequestId ? { clientRequestId: item.clientRequestId } : {}), timestamp: item.createdAt, category: "message", senderType: item.sender?.type, senderId: item.sender?.id || null,
-      from: item.sender?.name || "Baton", to: selfAddressed ? null : item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? $t("你") : item.recipient?.id || null),
+      from: item.sender?.name || "Baton", to: selfAddressed ? null : item.recipient?.type === "team" ? null : item.recipient?.name || (item.recipient?.type === "human" ? $t("你") : item.recipient?.id || null), recipientType: item.recipient?.type || null,
       title: kinds[item.kind] || (item.replyToMessageId ? $t("答复") : $t("协作消息")), content: collaborationContent(item), attachments: asArray(item.attachments),
       status: answer ? $t("当前：已回答") : waiting ? $t("当前：等待答复") : "", statusCode,
       tone: waiting || item.kind === "escalation" ? "warning" : item.sender?.type === "human" ? "info" : ["manager_decision", "agent_consultation"].includes(item.kind) ? "violet" : "teal",
@@ -619,13 +642,14 @@ export function collaborationRecords(workspace = {}) {
         // A team-addressed decision followed by the sender's own coordination
         // turn (purpose manager/delivery_review) is not a handoff target.
         const selfDelivery = details.recipientAgentId && details.recipientAgentId === record.senderId;
-        if (originalRecipient?.type === "team") record.to = selfDelivery ? null : details.recipientName;
+        const deliveredTo = name => Object.assign(record, { to: name, recipientType: name ? "agent" : null });
+        if (originalRecipient?.type === "team") deliveredTo(selfDelivery ? null : details.recipientName);
         else if (originalRecipient?.type === "agent" && originalRecipient.id !== delivery.recipientAgentId) {
           record.addressedRecipient = { id: originalRecipient.id, name: originalRecipient.name };
           record.routingNote = $t("原消息指向 {0}；实际交由 {1} 处理。", [originalRecipient.name || originalRecipient.id, details.recipientName]);
-          record.to = details.recipientName;
+          deliveredTo(details.recipientName);
         }
-        if (recovery) record.to = details.recipientName;
+        if (recovery) deliveredTo(details.recipientName);
       }
     }
   }

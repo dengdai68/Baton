@@ -289,4 +289,4 @@ Runtime 设置及员工选择覆盖九项，统一显示名来自 client/runtime
 
 ## 界面多语言
 
-所有界面文字经 `client/i18n.mjs` 的 `$t("源文本")` 输出，静态壳（index/login/setup）由 `localizeStatic` 翻译；`login.js`、`setup.js` 改为 ES module，登录前即可加载 `/client/i18n.mjs`；当前语言与目录由 preload 的 `batonDesktop.locale` 在页面脚本运行前同步提供。服务端返回的错误、暂停/失败原因、自动化记录原因、更新状态与 Runtime 审计文本在展示点经 `$tm` 翻译。日期与时间按 `intlLocale()` 格式化，zh-CN 保持原格式。设置 → 常规 → 语言提供“跟随系统 / 简体中文 / 繁體中文 / English”，经宿主保存后整页重新加载。清除数据确认词按当前语言输入，提交给服务端的仍是固定源确认词；暂停/终止原因以源文字提交。布局需容纳更长的英文文本，不依赖文字宽度。
+所有界面文字经 `client/i18n.mjs` 的 `$t("源文本")` 输出，静态壳（index/login/setup）由 `localizeStatic` 翻译；`login.js`、`setup.js` 改为 ES module，登录前即可加载 `/client/i18n.mjs`；当前语言与目录由 preload 的 `batonDesktop.locale` 在页面脚本运行前同步提供。服务端返回的错误、暂停/失败原因、自动化记录原因、更新状态与 Runtime 审计文本在展示点经 `$tm` 翻译；默认工作流名称/步骤与操作者“你”等平台写入记录的文字经 `workflowDisplay` / `partyName` 翻译，成员名称与自定义工作流保持原文。日期与时间按 `intlLocale()` 格式化，zh-CN 保持原格式。设置 → 常规 → 语言提供“跟随系统 / 简体中文 / 繁體中文 / English”，经宿主保存后整页重新加载。清除数据确认词按当前语言输入，提交给服务端的仍是固定源确认词；暂停/终止原因以源文字提交。布局需容纳更长的英文文本，不依赖文字宽度。

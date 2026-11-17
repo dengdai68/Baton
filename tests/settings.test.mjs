@@ -13,7 +13,7 @@ import { mkdtemp, mkdir, rm, writeFile, realpath, stat, access } from "node:fs/p
 import { constants } from "node:fs";
 import { resolve, join, isAbsolute, normalize, parse } from "node:path";
 import { STATUS_TEXT, buildConsoleEntries, taskActionLabel, taskMatchesFilter, taskNeedsAttention } from "../client/console-projections.mjs";
-import { collaborationRecords } from "../client/console-projections.mjs";
+import { collaborationRecords, partyName, workflowDisplay } from "../client/console-projections.mjs";
 import { createMarketplaceUI, createMcpMarketplaceUI } from "../web/marketplace.mjs";
 import { $t, $tm } from '../client/i18n.mjs';
 // Extracted renderer source runs outside its module; expose the translators it imports
@@ -1058,7 +1058,7 @@ test("thinking hydration displays recorded public text and explains empty histor
   for(const node of nodes.slice(2)){assert.match(node.innerHTML,/未保存可显示的思考正文/);assert.doesNotMatch(node.innerHTML,/已脱敏|敏感片段已隐藏/);}
 });
 
-function runWithCache(source,context={},...options){context.$t=$t;context.$tm=$tm;context.ByteCache=ByteCache;context.runtimeLabel=runtimeLabel;context.RUNTIME_IDS=RUNTIME_IDS;return vm.runInNewContext(source,context,...options);}
+function runWithCache(source,context={},...options){context.$t=$t;context.$tm=$tm;context.partyName=partyName;context.workflowDisplay=workflowDisplay;context.ByteCache=ByteCache;context.runtimeLabel=runtimeLabel;context.RUNTIME_IDS=RUNTIME_IDS;return vm.runInNewContext(source,context,...options);}
 
 test('work-root reset preserves presentation preferences and reloads the retained login',async()=>{const source=await readFile(new URL('../web/app.js',import.meta.url),'utf8');const callback=source.slice(source.indexOf('onDataReset:'),source.indexOf('onWorkspaceSaved:'));assert.doesNotMatch(callback,/removeItem|clear\(/);assert.match(callback,/location.replace/);});
 

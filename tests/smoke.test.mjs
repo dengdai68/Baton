@@ -16,11 +16,11 @@ import { createRunFiles } from "../server/run-files.mjs";
 import { createSqlitePersistence } from "../server/persistence.mjs";
 import { executeRun, readNodeResult, parseEmployeeResponse, terminateRun } from "../server/orchestrator.mjs";
 import { runClaudeCodeCli, RuntimeSessionMissingError } from "../server/runtime/local-cli.mjs";
-import { taskNeedsAttention, collaborationRecords, mentionables, roleExecutionStatus, workflowFocus } from "../client/console-projections.mjs";
+import { taskNeedsAttention, collaborationRecords, mentionables, partyName, roleExecutionStatus, workflowDisplay, workflowFocus } from "../client/console-projections.mjs";
 import { $t, $tm, intlLocale, currentLocale } from '../client/i18n.mjs';
 // Extracted renderer source runs outside its module; expose the translators it imports
 // (identity in the source language, so rendered text is unchanged).
-Object.assign(globalThis, { $t, $tm, intlLocale, currentLocale });
+Object.assign(globalThis, { $t, $tm, intlLocale, currentLocale, partyName, workflowDisplay });
 // Source assertions predate $t(): compare the original wording, not the call form.
 const sourceWording = text => text.replace(/\$\{\$t\(("(?:[^"\\]|\\.)*")\)\}/g, (_, literal) => JSON.parse(literal)).replace(/\$t\(("(?:[^"\\]|\\.)*")\)/g, '$1');
 
