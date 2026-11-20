@@ -1470,7 +1470,7 @@
  "搜索任务": "Search tasks",
  "任务快捷视图": "Task quick views",
  "任务名称": "Task name",
- "筛选任务名称": "Filter by task name",
+ "筛选任务名称": "Filter tasks",
  "筛选": "Filter",
  "任务状态": "Task status",
  "全部状态": "All statuses",
@@ -2320,8 +2320,8 @@
  "没有匹配成员": "No matching members",
  "加载会话…": "Loading chat…",
  "群聊 · {0} 位成员 · @ 指定成员回复，不 @ 时全员回复": {
-  "one": "Group chat · {0} member · @ someone to direct replies; otherwise everyone replies",
-  "other": "Group chat · {0} members · @ someone to direct replies; otherwise everyone replies"
+  "one": "Group · {0} member · @ to direct, else all reply",
+  "other": "Group · {0} members · @ to direct, else all reply"
  },
  "长期私聊": "Long-term direct chat",
  "输入消息，@ 提及成员…": "Type a message, @ to mention…",
