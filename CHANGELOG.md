@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-- 英文界面文案不再撑破或截断：群聊副标题改为 “Group · N members · @ to direct, else all reply”，输入提示改为 “⏎ Send · ⇧⏎ New line”，任务筛选框 “Filter tasks”，工作区文件摘要 “Open folder ↗ · N snapshots”；窄窗口设置导航换行显示全部分类，目录搜索框不再缩到 150px，任务控制台成员的 Runtime 与状态分段换行。协作记录与沟通消息正文整体缩小一个字号（14px → 13px，行高 22 → 20px，行内代码 12px），与员工昵称层级一致。仅界面呈现，CLI/HTTP/Store 不变。
+- 英文界面文案不再撑破或截断：群聊副标题改为 “Group · N members · @ to direct, else all reply”，任务筛选框改为 “Filter tasks”（只缩短实测超出区域的文字，输入提示与文件摘要保持原译文）；窄窗口设置导航换行显示全部分类，目录搜索框不再缩到 150px，任务控制台成员的 Runtime 与状态分段换行。协作记录与沟通消息正文整体缩小一个字号（14px → 13px，行高 22 → 20px，行内代码 12px），与员工昵称层级一致。仅界面呈现，CLI/HTTP/Store 不变。
 
 ## [0.1.11-beta.3] - 2026-11-18
 

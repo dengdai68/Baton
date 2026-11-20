@@ -1399,7 +1399,7 @@
  "向你提问": "asked you",
  "回答 {0} 的问题": "Answer {0}'s question",
  "输入回答，发送后 {0} 会继续执行": "Type your answer; {0} continues after you send it",
- "Enter 发送 · Shift + Enter 换行": "⏎ Send · ⇧⏎ New line",
+ "Enter 发送 · Shift + Enter 换行": "Enter to send · Shift + Enter for a new line",
  "发送回答": "Send answer",
  "查看已保存的交付快照": "View saved delivery snapshot",
  "在任务工作区查看其余记录": "View the rest in the task workspace",
@@ -1802,10 +1802,10 @@
  "暂无执行成员": "No one executing",
  "{0} 位": "{0}",
  "文件": "Files",
- "打开工作目录 ↗": "Open folder ↗",
+ "打开工作目录 ↗": "Open working directory ↗",
  "{0} 项交付快照": {
-  "one": "{0} snapshot",
-  "other": "{0} snapshots"
+  "one": "{0} delivery snapshot",
+  "other": "{0} delivery snapshots"
  },
  "任务来源": "Task source",
  "自动化 · 配置 v{0}": "Automation · configuration v{0}",
