@@ -1,5 +1,7 @@
 # 代码导航
 
+英文布局与记录字号：`client/locales/en.json` 缩短群聊副标题、输入提示、任务筛选与文件摘要译文；`web/styles.css` 将协作记录与沟通正文降为 `--fs-body`/`--lh-body`，≤860px 设置导航换行、目录搜索保持可收缩 220px，`web/app.js` 让控制台成员元信息按 Runtime/状态分段换行。仅呈现，CLI/HTTP/Store 不变；隔离 Electron 英文宽窄截图验证。
+
 附件与收起侧栏：web/communication.js 共用图片按钮（持久附件和本地发送反馈均直接显示图片），web/styles.css 统一56px待发卡片、320px消息图片上限及有界预览；≤1000px自动收起与手动收起都隐藏计数。验收 scripts/test-communication-media.mjs 覆盖源/包内、横竖小图、失败回退、下载、任务/沟通、两主题宽窄及零 Provider；HTTP/CLI 附件协议无变化。
 
 协作历史连续读取：web/app.js 向前累加旧页、按 ID 去重并恢复可见消息锚点，web/styles.css 居中加载入口；任务与沟通消息共用 client/console-projections.mjs 的月日/跨年时间标签。collaborationContent 展示已知 summary/handoff 报告（含历史引号错误），App/CLI 共用，不改历史、路由或执行。验收：client-projections/settings/communication tests、test-collaboration-flow。

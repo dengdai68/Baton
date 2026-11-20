@@ -1399,7 +1399,7 @@
  "向你提问": "asked you",
  "回答 {0} 的问题": "Answer {0}'s question",
  "输入回答，发送后 {0} 会继续执行": "Type your answer; {0} continues after you send it",
- "Enter 发送 · Shift + Enter 换行": "Enter to send · Shift + Enter for a new line",
+ "Enter 发送 · Shift + Enter 换行": "⏎ Send · ⇧⏎ New line",
  "发送回答": "Send answer",
  "查看已保存的交付快照": "View saved delivery snapshot",
  "在任务工作区查看其余记录": "View the rest in the task workspace",
@@ -1470,7 +1470,7 @@
  "搜索任务": "Search tasks",
  "任务快捷视图": "Task quick views",
  "任务名称": "Task name",
- "筛选任务名称": "Filter by task name",
+ "筛选任务名称": "Filter tasks",
  "筛选": "Filter",
  "任务状态": "Task status",
  "全部状态": "All statuses",
@@ -1802,10 +1802,10 @@
  "暂无执行成员": "No one executing",
  "{0} 位": "{0}",
  "文件": "Files",
- "打开工作目录 ↗": "Open working directory ↗",
+ "打开工作目录 ↗": "Open folder ↗",
  "{0} 项交付快照": {
-  "one": "{0} delivery snapshot",
-  "other": "{0} delivery snapshots"
+  "one": "{0} snapshot",
+  "other": "{0} snapshots"
  },
  "任务来源": "Task source",
  "自动化 · 配置 v{0}": "Automation · configuration v{0}",
@@ -2320,8 +2320,8 @@
  "没有匹配成员": "No matching members",
  "加载会话…": "Loading chat…",
  "群聊 · {0} 位成员 · @ 指定成员回复，不 @ 时全员回复": {
-  "one": "Group chat · {0} member · @ someone to direct replies; otherwise everyone replies",
-  "other": "Group chat · {0} members · @ someone to direct replies; otherwise everyone replies"
+  "one": "Group · {0} member · @ to direct, else all reply",
+  "other": "Group · {0} members · @ to direct, else all reply"
  },
  "长期私聊": "Long-term direct chat",
  "输入消息，@ 提及成员…": "Type a message, @ to mention…",
