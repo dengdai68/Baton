@@ -1,3 +1,9 @@
+import QRCode from 'qrcode';
+import {networkInterfaces} from 'node:os';
+import {workspaceIdentity} from './workspace-identity.mjs';
+import {provisionWorkspace,pairingLink} from './workspace-config.mjs';
+import {startWorkspace} from './workspace-http.mjs';
+import {DatabaseSync} from 'node:sqlite';
 import {RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import { closeExecutionBudget } from './execution-budget.mjs';
 import { attachmentThumbnail } from './attachment-thumbnails.mjs';
@@ -49,6 +55,17 @@ const host = "127.0.0.1";
 const instanceId = randomUUID();
 const storage = desktopServiceStoragePaths();
 const databasePath = storage.databasePath;
+let workspaceConfig;
+try { workspaceConfig = JSON.parse(await readFile(join(storage.controlRoot,'workspace-service.json'),'utf8')); }
+catch(error){ if(error.code!=='ENOENT')throw error; }
+if(workspaceConfig?.mode==='cloud' && process.env.BATON_WORKSPACE_DAEMON!=='1')throw Error('云端工作空间需要独立服务入口');
+let instanceLock,workspaceError;
+function lockWorkspace() {
+  if(instanceLock)return;
+  const lock=new DatabaseSync(join(storage.controlRoot,'workspace-service-lock.sqlite'));
+  try { lock.exec('BEGIN EXCLUSIVE');instanceLock=lock; }
+  catch(error){lock.close();throw error;}
+}
 installProcessDiagnostics("server", { instancePath: storage.authDatabasePath });
 const runFilesRoot = storage.runFilesRoot;
 const workspaceRoot = storage.workspaceRoot;
@@ -122,6 +139,7 @@ function ensureBusiness() {
     try {
       diagnostic('business.starting', { phase });
       if (usesDefaultRoot) { await mkdir(storage.dataRoot, { recursive: true, mode: 0o700 }); await chmod(storage.dataRoot, 0o700); }
+      if(workspaceConfig)lockWorkspace();
       phase = 'reset_recovery'; await dataReset.recover();
       phase = 'store'; diagnostic('business.starting', { phase });
       store = createStore(storeOptions); subscribeDesktopNotifications(store); runFiles = communicationFiles();
@@ -277,7 +295,40 @@ async function withTaskDeletionLock(locks, taskId, work) {
   finally { locks.delete(taskId); }
 }
 
-async function routeApi(request, response, pathname, searchParams = new URLSearchParams()) {
+// context.sessionValid lets a caller that authenticated the request elsewhere
+// (the workspace gateway's device session) keep long-lived streams authorized.
+async function routeApi(request, response, pathname, searchParams = new URLSearchParams(), context = {}) {
+  if (pathname.startsWith('/api/phone/')) {
+    if(workspaceConfig?.mode==='cloud'){sendJson(response,403,{error:'云端使用账号登录'});return true;}
+    if(pathname==='/api/phone/status' && request.method==='GET'){
+      const address=Object.values(networkInterfaces()).flat().find(a=>a?.family==='IPv4'&&!a.internal)?.address;
+      sendJson(response,200,{origin:workspaceConfig?.origin || null,error:workspaceError||null,suggested:address?'https://'+address+':9443':''});return true;
+    }
+    if(pathname==='/api/phone/enable' && request.method==='POST'){
+      const {origin,relay}=await readJson(request);
+      if(workspaceConfig)throw Error('手机连接已配置');
+      if(!relay && Number(new URL(origin).port||443)!==9443)throw Error('局域网直连端口为 9443');
+      lockWorkspace();
+      const config=provisionWorkspace(storage.controlRoot,{mode:'local',origin,port:9443,bind:relay?'127.0.0.1':'0.0.0.0'});
+      workspaceConfig=config;
+      try{await listenWorkspace();}catch(error){
+        workspaceConfig=null;
+        await import('node:fs/promises').then(fs=>fs.unlink(join(storage.controlRoot,'workspace-service.json')));
+        throw error;
+      }
+      sendJson(response,200,{ok:true});return true;
+    }
+    if(!workspaceConfig)throw Error('请先启用手机连接');
+    const devices=workspaceIdentity(storage.controlRoot,'local');
+    try {
+      if(pathname==='/api/phone/pair' && request.method==='POST'){
+        const link=pairingLink(workspaceConfig,devices);
+        sendJson(response,200,{link,qr:await QRCode.toDataURL(link,{width:300,margin:2})});return true;
+      }
+      if(pathname==='/api/phone/devices' && request.method==='GET'){sendJson(response,200,{items:devices.devices()});return true;}
+      if(pathname==='/api/phone/revoke' && request.method==='POST'){devices.revoke((await readJson(request)).id);sendJson(response,200,{ok:true});return true;}
+    }finally{devices.close();}
+  }
   if (request.method === 'GET' && pathname === '/api/bootstrap' && searchParams.get('view') === 'connection') {
     sendJson(response,200,{settings:{workspaceRoot,source:'startup'},businessReady:Boolean(communications && !businessFailure)});
     return true;
@@ -459,6 +510,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     sendJson(response, 200, { workspaceRoot,source:'startup',version,businessRoot:storage.dataRoot,databasePath,runFilesRoot,runtimeConfigRoot,configurationRoot:storage.controlRoot,configurationFile:join(storage.controlRoot,'configuration.json'),authenticationRoot:storage.controlRoot,logDirectory:diagnostics().status().directory }); return true;
   }
   if (pathname === "/api/settings/workspace" && request.method === "PUT") {
+    if(process.env.BATON_WORKSPACE_DAEMON==='1')throw Error('独立部署请在停机后更换实例目录');
     const input = await readJson(request);
     if(!input||Object.keys(input).some(key=>key!=='workspaceRoot'))throw new Error('数据目录仅接受 workspaceRoot');
     if(updateRestartLease||resettingData||writeRequests!==1||runtimeTestActive||taskDeletionLocks.size||pluginUpdates.status().running||communications.isActive()||store.pendingCommunications().length||store.listPatrolRunIds().length||store.listRecoveryRunIds().some(hasActiveExecution)){sendJson(response,409,{error:'仍有执行、排队任务或保存操作，请暂停执行并等待沟通结束后更换数据目录'});return true;}
@@ -933,7 +985,8 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
       congested=!response.write(chunk);
     };
     response.on('drain',()=>{congested=false;});
-    const authorized = () => { if (response.writableEnded) return false; if (auth.session(request)) return true; response.write("event: auth-expired\ndata: {}\n\n"); response.end(); return false; };
+    const sessionValid = context.sessionValid || (() => Boolean(auth.session(request)));
+    const authorized = () => { if (response.writableEnded) return false; if (sessionValid()) return true; response.write("event: auth-expired\ndata: {}\n\n"); response.end(); return false; };
     const unsubscribe = store.subscribe((event) => { if (event.runId === runId && authorized()) write(`event: run-event\ndata: ${JSON.stringify(event)}\n\n`); });
     const heartbeat = setInterval(() => { if (authorized()) write(": heartbeat\n\n"); }, 15000);
     request.on("close", () => { eventStreams.delete(response); clearInterval(heartbeat); unsubscribe(); });
@@ -986,39 +1039,76 @@ async function serveStatic(response, pathname) {
   }
 }
 
-const server = createServer(async (request, response) => {
-  if (!auth) { sendJson(response, 503, { error: "服务正在启动" }); return; }
+/** Count writes, refuse work during restart/reset and map failures to the shared HTTP error shape. */
+async function accountRequest(request, response, handle) {
   const write = !["GET", "HEAD"].includes(request.method);
   if (write && updateRestartLease) { sendJson(response, 503, { error: "应用正在准备重启更新，请稍后重试" }); return; }
   if (resettingData) { sendJson(response, 503, { error: "正在清除数据，请稍后重试" }); return; }
   if (write) ++writeRequests;
-  try {
+  try { await handle(); }
+  catch (error) {
+    diagnostic("http.request_failed", { method: request.method, pathname: (request.url || "").split("?")[0], error });
+    sendJson(response, error.committed ? 503 : error.code === "CLIENT_REQUEST_CONFLICT" ? 409 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: error.message || "请求处理失败" });
+  } finally { if (write) --writeRequests; }
+}
+
+/** Route an already authenticated request; business routes first wait for a ready Store. */
+async function serveApi(request, response, url, context = {}) {
+  const connectionRead = request.method === 'GET' && url.pathname === '/api/bootstrap' && url.searchParams.get('view') === 'connection';
+  const configurationRead = request.method === 'GET' && ['/api/settings/workspace','/api/settings/log-files','/api/runtime/git-credentials','/api/runtime/marketplace','/api/runtime/mcp-marketplace','/api/runtime/marketplace/updates'].includes(url.pathname);
+  if (url.pathname.startsWith('/api/') && url.pathname !== '/api/health' && !connectionRead && !configurationRead) {
+    try { await ensureBusiness(); }
+    catch (error) { sendJson(response, 503, { error: `业务数据未就绪：${error.message}` }); return true; }
+    if(store.configurationBlocked()){sendJson(response,503,{error:'配置发布尚未完成，请修复配置目录后重启恢复；不要重复提交'});return true;}
+  }
+  return routeApi(request, response, url.pathname, url.searchParams, context);
+}
+
+const server = createServer(async (request, response) => {
+  if (!auth) { sendJson(response, 503, { error: "服务正在启动" }); return; }
+  await accountRequest(request, response, async () => {
     const url = new URL(request.url || "/", "http://127.0.0.1");
     if (await auth.guard(request, response, url)) return;
-    const connectionRead = request.method === 'GET' && url.pathname === '/api/bootstrap' && url.searchParams.get('view') === 'connection';
-    const configurationRead = request.method === 'GET' && ['/api/settings/workspace','/api/settings/log-files','/api/runtime/git-credentials','/api/runtime/marketplace','/api/runtime/mcp-marketplace','/api/runtime/marketplace/updates'].includes(url.pathname);
-    if (url.pathname.startsWith('/api/') && url.pathname !== '/api/health' && !connectionRead && !configurationRead) {
-      try { await ensureBusiness(); }
-      catch (error) { sendJson(response, 503, { error: `业务数据未就绪：${error.message}` }); return; }
-      if(store.configurationBlocked()){sendJson(response,503,{error:'配置发布尚未完成，请修复配置目录后重启恢复；不要重复提交'});return;}
-    }
-    const handled = await routeApi(request, response, url.pathname, url.searchParams);
-    if (handled) return;
+    if (await serveApi(request, response, url)) return;
     if (url.pathname.startsWith("/api/")) {
       sendJson(response, 404, { error: "not_found" });
       return;
     }
     await serveStatic(response, url.pathname);
-  } catch (error) {
-    diagnostic("http.request_failed", { method: request.method, pathname: (request.url || "").split("?")[0], error });
-    sendJson(response, error.committed ? 503 : error.code === "CLIENT_REQUEST_CONFLICT" ? 409 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: error.message || "请求处理失败" });
-  } finally { if (write) --writeRequests; }
+  });
 });
 
-server.listen(port, host, () => {
+// The workspace gateway authenticates devices itself, then reuses the exact
+// desktop API (same routes, accounting and errors) for the routes it allows.
+function gatewayApi(request, response, url, context) {
+  return accountRequest(request, response, async () => {
+    if (!(await serveApi(request, response, url, context))) sendJson(response, 404, { error: "not_found" });
+  });
+}
+
+function listenWorkspace() {
+  return startWorkspace({config:workspaceConfig,root:storage.controlRoot,ensureBusiness,readJson,sendJson,api:gatewayApi,
+      execute:runId=>{void executeRun(store,runId,runExecutionOptions).catch(error=>diagnostic('workspace.execute_failed',{error,runId}));},
+      wake:wakeCommunication,pause:id=>pauseRun(store,id,'用户暂停'),resume:id=>resumeRun(store,id),
+      canWrite:()=>!updateRestartLease && !resettingData});
+}
+
+server.listen(port, host, async () => {
   const listeningPort = server.address().port;
   authOptions.origins = [`http://127.0.0.1:${listeningPort}`];
   auth = createAuth(authOptions);
+  if(workspaceConfig) {
+    try {
+      lockWorkspace();
+      await listenWorkspace();
+      await ensureBusiness();
+      console.log('Workspace online '+workspaceConfig.origin);
+    } catch(error) {
+      if(process.env.BATON_WORKSPACE_DAEMON==='1' || !instanceLock)throw error;
+      workspaceError=error.message;
+      diagnostic('workspace.start_failed',{error});
+    }
+  }
   console.log(`Baton is running at http://${host}:${listeningPort}`);
   process.send({ type: "baton-ready", port: listeningPort, instanceId });
 });

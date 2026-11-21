@@ -5,9 +5,9 @@ import {runtimeLabel} from "./runtime-providers.mjs";
 
 // Server pages are in stable archive order. Keep adjacent pages together up to
 // a fixed window; a missed live page must not silently bridge a history gap.
-export function consoleEventWindow(current, incoming, { older = false, limit = 200 } = {}) {
+export function consoleEventWindow(current, incoming, { older = false, joined = false, limit = 200 } = {}) {
   const currentIds = new Set(current.map(event => event.id));
-  const reset = !older && current.length > 0 && incoming.length > 0 && !incoming.some(event => currentIds.has(event.id));
+  const reset = !older && !joined && current.length > 0 && incoming.length > 0 && !incoming.some(event => currentIds.has(event.id));
   const rows = [...new Map((older ? [...incoming, ...current] : [...(reset ? [] : current), ...incoming]).map(event => [event.id, event])).values()];
   return { events: older ? rows.slice(0, limit) : rows.slice(-limit), trimmedBefore: !older && rows.length > limit, reset };
 }
@@ -41,11 +41,10 @@ export function consoleContentTokens(value, { json = true, truncated = false } =
   return { json: true, tokens };
 }
 
-export const STATUS_TEXT = {
-  backlog: $t("草稿"), planning: $t("进行中"), running: $t("进行中"), awaiting_human: $t("等待你的澄清"),
-  review: $t("进行中"), awaiting_acceptance: $t("待你验收"), paused: $t("已暂停"), done: $t("已完成"),
-  blocked: $t("错误中断"), failed: $t("错误中断"), completed: $t("已完成"), cancelled: $t("已终止")
-};
+// Translated label tables are filled by refreshProjectionLabels(): the desktop
+// selects its language before loading, the phone app switches live and refreshes
+// them in place, so importers keep the same objects.
+export const STATUS_TEXT = {};
 
 // Shell-like tools whose already-redacted input carries a real command line.
 const SHELL_TOOL_NAMES = new Set(["bash", "shell", "command_execution", "exec", "local_shell", "terminal", "powershell", "cmd"]);
@@ -222,14 +221,7 @@ export function editDiff(oldText, newText, { maxCells = 2000000 } = {}) {
 
 // These categories are display-only. Store remains the authority for every
 // Task/Run transition; clients use them only to make human next actions clear.
-export const TASK_FILTERS = Object.freeze([
-  { id: "all", label: $t("全部") },
-  { id: "attention", label: $t("待你处理") },
-  { id: "active", label: $t("执行中") },
-  { id: "backlog", label: $t("草稿") },
-  { id: "done", label: $t("已完成") },
-  { id: "cancelled", label: $t("已终止") }
-]);
+export const TASK_FILTERS = Object.freeze(["all", "attention", "active", "backlog", "done", "cancelled"].map(id => ({ id, label: "" })));
 
 const taskAttentionStatuses = new Set(["awaiting_human", "awaiting_acceptance", "paused", "blocked", "failed"]);
 const taskActiveStatuses = new Set(["planning", "running", "review"]);
@@ -258,7 +250,20 @@ export function taskActionLabel(status) {
   }[status] || $t("进入任务空间");
 }
 
-export const EVENT_KIND_LABEL = { output: $t("输出"), thinking: $t("推理片段"), tool: $t("工具调用"), deliver: $t("交付"), system: $t("系统") };
+export const EVENT_KIND_LABEL = {};
+
+/** Recompute the translated label tables in place for the current interface language. */
+export function refreshProjectionLabels() {
+  Object.assign(STATUS_TEXT, {
+    backlog: $t("草稿"), planning: $t("进行中"), running: $t("进行中"), awaiting_human: $t("等待你的澄清"),
+    review: $t("进行中"), awaiting_acceptance: $t("待你验收"), paused: $t("已暂停"), done: $t("已完成"),
+    blocked: $t("错误中断"), failed: $t("错误中断"), completed: $t("已完成"), cancelled: $t("已终止")
+  });
+  const filterLabels = { all: $t("全部"), attention: $t("待你处理"), active: $t("执行中"), backlog: $t("草稿"), done: $t("已完成"), cancelled: $t("已终止") };
+  for (const filter of TASK_FILTERS) filter.label = filterLabels[filter.id];
+  Object.assign(EVENT_KIND_LABEL, { output: $t("输出"), thinking: $t("推理片段"), tool: $t("工具调用"), deliver: $t("交付"), system: $t("系统") });
+}
+refreshProjectionLabels();
 
 const asArray = (value) => Array.isArray(value) ? value : [];
 const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -344,6 +349,7 @@ export function displayText(event = {}) {
 
 export function isTransportFrame(event = {}) {
   if (event.data?.providerEventType === "stream_event") return true;
+  if (event.data?.contentRef || ["tool", "tool_result", "error"].includes(event.data?.presentation)) return false;
   const type = event.data?.providerEventType;
   if (event.type !== "runtime.event" || !type) return false;
   const text = displayText(event).trim();
@@ -361,12 +367,21 @@ export function isRoutineConsoleEvent(event = {}) {
   if (event.type !== "runtime.event" || data.auditVersion !== 2) return false;
   const type = data.providerEventType;
   if (type === "stderr" && data.presentation === "system") return true; // diagnostic text remains in the private log
-  if (!["system", "thread.started", "turn.started", "turn.completed", "result", "item.started", "item.completed", "assistant", "tool_progress"].includes(type)) return false;
+  if (!["system", "thread.started", "turn.started", "turn.completed", "result", "item.started", "item.completed", "assistant", "tool_progress", "agent_start", "agent_end", "agent_settled", "turn_start", "turn_end", "message_start", "message_update", "message_end", "tool_execution_update"].includes(type)) return false;
   const text = displayText(event).trim();
   // Task audits prefix their message with the exact Provider event type;
   // communication audits do not. Normalize that envelope, not business text.
   const summary = text.startsWith(`${type}: `) ? text.slice(type.length + 2) : text;
-  return [$t("Provider 会话已初始化"), $t("成员会话已连接"), $t("Provider 已返回结构化结果"), $t("模型已更新执行进展"), $t("模型正在整理执行方案")].includes(summary);
+  // Portable runtimes, including Pi's per-delta frames, use this empty
+  // status summary. Content and abnormal events were excluded above.
+  if (data.presentation === "system" && summary === "Provider 执行状态") return true;
+  return ["Provider 会话已初始化", "成员会话已连接", "Provider 已返回结构化结果", "模型已更新执行进展", "模型正在整理执行方案"].includes(summary);
+}
+
+// A start marker locates a Trace prompt even when it has no event row of its own.
+export function retainsConsoleEvent(event) {
+  if (event.data?.traceId && ["trace.started", "communication.started"].includes(event.type)) return true;
+  return event.type !== "message.sent" && !isTransportFrame(event) && !isRoutineConsoleEvent(event);
 }
 
 export function workspaceAgents(workspace = {}, agents = [], { includeDeleted = false } = {}) {

@@ -39,7 +39,8 @@ export function setLocale(locale, messages = {}) {
   catalog = Object.assign(Object.create(null), current === SOURCE_LOCALE ? {} : messages);
   patterns = null;
   messageCache.clear();
-  pluralRules = typeof Intl !== 'undefined' ? new Intl.PluralRules(INTL_LOCALES[current]) : null;
+  // Hermes (the iOS app's engine) has Intl but no Intl.PluralRules.
+  pluralRules = typeof Intl !== 'undefined' && typeof Intl.PluralRules === 'function' ? new Intl.PluralRules(INTL_LOCALES[current]) : null;
   return current;
 }
 
@@ -49,6 +50,13 @@ export function intlLocale() { return INTL_LOCALES[current]; }
 function interpolate(template, params) {
   if (params == null) return template;
   return template.replace(/\{(\w+)\}/g, (match, name) => (Object.hasOwn(params, name) && params[name] != null ? String(params[name]) : match));
+}
+
+// Catalogs only distinguish "one" and "other"; without Intl.PluralRules only
+// English uses "one" (for exactly 1), as Intl would for these locales.
+function pluralCategory(count) {
+  if (pluralRules) return pluralRules.select(count);
+  return current === 'en' && Math.abs(count) === 1 ? 'one' : 'other';
 }
 
 function countOf(params) {
@@ -75,7 +83,7 @@ export function $t(source, params) {
   let entry = current === SOURCE_LOCALE ? undefined : catalog[source];
   if (entry && typeof entry === 'object') {
     const count = countOf(params);
-    entry = (Number.isFinite(count) && pluralRules ? entry[pluralRules.select(count)] : undefined) ?? entry.other;
+    entry = (Number.isFinite(count) ? entry[pluralCategory(count)] : undefined) ?? entry.other;
   }
   return interpolate(typeof entry === 'string' ? entry : sourceText(source), params);
 }

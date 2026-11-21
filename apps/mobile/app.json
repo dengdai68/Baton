@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Baton",
+    "slug": "baton-mobile",
+    "version": "1.1.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "baton",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#ffffff",
+    "ios": {
+      "bundleIdentifier": "com.dengdai68.baton.mobile",
+      "buildNumber": "2",
+      "appleTeamId": "62UU2N6M4X",
+      "supportsTablet": true,
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "zh-Hans",
+        "CFBundleLocalizations": [
+          "zh-Hans",
+          "zh-Hant",
+          "en"
+        ],
+        "NSLocalNetworkUsageDescription": "连接本地 Baton 工作空间",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.dengdai68.baton.mobile",
+      "predictiveBackGestureEnabled": false
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#ffffff",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 96,
+          "dark": {
+            "backgroundColor": "#111215"
+          }
+        }
+      ],
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-localization",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "扫描 Baton 工作空间配对码",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "选择图片作为任务或沟通的附件",
+          "cameraPermission": "拍摄图片作为任务或沟通的附件",
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
