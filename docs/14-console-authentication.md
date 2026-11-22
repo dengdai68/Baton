@@ -37,3 +37,5 @@ Electron 自有子服务尚无管理员时，主进程以一次性私有 bootstr
 CLI 先验证私有 endpoint 和实例身份，再读取同目录的专用共享凭证；有有效客户端授权时优先使用，没有时使用自己的私有登录会话。显式 `--session-file` 隔离使用独立 CLI 会话。CLI 不读取 Chromium 存储或 SQLite。CLI logout 只撤销自己的独立会话，不能注销共享客户端会话；客户端授权由客户端退出登录管理。此能力不扩大权限，仍为本机同用户、单管理员。
 
 任务附件二进制例外仅适用于 POST /api/runs/run_…/attachments（与沟通附件一致）；仍强制管理员会话、精确 Origin/Host，其他写接口继续要求 JSON。下载与图片预览同样鉴权，禁止活动 HTML/SVG 作为内联图片执行。
+
+工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](31-workspace-service.md)。

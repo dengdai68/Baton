@@ -16,7 +16,17 @@
       <p id="setup-error" role="alert" aria-live="polite"></p>
       <button class="submit" type="submit">创建管理员并进入工作区</button>
     </form>
-    <footer><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="m12 3 8 4v6c0 5-8 8-8 8s-8-3-8-8V7z"/><path d="m8 12 3 3 5-6"/></svg>本机单管理员 · 安全会话</footer>
+    <div id="workspace-choice" hidden>
+        <label for="workspace-mode">工作空间</label>
+        <select id="workspace-mode"><option value="local">本机工作空间</option></select>
+      </div>
   </main>
+  <dialog id="workspace-dialog" aria-labelledby="workspace-dialog-title">
+      <form id="workspace-add"><h2 id="workspace-dialog-title">添加工作空间</h2>
+        <label for="workspace-address">工作空间地址</label>
+        <input id="workspace-address" placeholder="mac.local:9443" autocomplete="url" spellcheck="false" required>
+        <p role="alert" id="address-error"></p>
+        <div class="dialog-actions"><button type="button" id="workspace-cancel">取消</button><button class="submit" type="submit">添加</button></div>
+      </form></dialog>
   <script type="module" src="/setup.js"></script>
-</body></html>
+<script type="module" src="/workspace-choice.js"></script></body></html>

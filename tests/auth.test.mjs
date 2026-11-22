@@ -239,7 +239,12 @@ test("desktop bootstrap can create exactly one initial local administrator", asy
 test("HTTP authentication precedes business routes and active content is sandboxed", async () => {
   const source = await readFile(new URL("../server/index.mjs",import.meta.url),"utf8");
   const handler = source.slice(source.indexOf("const server = createServer"));
-  assert.ok(handler.indexOf("auth.guard") < handler.indexOf("routeApi"));
+  // The desktop handler authenticates before routing; business routes are reached only through serveApi
+  // (the workspace gateway calls serveApi after its own device-session check in workspace-http.mjs).
+  assert.ok(handler.indexOf("auth.guard") >= 0 && handler.indexOf("auth.guard") < handler.indexOf("serveApi("));
+  const serve = source.slice(source.indexOf("async function serveApi"), source.indexOf("const server = createServer"));
+  assert.match(serve, /return routeApi\(/);
+  assert.equal(source.split("routeApi(").length - 1, 2, "routeApi is defined once and called only from serveApi");
   assert.ok(source.includes("auth.session(request)"));
   assert.ok(!source.includes('"Access-Control-Allow-Origin": "*"'));
   const raw = source.slice(source.indexOf("const artifactRawMatch"), source.indexOf("const artifactRawMatch") + 1000);

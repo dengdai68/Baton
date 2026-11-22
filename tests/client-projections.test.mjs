@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "../client/console-projections.mjs";
 import { formatMessageTime } from '../client/console-projections.mjs';
+import { setLocale } from '../client/i18n.mjs';
 
 test('message times always identify the local date and identify other years', () => {
   const now=new Date(2026,0,1,0,5);
@@ -194,6 +195,47 @@ test("empty notifications do not break tool pairing/grouping across a raw page",
   assert.equal(entries.length, 1);
   assert.equal(entries[0].type, "tool-group");
   assert.ok(entries[0].tools.every(tool => tool.result));
+});
+
+test('Pi empty lifecycle frames stay out of task and chat consoles without hiding content or failures', () => {
+  const types = ['thread.started', 'agent_start', 'agent_end', 'agent_settled', 'turn_start', 'turn_end', 'message_start', 'message_update', 'message_end', 'tool_execution_update', 'result'];
+  const frame = (type, extra = {}, task = false) => ({ type: 'runtime.event', message: `${task ? `Pi · ${type}: ` : ''}Provider 执行状态`, data: { auditVersion: 2, presentation: 'system', providerEventType: type, ...extra } });
+  for (const task of [false, true]) {
+    const noise = types.map(type => frame(type, {}, task));
+    for (const event of noise) assert.equal(isRoutineConsoleEvent(event), true, event.message);
+    const visible = [
+      frame('message_update', { presentation: 'thinking', contentRef: {} }, task),
+      frame('message_end', { presentation: 'output', contentRef: {} }, task),
+      frame('tool_execution_update', { presentation: 'tool', toolUseId: 'read-1' }, task),
+      frame('message_end', { presentation: 'error' }, task),
+      frame('agent_end', { status: 'failed' }, task),
+      frame('agent_end', { status: 'cancelled' }, task),
+      frame('auto_retry_start', {}, task),
+      frame('future_provider_event', {}, task),
+      { ...frame('turn_end', {}, task), message: 'An unfamiliar provider warning' },
+    ];
+    for (const event of visible) assert.equal(isRoutineConsoleEvent(event), false, JSON.stringify(event));
+    const use = id => frame('tool.started', { presentation: 'tool', traceId: 'pi', toolUseId: id, toolName: 'read' }, task);
+    const result = id => frame('tool.completed', { presentation: 'tool_result', traceId: 'pi', toolResultId: id, toolName: 'read' }, task);
+    const raw = [use('1'), ...noise, result('1'), use('2'), ...noise, result('2')];
+    const before = structuredClone(raw), entries = buildConsoleEntries(raw);
+    assert.equal(entries.length, 1);
+    assert.equal(entries[0].type, 'tool-group');
+    assert.equal(entries[0].tools.length, 2);
+    assert.ok(entries[0].tools.every(tool => tool.result));
+    assert.deepEqual(raw, before, 'source events and session references remain intact');
+  }
+});
+
+test('Pi status filtering uses stored source text regardless of interface language', async () => {
+  try {
+    for (const locale of ['en', 'zh-TW']) {
+      setLocale(locale, JSON.parse(await readFile(new URL(`../client/locales/${locale}.json`, import.meta.url), 'utf8')));
+      const event = { type: 'runtime.event', message: 'message_update: Provider 执行状态', data: { auditVersion: 2, providerEventType: 'message_update', presentation: 'system' } };
+      assert.equal(isRoutineConsoleEvent(event), true, locale);
+      assert.equal(isRoutineConsoleEvent({ ...event, message: 'Provider 会话已初始化', data: { ...event.data, providerEventType: 'system' } }), true, locale);
+    }
+  } finally { setLocale('zh-CN'); }
 });
 
 test('tool phases with one native ID appear once while distinct calls remain distinct', () => {
@@ -549,4 +591,12 @@ test("collaboration preserves exact sender identity independently of same names 
   ]});
   assert.deepEqual(records.map(record=>record.senderId),['agent-one','agent-two',null]);
   assert.deepEqual(records.map(record=>record.from),['相同姓名','相同姓名','相同姓名']);
+});
+
+test("next trigger uses the schedule timezone to decide when to show the year", async () => {
+  const {formatNextTriggerTime} = await import('../client/console-projections.mjs');
+  const now = Date.parse('2026-12-31T15:30:00Z'), next = '2026-12-31T16:15:00Z';
+  assert.match(formatNextTriggerTime(next, 'Asia/Shanghai', now), /2027/);
+  assert.doesNotMatch(formatNextTriggerTime(next, 'UTC', now), /2026|2027/);
+  assert.equal(formatNextTriggerTime(null), '—');
 });

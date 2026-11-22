@@ -1,11 +1,11 @@
 // Files of a task Run: working directory (drill-down like the Files app),
-// Git changes and saved delivery snapshots; previews render Markdown, images
+// Git changes and saved delivery snapshots as collapsible folder trees (as on the Mac); previews render Markdown, images
 // and highlighted code (server highlight.js classes → Graphite syntax tokens).
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import { ChevronRight, FileText, Folder, FolderOpen, GitCompareArrows, Package } from 'lucide-react-native';
+import { ChevronDown, ChevronRight, Code, Eye, FileText, Folder, FolderOpen, GitCompareArrows, Package, Share } from 'lucide-react-native';
 import { useState } from 'react';
 import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
 
@@ -13,8 +13,9 @@ import { formatExactTime, formatRelativeTime } from '@shared/console-projections
 import { useWorkspaceKey } from '@/api/queries';
 import { $t } from '@/i18n';
 import { formatBytes } from '@/lib/attachments';
+import { fileTreeRows } from '@/lib/file-tree';
 import { type Colors, useTheme } from '@/theme';
-import { Button } from '@/ui/button';
+import { IconButton } from '@/ui/icon-button';
 import { Segmented } from '@/ui/form';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
 import { Markdown } from '@/ui/markdown';
@@ -75,6 +76,59 @@ export function DirectoryList({ taskId, runId, path, inset }: { taskId: string; 
   );
 }
 
+/** Collapsible folder tree of files (Mac: changes and snapshots by directory); folders start open. */
+function FileTree<T>({ items, pathOf, keyOf, fileIcon, meta, onOpen, empty }: {
+  items: T[]; pathOf: (item: T) => string; keyOf: (item: T) => string; fileIcon: (item: T) => React.ReactNode;
+  meta?: (item: T) => string; onOpen: (item: T) => void; empty: React.ReactElement;
+}) {
+  const { colors } = useTheme();
+  const [closed, setClosed] = useState<Set<string>>(() => new Set());
+  const rows = fileTreeRows(items, pathOf, keyOf, closed);
+  const toggle = (path: string) => setClosed((current) => { const next = new Set(current); if (next.has(path)) next.delete(path); else next.add(path); return next; });
+  return (
+    <FlatList
+      data={rows}
+      keyExtractor={(row) => (row.kind === 'directory' ? 'd:' + row.path : 'f:' + row.key)}
+      renderItem={({ item: row }) => {
+        const indent = 12 + row.depth * 18;
+        if (row.kind === 'directory') {
+          const open = !closed.has(row.path);
+          const Chevron = open ? ChevronDown : ChevronRight;
+          return (
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={row.name} onPress={() => toggle(row.path)}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 6, paddingLeft: indent, paddingRight: 16, minHeight: 44, backgroundColor: pressed ? colors.bgHover : colors.bgCanvas })}>
+              <Chevron size={15} color={colors.textTertiary} />
+              {open ? <FolderOpen size={18} color={colors.accentText} strokeWidth={1.6} /> : <Folder size={18} color={colors.accentText} strokeWidth={1.6} />}
+              <Txt numberOfLines={1} style={{ flex: 1 }}>{row.name}</Txt>
+              <Txt variant="caption" tone="tertiary" numeric>{row.files}</Txt>
+            </Pressable>
+          );
+        }
+        const detail = meta?.(row.item);
+        return (
+          <Pressable accessibilityRole="button" accessibilityLabel={row.path} onPress={() => onOpen(row.item)}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: indent + 21, paddingRight: 16, minHeight: detail ? 52 : 44, backgroundColor: pressed ? colors.bgHover : colors.bgCanvas })}>
+            {fileIcon(row.item)}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Txt numberOfLines={1}>{row.name}</Txt>
+              {detail ? <Txt variant="caption" tone="tertiary" numberOfLines={1}>{detail}</Txt> : null}
+            </View>
+          </Pressable>
+        );
+      }}
+      ListEmptyComponent={empty}
+    />
+  );
+}
+
+/** Git change letter as a small tinted badge (A added, D deleted, R renamed, M/other modified). */
+function ChangeBadge({ status }: { status: string }) {
+  const { colors } = useTheme();
+  const letter = (status.trim()[0] || 'M').toUpperCase();
+  const color = letter === 'A' || letter === '?' ? colors.stDone : letter === 'D' ? colors.stFailed : letter === 'R' ? colors.stRunning : colors.stAttention;
+  return <View style={{ width: 18, alignItems: 'center' }}><Txt variant="caption" weight="semibold" mono color={color}>{letter === '?' ? 'U' : letter}</Txt></View>;
+}
+
 function Changes({ taskId, runId }: { taskId: string; runId: string }) {
   const client = useClient();
   const scope = useWorkspaceKey();
@@ -87,17 +141,13 @@ function Changes({ taskId, runId }: { taskId: string; runId: string }) {
   if (changes.error) return <ErrorState message={changes.error.message} onRetry={() => void changes.refetch()} />;
   const rows = changes.data.repositories.flatMap((repo) => repo.changes.map((change) => ({ repo, change })));
   const uninitialized = changes.data.repositories.every((repo) => !repo.initialized);
+  const statusOf = (row: (typeof rows)[number]) => row.change.status || row.change.workingTree || row.change.index || 'M';
   return (
-    <FlatList
-      data={rows}
-      keyExtractor={(row) => row.repo.path + ':' + row.change.path}
-      renderItem={({ item }) => (
-        <Row icon={<GitCompareArrows size={20} color={colors.stPlanning} strokeWidth={1.6} />} title={item.change.path}
-          meta={[item.repo.label, item.change.status || item.change.workingTree || item.change.index].filter(Boolean).join(' · ')}
-          onPress={() => router.push({ pathname: '/task/file', params: { taskId, runId, path: item.change.path, repo: item.repo.path, source: 'diff' } })} />
-      )}
-      ListEmptyComponent={<EmptyState icon={GitCompareArrows} title={uninitialized ? $t('工作目录尚未初始化 Git') : $t('没有未提交的变更')} description={uninitialized ? $t('员工在工作目录初始化 Git 后，可在这里查看累计变更与差异。') : undefined} />}
-    />
+    <FileTree items={rows} pathOf={(row) => row.change.path} keyOf={(row) => row.repo.path + ':' + row.change.path}
+      fileIcon={(row) => <ChangeBadge status={statusOf(row)} />}
+      meta={changes.data.repositories.length > 1 ? (row) => row.repo.label : undefined}
+      onOpen={(row) => router.push({ pathname: '/task/file', params: { taskId, runId, path: row.change.path, repo: row.repo.path, source: 'diff' } })}
+      empty={<EmptyState icon={GitCompareArrows} title={uninitialized ? $t('工作目录尚未初始化 Git') : $t('没有未提交的变更')} description={uninitialized ? $t('员工在工作目录初始化 Git 后，可在这里查看累计变更与差异。') : undefined} />} />
   );
 }
 
@@ -112,16 +162,11 @@ function Snapshots({ taskId, runId }: { taskId: string; runId: string }) {
   if (artifacts.isPending) return <LoadingState />;
   if (artifacts.error) return <ErrorState message={artifacts.error.message} onRetry={() => void artifacts.refetch()} />;
   return (
-    <FlatList
-      data={artifacts.data.items.filter((item) => item.name)}
-      keyExtractor={(item) => item.id}
-      renderItem={({ item }) => (
-        <Row icon={<Package size={20} color={colors.stDone} strokeWidth={1.6} />} title={item.name}
-          meta={[item.version ? 'v' + item.version : '', formatBytes(item.bytes), item.createdAt ? formatExactTime(item.createdAt) : '', item.deleted ? $t('已删除') : ''].filter(Boolean).join(' · ')}
-          onPress={() => router.push({ pathname: '/task/file', params: { taskId, runId, path: item.name, artifactId: item.id, source: 'artifact' } })} />
-      )}
-      ListEmptyComponent={<EmptyState icon={Package} title={$t('暂无交付快照')} description={$t('员工交接时保存的文件快照会出现在这里。')} />}
-    />
+    <FileTree items={artifacts.data.items.filter((item) => item.name)} pathOf={(item) => item.name} keyOf={(item) => item.id}
+      fileIcon={(item) => <Package size={18} color={item.deleted ? colors.textTertiary : colors.stDone} strokeWidth={1.6} />}
+      meta={(item) => [item.version ? 'v' + item.version : '', formatBytes(item.bytes), item.createdAt ? formatExactTime(item.createdAt) : '', item.deleted ? $t('已删除') : ''].filter(Boolean).join(' · ')}
+      onOpen={(item) => router.push({ pathname: '/task/file', params: { taskId, runId, path: item.name, artifactId: item.id, source: 'artifact' } })}
+      empty={<EmptyState icon={Package} title={$t('暂无交付快照')} description={$t('员工交接时保存的文件快照会出现在这里。')} />} />
   );
 }
 
@@ -228,8 +273,8 @@ export function FilePreview({ runId, path, source, artifactId, repo }: { runId: 
   const toolbar = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
       <Txt variant="small" tone="tertiary" style={{ flex: 1 }} numberOfLines={1}>{[formatBytes(data.bytes), data.language, data.modifiedAt ? formatExactTime(data.modifiedAt) : ''].filter(Boolean).join(' · ')}</Txt>
-      {markdown ? <Button size="sm" variant="ghost" label={rendered ? $t('源码') : $t('预览')} onPress={() => setRendered(!rendered)} /> : null}
-      {source !== 'diff' ? <Button size="sm" label={$t('分享')} loading={sharing} onPress={() => void share()} /> : null}
+      {markdown ? <IconButton icon={rendered ? Code : Eye} label={rendered ? $t('源码') : $t('预览')} tone="neutral" size={32} onPress={() => setRendered(!rendered)} /> : null}
+      {source !== 'diff' ? <IconButton icon={Share} label={$t('分享')} size={32} loading={sharing} onPress={() => void share()} /> : null}
     </View>
   );
   if (source === 'diff') {

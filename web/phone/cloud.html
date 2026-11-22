@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'self'; form-action https:"
+    />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="../workspace/style.css" />
+    <title>云端工作空间</title>
+    <script src="cloud.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>登录云端工作空间</h1>
+      <form>
+        <label
+          >工作空间地址<input
+            type="url"
+            placeholder="https://baton.example.com"
+            required /></label
+        ><button class="primary">连接</button>
+      </form>
+      <p role="status"></p>
+    </main>
+  </body>
+</html>

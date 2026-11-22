@@ -1,6 +1,7 @@
 // Interface translation: locale resolution, lookup semantics and catalog completeness.
 // The catalogs are keyed by the Simplified Chinese source text, so every literal
-// $t("…") in interface code must have an English and a Traditional Chinese entry.
+// $t("…") in interface code (and $t('…') in the iPhone app) must have an English
+// and a Traditional Chinese entry.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
@@ -134,6 +135,37 @@ test("every interface key has English and Traditional Chinese entries", async ()
     const missing = [...keys].filter(([key]) => !Object.hasOwn(catalog, key)).map(([key, file]) => `${file}: ${key}`);
     if (missing.length) console.log(`${locale} missing:\n  ${missing.slice(0, 20).join("\n  ")}`);
     assert.deepEqual(missing, [], `${locale} catalog is missing interface keys`);
+  }
+});
+
+/** Literal $t('…') / $t("…") keys of the iPhone app (React Native sources use single quotes). */
+async function phoneKeys() {
+  const keys = new Map();
+  async function visit(directory) {
+    for (const entry of await readdir(join(root, directory), { withFileTypes: true })) {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) await visit(path);
+      else if (/\.tsx?$/.test(entry.name)) {
+        const source = await readFile(join(root, path), "utf8");
+        for (const match of source.matchAll(/\$t\(\s*(['"])((?:(?!\1)[^\\\n]|\\.)*)\1/g)) {
+          const key = match[2].replace(/\\(['"\\])/g, "$1").replace(/\\n/g, "\n");
+          if (/[一-鿿]/.test(key) && !keys.has(key)) keys.set(key, path);
+        }
+      }
+    }
+  }
+  await visit("apps/mobile/src");
+  return keys;
+}
+
+test("every iPhone app key has English and Traditional Chinese entries", async () => {
+  const keys = await phoneKeys();
+  console.log(`phone keys: ${keys.size}`);
+  assert.ok(keys.size > 100, "the phone sources were scanned");
+  for (const [locale, catalog] of Object.entries(catalogs)) {
+    const missing = [...keys].filter(([key]) => !Object.hasOwn(catalog, key)).map(([key, file]) => `${file}: ${key}`);
+    if (missing.length) console.log(`${locale} missing:\n  ${missing.slice(0, 20).join("\n  ")}`);
+    assert.deepEqual(missing, [], `${locale} catalog is missing iPhone app keys`);
   }
 });
 

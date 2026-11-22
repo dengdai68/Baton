@@ -194,3 +194,11 @@ Store.subscribeNotifications 发布未来已提交的任务待验收/完成及�
 ## 多语言边界
 
 服务端错误、事件与系统消息继续以简体中文源文字产生和存储，不随界面语言变化；客户端在展示点用 `$tm` 翻译已知文字，未知文字原样显示；默认工作流快照（`id: null`）与消息中的操作者/全体团队名称同样以源文字冻结，只在展示时翻译。认证守卫允许未登录读取 `/client/i18n.mjs`（不含凭据的静态脚本）；译文目录由桌面宿主经 preload 交付，不经 HTTP 公开。
+
+工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](../docs/31-workspace-service.md)。
+
+## 工作空间网关安全
+
+`workspace-http.mjs` 是公网可达的唯一入口：默认拒绝，只转发白名单路由；设备会话按配对范围授权（`mobile` 只读配置，`desktop` 为另一台 Mac 的客户端），认证失败按客户端地址计数（10 分钟 20 次封禁 10 分钟，只有回环反向代理的 `X-Forwarded-For` 被采信）；远程请求的非预期内部错误只返回「请求处理失败」并写本机诊断；所有响应带 HSTS、CSP、`X-Frame-Options: DENY`、COOP/CORP 与 Permissions-Policy；每台设备最多 8 条实时事件流，网关最多 256 个并发连接。`workspace-identity.mjs` 只存令牌摘要，记录设备配对时间、最近访问时间与地址，会话闲置 30 天失效、使用即续期（每分钟最多写一次），访问库文件为 0600。安全模型与加密取舍见 [docs/32](../docs/32-resident-service.md)，测试 `tests/workspace-service.test.mjs`。
+
+工作空间事件流、Mac 配对目录及网关访问范围见 docs/31-workspace-service.md。配对目录只对本机管理 API 开放。

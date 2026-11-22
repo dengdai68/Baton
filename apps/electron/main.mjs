@@ -1,22 +1,27 @@
 import { $t, $tm, setLocale, resolveLocale, normalizeLanguage, currentLocale } from "../../client/i18n.mjs";
 import { createDesktopNotifications } from './notifications.mjs';
 import { app, BrowserWindow, Menu, Tray, nativeImage, nativeTheme, shell, session, screen, ipcMain, clipboard, net, Notification } from "electron";
+import { get as getHttp } from 'node:http';
+import { get as getHttps } from 'node:https';
+import { workspaceOrigin } from '../../server/workspace-config.mjs';
+import { readWorkspaceChoices, selectWorkspace } from './preferences.mjs';
 import { fork, execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { join, dirname, isAbsolute } from "node:path";
-import { userInfo, homedir } from "node:os";
+import { userInfo, homedir, hostname } from "node:os";
 import { lstat, mkdir, rename, unlink, writeFile, readFile, realpath, mkdtemp } from "node:fs/promises";
-import { mkdirSync, rmSync, readFileSync } from "node:fs";
-import { randomBytes } from "node:crypto";
-import { isConsoleURL, isExternalURL, isPreferencesSender, isCliSender, isUpdateSender, health, initialRoute } from "./policy.mjs";
+import { mkdirSync, rmSync, readFileSync, existsSync } from "node:fs";
+import { randomBytes, X509Certificate } from "node:crypto";
+import { isConsoleURL, isExternalURL, isPreferencesSender, isWorkspaceSender, isCliSender, isUpdateSender, health, initialRoute } from "./policy.mjs";
 import { desktopBrowserPaths, desktopControlPlaneEnvironment, desktopStoragePaths, legacyDesktopDataRoot, resolveDesktopDataRoot,defaultDesktopLocation } from "./runtime-paths.mjs";
 import {readStorageLocation,writeStorageLocation} from '../../server/storage-layout.mjs';
 import {relocateStorage,finishStorageRelocation} from './storage-relocation.mjs';
 import { diagnostic, diagnostics, installProcessDiagnostics } from "../../server/diagnostics.mjs";
 import { legacyDataRequiresMigration, migrationGuidance } from "../../server/data-home.mjs";
 import { createInterface } from "node:readline";
-import { closeModes, normalizeAppearance, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel } from "./preferences.mjs";
+import { closeModes, normalizeAppearance, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel, readResidentService, saveResidentService } from "./preferences.mjs";
+import { buildIdentity, canonicalPath, createDaemonService, daemonLabel, daemonRequest, daemonSubscribe, waitForDaemon } from "./daemon-service.mjs";
 import { loadLoginShellEnvironment } from "./login-shell-env.mjs";
 import { confirmCliInstallation } from "./cli-confirmation.mjs";
 import { createCliInstallation } from "./cli-installation.mjs";
@@ -37,6 +42,20 @@ const appDialog = (options) => showAppDialog({ BrowserWindow, workAreaHeight, ba
 const sourceRoot = fileURLToPath(new URL("../../", import.meta.url));
 let window, child, tray, childBootstrapToken = null, controlOrigin = null, childInstanceId = null, connecting = false, quitting = false, closeMode = null, savingCloseMode = false, closingPrompt = false, appearance = "light";
 let shellEnvironment;
+// Resident mode: launchd runs the service (apps/electron/daemon.mjs) and it keeps
+// running when the app quits; otherwise the app owns it as a child process.
+let resident = false, daemon = null, daemonEvents = null, residentUpgradeTimer = null;
+const managedService = process.platform === "darwin";
+let savingService = false;
+const daemonSocket = () => join(controlRoot, "daemon.sock");
+/** The real instance (~/.baton) of the packaged app is the default resident service. */
+// Compared canonically: the root is resolved with realpath only once it exists (and may be a symlink).
+const standardInstance = () => app.isPackaged && canonicalPath(controlRoot) === canonicalPath(join(userInfo().homedir, ".baton"));
+function residentDaemon() {
+  // One launchd agent per configuration root; any non-standard root gets its own label.
+  const root = app.isPackaged ? app.getAppPath() : sourceRoot;
+  return createDaemonService({ label: daemonLabel(controlRoot, standardInstance()), program: process.execPath, script: join(root, "apps/electron/daemon.mjs"), controlRoot: canonicalPath(controlRoot), instance: app.isPackaged ? "desktop" : "desktop-dev", dev: !app.isPackaged });
+}
 let installingCli = false;
 // Host chrome (menus, tray, native dialogs) follows the renderer language.
 let language = "system";
@@ -162,6 +181,102 @@ async function startControlPlane() {
   } catch (error) { owned.kill(); throw new Error($t("无法安全保存桌面连接信息：{0}", [error.message])); }
 }
 
+/** Build identity of this app; the resident service reports the one it runs. */
+const currentBuild = () => buildIdentity(process.execPath, app.isPackaged ? app.getVersion() : JSON.parse(readFileSync(join(sourceRoot,"package.json"),"utf8")).version);
+/** Page to return to after reconnecting (same service origin only). */
+function currentRoute() {
+  try { const url = new URL(window?.webContents.getURL() || ""); return url.origin === controlOrigin ? url.pathname + url.search + url.hash : null; }
+  catch { return null; }
+}
+/** Resident mode: make sure the launchd agent runs this build, then use its service. */
+async function connectResidentService() {
+  const running = (await daemon.state()).running;
+  const redefine = await daemon.definitionChanged();
+  // A running agent is replaced only once it is idle (upgradeResidentService); otherwise install or start it.
+  if (!running || !redefine) await daemon.ensure(resident);
+  let status = await waitForDaemon(daemonSocket(), { timeoutMs: 300000 });
+  // Local reinstalls keep the version number, so compare the build identity.
+  if ((running && redefine) || status.build !== currentBuild()) status = await upgradeResidentService(status, { redefine: running && redefine }) ?? status;
+  controlOrigin = status.origin; childInstanceId = status.instanceId; childBootstrapToken = status.bootstrapToken;
+  if (!await health(controlOrigin, childInstanceId)) { controlOrigin = null; childInstanceId = null; throw new Error($t("本地后台身份校验失败。")); }
+  watchResidentService();
+}
+/**
+ * The resident service runs an older build or definition (app updated or moved): restart
+ * it on this build once it is idle. Returns the new status, or null while it is busy (the
+ * running service keeps serving and another attempt is scheduled).
+ */
+async function upgradeResidentService(status, { redefine = false } = {}) {
+  clearTimeout(residentUpgradeTimer); residentUpgradeTimer = null;
+  const lease = await daemonRequest(daemonSocket(), { type: "update-prepare" }).catch(() => ({ ok: false }));
+  if (!lease.ok) {
+    diagnostic("desktop.daemon_upgrade_deferred", { running: status.build ?? status.version, app: currentBuild() });
+    // Busy: keep serving; try again later instead of interrupting tasks or chats.
+    residentUpgradeTimer = setTimeout(() => void retryResidentUpgrade(redefine), 15 * 60000);
+    return null;
+  }
+  diagnostic("desktop.daemon_upgrade", { from: status.build ?? status.version, to: currentBuild(), redefine });
+  try { if (redefine) await daemon.ensure(resident); else await daemon.restart(); }
+  catch (error) { await daemonRequest(daemonSocket(), { type: "update-release", lease: lease.lease }).catch(() => {}); throw error; }
+  return waitForDaemon(daemonSocket(), { timeoutMs: 300000, until: (next) => next.state === "ready" && next.pid !== status.pid });
+}
+/** Deferred upgrade: retried in the background; the window reconnects only after the service moved. */
+async function retryResidentUpgrade(redefine) {
+  residentUpgradeTimer = null;
+  if (quitting || !managedService) return;
+  if (connecting) { residentUpgradeTimer = setTimeout(() => void retryResidentUpgrade(redefine), 60000); return; }
+  const status = await daemonRequest(daemonSocket(), { type: "status" }).catch(() => null);
+  if (!status) return; // gone: the connection watcher reconnects
+  const upgraded = await upgradeResidentService(status, { redefine }).catch((error) => { diagnostic("desktop.daemon_upgrade_failed", { error }); return null; });
+  if (upgraded) reconnectResident();
+}
+/** The resident service restarted on a new port: reconnect and stay on the current page. */
+function reconnectResident() {
+  if (quitting || !managedService || connecting) return;
+  const route = currentRoute();
+  controlOrigin = null; childInstanceId = null;
+  void connect(route);
+}
+/** The daemon connection dropped (restart, crash, launchd relaunch): follow the service. */
+async function residentConnectionLost() {
+  if (quitting || !managedService || connecting || !controlOrigin) return;
+  const status = await waitForDaemon(daemonSocket(), { timeoutMs: 120000 }).catch(() => null);
+  if (quitting || !managedService || connecting) return;
+  if (status && status.origin === controlOrigin && status.instanceId === childInstanceId) return watchResidentService();
+  // A new origin, or still no service: connect() reconnects or shows the usual retry dialog.
+  reconnectResident();
+}
+/** Notifications of the resident service reach the app over its private socket. */
+function watchResidentService() {
+  if (daemonEvents) return;
+  daemonEvents = daemonSubscribe(daemonSocket(), (event) => {
+    if (event.type === "notification") void desktopNotifications.receive(event.notice, () => managedService && !quitting);
+    if (event.type === "service" && event.state === "ready" && event.instanceId !== childInstanceId) reconnectResident();
+  }, { desktop:true, onClose: () => {
+    daemonEvents = null; desktopNotifications.clear();
+    if (!quitting && managedService) setTimeout(() => void residentConnectionLost(), 3000);
+  } });
+}
+async function residentServiceStatus() {
+  if (!managedService) return { resident: false, state: child ? "owned" : "stopped", servicePid: child?.pid ?? null };
+  const status = await daemonRequest(daemonSocket(), { type: "status" }).catch(() => null);
+  return { resident, state: status?.state || "unavailable", pid: status?.pid ?? null, servicePid: status?.servicePid ?? null, startedAt: status?.startedAt ?? null, version: status?.version ?? null };
+}
+/** Change next-login and quit behavior without restarting the running service. */
+async function setResidentService(next) {
+  if (typeof next !== "boolean") throw Error($t("后台服务设置无效"));
+  if (savingService || connecting || quitting) throw Error($t("客户端正在连接或退出，请稍后重试"));
+  if (next === resident) return residentServiceStatus();
+  savingService = true;
+  try {
+    await daemon.setPersistence(next);
+    try { await saveResidentService(preferencesFile, next); }
+    catch (error) { await daemon.setPersistence(resident); throw error; }
+    resident = next;
+    return await residentServiceStatus();
+  } finally { savingService = false; }
+}
+
 async function changeStorageRoot(workspaceRoot){
   if(connecting||quitting)throw new Error($t("客户端正在连接或退出，数据目录未更改"));
   connecting=true;const previous=storage;let moved;
@@ -223,7 +338,8 @@ async function connect(preferredRoute=null) {
   connecting = true;
   window?.setTitle($t("Baton · 正在连接本机服务…"));
   try {
-    if (!child || !await health(controlOrigin, childInstanceId)) await startControlPlane();
+    if (managedService) { if (!controlOrigin || !await health(controlOrigin, childInstanceId)) await connectResidentService(); }
+    else if (!child || !await health(controlOrigin, childInstanceId)) await startControlPlane();
     if (!quitting) {
       const route = await initialRoute(controlOrigin);
       if (route === "/setup") await window.loadURL(`${controlOrigin}/setup`, { extraHeaders: `X-Baton-Bootstrap: ${childBootstrapToken}\n` });
@@ -330,6 +446,7 @@ function cliInstallation() {
 const cliUnavailable = () => ({ supported: false, canInstall: false, installed: false, message: $t("请先将 Mac 安装包移到持久位置（建议应用程序），从打包客户端打开；Web/源码模式不安装 Shell 命令。") });
 function openSettings() { showWindow(); if (controlOrigin) void window.loadURL(`${controlOrigin}/settings/general`); else void connect(); }
 function applyCloseMode() {
+  if(existsSync(join(controlRoot,'workspace-service.json'))){ensureTray();window.hide();app.dock?.hide();return;}
   if (closeMode === "quit") { app.quit(); return; }
   if (closeMode !== "tray") return;
   try { ensureTray(); window.hide(); app.dock?.hide(); diagnostic("desktop.window_hidden"); }
@@ -337,7 +454,7 @@ function applyCloseMode() {
 }
 async function closeWindow() {
   if (savingCloseMode || closingPrompt) return;
-  if (closeMode) { applyCloseMode(); return; }
+  if (closeMode || existsSync(join(controlRoot,'workspace-service.json'))) { applyCloseMode(); return; }
   closingPrompt = true;
   try {
     const response = await appDialog({ parent: window,
@@ -367,6 +484,14 @@ function showAboutDialog() {
 
 async function prepareUpdateRestart() {
   if (installingCli || savingCloseMode || closingPrompt || connecting) throw new Error($t("客户端仍在保存或连接，请稍后再重启安装"));
+  // The resident service keeps running across the app update and restarts on the new code once idle.
+  if (resident) return;
+  if (managedService) {
+    const result = await daemonRequest(daemonSocket(), {type:'update-prepare'});
+    if (!result.ok) throw Error($t("仍有任务、沟通或保存操作正在执行，请结束后再重启安装"));
+    restartReservation = {lease:result.lease};
+    return;
+  }
   const owned = child;
   if (!owned?.connected) throw new Error($t("无法确认当前执行状态，请重新连接后再更新"));
   const id = randomBytes(18).toString('hex');
@@ -383,7 +508,9 @@ async function prepareUpdateRestart() {
   });
 }
 function releaseUpdateRestart() {
-  if (restartReservation?.child.connected) restartReservation.child.send({type:'baton-update-release',id:restartReservation.id},()=>{});
+  if (resident) return;
+  if (restartReservation?.lease) void daemonRequest(daemonSocket(), {type:'update-release',lease:restartReservation.lease}).catch(()=>{});
+  if (restartReservation?.child?.connected) restartReservation.child.send({type:'baton-update-release',id:restartReservation.id},()=>{});
   restartReservation = null;
 }
 async function startApplicationUpdates() {
@@ -438,6 +565,87 @@ async function checkApplicationUpdates() {
   await applicationUpdates?.check();
 }
 
+let externalWorkspace = null;
+// A credential-free Baton health request. A private certificate may be inspected here;
+ // the password request below uses a separate, fingerprint-verified session.
+async function inspectWorkspace(origin) {
+  return new Promise((resolve,reject) => {
+    const secure = new URL(origin).protocol === 'https:';
+    const get = secure ? getHttps : getHttp;
+    const req = get(origin+'/healthz',{agent:false,...(secure && {rejectUnauthorized:false}),signal:AbortSignal.timeout(4500)}, res => {
+      const socket = res.socket;
+      const fingerprint = secure ? socket.getPeerCertificate().fingerprint256 : null;
+      const trusted = socket.authorized;
+      let body = '';
+      res.on('error',reject);
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; if (body.length > 2048) req.destroy(Error('Invalid health response')); });
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data.service !== 'baton-workspace' || (secure && !fingerprint)) throw Error();
+          resolve({fingerprint,trusted, ready:res.statusCode === 200 && data.status === 'ready'});
+        } catch { reject(Error($t("无法连接工作空间，请检查地址和证书"))); }
+      });
+    });
+    req.on('error',reject);
+  });
+}
+async function openExternalWorkspace(address, name, password) {
+  if (externalWorkspace) { externalWorkspace.focus(); return; }
+  const origin = workspaceOrigin(address), target = new URL(origin);
+  if (typeof name !== 'string' || !name.trim() || name.length > 64 || typeof password !== 'string' || !password || password.length > 128) throw Error($t("用户名或密码错误"));
+  const {trusted,fingerprint} = await inspectWorkspace(origin);
+  if (fingerprint && !trusted) {
+    const consent = await appDialog({parent:window,kind:'question',title:$t("确认服务器证书"),message:origin,detail:'SHA-256\n'+fingerprint,
+      buttons:[$t("取消"),$t("信任并登录")],defaultIndex:0,cancelIndex:0});
+    if (consent !== 1) throw Error($t("已取消"));
+  }
+  const remote = new BrowserWindow({parent:window, modal:true, show:false, title:origin, width:1240, height:800,
+    webPreferences:{partition:'baton-login-'+randomBytes(12).toString('hex'),sandbox:true,contextIsolation:true,nodeIntegration:false}});
+  externalWorkspace = remote;
+  const contents = remote.webContents;
+  const partition = contents.session;
+  contents.setWindowOpenHandler(()=>({action:'deny'}));
+  partition.setPermissionRequestHandler((_contents,_permission,done)=>done(false));
+  let signedIn = false;
+  const restrict = (event,url) => {
+    const next = new URL(url);
+    if (next.origin !== origin || next.username || next.password) {event.preventDefault(); return;}
+    if (next.pathname === '/signed-out' || (signedIn && next.pathname === '/login')) {
+      event.preventDefault(); remote.close();
+    }
+  };
+  contents.on('will-navigate', restrict);
+  contents.on('will-redirect', restrict);
+  contents.on('did-navigate',(_event,url)=>{if (new URL(url).pathname === '/tasks') signedIn=true;});
+  if (fingerprint) partition.setCertificateVerifyProc((request,done) => {
+    const same = request.hostname === target.hostname && new X509Certificate(request.certificate.data).fingerprint256 === fingerprint;
+    done(same ? 0 : -2);
+  });
+  let closing = false;
+  remote.on('close',event=>{
+    if (closing || contents.isDestroyed() || !contents.getURL().startsWith(origin+'/')) return;
+    event.preventDefault(); closing=true;
+    // Revoke the remote login on an ordinary window close as well as an explicit logout.
+    void Promise.race([
+      contents.executeJavaScript("fetch('/logout',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}).then(r=>r.ok)"),
+      new Promise(resolve=>setTimeout(resolve,1500)),
+    ]).catch(()=>{}).finally(()=>{if (!remote.isDestroyed()) remote.destroy();});
+  });
+  remote.once('closed',()=>{externalWorkspace=null;void partition.clearStorageData().catch(()=>{});});
+  try {
+    const result = await partition.fetch(origin+'/login',{method:'POST',redirect:'error',credentials:'include',
+      headers:{'Content-Type':'application/json',Origin:origin},body:JSON.stringify({name:name.trim(),password,device:hostname()}),signal:AbortSignal.timeout(15000)});
+    if (!result.ok) throw Error(result.status === 401 ? $t("用户名或密码错误") : $t("登录失败，请重试"));
+    const data = await result.json();
+    await remote.loadURL(origin+(data.mode === 'local' ? '/tasks' : '/'));
+    signedIn = true;
+    remote.show();
+  } catch (error) { if (!remote.isDestroyed()) remote.destroy(); throw error; }
+
+}
+
 function installMenu() {
   const contents = window.webContents;
   Menu.setApplicationMenu(Menu.buildFromTemplate([
@@ -487,6 +695,11 @@ async function start() {
   }
   try { closeMode = await readCloseMode(preferencesFile); appearance = await readAppearance(preferencesFile) ?? appearance; }
   catch (error) { diagnostic("desktop.preferences_read_failed", { error }); }
+  // Resident by default for the real instance; tests and other roots opt in explicitly.
+  const residentChoice = await readResidentService(preferencesFile).catch(() => null);
+  // launchd only exists on macOS; other platforms always own the service as a child process.
+  resident = process.platform === "darwin" && (process.env.BATON_DESKTOP_RESIDENT === "0" ? false : process.env.BATON_DESKTOP_RESIDENT === "1" ? true : residentChoice ?? standardInstance());
+  daemon = residentDaemon();
   nativeTheme.themeSource = appearance;
   nativeTheme.on("updated", () => { if (window && !window.isDestroyed()) window.setBackgroundColor(appearanceBackground()); });
   session.defaultSession.cookies.on('changed', (_event, cookie) => {
@@ -533,6 +746,34 @@ async function start() {
   ipcMain.handle("desktop:appearance:set", (event, value) => {
     if (event.sender !== contents || event.senderFrame !== contents.mainFrame || !isConsoleURL(event.senderFrame?.url, controlOrigin)) throw new Error($t("仅允许应用主窗口同步外观"));
     return changeAppearance(value);
+  });
+  function requireLoginPage(event) {
+    if(event.sender !== contents || event.senderFrame !== contents.mainFrame || !isConsoleURL(event.senderFrame?.url,controlOrigin) ||
+       !['/login','/setup.html'].includes(new URL(event.senderFrame.url).pathname)) throw Error($t("请从登录页选择工作空间"));
+  }
+  ipcMain.handle("desktop:workspace:choices", async (event,address) => {
+    requireLoginPage(event);
+    if (address === undefined) return readWorkspaceChoices(preferencesFile);
+    return selectWorkspace(preferencesFile,address === 'local' ? address : workspaceOrigin(address));
+  });
+  ipcMain.handle("desktop:workspace:health", async (event,address) => {
+    requireLoginPage(event);
+    if (address === 'local') return await health(controlOrigin,childInstanceId) ? 'ready' : 'offline';
+    const origin = workspaceOrigin(address);
+    if (!(await readWorkspaceChoices(preferencesFile)).addresses.includes(origin)) return 'offline';
+    try { return (await inspectWorkspace(origin)).ready ? 'ready' : 'unavailable'; } catch { return 'offline'; }
+  });
+  ipcMain.handle("desktop:workspace:login", (event,address,name,password) => {
+    requireLoginPage(event);
+    return openExternalWorkspace(address,name,password);
+  });
+  ipcMain.handle("desktop:service:status", event => {
+    if (!isWorkspaceSender(event, contents, controlOrigin)) throw new Error($t("仅允许客户端工作空间设置访问"));
+    return residentServiceStatus();
+  });
+  ipcMain.handle("desktop:service:resident", (event, value) => {
+    if (!isWorkspaceSender(event, contents, controlOrigin) || process.platform !== "darwin") throw new Error($t("仅允许 Mac 客户端工作空间设置修改"));
+    return setResidentService(value);
   });
   ipcMain.handle("desktop:preferences:set", (event, mode) => {
     if (!isPreferencesSender(event, contents, controlOrigin) || process.platform !== "darwin") throw new Error($t("仅允许 Mac 客户端常规设置修改"));
@@ -617,4 +858,4 @@ async function start() {
 
 app.on("window-all-closed", () => app.quit());
 app.on("activate", showWindow);
-app.on("before-quit", () => { quitting = true; desktopNotifications.stop(); applicationUpdates?.stop(); shellEnvironmentAbort.abort(); tray?.destroy(); tray = null; child?.kill(); });
+app.on("before-quit", () => { quitting = true; clearTimeout(residentUpgradeTimer); daemonEvents?.close(); desktopNotifications.stop(); applicationUpdates?.stop(); shellEnvironmentAbort.abort(); tray?.destroy(); tray = null; child?.kill(); });

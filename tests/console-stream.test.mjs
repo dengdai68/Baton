@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readConsoleTail } from '../web/console-stream.mjs';
+import { readConsoleTail, applyConsoleRead, appendConsoleLive } from '../web/console-stream.mjs';
 import { consoleEventWindow } from '../client/console-projections.mjs';
 
 const rows = (start, end) => Array.from({ length: end - start }, (_, i) => ({ id: `event-${start + i}` }));
@@ -36,4 +36,59 @@ test('a stuck cursor or failed console read surfaces the failure without mutatin
   await assert.rejects(readConsoleTail(current, async () => ({ events: rows(100, 110), hasMore: true, nextBefore: 'stuck' })), /游标未推进/);
   await assert.rejects(readConsoleTail(current, async () => { throw Error('offline'); }), /offline/);
   assert.deepEqual(current, before);
+});
+
+const noise = (from, to) => rows(from, to).map(event => ({
+  ...event, type: 'runtime.event', message: 'Provider 执行状态',
+  data: { auditVersion: 2, presentation: 'system', providerEventType: 'message_update' }
+}));
+
+test('hidden archive heads allow sparse initial, older and live reads without losing visible rows', async () => {
+  const all = [...rows(0, 51), ...noise(51, 401)], page = { events: [] };
+  const fetch = pages(all, []);
+  applyConsoleRead(page, await readConsoleTail([], fetch));
+  assert.deepEqual(page.events, rows(1, 51));
+  assert.equal(page.headId, 'event-400');
+  applyConsoleRead(page, await readConsoleTail([], fetch, { before: page.nextBefore }), { older: true });
+  assert.deepEqual(page.events, rows(0, 51));
+  all.push(...noise(401, 661), ...rows(661, 663));
+  applyConsoleRead(page, await readConsoleTail(page.events, fetch, { headId: page.headId }));
+  assert.deepEqual(page.events, [...rows(0, 51), ...rows(661, 663)]);
+  assert.equal(page.hasMore, false);
+  const calls = [];
+  await readConsoleTail(page.events, pages(all, calls), { headId: page.headId });
+  assert.equal(calls.length, 1);
+});
+
+test('archived order wins over out-of-order or duplicated SSE, even with identical timestamps', async () => {
+  const page = { events: [] }, all = rows(0, 8);
+  applyConsoleRead(page, await readConsoleTail([], pages(all.slice(0, 2), [])));
+  appendConsoleLive(page, [all[4], all[3]], false);
+  const batch = await readConsoleTail(page.events, pages(all.slice(0, 6), []), { headId: page.headId });
+  applyConsoleRead(page, batch, { arriving: [all[4], all[6], all[6], all[7]] });
+  assert.deepEqual(page.events, all);
+});
+
+test('upward reading survives a disconnected burst and latest restores the real older cursor', async () => {
+  const page = { events: [] }, all = rows(0, 700);
+  applyConsoleRead(page, await readConsoleTail([], pages(all.slice(0, 60), [])));
+  const shown = page.events, cursor = page.nextBefore;
+  applyConsoleRead(page, await readConsoleTail(shown, pages(all, []), { headId: page.headId }), { holdReading: true });
+  assert.deepEqual(page.liveEvents, rows(500, 700));
+  assert.equal(page.events, shown);
+  assert.equal(page.nextBefore, cursor);
+  applyConsoleRead(page, await readConsoleTail([], pages(all, [])), { latest: true });
+  assert.deepEqual(page.events, rows(650, 700));
+  assert.equal(page.nextBefore, 'event-650');
+  assert.equal(page.liveEvents, null);
+});
+
+test('all-hidden reads prove exhaustion and cancelled scans stop requesting history', async () => {
+  const all = noise(0, 251);
+  const page = await readConsoleTail([], pages(all, []));
+  assert.equal(page.hasMore, false);
+  assert.deepEqual(page.events, []);
+  const calls = [];
+  assert.equal(await readConsoleTail([], pages(all, calls), { isCurrent: () => calls.length === 0 }), null);
+  assert.equal(calls.length, 1);
 });

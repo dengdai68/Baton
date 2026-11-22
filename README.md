@@ -113,4 +113,4 @@ npm start
 
 [使用文档](docs/README.md) · [更新记录](CHANGELOG.md) · [Apache-2.0](LICENSE) · [第三方声明](NOTICE)
 
-iOS 客户端（React Native + Expo 重写，全量功能）见 [apps/mobile](apps/mobile/README.md)；旧版 Web 壳归档于 [apps/ios](apps/ios/README.md)。手机连接、云端多人工作空间及本地配对步骤见 [工作空间服务](docs/31-workspace-service.md)。
+iOS 客户端（React Native + Expo 重写，全量功能）见 [apps/mobile](apps/mobile/README.md)；旧版 Web 壳归档于 [apps/ios](apps/ios/README.md)。手机地址登录、云端多人工作空间及本机服务设置见 [工作空间服务](docs/31-workspace-service.md)。

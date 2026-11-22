@@ -1,0 +1,134 @@
+:root {
+  font:
+    16px -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+  color-scheme: light dark;
+  color: CanvasText;
+  background: Canvas;
+  --line: color-mix(in srgb, CanvasText 18%, Canvas);
+  --muted: color-mix(in srgb, CanvasText 66%, Canvas);
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 48rem;
+  margin: auto;
+  padding: 16px max(16px, env(safe-area-inset-right)) 5rem;
+}
+header,
+nav,
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+header {
+  border-bottom: 1px solid var(--line);
+  padding: 0.5rem 0 1rem;
+}
+header strong {
+  font-size: 1.35rem;
+}
+header span {
+  flex: 1;
+  color: var(--muted);
+}
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+button {
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: Canvas;
+  cursor: pointer;
+}
+button:disabled {
+  opacity: 0.55;
+}
+nav {
+  flex-wrap: nowrap;
+  overflow: auto;
+}
+nav button {
+  flex: 1;
+  white-space: nowrap;
+}
+nav [aria-current="true"],
+button.primary {
+  background: CanvasText;
+  color: Canvas;
+}
+label {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.7rem 0;
+}
+input,
+textarea,
+select {
+  width: 100%;
+  background: Canvas;
+  border: 1px solid var(--line);
+  border-radius: 0.4rem;
+  padding: 0.65rem;
+}
+textarea {
+  min-height: 5rem;
+}
+input[type="checkbox"] {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+label.choice {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  margin: 0;
+}
+.row {
+  display: block;
+  text-align: left;
+  width: 100%;
+  margin: 0.55rem 0;
+  overflow-wrap: anywhere;
+}
+.row small {
+  display: block;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+article {
+  border-top: 1px solid var(--line);
+  padding: 0.8rem 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+small,
+#status {
+  color: var(--muted);
+}
+#status:empty {
+  display: none;
+}
+h1 {
+  font-size: 1.4rem;
+}
+h2 {
+  font-size: 1.1rem;
+}
+.error {
+  color: #ba412d;
+}

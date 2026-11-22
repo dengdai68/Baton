@@ -3,13 +3,13 @@
 // sendInstruction): reply to the pending question first, at most one @member,
 // attachments uploaded before the message, local "sending" records confirmed by id.
 import { router } from 'expo-router';
-import { MessagesSquare } from 'lucide-react-native';
+import { MessagesSquare, Reply, RotateCcw, SquareTerminal, Undo2 } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
 
 import { partyName, workspaceAgents } from '@shared/console-projections.mjs';
 import { useCatalog } from '@/features/catalog';
-import { type MessageAttachment, MessageAttachments } from '@/features/messages/attachment';
+import { LocalAttachments, type MessageAttachment, MessageAttachments } from '@/features/messages/attachment';
 import { dayLabel, sameDay } from '@/features/messages/day';
 import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage } from '@/features/messages/views';
 import { $t, $tm } from '@/i18n';
@@ -17,6 +17,7 @@ import { type LocalAttachment, pickFiles, pickImages } from '@/lib/attachments';
 import { useTheme } from '@/theme';
 import { Button } from '@/ui/button';
 import { Composer } from '@/ui/composer';
+import { IconButton } from '@/ui/icon-button';
 import { Markdown } from '@/ui/markdown';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
 import { Txt } from '@/ui/text';
@@ -61,12 +62,6 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
   useEffect(() => {
     if (pending.length !== outbox.length) setOutbox(pending);
   }, [pending.length, outbox.length]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const note = run.task.archivedAt ? $t('任务已归档，协作记录只读。')
-    : run.status === 'failed' ? $t('任务因错误中断，请先点击重试继续失败员工；当前不能发送消息或 @ 其他成员。')
-      : questions.length ? $t('请先回复待澄清的问题。')
-        : ['completed', 'cancelled', 'paused'].includes(run.status) ? $t('可继续咨询；仅答疑，不恢复业务流程。')
-          : $t('新指令入队，不打断当前成员。');
 
   async function attach(kind: 'file' | 'image') {
     try {
@@ -147,14 +142,15 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
                   {entry.status === 'sending' ? $t('发送中…') : $t('未确认送达：{0}', [entry.error || ''])}
                 </Txt>
                 {entry.status === 'unconfirmed' ? (
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
-                    <Button size="sm" label={$t('恢复草稿')} onPress={() => restore(entry)} />
-                    <Button size="sm" label={$t('重试发送')} onPress={() => void send(entry)} />
+                  <View style={{ flexDirection: 'row', gap: 4 }}>
+                    <IconButton icon={Undo2} label={$t('恢复草稿')} tone="neutral" tinted size={32} onPress={() => restore(entry)} />
+                    <IconButton icon={RotateCcw} label={$t('重试发送')} tinted size={32} onPress={() => void send(entry)} />
                   </View>
                 ) : null}
               </View>
             }>
-            <Markdown content={entry.content || $t('（附件）')} />
+            {entry.content ? <Markdown size="body" content={entry.content} /> : null}
+            <LocalAttachments items={entry.attachments} />
           </HumanMessage>
         </View>
       );
@@ -162,7 +158,7 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
     const item = row.item;
     const trace = item.traceId || item.executionTraceId;
     const consoleLink = trace && item.senderType !== 'human' && item.senderId ? (
-      <Button size="sm" variant="ghost" label={$t('本轮控制台 ↗')} onPress={() => onOpenConsole(item.senderId as string, trace)} style={{ alignSelf: 'flex-start', paddingHorizontal: 0 }} />
+      <IconButton icon={SquareTerminal} label={$t('本轮控制台')} tone="neutral" size={30} onPress={() => onOpenConsole(item.senderId as string, trace)} />
     ) : null;
     if (item.senderType === 'human') {
       return (
@@ -179,14 +175,14 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
       <View>
         {divider}
         <AgentMessage sender={senderOf(item)} name={partyName(item.senderType, item.from)} kind={$tm(item.title)}
-          to={item.to ? partyName(item.recipientType || 'agent', item.to) : null} time={item.timestamp} status={item.status} attention={item.canReply}>
+          to={item.to ? partyName(item.recipientType || 'agent', item.to) : null} time={item.timestamp} status={item.status} attention={item.canReply}
+          accessory={<>
+            {item.canReply ? <IconButton icon={Reply} label={$t('回复此问题')} tone="attention" tinted size={30} onPress={() => { setReplyTo(item.replyId); following.current = true; list.current?.scrollToEnd({ animated: true }); }} /> : null}
+            {consoleLink}
+          </>}>
           <CollapsibleBody content={item.content} mentions={agents.map((agent) => agent.name)} />
           <MessageAttachments items={item.attachments as MessageAttachment[]} scope="runs" ownerId={run.id} />
           {item.reason ? <Txt variant="small" tone="secondary">{$tm(item.reason)}</Txt> : null}
-          {item.canReply ? (
-            <Button size="sm" variant="primary" label={$t('回复此问题')} onPress={() => { setReplyTo(item.replyId); following.current = true; list.current?.scrollToEnd({ animated: true }); }} style={{ alignSelf: 'flex-start' }} />
-          ) : null}
-          {consoleLink}
         </AgentMessage>
       </View>
     );
@@ -233,7 +229,6 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
           onSend={() => void send()}
           sending={sending}
           disabled={blocked}
-          note={note}
           reply={replyQuestion ? { label: $t('回复 {0}：{1}', [replyQuestion.sender.name, replyQuestion.content]), onCancel: () => setReplyTo('') } : null}
           attachments={attachments}
           onAttach={(kind) => void attach(kind)}

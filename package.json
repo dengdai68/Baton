@@ -19,6 +19,7 @@
   },
   "scripts": {
     "cli": "node cli/main.mjs",
+    "workspace": "node server/workspace-admin.mjs",
     "start": "electron apps/electron/main.mjs",
     "dev": "electron apps/electron/main.mjs",
     "test": "node scripts/run-tests.mjs",
@@ -32,6 +33,8 @@
     "desktop:check": "node --check apps/electron/main.mjs && node --test tests/electron.test.mjs",
     "prepackage:mac": "npm run desktop:install",
     "package:mac": "electron-builder --mac --arm64 --publish never",
+    "prepackage:mac:local": "npm run desktop:install",
+    "package:mac:local": "node scripts/package-mac-local.mjs",
     "package:mac:check": "node scripts/test-packaged-electron.mjs",
     "mac:check": "npm run desktop:check",
     "mac:run": "npm run desktop"
@@ -49,6 +52,7 @@
     "highlight.js": "^11.12.0",
     "js-yaml": "4.3.2",
     "marked": "^18.0.12",
+    "qrcode": "^1.5.4",
     "semver": "7.7.3",
     "sharp": "0.35.5"
   },

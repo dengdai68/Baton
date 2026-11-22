@@ -8,13 +8,13 @@ import { runInNewContext } from 'node:vm';
 
 test('SSE releases slow consumers, recovers after drain and removes subscriptions on close',async()=>{
   const source=await readFile(new URL('../server/index.mjs',import.meta.url),'utf8');
-  const body=source.slice(source.indexOf('    const runId = streamMatch[1];'),source.indexOf('  if (request.method === "GET" && pathname === "/api/health")'));
+  const body=source.slice(source.indexOf('    const runId = streamMatch?.[1]'),source.indexOf('  if (request.method === "GET" && pathname === "/api/health")'));
   function connection(){
     let listener,heartbeat,unsubscribed=false,cleared=false;const responseEvents={},requestEvents={},writes=[];
     const response={writableEnded:false,destroyed:false,writableLength:0,accept:true,writeHead(){},write(chunk){writes.push(chunk);return this.accept;},on(type,fn){responseEvents[type]=fn;},destroy(){this.destroyed=true;requestEvents.close();},end(){this.writableEnded=true;requestEvents.close();}};
     const streams=new Set(),request={on(type,fn){requestEvents[type]=fn;}};
     const invoke=runInNewContext('(function(){'+body.slice(0,body.lastIndexOf('  }'))+'})',{
-      response,request,streamMatch:['','run'],Buffer,JSON,eventStreams:streams,auth:{session:()=>true},store:{getRun(){},subscribe(fn){listener=fn;return()=>{unsubscribed=true;};}},setInterval(fn){heartbeat=fn;return 1;},clearInterval(){cleared=true;}
+      response,request,context:{},workspaceStream:false,clearTimeout,streamMatch:['','run'],Buffer,JSON,eventStreams:streams,auth:{session:()=>true},store:{getRun(){},subscribe(fn){listener=fn;return()=>{unsubscribed=true;};}},setInterval(fn){heartbeat=fn;return 1;},clearInterval(){cleared=true;}
     });invoke();
     return {response,responseEvents,writes,streams,emit(message='event'){listener({runId:'run',message});},beat(){heartbeat();},closed:()=>unsubscribed&&cleared};
   }

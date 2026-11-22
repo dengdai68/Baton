@@ -746,11 +746,14 @@ test("appearance choice is mirrored to the desktop host and colors native chrome
 });
 
 test("settings categories are refreshable routes and configuration leaves the employee shell", async () => {
-  assert.deepEqual(Object.keys(SETTINGS_PAGES), ["general", "appearance", "workspace", "cli", "repositories", "runtime", "updates", "logs"]);
+  assert.deepEqual(Object.keys(SETTINGS_PAGES), ["general", "appearance", "workspaces", "workspace", "cli", "repositories", "runtime", "devices", "updates", "logs"]);
   const settings = await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8");
   const panel = name => settings.split(`data-settings-panel="${name}"`)[1].split("</section>")[0];
   assert.match(panel("appearance"), /navigation-options/);
-  assert.match(panel("workspace"), /data-reset-all/);
+  assert.match(panel("workspaces"), /data-reset-all/);
+  assert.match(panel("workspaces"), /data-resident-toggle/);
+  assert.match(panel("workspaces"), /data-current-workspace/);
+  assert.doesNotMatch(settings, /data-phone-address|data-phone-enable/);
   assert.match(panel("cli"), /data-cli-install/);
   assert.doesNotMatch(panel("general"), /data-cli-install/);
   const app = await readFile(new URL("../web/app.js", import.meta.url), "utf8");

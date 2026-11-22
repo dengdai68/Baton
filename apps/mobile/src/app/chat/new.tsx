@@ -1,6 +1,8 @@
+import { plainHeaderItem } from '@/ui/header';
 // Start a conversation: one employee opens the private chat, several create a group.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
@@ -11,6 +13,7 @@ import { startConversation } from '@/features/chats/model';
 import { $t } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Button } from '@/ui/button';
+import { IconButton } from '@/ui/icon-button';
 import { ErrorState, LoadingState } from '@/ui/states';
 import { useToast } from '@/ui/toast';
 import { useClient } from '@/workspace/session';
@@ -37,7 +40,7 @@ export default function NewChat() {
   }
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: $t('发起沟通'), headerLeft: () => <Button size="sm" variant="ghost" label={$t('取消')} onPress={() => router.back()} /> }} />
+      <Stack.Screen options={{ title: $t('发起沟通'), unstable_headerLeftItems: () => plainHeaderItem(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
       {catalog.isPending ? <LoadingState /> : catalog.error ? <ErrorState message={catalog.error.message} onRetry={() => void catalog.refetch()} /> : (
         <MemberPicker agents={catalog.data.agents} selected={selected} onChange={setSelected} />
       )}

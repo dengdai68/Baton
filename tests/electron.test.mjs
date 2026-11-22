@@ -143,7 +143,7 @@ test("tray restore suppresses only navigation focus until the next interaction",
     return document;
   };
   const document = fixture();
-  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage"]);
+  assert.deepEqual(Object.keys(exposed).sort(), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "getServiceStatus", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openExternalWorkspace", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage", "setResidentService", "workspaceChoices", "workspaceHealth"]);
   const attributes = new Map(), navigation = { matches: selector => selector === ".nav-item", setAttribute: (key, value) => attributes.set(key, value), removeAttribute: key => attributes.delete(key), blur: () => assert.fail("must not move focus") };
   const restore = handlers.get("desktop:tray-restore"), marked = () => attributes.has("data-desktop-restored-focus");
   document.activeElement = navigation;
@@ -174,8 +174,8 @@ test("tray restore suppresses only navigation focus until the next interaction",
 test("first-close controller cancels, deduplicates, saves before action and keeps failures visible", async () => {
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   const controller = source.slice(source.indexOf("async function closeWindow()"), source.indexOf("function installMenu()"));
-  const fixture = (show, fail = false) => {
-    const calls = [], context = { $t, savingCloseMode: false, closingPrompt: false, quitting: false, closeMode: null, window: {}, BrowserWindow: function BrowserWindow() {},
+  const fixture = (show, fail = false, phoneEnabled = false) => {
+    const calls = [], context = { $t, existsSync: () => phoneEnabled, join: (...parts) => parts.join("/"), controlRoot: "/test", savingCloseMode: false, closingPrompt: false, quitting: false, closeMode: null, window: {}, BrowserWindow: function BrowserWindow() {},
       appDialog: show, diagnostic() {}, diagnostics: () => ({ status: () => ({ filePath: "/test/log" }) }),
       showWindow: () => calls.push("visible"), changeCloseMode: async mode => { calls.push(`save:${mode}`); if (fail) throw new Error("write failed"); context.closeMode = mode; },
       applyCloseMode: () => calls.push(`apply:${context.closeMode}`) };
@@ -185,6 +185,8 @@ test("first-close controller cancels, deduplicates, saves before action and keep
     const f = fixture(async () => response); await f.close();
     assert.deepEqual(f.calls, [`save:${response === 0 ? 'quit' : 'tray'}`, `apply:${response === 0 ? 'quit' : 'tray'}`]);
   }
+  const phone = fixture(() => assert.fail('phone-enabled window should go directly to tray'), false, true);
+  await phone.close(); assert.deepEqual(phone.calls, ['apply:null']);
   let answer, questions = 0;
   const cancel = fixture(() => { questions++; return new Promise(resolve => { answer = resolve; }); });
   const closing = cancel.close(); await cancel.close(); assert.equal(questions, 1);
@@ -235,17 +237,23 @@ test("Electron renderer has no Node and only closed preference/CLI/workspace/upd
   const source = await readFile(new URL("../apps/electron/main.mjs", import.meta.url), "utf8");
   assert.match(source, /nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true/);
   assert.doesNotMatch(source, /createStore/);
-  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 11);
+  assert.equal((source.match(/ipcMain\.handle\(/g) || []).length, 16);
   // The update channel is settings → updates only, like the other update commands.
   assert.match(source, /ipcMain\.handle\('desktop:updates:channel', \(event, \.\.\.args\) => \{\n\s+if \(args\.length !== 1 \|\| connecting \|\| !isUpdateSender\(event,contents,controlOrigin\)/);
   assert.equal((source.match(/ipcMain\.on\(/g) || []).length, 1, "only the synchronous locale read uses ipcMain.on");
   assert.equal((source.match(/isPreferencesSender\(event, contents, controlOrigin\)/g) || []).length, 3);
+  // The local service status and resident switch are available only in workspace settings.
+  assert.match(source, /ipcMain\.handle\("desktop:service:status", event => \{\n\s+if \(!isWorkspaceSender\(event, contents, controlOrigin\)\)/);
+  assert.match(source, /ipcMain\.handle\("desktop:service:resident", \(event, value\) => \{\n\s+if \(!isWorkspaceSender\(event, contents, controlOrigin\) \|\| process\.platform !== "darwin"\)/);
   assert.equal((source.match(/isCliSender\(event, contents, controlOrigin\)/g) || []).length, 3);
   const preload = await readFile(new URL("../apps/electron/preload.cjs", import.meta.url), "utf8");
   assert.match(preload, /process.isMainFrame && \/\^http:/);
   assert.match(preload, /getPreferences: \(\) => ipcRenderer.invoke\("desktop:preferences:get"\)/);
   assert.match(preload, /setCloseMode: \(mode\) => ipcRenderer.invoke\("desktop:preferences:set", mode\)/);
-  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 13);
+  assert.equal((preload.match(/ipcRenderer\.invoke\(/g) || []).length, 18);
+  assert.match(source, /requireLoginPage\(event\)/);
+  assert.match(preload, /getServiceStatus: \(\) => ipcRenderer.invoke\("desktop:service:status"\)/);
+  assert.match(preload, /setResidentService: \(resident\) => ipcRenderer.invoke\("desktop:service:resident", resident\)/);
   assert.match(preload, /setAppUpdateChannel: \(channel\) => ipcRenderer.invoke\("desktop:updates:channel", channel\)/);
   assert.equal((preload.match(/ipcRenderer\.sendSync\(/g) || []).length, 1);
   assert.match(preload, /ipcRenderer\.sendSync\("desktop:locale:get"\)/);
@@ -427,7 +435,7 @@ test('app dialog accepts only exact local main-frame choices, sizes to content a
   const module = await readFile(new URL('../apps/electron/app-dialog.mjs', import.meta.url), 'utf8');
   assert.match(module, /Math\.max\(document\.documentElement\.scrollHeight, document\.body\.scrollHeight\)/);
   const main = await readFile(new URL('../apps/electron/main.mjs', import.meta.url), 'utf8');
-  assert.equal((main.match(/appDialog\(\{/g) || []).length, 10, 'system dialog scenes, notification draft protection, About, configuration cutover refusal, legacy refusal and storage relocation errors use the shared app dialog');
+  assert.equal((main.match(/appDialog\(\{/g) || []).length, 11, 'external certificate confirmation, system dialog scenes, notification draft protection, About, configuration cutover refusal, legacy refusal and storage relocation errors use the shared app dialog');
   assert.match(main, /需要先搬迁实例数据/);
   assert.doesNotMatch(main, /role:\s*["']about["']/, 'the macOS menu no longer triggers the system About panel');
   assert.match(main, /关于 Baton/);
@@ -484,7 +492,7 @@ test("Electron reduces chrome spacing without shrinking reading text or scaling 
   assert.match(css, /\.table-actions \{ flex-wrap:wrap; gap:4px/);
   assert.match(css, /\.team-directory-row \{[^}]*padding:8px 16px 8px var\(--pad-page\)/);
   assert.match(css, /body \{[^}]*font:var\(--fs-body\)\/var\(--lh-body\)/);
-  assert.match(css, /\.communication-body \{[^}]*font-size:14px; line-height:22px/, "reading text grows to the 14/22 reading size");
+  assert.match(css, /\.communication-body \{[^}]*font-size:var\(--fs-body\); line-height:21px/, "message bodies use the smaller reading size");
   assert.doesNotMatch(css, /(?:zoom|font-size-adjust)\s*:|transform\s*:\s*scale|\.markdown-preview[^}]*font-size/);
   assert.match(css, /@media \(max-width:760px\) \{\s*\.communication-layout \{ grid-template-columns:minmax\(0,1fr\); height:auto; min-height:0/);
   assert.match(css, /@media \(max-width:760px\), \(max-height:620px\) \{\s*\.collaboration-row \{ grid-template-columns:minmax\(0,1fr\); gap:4px/);

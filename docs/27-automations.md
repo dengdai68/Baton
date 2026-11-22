@@ -59,3 +59,7 @@ GET/POST /api/automations；GET/PUT/DELETE /api/automations/:id；GET /api/autom
 目录使用全部/已启用/已停用填充 chips 与即时搜索，对应现有 status=all|enabled|disabled；计数来自相同搜索的服务端总数，分页不变。行首原生 checkbox 调用 PUT enabled，失败还原；行点击与标题键盘入口打开原详情，立即执行/编辑/删除继续由详情提供。执行规则展示任务表单同一组 Cron 预设（自定义保留原表达式），状态与成员来自已有目录/引用，不新增调度或 CLI 协议。
 
 执行规则摘要（如“每天 09:00”“工作日 09:00”）、耗时与触发状态按界面语言显示；Cron、时区与触发记录原因按源文字保存，原因在展示时翻译。
+
+云端自动化保存创建者与负责人，各轮任务的访问权限以当前自动化授权为准。见[工作空间服务](31-workspace-service.md)。
+
+App 与 CLI 的自动化详情 latestExecution 返回最近一次实际创建的 Run 的 runId、taskId、startedAt、status，无执行时为 null。跳过的触发仍计入 latestTrigger。两端详情合并配置与触发信息，点配置直接编辑。

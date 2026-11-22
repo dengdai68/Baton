@@ -6,5 +6,5 @@ import { useSession } from '@/workspace/session';
 export default function Index() {
   const { ready, active } = useSession();
   if (!ready) return null;
-  return <Redirect href={active ? '/inbox' : '/connect'} />;
+  return <Redirect href={active ? '/tasks' : '/connect'} />;
 }

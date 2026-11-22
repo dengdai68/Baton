@@ -29,3 +29,7 @@
 提示词原文对照：[当前安装版逐字导出](development/current-prompt-wording-export.md)。固定文案来自真实组装函数，并核对安装包源码；仅身份配置、消息和路径等动态数据使用 mock，未执行示例任务。
 
 待实施设计：[团队共享协作记录与分层提示词方案](development/prompt-assembly-and-shared-collaboration-design.md)。分别提供 Leader、成员、自动化、私聊和群聊的完整 systemPrompt 与每轮 userPrompt，另列响应协议和模型回复。固定文案是拟实施全文，动态数据使用 mock；尚未修改运行逻辑，不与上方当前行为混用。
+
+[31 · 工作空间服务与 iOS](31-workspace-service.md) 说明两种部署、成员权限和 Relay 的职责。
+
+[32 · 本机常驻服务与公网访问安全](32-resident-service.md)：launchd 常驻服务、daemon 与客户端的配对范围、公网暴露的软件层安全模型与加密取舍。

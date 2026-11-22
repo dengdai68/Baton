@@ -108,12 +108,11 @@ final class BatonE2ETests: XCTestCase {
       let label = step.value ?? ""
       // Rows are accessibility elements whose label joins title and subtitle;
       // the exact text varies, so locate them first.
-      let buttons = app.buttons.containing(predicate(of: label))
-      let buttonCount = buttons.count
-      if buttonCount > 0 { buttons.element(boundBy: step.index ?? 0).tap(); return }
-      let rows = app.otherElements.containing(predicate(of: label))
-      let rowCount = rows.count
-      if rowCount > 0 { rows.element(boundBy: step.index ?? 0).tap(); return }
+      // An element's own label must match (matching), not a descendant (containing).
+      let buttons = app.buttons.matching(predicate(of: label))
+      if buttons.count > 0 { buttons.element(boundBy: step.index ?? 0).tap(); return }
+      let rows = app.otherElements.matching(predicate(of: label))
+      if rows.count > 0 { rows.element(boundBy: step.index ?? 0).tap(); return }
       let any = element(label, index: step.index ?? 0)
       guard any.waitForExistence(timeout: timeout) else { throw StepError(description: "not found: \(label)") }
       any.tap()
@@ -128,7 +127,7 @@ final class BatonE2ETests: XCTestCase {
     case "set":
       // Set text via the pasteboard: reliable for controlled multiline inputs.
       let intoField = step.into ?? ""
-      let textViews = app.textViews.containing(predicate(of: intoField))
+      let textViews = app.textViews.matching(predicate(of: intoField))
       let targetField: XCUIElement
       if textViews.count > 0 { targetField = textViews.element(boundBy: step.index ?? 0) } else {
         let anyField = element(intoField, index: step.index ?? 0)
@@ -144,7 +143,7 @@ final class BatonE2ETests: XCTestCase {
       sleep(1)
     case "type":
       let into = step.into ?? ""
-      let textViews = app.textViews.containing(predicate(of: into))
+      let textViews = app.textViews.matching(predicate(of: into))
       let textViewCount = textViews.count
       let target: XCUIElement
       if textViewCount > 0 { target = textViews.element(boundBy: step.index ?? 0) } else {

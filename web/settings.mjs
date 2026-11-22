@@ -3,7 +3,7 @@ import {runtimeLabel,RUNTIME_EFFORT_LEVELS} from "../client/runtime-providers.mj
 import { DIRECTORY_THEMES, NAVIGATION, normalizePreferences, THEMES } from "./preferences.mjs";
 import { createFloatingList, closeFloatingLists } from './floating-list.mjs';
 
-export const SETTINGS_PAGES = { general: $t("常规"), appearance: $t("外观"), workspace: $t("工作目录"), cli: "CLI", repositories: $t("仓库访问"), runtime: $t("运行时"), updates: $t("更新"), logs: $t("运行日志") };
+export const SETTINGS_PAGES = { general: $t("常规"), appearance: $t("外观"), workspaces: $t("工作空间"), workspace: $t("工作目录"), cli: "CLI", repositories: $t("仓库访问"), runtime: $t("运行时"), devices: $t("手机连接"), updates: $t("更新"), logs: $t("运行日志") };
 const escape = (value = "") => String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
 
 const settingsIcon = id => {
@@ -11,9 +11,10 @@ const settingsIcon = id => {
     general: '<path d="M4 5h16v14H4zM4 9h16M8 5v4"/>', appearance: '<circle cx="12" cy="12" r="8"/><path d="M12 4v16a8 8 0 0 0 0-16"/>',
     workspace: '<path d="M3 7h7l2 2h9v11H3zM3 7V4h7l2 3"/>', runtime: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3m6-3v3M9 19v3m6-3v3M2 9h3m-3 6h3m14-6h3m-3 6h3"/>',
     cli: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/>', repositories: '<circle cx="7" cy="6" r="2"/><circle cx="17" cy="6" r="2"/><circle cx="7" cy="18" r="2"/><path d="M7 8v8m10-8v2c0 4-10 0-10 6"/>',
-    updates: '<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 2M4 17l2 2a8 8 0 0 0 13-3"/>', logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7m-7 4h7"/>'
+    updates: '<path d="M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-3l2 2M4 17l2 2a8 8 0 0 0 13-3"/>', logs: '<path d="M6 3h9l4 4v14H6zM14 3v5h5M9 12h7m-7 4h7"/>',
+    devices: '<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18.5h2"/>'
   };
-  return `<svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id] || paths.general}</svg>`;
+  return `<svg class="settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[id === 'workspaces' ? 'workspace' : id] || paths.general}</svg>`;
 };
 
 // Mirrors the provider effort vocabularies observed from the real CLIs in
@@ -88,6 +89,34 @@ export function createAppUpdateUI(panel, desktop) {
     if (!desktop?.getAppUpdateState) { status.textContent = $t("请使用支持应用更新的客户端版本。"); check.disabled = true; return; }
     await run('getAppUpdateState');
   }, dispose() { disposed = true; unsubscribe?.(); } };
+}
+
+/** 本机服务: keep the local service running under the system (launchd) or with the app. */
+export function createResidentServiceUI(panel, desktop) {
+  const toggle = panel.querySelector('[data-resident-toggle]'), status = panel.querySelector('[data-resident-status]');
+  if (!toggle || !status) return { refresh() {}, dispose() {} };
+  let busy = false, disposed = false;
+  const describe = (value) => value.resident
+    ? (value.state === "ready" ? $t("由系统托管，正在运行（进程 {0}）", [value.pid]) : $t("由系统托管：{0}", [value.state]))
+    : $t("随 Baton 运行，退出 Baton 时停止");
+  async function refresh() {
+    if (disposed || busy) return;
+    if (!desktop?.getServiceStatus) { toggle.disabled = true; status.textContent = $t("客户端宿主接口不可用，请重新打开应用。"); return; }
+    try {
+      const value = await desktop.getServiceStatus();
+      if (disposed) return;
+      toggle.checked = Boolean(value.resident); toggle.disabled = false; status.textContent = describe(value);
+    } catch (error) { if (!disposed) { toggle.disabled = true; status.textContent = $t("读取本机服务状态失败：{0}", [error.message]); } }
+  }
+  toggle.onchange = async () => {
+    const next = toggle.checked;
+    busy = true; toggle.disabled = true;
+    status.textContent = next ? $t("正在交给系统托管…") : $t("正在改为随 Baton 运行…");
+    try { const value = await desktop.setResidentService(next); if (!disposed) { toggle.checked = Boolean(value.resident); status.textContent = describe(value); } }
+    catch (error) { if (!disposed) { toggle.checked = !next; status.textContent = error.message; } }
+    finally { busy = false; if (!disposed) toggle.disabled = false; }
+  };
+  return { refresh, dispose() { disposed = true; } };
 }
 
 export function createClosePreferenceUI(panel, desktop) {
@@ -190,9 +219,11 @@ export function createCliInstallationUI(panel, desktop) {
 export function createSettingsUI({ api, notify, navigate, getPreferences, updatePreferences, clearInvalid, setInvalid, onWorkspaceSaved = () => {}, openModal, closeModal, confirmDialog, onDataReset, onResetStarted = () => {}, onResetFailed = () => {} }) {
   let workspaceLocation = null;
   let root = null, repositoriesLoaded = false, workspaceLoaded = false, runtimeLoaded = false;
+  let deviceRefreshTimer = null;
   let logRequest = 0, currentPage = null;
-  let closePreferenceUI = null, languagePreferenceUI = null, cliInstallationUI = null, appUpdateUI = null;
+  let closePreferenceUI = null, languagePreferenceUI = null, residentServiceUI = null, cliInstallationUI = null, appUpdateUI = null;
   const refreshHostSettings = () => {
+    if (currentPage === "workspaces") void residentServiceUI?.refresh();
     if (currentPage === "general") { void closePreferenceUI?.refresh(); void languagePreferenceUI?.refresh(); }
     if (currentPage === "cli") void cliInstallationUI?.refresh();
     if (currentPage === "updates") void appUpdateUI?.refresh();
@@ -250,7 +281,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
         const label = runtimeLabel(profile.provider);
         const row = document.createElement('div'); row.className = 'runtime-provider-row'; row.dataset.runtimeProfile = profile.id;
         const availabilityLabel = () => profile.installed ? (profile.enabled ? $t("可用") : $t("已停用")) : $t("未安装");
-        row.innerHTML = `<details class="runtime-config"><summary aria-label="${$t("{0} 配置", [label])}"><span class="settings-provider-icon" aria-hidden="true">${escape(({'claude-code':'CC',codex:'CX','deepseek-harness':'DS',opencode:'OC',cursor:'CU',gemini:'GE',qwen:'QW',kimi:'KM',pi:'PI'})[profile.provider] || label.slice(0,2).toUpperCase())}</span><div><h4 aria-label="${label}">${label}<span class="settings-provider-count">${$t("{0} 位员工", [profile.employeeCount])}</span></h4><p class="field-hint" data-runtime-summary></p></div><span class="runtime-expand-icon" aria-hidden="true">⌄</span></summary></details><div class="runtime-provider-actions"><label class="runtime-availability"><input type="checkbox" role="switch" aria-label="${$t("{0} 可用", [label])}" ${profile.enabled ? 'checked' : ''} ${profile.installed ? '' : 'disabled'} /><span class="visually-hidden" data-enabled-label>${availabilityLabel()}</span></label></div><p role="status" data-row-result></p>`;
+        row.innerHTML = `<details class="runtime-config"><summary aria-label="${$t("{0} 配置", [label])}"><span class="settings-provider-icon" aria-hidden="true">${escape(({'claude-code':'CC',codex:'CX',dsh:'DS',opencode:'OC',cursor:'CU',gemini:'GE',qwen:'QW',kimi:'KM',pi:'PI'})[profile.provider] || label.slice(0,2).toUpperCase())}</span><div><h4 aria-label="${label}">${label}<span class="settings-provider-count">${$t("{0} 位员工", [profile.employeeCount])}</span></h4><p class="field-hint" data-runtime-summary></p></div><span class="runtime-expand-icon" aria-hidden="true">⌄</span></summary></details><div class="runtime-provider-actions"><label class="runtime-availability"><input type="checkbox" role="switch" aria-label="${$t("{0} 可用", [label])}" ${profile.enabled ? 'checked' : ''} ${profile.installed ? '' : 'disabled'} /><span class="visually-hidden" data-enabled-label>${availabilityLabel()}</span></label></div><p role="status" data-row-result></p>`;
         container.append(row);
         const summary = row.querySelector('[data-runtime-summary]');
         const syncSummary = () => { summary.textContent = `${availabilityLabel()} · ${profile.model ? runtimeOptionLabel(profile.model) : $t("CLI 默认模型")} · ${profile.effort ? runtimeOptionLabel(profile.effort) : $t("默认思考等级")}`; };
@@ -406,6 +437,10 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     try {
       const result = await api("/api/settings/workspace");
       if (!container.isConnected) return;
+      if (remoteWorkspace) {
+        container.innerHTML = `<div class="settings-group"><h4>${$t("存储位置")}</h4><div class="settings-box">${[[$t("工作目录"),result.workspaceRoot],[$t("配置目录"),result.configurationRoot]].map(([label,path])=>`<div class="settings-row"><strong>${label}</strong><code>${escape(path || '—')}</code></div>`).join('')}</div></div>`;
+        return;
+      }
       container.innerHTML = `<div class="settings-group"><h4>${$t("存储位置")}</h4><form id="workspace-settings-form"><div class="settings-box"><div class="settings-row settings-row-wrap"><div class="settings-row-text"><label for="default-workspace-root">${$t("工作目录")}</label><small>${$t("员工、任务、沟通与执行文件保存在此目录。")}</small></div><div class="form-field settings-workspace-input"><input id="default-workspace-root" name="workspaceRoot" value="${escape((workspaceLocation=result.workspaceRoot) || "")}" spellcheck="false" required /><div class="field-error" role="alert"></div></div></div><div class="settings-row"><div class="settings-row-text"><strong>${$t("业务资料")}</strong><code data-business-root>${escape(result.businessRoot || '')}</code></div><button type="button" class="ghost-button" data-copy-setting="[data-business-root]">${$t("复制")}</button>${globalThis.window?.batonDesktop?.openWorkspaceDirectory ? `<button type="button" class="small-button" data-open-workspace>${$t("打开工作目录")}</button>` : ''}</div><div class="settings-row"><div class="settings-row-text"><strong>${$t("配置目录")}</strong><code data-configuration-root>${escape(result.configurationRoot || '')}</code></div><button type="button" class="ghost-button" data-copy-setting="[data-configuration-root]">${$t("复制")}</button></div></div><p class="field-hint">${$t("默认 ~/.baton/workspace，请输入绝对路径。更换目录会整理应用资料并重启本机服务；有任务或沟通执行时不能更换。已有任务的工作路径保持原位。")}</p><div class="form-actions"><span data-workspace-status role="status"></span><button class="small-button" type="submit" disabled>${$t("保存并整理目录")}</button></div></form></div>`;
       const form = container.querySelector("form");
       form.elements.workspaceRoot.addEventListener('input', () => { form.querySelector('[type="submit"]').disabled = form.elements.workspaceRoot.value.trim() === workspaceLocation; });
@@ -504,17 +539,37 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     }
   }
 
+  const remoteWorkspace = Boolean(globalThis.document?.querySelector('meta[name=baton-remote-workspace]'));
+  async function loadCurrentWorkspace() {
+    const panel = root?.querySelector('[data-current-workspace]');
+    if (!panel) return;
+    try {
+      const info = await api('/api/settings/current-workspace');
+      if (!panel.isConnected) return;
+      const devices = info.devices || [];
+      const row = (title,value) => `<div class="workspace-fact"><strong>${escape(title)}</strong><span>${escape(value || '—')}</span></div>`;
+      const expanded = panel.querySelector("details")?.open;
+      const device = devices.find(item => item.id === info.deviceId);
+      panel.innerHTML = `<div class="settings-group"><h4>${$t("当前工作空间")}</h4><div class="settings-box">
+        ${row($t("名称"),info.name)}${row($t("当前机器"),device?.label)}${row($t("当前账号"),info.username)}
+        ${info.origin ? row($t("登录地址"),info.origin) : ''}${info.connectionError ? row($t("无法连接"),info.connectionError) : ''}${info.fingerprint ? `<details class="workspace-cert" ${expanded ? 'open' : ''}><summary>${$t("证书指纹")}</summary><code>${escape(info.fingerprint)}</code></details>` : ''}</div></div>
+        <div class="settings-group"><h4>${$t("当前账号登录的设备")}</h4><div class="settings-box">
+        ${devices.map(item => row(item.label, [item.lastAddress?.replace(/^::ffff:/i,''), item.id === info.deviceId ? $t("当前设备") : item.lastSeen ? new Date(item.lastSeen).toLocaleString() : $t("本机工作空间")].filter(Boolean).join(' · '))).join('')}</div></div>`;
+    } catch (error) { if (panel.isConnected) panel.textContent = error.message; }
+  }
   function mount(target, page = "general") {
+    if (page === "devices" || page === "workspace") page = "workspaces";
     const host = globalThis.window?.batonDesktop;
     if (root !== target) {
       root = target;
       root.innerHTML = `<div class="settings-layout">
-        <nav class="settings-nav" aria-label="${$t("设置分类")}">${[[$t("通用"),['general','appearance','workspace']],[$t("集成"),['runtime','cli','repositories']],[$t("系统"),['updates','logs']]].map(([group,ids]) => `<div class="settings-nav-group"><span>${group}</span>${ids.map(id => `<button type="button" data-settings-page="${id}">${settingsIcon(id)}${SETTINGS_PAGES[id]}</button>`).join('')}</div>`).join('')}</nav>
+        <nav class="settings-nav" aria-label="${$t("设置分类")}">${[[$t("通用"),['general','appearance','workspaces']],[$t("集成"),['runtime','cli','repositories']],[$t("系统"),['updates','logs']]].map(([group,ids]) => `<div class="settings-nav-group"><span>${group}</span>${ids.map(id => `<button type="button" data-settings-page="${id}">${settingsIcon(id)}${SETTINGS_PAGES[id]}</button>`).join('')}</div>`).join('')}</nav>
         <div class="settings-content">
           <section class="settings-section" data-settings-panel="general" hidden>
             <h3>${$t("常规")}</h3><p class="settings-description">${$t("常规设置即时生效，自动保存在当前客户端。")}</p>
             <div class="settings-group"><h4>${$t("语言")}</h4><div class="settings-box"><form data-language-form class="settings-row"><div class="settings-row-text"><strong><label for="settings-language">${$t("界面语言")}</label></strong><small data-language-status>${$t("切换后界面立即重新加载；跟随系统使用 macOS 首选语言。")}</small></div><select id="settings-language" name="language" disabled>${LANGUAGE_PREFERENCES.map(value => `<option value="${value}">${value === "system" ? $t("跟随系统") : LOCALE_NAMES[value]}</option>`).join("")}</select></form></div></div>
             <div class="settings-group"><h4>${$t("窗口")}</h4><div class="settings-box"><form data-close-form class="settings-row"><div class="settings-row-text"><strong>${$t("关闭主窗口时")}</strong><small>${$t("Cmd+Q 始终退出程序。")}</small></div><fieldset class="settings-radio-group settings-segmented"><legend class="visually-hidden">${$t("关闭主窗口时")}</legend><label class="settings-radio-option"><input type="radio" name="closeMode" value="quit" disabled /><span>${$t("退出程序")}</span></label><label class="settings-radio-option"><input type="radio" name="closeMode" value="tray" disabled /><span>${$t("保留在菜单栏")}</span></label></fieldset><button class="primary-button compact" type="submit" disabled>${$t("保存")}</button></form></div><p data-close-status class="settings-status" role="status">${$t("正在读取客户端偏好…")}</p><button class="small-button" data-close-retry hidden>${$t("重试")}</button></div>
+
             <div class="settings-group"><h4>${$t("账号")}</h4><div class="settings-box"><div class="settings-row"><span class="settings-account-avatar" aria-hidden="true">${$t("我")}</span><div class="settings-row-text"><strong data-settings-account>${$t("本机管理员")}</strong><small>${$t("本机单管理员 · CLI 与客户端共用登录授权。")}</small></div><button type="button" class="small-button" id="logout-button">${$t("退出登录")}</button></div></div></div>
           </section>
           <section class="settings-section" data-settings-panel="appearance" aria-labelledby="appearance-title" hidden>
@@ -525,9 +580,12 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
             <div class="settings-group"><h4>${$t("提醒")}</h4><div class="settings-box">${[['showCounts',$t("任务待处理提醒"),$t("只显示待你回复、验收或处理的任务数；零值不显示。")],['showUnread',$t("沟通未读提醒"),$t("显示员工新回复的未读数；看到最新记录后清零。")]].map(([id,label,hint]) => `<label class="settings-row settings-toggle"><span class="settings-row-text"><strong>${label}</strong><small>${hint}</small></span><input type="checkbox" role="switch" data-display-option="${id}" aria-label="${$t("显示{0}", [label])}" /></label>`).join('')}</div></div>
             <p class="settings-save-status" data-preferences-status role="status">${$t("外观和展示偏好自动保存在当前客户端。")}</p>
           </section>
-          <section class="settings-section" data-settings-panel="workspace" aria-labelledby="workspace-settings-title" hidden>
-            <h3 id="workspace-settings-title">${$t("工作目录")}</h3><p class="settings-description">${$t("集中管理任务文件、配置、执行记录和扩展的存放位置。")}</p><div data-workspace-config></div>
-            <div class="settings-group"><h4 id="data-management-title">${$t("危险操作")}</h4><div class="settings-box settings-danger-zone"><div class="settings-row"><div class="settings-row-text"><strong>${$t("清除所有数据")}</strong><small>${$t("删除整个当前工作目录，保留设置与登录。")}</small></div><button type="button" class="small-button danger" data-reset-all>${$t("清除所有数据")}</button></div></div><p class="field-hint">${$t("包括当前工作目录中的所有文件和业务记录；配置目录中的账号、认证、Runtime、插件、MCP、Git 凭据、偏好和日志保留。")}</p></div>
+          <section class="settings-section" data-settings-panel="workspaces" hidden>
+            <h3>${$t("工作空间")}</h3>
+            <div data-current-workspace></div>
+            <div class="settings-group" data-local-only><h4>${$t("本机服务")}</h4><div class="settings-box"><label class="settings-row settings-toggle"><span class="settings-row-text"><strong>${$t("常驻后台运行")}</strong><small data-resident-status role="status">${$t("正在读取本机服务…")}</small></span><input type="checkbox" role="switch" data-resident-toggle aria-label="${$t("常驻后台运行")}" disabled /></label></div></div>
+            <div data-workspace-config></div>
+            <div class="settings-group" data-local-only><h4 id="data-management-title">${$t("危险操作")}</h4><div class="settings-box settings-danger-zone"><div class="settings-row"><div class="settings-row-text"><strong>${$t("清除所有数据")}</strong><small>${$t("删除整个当前工作目录，保留设置与登录。")}</small></div><button type="button" class="small-button danger" data-reset-all>${$t("清除所有数据")}</button></div></div><p class="field-hint">${$t("包括当前工作目录中的所有文件和业务记录；配置目录中的账号、认证、Runtime、插件、MCP、Git 凭据、偏好和日志保留。")}</p></div>
           </section>
           <section class="settings-section" data-settings-panel="runtime" aria-labelledby="runtime-title" hidden>
             <h3 id="runtime-title">${$t("运行时")}</h3><p class="settings-description">${$t("启用的运行时可被员工选择。模型与思考等级留空时使用 CLI 默认配置，保存后用于之后的调用。")}</p><div class="repository-access-grid settings-box" data-runtime-config></div>
@@ -554,6 +612,8 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
       const layout = root.firstElementChild;
       api('/api/auth/session').then(account => { if (layout.isConnected && account.username) layout.querySelector('[data-settings-account]').textContent = account.username; }).catch(() => {});
       closePreferenceUI = createClosePreferenceUI(root.querySelector('[data-settings-panel="general"]'), globalThis.window?.batonDesktop);
+      if (remoteWorkspace) root.querySelectorAll('[data-local-only]').forEach(section => {section.hidden=true;});
+      residentServiceUI = createResidentServiceUI(root.querySelector('[data-settings-panel="workspaces"]'), globalThis.window?.batonDesktop);
       languagePreferenceUI = createLanguagePreferenceUI(root.querySelector('[data-settings-panel="general"]'), globalThis.window?.batonDesktop);
       const cliPanel = root.querySelector('[data-settings-panel="cli"]');
       cliInstallationUI = createCliInstallationUI(cliPanel, host);
@@ -587,30 +647,37 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     }
     syncPreferences();
     root.querySelectorAll("[data-settings-page]").forEach((button) => {
-      const selected = button.dataset.settingsPage === page;
+      const selected = button.dataset.settingsPage === page || (page === "workspace" && button.dataset.settingsPage === "workspaces");
       button.classList.toggle("active", selected);
       if (selected) button.setAttribute("aria-current", "page"); else button.removeAttribute("aria-current");
     });
     root.querySelectorAll("[data-settings-panel]").forEach((panel) => { panel.hidden = panel.dataset.settingsPanel !== page; });
     if (currentPage !== page) {
       ++logRequest; currentPage = page;
+      clearInterval(deviceRefreshTimer);
+      if (page === "workspaces") {
+        void loadCurrentWorkspace();
+        deviceRefreshTimer=setInterval(()=>{if (!document.hidden) void loadCurrentWorkspace();},15000);
+      }
       refreshHostSettings();
       if (page === "logs") loadLogs();
     }
     if (page === "repositories" && !repositoriesLoaded) loadRepositories();
-    if (page === "workspace" && !workspaceLoaded) loadWorkspace();
+    if (page === "workspaces" && !workspaceLoaded) loadWorkspace();
     if (page === "runtime" && !runtimeLoaded) loadRuntimes();
+
     root.querySelector("[data-preferences-status]").hidden = page !== "appearance";
   }
 
   function unmount() {
     globalThis.window?.removeEventListener("focus", refreshHostSettings);
-    closePreferenceUI?.dispose(); closePreferenceUI = null; languagePreferenceUI?.dispose(); languagePreferenceUI = null;
+    closePreferenceUI?.dispose(); closePreferenceUI = null; languagePreferenceUI?.dispose(); languagePreferenceUI = null; residentServiceUI?.dispose(); residentServiceUI = null;
     cliInstallationUI?.dispose(); cliInstallationUI = null;
     appUpdateUI?.dispose(); appUpdateUI = null;
     ++logRequest;
     currentPage = null;
     if (root) { closeFloatingLists(root); inputClear(root); root.replaceChildren(); }
+    clearInterval(deviceRefreshTimer);
     root = null; repositoriesLoaded = false; workspaceLoaded = false; runtimeLoaded = false;
   }
   return { mount, unmount, syncPreferences };

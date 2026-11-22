@@ -2712,6 +2712,82 @@
       }
     },
     {
+      "id": "apps.daemon",
+      "path": "apps/electron/daemon.mjs",
+      "kind": "desktop-host",
+      "owner": "client-platform",
+      "purpose": "Resident Mac service: launchd-run supervisor that owns the business service with the desktop environment and IPC protocol, serves status, notifications and idle reservations on a private 0600 Unix socket, and relocates storage. Never starts an empty instance when the saved data root is unreachable.",
+      "sourceOfTruth": [
+        "docs/32-resident-service.md",
+        "docs/18-electron-client.md"
+      ],
+      "tests": [
+        "tests/daemon.test.mjs"
+      ],
+      "allowedDependencies": [
+        "node:*",
+        "server/storage-layout.mjs",
+        "server/diagnostics.mjs",
+        "apps/electron/runtime-paths.mjs",
+        "apps/electron/login-shell-env.mjs",
+        "apps/electron/storage-relocation.mjs"
+      ],
+      "forbiddenDependencies": [
+        "electron",
+        "Store or business state",
+        "network listeners"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "ai/module-registry.json",
+          "docs/32-resident-service.md",
+          "docs/18-electron-client.md",
+          "apps/electron/README.md"
+        ],
+        "reviewIf": [
+          "service lifecycle",
+          "local authentication",
+          "launchd",
+          "data relocation"
+        ]
+      }
+    },
+    {
+      "id": "apps.daemon-service",
+      "path": "apps/electron/daemon-service.mjs",
+      "kind": "desktop-host",
+      "owner": "client-platform",
+      "purpose": "launchd user agent definition and management (install, start, restart, remove) for the resident service, plus the app's JSON-lines client for the daemon socket. launchctl is injected for tests.",
+      "sourceOfTruth": [
+        "docs/32-resident-service.md",
+        "docs/18-electron-client.md"
+      ],
+      "tests": [
+        "tests/daemon.test.mjs"
+      ],
+      "allowedDependencies": [
+        "node:*"
+      ],
+      "forbiddenDependencies": [
+        "electron",
+        "Store or business state"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "ai/module-registry.json",
+          "docs/32-resident-service.md",
+          "docs/18-electron-client.md",
+          "apps/electron/README.md"
+        ],
+        "reviewIf": [
+          "service lifecycle",
+          "local authentication",
+          "launchd",
+          "data relocation"
+        ]
+      }
+    },
+    {
       "id": "scripts.desktop-notifications",
       "path": "scripts/test-desktop-notifications.mjs",
       "kind": "developer-tooling",
@@ -3104,6 +3180,31 @@
       }
     },
     {
+      "id": "workspace.login-choice",
+      "path": "web/workspace-choice.js",
+      "kind": "ui",
+      "owner": "client-platform",
+      "purpose": "Choose one local or external workspace during desktop login or first setup.",
+      "sourceOfTruth": [
+        "docs/31-workspace-service.md"
+      ],
+      "tests": [
+        "tests/workspace-service.test.mjs"
+      ],
+      "allowedDependencies": [
+        "node:*",
+        "Baton Store"
+      ],
+      "forbiddenDependencies": [
+        "Relay business state"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "docs/31-workspace-service.md"
+        ]
+      }
+    },
+    {
       "id": "workspace.mobile",
       "path": "apps/mobile/",
       "kind": "mobile-client",
@@ -3114,7 +3215,8 @@
         "docs/31-workspace-service.md"
       ],
       "tests": [
-        "apps/mobile/tests/link.test.ts"
+        "apps/mobile/tests/link.test.ts",
+        "tests/i18n.test.mjs"
       ],
       "whenChanged": {
         "mustUpdate": [

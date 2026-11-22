@@ -29,9 +29,10 @@ type StreamHandlers = { onEvent: (event: string, data: string) => void; onEnd?: 
 export function transportError(error: unknown): ApiError {
   const message = error instanceof Error ? error.message : String(error);
   if (message.includes('PIN_MISMATCH'))
-    return new ApiError($t('工作空间证书已变化，请在 Mac 上重新生成配对码后再连接。'), 0, 'PIN_MISMATCH');
+    return new ApiError($t('工作空间证书已变化，请核对服务器证书后重新登录。'), 0, 'PIN_MISMATCH');
+  // Native failures arrive wrapped ("Calling the 'request' function has failed\n→ Caused by: NETWORK: …").
   if (message.includes('NETWORK'))
-    return new ApiError($t('无法连接工作空间：{0}', [message.replace(/^.*NETWORK:\s*/, '')]), 0, 'NETWORK');
+    return new ApiError($t('无法连接工作空间：{0}', [message.replace(/^[\s\S]*?NETWORK:\s*/, '')]), 0, 'NETWORK');
   return new ApiError(message, 0, 'TRANSPORT');
 }
 
@@ -127,24 +128,27 @@ export function createApiClient({ origin, pin, token, onUnauthorized }: ClientOp
   };
 }
 
-/** Unauthenticated calls used during pairing (no token yet). */
-export async function pairDevice(origin: string, pin: string | null, code: string, device: string): Promise<string> {
-  let response;
-  try {
-    response = await Transport.request({
-      url: origin + '/pair',
-      method: 'POST',
-      pin: pin ?? undefined,
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ code, bearer: true, device }),
-    });
-  } catch (error) {
-    throw transportError(error);
-  }
-  let payload: any = null;
-  try { payload = response.body ? JSON.parse(response.body) : null; } catch { payload = null; }
-  if (response.status === 401) throw new ApiError($t('配对码无效或已过期（5 分钟内有效且只能使用一次），请在 Mac 上重新生成。'), 401);
-  if (response.status !== 200 || typeof payload?.token !== 'string')
-    throw new ApiError($tm(payload?.error || $t('配对失败（{0}）', [response.status])), response.status);
-  return payload.token;
+/**
+ * Client for screens that are still unmounting after the workspace was closed
+ * (logout, forget, switch): every call rejects instead of the render throwing.
+ */
+export function closedClient(): ApiClient {
+  const closed = async (): Promise<never> => { throw new ApiError($t('工作空间已关闭，请重新连接。'), 0, 'CLOSED'); };
+  return {
+    origin: '',
+    get: closed, post: closed, put: closed, patch: closed, del: closed, upload: closed, file: closed,
+    stream(_path: string, handlers: StreamHandlers) {
+      handlers.onEnd?.(new ApiError($t('工作空间已关闭，请重新连接。'), 0, 'CLOSED'));
+      return () => undefined;
+    },
+  };
+}
+
+export async function loginDevice(origin: string, pin: string | null, name: string, password: string, device: string) {
+  const response = await Transport.request({url: origin + '/login', method: 'POST', pin:pin ?? undefined,
+    headers:{'Content-Type':'application/json'}, body:JSON.stringify({name,password,device,bearer:true}), timeout:20}).catch(error => {throw transportError(error);});
+  const result = JSON.parse(response.body || '{}');
+  if (response.status !== 200 || !result.token || !result.workspace)
+    throw new ApiError($tm(result.error || $t('登录失败，请检查地址和账号')), response.status);
+  return result as {token:string; workspace:string; mode:'local'|'cloud'};
 }

@@ -2,6 +2,9 @@ import { $t } from "../../client/i18n.mjs";
 export function isPreferencesSender(event, contents, origin) {
   return isSettingsSender(event, contents, origin, "/settings/general");
 }
+export function isWorkspaceSender(event, contents, origin) {
+  return isSettingsSender(event, contents, origin, "/settings/workspaces");
+}
 export function isCliSender(event, contents, origin) {
   return isSettingsSender(event, contents, origin, "/settings/cli");
 }

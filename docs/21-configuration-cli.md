@@ -230,3 +230,5 @@ runtimes models 的新增目标返回原生可选模型与逐模型 levels，非
 任务和沟通的系统通知属于 Electron 原生呈现，CLI 不新增通知命令或宿主权限。App/CLI 仍通过相同认证 HTTP/Store 触发业务操作；只要客户端在线且登录有效，CLI 产生的同类已提交事件也走同一通知订阅，离线不补发历史。创建、启动、查询、沟通的参数、schema 与成功/失败语义保持不变。
 
 CLI 输出、帮助与错误保持简体中文，不读取客户端界面语言；界面语言是客户端宿主偏好，不属于 CLI 可配置能力，App/CLI 业务语义不变。
+
+automations get 的 automation.latestExecution 显示最近一次实际 Run 的标识、开始时间与当前状态；无实际运行时为 null。

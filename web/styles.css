@@ -2809,8 +2809,8 @@ button:disabled { cursor:not-allowed; opacity:.45; pointer-events:none; }
 #run-workspace .collaboration-row header strong { color:var(--text); font-size:var(--fs-body); font-weight:600; }
 #run-workspace .collaboration-row .collaboration-kind { padding:0; background:transparent; color:var(--text-tertiary); font-size:var(--fs-small); font-weight:400; }
 .collaboration-status { color:var(--text-tertiary); font-size:12px; }
-#run-workspace .collaboration-row .collaboration-content { padding-inline:0; font-size:14px; line-height:22px; }
-#run-workspace .collaboration-row .collaboration-body-content { line-height:22px; }
+#run-workspace .collaboration-row .collaboration-content { padding-inline:0; font-size:var(--fs-body); line-height:21px; }
+#run-workspace .collaboration-row .collaboration-body-content { line-height:21px; }
 #run-workspace .collaboration-row .collaboration-markdown :is(strong,h1,h2,h3) { color:var(--text); }
 #run-workspace .collaboration-row.from-human { display:flex; flex-direction:column; align-items:flex-end; width:100%; max-width:none; margin:0; padding:16px 0; border-bottom:1px solid var(--border-subtle); }
 #run-workspace .collaboration-row.from-human > .collaboration-message-main { display:flex; flex-direction:column; align-items:flex-end; width:100%; max-width:none; }
@@ -2843,7 +2843,7 @@ button:disabled { cursor:not-allowed; opacity:.45; pointer-events:none; }
 .communication-message header { gap:8px; margin-bottom:4px; font-size:13px; }
 .communication-message header strong { color:var(--text); font-weight:600; }
 .communication-message time,.communication-subtitle { color:var(--text-tertiary); font-size:12px; font-variant-numeric:tabular-nums; }
-.communication-body { padding:0; border-radius:0; background:transparent; color:var(--text); font-size:14px; line-height:22px; }
+.communication-body { padding:0; border-radius:0; background:transparent; color:var(--text); font-size:var(--fs-body); line-height:21px; }
 .communication-message.from-human { display:flex; flex-direction:column; align-items:flex-end; width:auto; min-width:0; max-width:none; margin:0; }
 .communication-message.from-human .communication-body { max-width:72%; padding:8px 16px; border-radius:12px 12px 4px 12px; background:var(--accent-soft); }
 .communication-message.from-human header strong { color:var(--text-secondary); }
@@ -3901,6 +3901,17 @@ html:root #settings-root {
   .app-update-progress-row { margin:0; padding:0 16px 12px; }
   input[name="intervalMinutes"] { width:72px; height:var(--control-h); min-height:var(--control-h); padding:0 8px; text-align:right; font-size:13px; }
   .settings-row-wrap { flex-wrap:wrap; }
+  .phone-enable-controls { flex:1 1 360px; justify-content:flex-end; flex-wrap:wrap; }
+  .phone-enable-controls input[type="url"] { flex:1 1 220px; min-width:0; height:var(--control-h); min-height:var(--control-h); padding:0 8px; font:12px var(--font-mono); }
+  .phone-relay-option { display:inline-flex; align-items:center; gap:6px; white-space:nowrap; font-size:12px; color:var(--text-secondary); }
+  .phone-pairing { display:flex; align-items:center; gap:20px; padding:16px; border-top:1px solid var(--border-subtle); background:var(--bg-subtle); }
+  .phone-pairing-qr { flex:none; width:180px; height:180px; border-radius:var(--r-md); border:1px solid var(--border); image-rendering:pixelated; }
+  .phone-pairing-text { display:flex; flex-direction:column; gap:6px; min-width:0; flex:1; }
+  .phone-pairing-text strong { font-size:13px; line-height:20px; font-weight:600; color:var(--text); }
+  .phone-pairing-text small { font-size:12px; line-height:18px; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+  .phone-pairing-link { display:flex; gap:8px; margin-top:6px; }
+  .phone-pairing-link input { flex:1; min-width:0; height:var(--control-h); min-height:var(--control-h); padding:0 8px; font:12px var(--font-mono); color:var(--text-secondary); }
+  @media (max-width:860px) { .phone-pairing { flex-direction:column; align-items:stretch; } .phone-pairing-qr { align-self:flex-start; } }
   .settings-workspace-input { flex:1 1 300px; margin:0; }
   .settings-workspace-input input { height:var(--control-h); min-height:var(--control-h); padding:0 8px; font:12px var(--font-mono); }
   .settings-danger-zone { border-color:var(--st-failed-border); }
@@ -4010,7 +4021,7 @@ html:root .automation-directory-table .directory-avatar-stack .agent-card-avatar
 .automation-row-menu summary { display:grid; place-items:center; }
 html:root .automation-row-menu .automation-menu-items button { width:100%; text-align:left; }
 html:root .automation-row-menu .automation-menu-items button:disabled { opacity:.45; cursor:not-allowed; }
-html:root #automations-root .automation-detail-header { display:flex; align-items:center; flex:none; gap:12px; min-height:var(--header-h); height:var(--header-h); margin:0 calc(-1 * var(--pad-page)); padding:0 16px 0 var(--pad-page); border:0; border-bottom:1px solid var(--border-subtle); -webkit-app-region:drag; }
+html:root #automations-root .automation-detail-header { display:flex; flex-wrap:nowrap; align-items:center; flex:none; gap:12px; min-height:var(--header-h); height:var(--header-h); margin:0 calc(-1 * var(--pad-page)); padding:0 16px 0 var(--pad-page); border:0; border-bottom:1px solid var(--border-subtle); -webkit-app-region:drag; }
 .automation-detail-identity { display:flex; align-items:center; flex:1; min-width:0; gap:8px; }
 html:root .automation-detail-identity h2 { flex:1; min-width:0; margin:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; line-height:20px; font-weight:600; }
 .automation-detail-identity > span { color:var(--text-tertiary); font-size:13px; }
@@ -4216,3 +4227,16 @@ html:root :is(#run-workspace,.communication-messages) :is(.collaboration-row,.co
 .workflow-advanced-fields > summary { cursor:pointer; color:var(--text-secondary); margin-bottom:12px; }
 .workflow-advanced-fields > label { display:flex; align-items:center; gap:8px; margin-bottom:8px; }
 html:root #modal-backdrop .workflow-editor-modal .workflow-advanced-fields input[type=checkbox] { width:16px; height:16px; min-height:16px; padding:0; }
+
+[data-current-workspace] .settings-row > strong { flex: 0 0 auto; }
+[data-current-workspace] .settings-row > span { min-width: 0; overflow-wrap: anywhere; }
+
+[data-settings-panel="workspaces"] .settings-group { margin-block:14px; }
+[data-settings-panel="workspaces"] .settings-row { min-height:36px; padding-block:7px; }
+.workspace-fact { display:grid;grid-template-columns:minmax(85px, 0.32fr) minmax(0, 1fr); gap:12px;align-items:baseline;padding:6px 12px;line-height:1.4;font-size:var(--fs-small); }
+.workspace-fact + .workspace-fact,.workspace-cert {border-top:1px solid var(--border);}
+.workspace-fact strong,.workspace-cert summary {color:var(--text-secondary);font-weight:500;}
+.workspace-fact span,.workspace-cert code {overflow-wrap:anywhere;}
+.workspace-cert {padding:6px 12px;font-size:var(--fs-small);}
+.workspace-cert summary {cursor:pointer;}
+.workspace-cert code {display:block;padding-top:4px;}

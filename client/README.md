@@ -18,6 +18,8 @@ workspaceAgents 使用服务端 deletedAgentIds 过滤已删除员工（经理�
 
 `isRoutineConsoleEvent` 在 `buildConsoleEntries` 中隐藏无正文的常规状态通知（开始/保存、普通会话连接、空 Provider 进度和诊断占位），不删除源事件。正文引用、工具、错误、重试、会话重建、恢复与未知记录仍保留；原始分页边界不按可见条数重算。任务和沟通共用此规则，CLI/API/日志不变。
 
+Pi 的无正文 `agent_start/end/settled`、`turn_start/end`、`message_start/update/end`、`tool_execution_update` 及 portable 会话/完成占位使用同一过滤：仅识别已知事件类型和精确“Provider 执行状态”摘要；有正文引用、工具、异常和未知消息仍显示。已保存记录与实时追加共用规则，Runtime 协议与 CLI/API 不变。
+
 任务审计的精确 Provider 类型前缀在识别通知前归一；无正文的 trace.accepted 同属常规确认，不重复回显交接保存状态。
 
 本次提示词完整展示已脱敏系统层和本轮输入。工具阶段按 Trace + 原生调用 ID 合并，不把重复阶段计为多次调用；不同 ID 的真实调用保留。空 tool_progress 摘要隐藏，真实工具/正文引用仍保留。
@@ -80,3 +82,7 @@ runtime-providers 思考集合同步新增六项；OpenCode 可用档位是模�
 浏览器中模块求值时直接读取 preload 同步提供的 `batonDesktop.locale`（宿主已解析的语言与目录）并选定语言，因此依赖它的模块常量已是译文；模块不含顶层 await，Node 可 `require()` 包含它的 ESM 图。没有宿主或目录缺失时保持源语言。Node 端（服务、CLI、单测）保持 zh-CN。业务数据、AI 提示词、冻结工作流说明（`workflow-description.mjs` 输出及其预览）、CLI 输出与存储历史从不翻译；客户端发往服务端的系统原因保持源文字，仅在展示时翻译。
 
 新增界面文字时以 `$t("…")` 双引号字面量书写，并在两份目录补齐；`tests/i18n.test.mjs` 校验所有 `$t` 键与静态 HTML 均有译文、占位符一致、译文不新增 `< > & "`，英文无汉字、繁体无常见简体字。
+
+控制台的 retainsConsoleEvent 共用于实时接收和历史分页。正文、工具、错误及提示词起点占用展示窗口，已隐藏的状态事件只用于推进原始归档游标。
+
+协作与聊天正文字号在 Mac 采用 13px、iPhone 采用 15pt。工作空间管理的界面文本复用简中、繁中与英文目录。

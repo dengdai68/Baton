@@ -8,7 +8,7 @@ Store 拥有员工逻辑删除、成员校验和公开消息的定向投递；HT
 
 协作记录只展示员工、经理、人类之间的沟通 Message；系统提示、启动、投递、重试和结算事件不作为记录行。底层不可变事件、Dispatch 和 Trace 继续保留，关联执行元数据供查询。消息保存本轮 `startMessageId`，对应 Trace 的 `inputMessageId`；“本轮控制台”按该 ID 打开、定位本次提示词，不受日志分页影响。成员原生会话贯穿任务且彼此隔离，每次执行拥有独立输入轮次 ID。 sourceMessageId 由 Store 校验同 Run；共享投影供 Web/Electron 与 CLI 使用，不按正文或时间猜测关联。
 
-本仓库为 Baton App 独立客户端，完整抽取边界见 [ADR：客户端抽取](23-desktop-extraction.md)。默认 start/dev 启动 Electron，自带本机控制面与全部界面；服务要求父进程 IPC 与 bootstrap 信息，不能直接启动；父进程断开时退出。
+本仓库为 Baton App 独立客户端，完整抽取边界见 [ADR：客户端抽取](23-desktop-extraction.md)。默认 start/dev 启动 Electron，自带本机控制面与全部界面；服务要求父进程 IPC 与 bootstrap 信息，不能直接启动；父进程断开时退出。父进程是 Electron 宿主，或常驻模式下由 launchd 运行的服务监督进程，两者使用同一 IPC 协议（[docs/32](32-resident-service.md)）。
 
 工作目录展示由 Run Files 直接读取真实任务根，取代 manifest 白名单；HTTP 按 path/offset 每页200项，界面按需展开。工作流只提供交付位置建议，Store 校验规范相对路径，CLI同步，未提供时不填 docs。Orchestrator 采集各业务路径的有限不可变快照，CHANGE 通过只读 Git 观察已提交/未提交/未跟踪文件；大媒体不因快照上限从目录/CHANGE消失。不新增索引库、文件监控服务或自动提交。
 
@@ -145,3 +145,5 @@ Store 选择 Run 全部未读公开消息并管理当前处理消息引用，Orc
 系统通知沿用自有子服务 IPC：Store 成功提交后发布有界元数据 → index 透传 → Electron 校验身份/当前登录并显示原生通知。无全量历史扫描、数据库轮询、第二事件库或 renderer 通用通知桥；系统失败不回滚业务。页面 toast 使用浏览器顶层 Popover，解决原生 dialog 不受普通 z-index 约束的问题。实现和生命周期见 docs/18 与 docs/06。
 
 任务回复解析保留原始 rawResponse；正文加唯一尾部协调 JSON 时，正文和非空、不同的 summary 按原顺序合并，相同正文只保存一次，协调字段仍按原协议执行。短引导句不能覆盖完整交付报告。既有 Message 不重写，原始完整输出可在对应控制台读取。
+
+工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](31-workspace-service.md)。

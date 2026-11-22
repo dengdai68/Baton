@@ -40,6 +40,7 @@ type TransportEvents = {
 };
 
 declare class BatonTransportModule extends NativeModule<TransportEvents> {
+  inspectCertificate(origin: string): Promise<{fingerprint:string; trusted:boolean}>;
   request(options: TransportRequest): Promise<TransportResponse>;
   openStream(id: string, options: TransportRequest): void;
   closeStream(id: string): void;

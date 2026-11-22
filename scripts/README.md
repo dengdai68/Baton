@@ -86,7 +86,7 @@ BATON_CLI_E2E=1 或 BATON_TASK_CLI_E2E=1 的真实开发验收启动独立 Elect
 
 `BATON_WORKSPACE_E2E=1 node scripts/test-development-e2e.mjs` 在隔离实例通过设置页保存不存在的嵌套目录，再于新根完成真实 Claude 代码开发、独立测试及界面确认；不能在真实操作者实例执行。
 
-打包控制台检查遵循按角色点击和视口加载，不等待未触发的后台内容；覆盖未展开的 Bash/Read/Write 摘要、分组 Read 成功/失败、Write 转义正文与窄窗口。
+打包控制台检查核对 75 条初始化通知不额外产生历史页，整轮可见内容能在一页内呈现时直接展示本轮提示词。检查遵循按角色点击和视口加载，不等待未触发的后台内容；覆盖未展开的 Bash/Read/Write 摘要、分组 Read 成功/失败、Write 转义正文与窄窗口。
 
 任务空间回归覆盖当前文件/CHANGE 的同构树与独立折叠、移除交付版本、控制台不回显协作正文，以及返回按钮间距和列表搜索保留。
 
@@ -261,6 +261,8 @@ MCP 编辑回归：`test-market-catalog.mjs` 覆盖详情读取失败后通过�
 
 MCP 详情编辑验收：test-market-catalog.mjs 同时核对共享抽屉标题栏的原生 no-drag 命中区域与键盘编辑，详情/工具失败均可进入表单；真实鼠标命中需在安装包实际点击右上编辑、更多及关闭，不能仅凭 DOM click 或可访问性激活判定。mcp-tools 单测用16秒初始化服务验证45秒默认发现预算，另保留自定义短超时及清理失败路径。
 
-`test-console-live.mjs` 在临时 HOME/工作目录的暂停任务与私聊中验证实时增量、重复 SSE、旧行 DOM、向上阅读锚点、延迟长正文、最新定位、75条突发补页、读取失败保留与关闭停止轮询，并核对1320/760px及两主题的分页居中。事件/网络故障为展示夹具，不调用 Provider。BATON_CONSOLE_LIVE_APP 指定独立包；BATON_CONSOLE_PREVIEW=1 成功后保留隔离演示窗口，不替换当前安装。
+`test-console-live.mjs` 在临时 HOME/工作目录的暂停任务与私聊中验证实时增量、重复 SSE、旧行 DOM、向上阅读锚点、延迟长正文、最新定位、75条突发补页、读取失败保留与关闭停止轮询，并核对1320/760px及两主题的分页居中。先写入隔离 SQLite，经真实认证接口验证 60 条输出后连续 280 条隐藏状态的首次读取和翻页，再注入翻页失败、延迟响应及同时到达的 255 条状态和一条正文，验证重试与去重。事件/网络故障为展示夹具，不调用 Provider。BATON_CONSOLE_LIVE_APP 指定独立包；BATON_CONSOLE_PREVIEW=1 成功后保留隔离演示窗口，不替换当前安装。`BATON_CONSOLE_NOISE_ONLY=1` 聚焦 Pi 状态降噪的四组界面验收：实时追加与重新加载已保存页均隐藏已知空状态行，保留正文与错误，支持与独立安装包参数组合。
 
 `test-i18n.mjs` 在隔离 HOME/Store 夹具与禁用 Provider 的 Electron 中，以 `BATON_LOCALE=en` 逐页（待我处理、任务、自动化、团队、工作流、员工、角色、插件、MCP、沟通、全部设置页、开发手册、任务工作区）检查可见文字与 title/aria/placeholder：英文不得残留界面中文、繁体不得出现常见简体字，业务数据（API 返回的中文内容）不计入；同时核对宿主菜单、登录页、设置 → 常规切换繁体后的重载与 `desktop-preferences.json` 持久化、重启后显式选择优先于系统语言以及“跟随系统”恢复。截图（英文宽/窄、繁体宽）与 evidence.json 写入 `.data/i18n-acceptance/`。`BATON_I18N_APP=/path/Baton.app` 可验收打包版本。
+
+`npm run package:mac:local`（`package-mac-local.mjs`）构建本机安装用的 `release/mac-arm64/Baton.app`：与 `package:mac` 相同的应用，但用钥匙串中的稳定签名身份（Apple Development 或 Developer ID Application）代替 ad-hoc，使 macOS 在重装后保留授予 Baton 的文件访问权限（外接数据卷、完全磁盘访问），常驻服务不会卡在等待授权。钥匙串有多个身份时用 `BATON_SIGN_IDENTITY`（SHA-1 或全名）指定；没有可用身份时明确失败，不回退 ad-hoc。构建后核对签名身份并执行 `codesign --verify --deep --strict`。发布流程不变。

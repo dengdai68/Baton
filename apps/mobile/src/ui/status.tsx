@@ -50,7 +50,7 @@ export function StatusIcon({ status, size = 16 }: { status: string; size?: numbe
 }
 
 /** 22pt pill: tinted background, same-hue text and border, icon + label. */
-export function StatusPill({ status, label, tone }: { status?: string; label?: string; tone?: StatusTone }) {
+export function StatusPill({ status, label, tone, centered }: { status?: string; label?: string; tone?: StatusTone; centered?: boolean }) {
   const { colors } = useTheme();
   const meta = status ? statusInfo(status) : { tone: tone || 'neutral', icon: null };
   const palette = tonePalette(colors, tone || meta.tone);
@@ -58,7 +58,7 @@ export function StatusPill({ status, label, tone }: { status?: string; label?: s
   return (
     <View
       style={{
-        flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', minHeight: 24,
+        flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: centered ? 'center' : 'flex-start', minHeight: 24,
         paddingHorizontal: 9, borderRadius: 999, backgroundColor: palette.bg, borderWidth: 1, borderColor: palette.border,
       }}
     >

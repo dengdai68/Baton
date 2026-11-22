@@ -12,7 +12,7 @@ export default function ChatConsole() {
   return (
     <>
       <Stack.Screen options={{ title: member ? $t('{0} · 控制台', [member.name]) : $t('控制台') }} />
-      <ConsoleStream runId={chatId} agentId={agentId} base={`/api/communications/${encodeURIComponent(chatId)}`} />
+      <ConsoleStream runId={chatId} agentId={agentId} base={`/api/communications/${encodeURIComponent(chatId)}`} provider={(member as { runtime?: { provider?: string } } | undefined)?.runtime?.provider} />
     </>
   );
 }

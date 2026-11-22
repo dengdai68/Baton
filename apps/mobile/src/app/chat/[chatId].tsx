@@ -1,15 +1,16 @@
+import { plainHeaderItem } from '@/ui/header';
 // One conversation: messages (agents left, you right), "正在回复…", failed replies
 // with retry/console, read receipts, @mentions in groups and attachments.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useHeaderHeight } from 'expo-router/react-navigation';
-import { Ellipsis, MessageSquare } from 'lucide-react-native';
+import { Ellipsis, MessageSquare, RotateCcw, SquareTerminal, Undo2 } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { ActionSheetIOS, Alert, FlatList, KeyboardAvoidingView, View } from 'react-native';
+import { FlatList, KeyboardAvoidingView, View } from 'react-native';
 
 import { useWorkspaceKey } from '@/api/queries';
 import { type ChatMessage, chatMessages, useConversation } from '@/features/chats/model';
-import { MessageAttachments } from '@/features/messages/attachment';
+import { LocalAttachments, MessageAttachments } from '@/features/messages/attachment';
 import { dayLabel, sameDay } from '@/features/messages/day';
 import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage } from '@/features/messages/views';
 import { $t, useLocale } from '@/i18n';
@@ -18,7 +19,7 @@ import { useTheme } from '@/theme';
 import { Avatar } from '@/ui/avatar';
 import { Button } from '@/ui/button';
 import { Composer } from '@/ui/composer';
-import { HeaderButton } from '@/ui/header';
+import { IconButton } from '@/ui/icon-button';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
 import { Txt } from '@/ui/text';
 import { useToast } from '@/ui/toast';
@@ -108,33 +109,6 @@ export default function Conversation() {
     catch (error) { toast((error as Error).message, true); }
   }
 
-  function menu() {
-    if (!chat) return;
-    const items: Array<[string, () => void, boolean?]> = [];
-    if (group) {
-      items.push([$t('成员与控制台'), () => router.push({ pathname: '/chat/members', params: { chatId } })]);
-      items.push([$t('重命名群聊'), () => Alert.prompt($t('重命名群聊'), undefined, async (name) => {
-        if (!name?.trim()) return;
-        try { await client.put(`/api/communications/${encodeURIComponent(chatId)}`, { name: name.trim() }); await queryClient.invalidateQueries({ queryKey: scope }); }
-        catch (error) { toast((error as Error).message, true); }
-      }, 'plain-text', chat.name)]);
-      items.push([$t('删除群聊'), () => Alert.alert($t('删除群聊'), $t('将删除「{0}」及其消息记录，无法恢复。', [chat.name]), [
-        { text: $t('取消'), style: 'cancel' },
-        { text: $t('删除'), style: 'destructive', onPress: async () => {
-          try { await client.del(`/api/communications/${encodeURIComponent(chatId)}`); await queryClient.invalidateQueries({ queryKey: scope }); toast($t('群聊已删除')); router.back(); }
-          catch (error) { toast((error as Error).message, true); }
-        } },
-      ]), true]);
-    } else if (members[0]) {
-      items.push([$t('控制台'), () => router.push({ pathname: '/chat/console', params: { chatId, agentId: members[0].id } })]);
-    }
-    items.push([$t('刷新'), () => void conversation.refetch()]);
-    ActionSheetIOS.showActionSheetWithOptions(
-      { title: chat.name, options: [$t('取消'), ...items.map((item) => item[0])], cancelButtonIndex: 0, destructiveButtonIndex: items.findIndex((item) => item[2]) + 1 || undefined },
-      (index) => index > 0 && items[index - 1][1](),
-    );
-  }
-
   type Row = { kind: 'message'; item: ChatMessage } | { kind: 'outgoing'; item: Outgoing };
   const rows: Row[] = [...messages.map((item) => ({ kind: 'message' as const, item })), ...pending.map((item) => ({ kind: 'outgoing' as const, item }))];
   const timeOf = (row: Row) => row.item.createdAt;
@@ -151,14 +125,15 @@ export default function Conversation() {
             <View style={{ alignItems: 'flex-end', gap: 6 }}>
               <Txt variant="caption" tone={entry.status === 'sending' ? 'tertiary' : 'danger'}>{entry.status === 'sending' ? $t('发送中…') : $t('未确认送达：{0}', [entry.error || ''])}</Txt>
               {entry.status === 'unconfirmed' ? (
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <Button size="sm" label={$t('恢复草稿')} onPress={() => restore(entry)} />
-                  <Button size="sm" label={$t('重试发送')} onPress={() => void send(entry)} />
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  <IconButton icon={Undo2} label={$t('恢复草稿')} tone="neutral" tinted size={32} onPress={() => restore(entry)} />
+                  <IconButton icon={RotateCcw} label={$t('重试发送')} tinted size={32} onPress={() => void send(entry)} />
                 </View>
               ) : null}
             </View>
           }>
-            <CollapsibleBody content={entry.content || $t('（附件）')} mentions={mentionNames} />
+            {entry.content ? <CollapsibleBody content={entry.content} mentions={mentionNames} /> : null}
+            <LocalAttachments items={entry.attachments} />
           </HumanMessage>
         </View>
       );
@@ -168,8 +143,8 @@ export default function Conversation() {
     const recovery = failed.map((delivery) => (
       <View key={delivery.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         <Txt variant="small" tone="danger">{$t('{0} 回复失败', [members.find((member) => member.id === delivery.agentId)?.name || $t('员工')])}</Txt>
-        <Button size="sm" label={$t('重试')} onPress={() => void retryDelivery(delivery.id)} />
-        <Button size="sm" variant="ghost" label={$t('控制台')} onPress={() => router.push({ pathname: '/chat/console', params: { chatId, agentId: delivery.agentId } })} />
+        <IconButton icon={RotateCcw} label={$t('重试')} tone="danger" tinted size={30} onPress={() => void retryDelivery(delivery.id)} />
+        <IconButton icon={SquareTerminal} label={$t('控制台')} tone="neutral" size={30} onPress={() => router.push({ pathname: '/chat/console', params: { chatId, agentId: delivery.agentId } })} />
       </View>
     ));
     if (message.sender.type === 'human') {
@@ -196,7 +171,7 @@ export default function Conversation() {
   }
 
   const running = members.filter((member) => member.running);
-  const screen = <Stack.Screen options={{ title: chat?.name || $t('沟通'), headerRight: () => <HeaderButton icon={Ellipsis} label={$t('会话操作')} onPress={menu} disabled={!chat} /> }} />;
+  const screen = <Stack.Screen options={{ title: chat?.name || $t('沟通'), unstable_headerRightItems: () => plainHeaderItem(<IconButton icon={Ellipsis} label={$t('会话信息')} disabled={!chat} onPress={() => router.push({ pathname: '/chat/info', params: { chatId } })} />) }} />;
   if (conversation.isPending) return <>{screen}<LoadingState label={$t('正在读取聊天记录…')} /></>;
   if (conversation.error && !first) return <>{screen}<ErrorState message={conversation.error.message} onRetry={() => void conversation.refetch()} /></>;
 

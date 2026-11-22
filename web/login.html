@@ -5,7 +5,7 @@
   <div class="auth__bar" aria-hidden="true"></div>
   <main class="login-card">
     <img class="login-icon" src="/icons/application-ui.png" width="52" height="52" alt="">
-    <h1>登录 Baton</h1>
+    <h1>登录</h1>
     <p class="intro">正在检查工作区…</p>
     <form id="login-form" hidden>
       <label for="username">用户名</label><input id="username" name="username" autocomplete="username" maxlength="64" required autofocus>
@@ -13,11 +13,21 @@
       <p id="login-error" role="alert" aria-live="polite"></p>
       <button class="submit" type="submit">登录</button>
     </form>
+    <div id="workspace-choice" hidden>
+        <label for="workspace-mode">工作空间</label>
+        <select id="workspace-mode"><option value="local">本机工作空间</option></select>
+      </div>
     <section id="setup-guidance" class="setup-guidance" hidden aria-live="polite">
       <p id="desktop-setup-guidance" hidden>请在客户端菜单选择「导航 → 首页 / 重新连接」（⌘0），继续在应用内创建管理员。无需终端命令或项目目录；如仍无法打开，请退出并重新启动客户端。</p>
       <a class="recheck-button" href="/login">设置完成后重新检查</a>
     </section>
-    <footer><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> 会话仅在本机有效，数据不离开这台电脑。</footer>
   </main>
+  <dialog id="workspace-dialog" aria-labelledby="workspace-dialog-title">
+      <form id="workspace-add"><h2 id="workspace-dialog-title">添加工作空间</h2>
+        <label for="workspace-address">工作空间地址</label>
+        <input id="workspace-address" placeholder="mac.local:9443" autocomplete="url" spellcheck="false" required>
+        <p role="alert" id="address-error"></p>
+        <div class="dialog-actions"><button type="button" id="workspace-cancel">取消</button><button class="submit" type="submit">添加</button></div>
+      </form></dialog>
   <script type="module" src="/login.js"></script>
-</body></html>
+<script type="module" src="/workspace-choice.js"></script></body></html>

@@ -68,7 +68,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
     const target = thread.kind === "agent" ? journal.get("agents", thread.targetId) : null;
     const last = journal.select("communicationMessages", "conversationId", thread.id,{last:1})[0];
     const unreadCount=unread(thread),pendingRows=['queued','claimed','running','failed'].flatMap(status=>journal.select('communicationDeliveries','status',status)).filter(row=>row.conversationId===thread.id);
-    return { id: thread.id, kind: thread.kind === "agent" ? "agent" : "group", ...(thread.kind === "agent" ? { targetId: thread.targetId } : {}), name: target?.name || thread.name, ...(details?{workspacePath:thread.workspacePath || null}:{}), unreadCount, createdAt: thread.createdAt, updatedAt: thread.updatedAt, members: members(thread).map(({systemPrompt,roles,...member}) => ({ ...(details ? { ...member, systemPrompt, roles } : member), running: pendingRows.some(row => row.agentId === member.id && row.status === "running") })), preview: last?.content.slice(0, 100) || last?.attachments?.map(row => row.name).join('、').slice(0, 100) || "", pending: pendingRows.length };
+    return { ...(thread.access ? {access:copy(thread.access)} : {}), id: thread.id, kind: thread.kind === "agent" ? "agent" : "group", ...(thread.kind === "agent" ? { targetId: thread.targetId } : {}), name: target?.name || thread.name, ...(details?{workspacePath:thread.workspacePath || null}:{}), unreadCount, createdAt: thread.createdAt, updatedAt: thread.updatedAt, members: members(thread).map(({systemPrompt,roles,...member}) => ({ ...(details ? { ...member, systemPrompt, roles } : member), running: pendingRows.some(row => row.agentId === member.id && row.status === "running") })), preview: last?.content.slice(0, 100) || last?.attachments?.map(row => row.name).join('、').slice(0, 100) || "", pending: pendingRows.length };
   };
   const page = (rows, before, limit) => {
     if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("分页大小必须为 1–200");
@@ -106,20 +106,20 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
       state.communicationAttachments.push(item); save(); return copy(item);
     },
     getCommunicationAttachment(key, attachmentId) { return copy(attachment(key, attachmentId)); },
-    openCommunication(input = {}) {
+    openCommunication(input = {}, access = null) {
       const { kind, targetId } = input;
       if (kind === "agent") {
         const target = state.agents.find(row => row.id === targetId && row.status !== "deleted");
         if (!target) throw new Error("沟通对象不存在或已删除");
-        let thread = state.communicationConversations.find(row => row.kind === "agent" && row.targetId === targetId);
-        if (!thread) { thread = { id: id("chat"), kind, targetId, name: target.name, createdAt: now(), updatedAt: now(), sessions: {}, humanReadThroughMessageId: null }; state.communicationConversations.push(thread); save(); }
+        let thread = state.communicationConversations.find(row => row.kind === "agent" && row.targetId === targetId && (row.access?.ownerId || "human_operator") === (access?.ownerId || "human_operator"));
+        if (!thread) { thread = { id: id("chat"), ...(access ? {access:copy(access)} : {}), kind, targetId, name: target.name, createdAt: now(), updatedAt: now(), sessions: {}, humanReadThroughMessageId: null }; state.communicationConversations.push(thread); save(); }
         return summary(thread);
       }
       if (kind !== "group" || Object.hasOwn(input, "targetId")) throw new Error("群聊独立创建，请提交 kind=group、name 和 memberAgentIds，不再绑定团队");
       const memberAgentIds = validateMembers(input.memberAgentIds);
       if (!memberAgentIds.length) throw new Error("新群聊至少选择一位数字员工");
       const name = input.name === undefined ? memberAgentIds.map(value => journal.get("agents", value).name).join("，") : groupName(input.name);
-      const thread = { id: id("chat"), kind: "group", name, memberAgentIds, createdAt: now(), updatedAt: now(), sessions: {}, humanReadThroughMessageId: null };
+      const thread = { id: id("chat"), ...(access ? {access:copy(access)} : {}), kind: "group", name, memberAgentIds, createdAt: now(), updatedAt: now(), sessions: {}, humanReadThroughMessageId: null };
       state.communicationConversations.push(thread); save(); return summary(thread);
     },
     updateCommunication(key, input = {}) {
@@ -146,7 +146,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
           item.status = "cancelled"; item.nextAttemptAt = null; item.updatedAt = now(); event(item, "cancelled", "群聊已删除，待回复取消；历史保留");
         }
         thread.status = "deleted"; thread.deletedAt = now(); save();
-        return { id: thread.id, kind: "group", name: thread.name, status: thread.status, deletedAt: thread.deletedAt, historyRetained: true };
+        return { ...(thread.access ? {access:copy(thread.access)} : {}), id: thread.id, kind: "group", name: thread.name, status: thread.status, deletedAt: thread.deletedAt, historyRetained: true };
       });
     },
     detachCommunicationTeam(teamId) { detachTeam(teamId); },
@@ -179,14 +179,14 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
       return { revision, conversation: summary(thread, true), messages: result.items, hasMore: result.hasMore, nextBefore: result.nextBefore,
         deliveries: copy([...new Map([...messageIds].flatMap(id=>journal.select('communicationDeliveries','messageId',id)).concat(['queued','claimed','running','failed'].flatMap(status=>journal.select('communicationDeliveries','status',status)).filter(row=>row.conversationId===key)).map(row=>[row.id,row])).values()]).map(({ agentSnapshot, invocations, ...row }) => row) };
     },
-    sendCommunication(key, { content = '', mentionAgentIds = [], attachmentIds = [], clientRequestId } = {}) {
+    sendCommunication(key, { content = '', mentionAgentIds = [], attachmentIds = [], clientRequestId } = {}, actor = { type:"human", id:"human_operator", name:"你" }) {
       const thread = conversation(key);
       if (!Array.isArray(attachmentIds) || attachmentIds.some(value => typeof value !== 'string') || new Set(attachmentIds).size !== attachmentIds.length) throw new Error('附件列表无效');
       const attachments = attachmentIds.map(value => copy(attachment(key, value)));
       if (typeof content !== "string" || (!content.trim() && !attachments.length) || content.length > 32000) throw new Error("消息需为 1–32000 字符，或包含附件");
       if (typeof clientRequestId !== "string" || !/^[a-zA-Z0-9_-]{8,100}$/.test(clientRequestId)) throw new Error("发送请求标识无效");
       if (!Array.isArray(mentionAgentIds) || mentionAgentIds.some((item) => typeof item !== "string")) throw new Error("@ 成员列表无效");
-      const previous = journal.select("communicationMessages", "clientRequestId", clientRequestId).find(row => row.conversationId === key);
+      const previous = journal.select("communicationMessages", "clientRequestId", clientRequestId).find(row => row.conversationId === key && row.sender.id === actor.id);
       if (previous) {
         if (previous.content !== content || JSON.stringify(previous.mentionAgentIds) !== JSON.stringify([...new Set(mentionAgentIds)]) || JSON.stringify((previous.attachments || []).map(row => row.id)) !== JSON.stringify(attachmentIds)) throw new Error("发送标识已用于另一条消息");
         return copy(previous);
@@ -198,7 +198,7 @@ export function communicationCommands(state, save, employeeSnapshot, journal, pe
       if (recipients.some((key) => !roster.some((member) => member.id === key && member.status === "active"))) throw new Error("数字员工已停用");
       if (!recipients.length) throw new Error("没有可回复的群聊成员，请先添加可用员工");
       for (const agentId of recipients) this.assertRuntimeEnabled(journal.get("agents", agentId).runtime);
-      const message = { id: id("chat_message"), conversationId: key, clientRequestId, sender: { type: "human", id: "human_operator", name: "你" }, content, attachments, mentionAgentIds: mentioned, visibleToAgentIds: roster.map(member => member.id), createdAt: now(), replyToMessageId: null };
+      const message = { id: id("chat_message"), conversationId: key, clientRequestId, sender: copy(actor), content, attachments, mentionAgentIds: mentioned, visibleToAgentIds: roster.map(member => member.id), createdAt: now(), replyToMessageId: null };
       const deliveries = recipients.map((agentId) => ({ id: id("chat_delivery"), conversationId: key, messageId: message.id, rootMessageId: message.id, agentId, agentSnapshot: withRole(journal.get("agents", agentId)), status: "queued", attempts: 0, createdAt: now(), updatedAt: now(), nextAttemptAt: null, error: null }));
       state.communicationMessages.push(message); state.communicationDeliveries.push(...deliveries); thread.updatedAt = now(); save();
       return copy(message);

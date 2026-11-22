@@ -1,8 +1,9 @@
+import { requestId as newRequestId } from './workspace/request-id.mjs';
 import { $t, $tm, currentLocale, intlLocale } from "../client/i18n.mjs";
-import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
+import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail, applyConsoleRead } from './console-stream.mjs';
 import { runtimeLabel } from '../client/runtime-providers.mjs';
 import { ByteCache } from "../client/byte-cache.mjs";
-import { consoleEventWindow, formatMessageTime, partyName } from "../client/console-projections.mjs";
+import { formatMessageTime, partyName } from "../client/console-projections.mjs";
 
 // Let the browser own ordinary line breaks, caret following and undo. Other
 // modifier+Enter shortcuts need an explicit insertion on macOS Chromium.
@@ -358,7 +359,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     finally { if (listRequest === request) listRequest = null; }
   }
   function consolePage(state) {
-    if (!state.consolePages.has(state.consoleAgentId)) state.consolePages.set(state.consoleAgentId, { events: new Map(), traces: [], loaded: false, hasMore: false, before: null });
+    if (!state.consolePages.has(state.consoleAgentId)) state.consolePages.set(state.consoleAgentId, { events: [], traces: [], loaded: false, hasMore: false, nextBefore: null });
     return state.consolePages.get(state.consoleAgentId);
   }
   function renderConsolePanel() {
@@ -373,15 +374,15 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('[data-communication-console-error]').textContent = state.consoleError;
     const page = consolePage(state);
     query('[data-communication-console-older]').hidden = !page.hasMore;
-    query('[data-communication-console-older]').disabled = Boolean(state.consoleRequest);
+    query('[data-communication-console-older]').disabled = Boolean(state.consoleRequest && !state.consoleRequest.silent);
     const stream = query('[data-communication-stream]');
     const agent = state.consoleMembers.find(row => row.id === state.consoleAgentId);
     query("[data-chat-console-name]").textContent = agent?.name || $t("控制台");
     const identity = state.conversation?.members.find(member => member.id === state.consoleAgentId) || contacts.find(member => member.id === state.consoleAgentId) || agent;
     query('[data-chat-console-avatar]').innerHTML = identity ? renderAvatar(identity) : '';
     query('[data-chat-console-runtime]').textContent = [identity?.runtime?.provider ? runtimeLabel(identity.runtime.provider) : null, identity?.runtime?.model].filter(Boolean).join(' · ');
-    if (!agent) { stream.textContent = state.consoleRequest ? $t("正在读取控制台…") : $t("此会话尚无执行记录。"); return; }
-    const key = JSON.stringify([agent.id, [...page.events.keys()], page.traces, Boolean(page.forceLatest)]);
+    if (!agent || !page.loaded) { stream.textContent = state.consoleError ? "" : page.loaded ? $t("此会话尚无执行记录。") : $t("正在读取控制台…"); return; }
+    const key = JSON.stringify([agent.id, page.events.map(event => event.id), page.traces, page.hasMore, Boolean(state.consoleError), page.windowStart, Boolean(page.liveEvents), Boolean(page.forceLatest)]);
     if (state.consoleRenderKey === key) return;
     state.consoleRenderKey = key;
     const reading = page.reading || { following: true, top: 0, open: [], closed: [] };
@@ -394,7 +395,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     onConsoleLatest(stream, () => { if (page.browsingHistory) { state.consoleRequest = null; void loadConsole(false, { latest: true }); } });
     const position = page.forceLatest ? { following: true, top: 0 } : captureConsoleReading(stream);
     stream.dataset.agentId = agent.id;
-    renderConsole(stream, { events: [...page.events.values()], traces: page.traces, hasMore: page.hasMore, refresh: Boolean(state.consoleRefresh), basePath: `/api/communications/${encodeURIComponent(currentId)}` }, agent);
+    renderConsole(stream, { events: page.events, traces: page.traces, hasMore: page.hasMore, boundary: page.windowStart, historical: Boolean(page.liveEvents), showEmpty: !page.hasMore && !state.consoleError, refresh: Boolean(state.consoleRefresh), basePath: `/api/communications/${encodeURIComponent(currentId)}` }, agent);
     state.consoleRefresh = false;
     for (const details of stream.querySelectorAll('details[data-console-key]')) details.open = reading.open.includes(details.dataset.consoleKey) || (details.dataset.defaultOpen !== undefined && !reading.closed.includes(details.dataset.consoleKey));
     restoreConsoleReading(stream, position, { prepend: state.consolePrepend, latest: page.forceLatest });
@@ -404,32 +405,32 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     const key = currentId, token = generation;
     if (!key) return;
     const state = view(key), page = consolePage(state);
-    if (!state.consoleOpen || state.consoleRequest || older && (!page.hasMore || !page.before)) return;
+    if (!state.consoleOpen || (state.consoleRequest && !(older && state.consoleRequest.silent)) || older && (!page.hasMore || !page.nextBefore)) return;
     const stream = query('[data-communication-stream]');
-    if (older) { page.liveEvents ||= [...page.events.values()]; page.browsingHistory = true; }
-    const request = { agentId: state.consoleAgentId }; state.consoleRequest = request;
+    const request = { agentId: state.consoleAgentId, silent: page.loaded && !older && !latest }; state.consoleRequest = request;
     renderConsolePanel();
     try {
-      const params = new URLSearchParams({ limit: '50', ...(request.agentId ? { agentId: request.agentId } : {}), ...(older ? { before: page.before } : {}) });
-      const fetchPage = before => { const query = new URLSearchParams(params); if (before) query.set('before', before); return api(`/api/communications/${key}/console?${query}`); };
-      const result = older ? await fetchPage() : await readConsoleTail(latest ? [] : page.liveEvents || [...page.events.values()], fetchPage);
-      if (!isCurrent(key, token) || !state.consoleOpen || state.consoleRequest !== request) return;
+      const params = new URLSearchParams({ limit: '50', ...(request.agentId ? { agentId: request.agentId } : {}) });
+      const fetchPage = (before, limit = 50) => { const query = new URLSearchParams(params); query.set('limit', String(limit)); if (before) query.set('before', before); return api(`/api/communications/${key}/console?${query}`); };
+      const stillOpen = () => isCurrent(key, token) && state.consoleOpen && state.consoleRequest === request;
+      const result = request.agentId ? await readConsoleTail(older || latest ? [] : page.liveEvents || page.events, fetchPage, {
+        headId: !older && !latest ? page.headId : null, before: older ? page.nextBefore : undefined, isCurrent: stillOpen
+      }) : await fetchPage();
+      if (!result || !stillOpen()) return;
       state.consoleMembers = result.agents.filter(agent => !request.agentId || agent.id === request.agentId);
       if (!request.agentId && result.agents.length) {
         state.consoleAgentId = (result.agents.find(agent => agent.running) || result.agents[0]).id;
         state.consoleRequest = null; state.consoleRenderKey = null; renderConsolePanel(); void loadConsole(); return;
       }
-      if (!older && !latest && page.browsingHistory) { page.liveEvents = consoleEventWindow(page.liveEvents || [], result.events).events; return; }
-      const window = consoleEventWindow(latest ? [] : [...page.events.values()], result.events, { older });
-      page.events = new Map(window.events.map(event => [event.id, event]));
-      const traceIds = new Set(window.events.map(event => event.data?.traceId));
-      page.traces = [...new Map([...page.traces, ...result.traces].map(trace => [trace.id, trace])).values()].filter(trace => traceIds.has(trace.id));
-      if (!page.loaded || older || latest || window.reset) { page.before = result.nextBefore; page.hasMore = result.hasMore; }
-      if (window.trimmedBefore) { page.before = window.events[0].id; page.hasMore = true; }
-      if (older) page.browsingHistory = true;
-      if (latest) { page.browsingHistory = false; page.liveEvents = null; page.forceLatest = true; }
-      page.loaded = true; state.consoleError = ''; state.consolePrepend = older;
-    } catch (error) { if (isCurrent(key, token) && state.consoleRequest === request) state.consoleError = $t("控制台读取失败：{0}；记录保留，可刷新重试。", [error.message]); }
+      applyConsoleRead(page, result, { older, latest, holdReading: !captureConsoleReading(stream).following });
+      page.forceLatest = latest;
+      state.consoleError = ''; page.retryOptions = null; state.consolePrepend = older;
+    } catch (error) {
+      if (isCurrent(key, token) && state.consoleRequest === request) {
+        state.consoleError = $t("控制台读取失败：{0}；记录保留，可刷新重试。", [error.message]);
+        page.retryOptions = { older, latest };
+      }
+    }
     finally { if (state.consoleRequest === request) state.consoleRequest = null; if (isCurrent(key, token)) renderConsolePanel(); }
   }
   function renderAttachments() {
@@ -548,7 +549,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     query('[data-close-chat-console]').onclick = () => { state.consoleOpen = false; renderConsolePanel(); };
     query('[data-toggle-communication-console]').onclick = () => { state.consoleOpen = !state.consoleOpen; state.consoleRequest = null; state.consoleRenderKey = null; renderConsolePanel(); if (state.consoleOpen) void loadConsole(); };
     query('[data-communication-console-older]').onclick = () => void loadConsole(true);
-    query('[data-communication-console-refresh]').onclick = () => { state.consoleRenderKey = null; state.consoleRefresh = true; state.consoleRequest = null; void loadConsole(false, { latest: true }); };
+    query('[data-communication-console-refresh]').onclick = () => { state.consoleRenderKey = null; state.consoleRefresh = true; state.consoleRequest = null; const retry = consolePage(state).retryOptions; void loadConsole(Boolean(retry?.older), { latest: Boolean(retry?.latest) }); };
     query('[data-communication-console-latest]').onclick = () => { state.consoleRequest = null; void loadConsole(false, { latest: true }); };
     const fileInput = query('[data-chat-file]');
     query('[data-chat-attach]').onclick = () => { if (!state.sending) fileInput.click(); };
@@ -561,7 +562,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       if (state.sending) return;
       for (const file of picker.files) {
         if (file.size > 20 * 1024 * 1024) { notify($t("「{0}」超过单文件 20 MiB 上限。", [file.name]), true); continue; }
-        state.attachments.push({ id: crypto.randomUUID(), file, uploaded: null, previewURL: imageAttachment(file.name) ? URL.createObjectURL(file) : null });
+        state.attachments.push({ id: newRequestId(), file, uploaded: null, previewURL: imageAttachment(file.name) ? URL.createObjectURL(file) : null });
       }
       picker.value = ''; state.requestId = null; renderAttachments();
     };
@@ -614,7 +615,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const attachments = [...state.attachments];
       const signature=JSON.stringify({content,mentionAgentIds,attachments:attachments.map(item=>item.id)});
       if(state.requestSignature!==signature)state.requestId=null;
-      state.requestId ||= crypto.randomUUID();state.requestSignature=signature;
+      state.requestId ||= newRequestId();state.requestSignature=signature;
       const requestId = state.requestId;
       const draftRevision=state.draftRevision || 0;
       state.outbox ||= new Map();
@@ -649,7 +650,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   }
   function setMembersOpen(open) { query('.communication-panes').classList.toggle('members-open',open);query('[data-toggle-chat-members]').setAttribute('aria-expanded',String(open)); }
   function openMemberConsole(agentId) {
-    const state = view(currentId); const closing=state.consoleOpen && state.consoleAgentId===agentId; state.consoleAgentId = agentId; state.consoleOpen = !closing; state.consoleRequest = null; state.consoleRenderKey = null;
+    const state = view(currentId); const closing=state.consoleOpen && state.consoleAgentId===agentId; state.consoleAgentId = agentId; state.consoleOpen = !closing; state.consoleError = ''; state.consoleRequest = null; state.consoleRenderKey = null;
     if (query('.communication-member-detail').open) query('.communication-member-detail').close();
     setMembersOpen(false); renderConsolePanel(); if(state.consoleOpen) void loadConsole();
   }
@@ -730,7 +731,12 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     };
     dialog.showModal(); dialog.querySelector('[data-close-group]').focus();
   }
+  const update = () => { if (!host) return; if(globalThis.document?.visibilityState==='hidden')return; poll(); loadMessages(); if (currentId && view(currentId).consoleOpen) {
+        const retry = consolePage(view(currentId)).retryOptions;
+        if (!retry?.older && !retry?.latest) void loadConsole();
+      } };
   return {
+    refreshLive: update,
     newConversation() { if (!host) return false; showGroupEditor(); return true; },
     async open(kind, targetId) {
       if (kind === 'team') {
@@ -752,9 +758,8 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       }
       const changed = fresh || currentId !== selectedId;
       if (changed) { query('.communication-layout').classList.remove('conversation-list-open'); imageViewer?.close(); if(currentId){const old=view(currentId);old.consoleOpen=false;old.consoleRequest=null;old.consolePages.clear();old.messages.clear();old.deliveries.clear();old.readMessageIds.clear();old.loaded=false;old.revision=null;old.browsingHistory=false;} generation++; currentId = selectedId; if(currentId){view(currentId).consoleOpen=false;view(currentId).consoleRequest=null;} setupConversation(); }
-      const update = () => { if(globalThis.document?.visibilityState==='hidden')return; poll(); loadMessages(); void loadConsole(); };
       renderList(); renderReadErrors();
-      if (changed || !timer) { clearInterval(timer); timer = setInterval(update, 2000); update(); }
+      if (changed || !timer) { clearInterval(timer); timer = setInterval(update, 15000); update(); }
     },
     unmount() { markdownCache.clear(); imageViewer?.close(); for(const state of views.values()){state.consoleOpen=false;state.consoleRequest=null;} clearInterval(timer); timer = null; closeFloatingLists(host); host = null; currentId = null; generation++; }
   };

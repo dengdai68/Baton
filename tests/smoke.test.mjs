@@ -1,5 +1,7 @@
-import { formatMessageTime } from '../client/console-projections.mjs';
+import { requestId as newRequestId } from '../web/workspace/request-id.mjs';
+import { formatMessageTime, retainsConsoleEvent } from '../client/console-projections.mjs';
 import { communicationDayLabel } from '../web/communication.js';
+import { appendConsoleLive } from "../web/console-stream.mjs";
 import test from "node:test";
 import { workflowConnections } from "../client/workflow-description.mjs";
 import { mkdirSync } from "node:fs";
@@ -610,7 +612,7 @@ test("console subscription invalidates stale visits and preserves history during
     close() { this.closed = true; }
     emit(event) { this.handlers["run-event"]({ data: JSON.stringify(event) }); }
   }
-  const connect = new Function("state", "consolePages", "EventSource", "setTimeout", "clearTimeout", "workspaceView", "setLiveIndicator", "loadConsolePage", "loadWorkspace", "renderConsolePage", "$", "getSelection", `let workspaceRefreshTimer, consoleRenderTimer; ${code}; return connectEvents;`)(state, pages, EventSource, (fn) => { timers.push(fn); return timers.length; }, () => {}, () => ({ tab: "console" }), () => {}, () => {}, () => {}, () => {}, () => null, () => null);
+  const connect = new Function("state", "consolePages", "EventSource", "setTimeout", "clearTimeout", "workspaceView", "setLiveIndicator", "loadConsolePage", "loadWorkspace", "renderConsolePage", "$", "retainsConsoleEvent", "appendConsoleLive", `let workspaceRefreshTimer, consoleRenderTimer; ${code}; return connectEvents;`)(state, pages, EventSource, (fn) => { timers.push(fn); return timers.length; }, () => {}, () => ({ tab: "console" }), () => {}, () => {}, () => {}, () => {}, () => null, retainsConsoleEvent, appendConsoleLive);
   connect("run");
   const page = pages.get("run:agent"); assert.equal(page.loaded, false); assert.deepEqual(page.events, []);
   page.loaded = true; page.browsingHistory = true;
@@ -1947,8 +1949,8 @@ test("clarification submission preserves another Run or a newly edited draft, in
     const refreshed = [], requests = [], notices = [];
     let resolveRequest, rejectRequest;
     const pending = new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
-    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
-      state, (id = state.selectedRunId) => views[id], class { get(key) { return key === "replyToMessageId" ? "question-1" : "原草稿"; } },
+    const submit = new Function("newRequestId", "state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
+      newRequestId, state, (id = state.selectedRunId) => views[id], class { get(key) { return key === "replyToMessageId" ? "question-1" : "原草稿"; } },
       (url) => { requests.push(url); return pending; }, (message) => notices.push(message),
       async (id) => refreshed.push(id), () => [], () => {}, async()=>{},
     );
@@ -1999,8 +2001,8 @@ test("task composer sends unmentioned messages to the manager, preserves explici
     const calls = [], notices = [];
     const state = { selectedRunId: "run-1", workspace: { run: { task: { archivedAt: null } } }, agents: [] };
     const view = { draft: content };
-    const submit = new Function("state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
-      state, () => view, class { get(key) { return key === "content" ? content : replyToMessageId; } },
+    const submit = new Function("newRequestId", "state", "workspaceView", "FormData", "api", "toast", "loadWorkspace", "workspaceAgents", "renderCollaboration", "loadCollaboration", `${submitSource}; return sendInstruction;`)(
+      newRequestId, state, () => view, class { get(key) { return key === "content" ? content : replyToMessageId; } },
       async (_path, options) => { const payload=JSON.parse(options.body);calls.push(payload);return {message:{id:'saved',clientRequestId:payload.clientRequestId}}; },
       (message) => notices.push(message), async () => {}, () => [{ id: "manager", name: "经理" }, { id: "developer", name: "研发" }], () => {}, async()=>{},
     );

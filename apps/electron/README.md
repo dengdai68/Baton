@@ -12,7 +12,7 @@
 
 沟通会话头像在 compact.css 保持 38px、两字与员工身份颜色；共享 renderer 的 floating-list.mjs 使用原生 Popover 顶层候选，按窗口空间定位，不受桌面弹框正文滚动裁剪。含表单的创建/编辑弹框仅显式退出，textarea 拖动时顶部锚定；宿主只复用这些 DOM 规则，不增加 IPC 或系统权限。
 
-客户端是唯一产品入口。子服务要求父进程 IPC、bootstrap 信息和随机 loopback 端口；父进程断开即退出，页面始终使用客户端样式。
+客户端是唯一产品入口。子服务要求父进程 IPC、bootstrap 信息和随机 loopback 端口；父进程断开即退出，页面始终使用客户端样式。常驻模式下父进程是 launchd 运行的 `daemon.mjs`，应用经私有 socket 连接它（见下表与 docs/32）。
 
 任务与目录共用紧凑顶栏，团队/工作流搜索和任务归档/新建均在搜索行；目录操作区上移。用户提供的蓝紫 A PNG 为唯一图标源，保留原始字节并生成 macOS ICNS；侧栏使用干净圆角图，Dock/安装包共用带透明留白的彩色图；菜单栏使用独立单色模板，不新增宿主桥。控制台显示完整脱敏提示词、原生会话 ID、正文/思考/工具与异常，不显示工具审计详情。人类协作元信息在气泡外右对齐，正文内边距独立，已知 @成员以黑色粗体展示。
 
@@ -28,11 +28,13 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 | 文件 | 职责 |
 | --- | --- |
-| `main.mjs` | 窗口、菜单栏、自有子服务、启动与退出 |
+| `main.mjs` | 窗口、菜单栏、自有子服务或连接常驻服务、启动与退出 |
+| `daemon.mjs` | 常驻服务监督进程：拥有业务服务子进程（同一 IPC 协议），经配置根 0600 `daemon.sock` 提供状态、通知订阅、空闲预约与数据目录搬运 |
+| `daemon-service.mjs` | launchd 用户代理 `com.baton.daemon` 的定义、安装、重启与移除，以及 `daemon.sock` 客户端 |
 | `policy.mjs`、`preload.cjs` | 精确来源校验与封闭宿主方法 |
 | `runtime-paths.mjs` | 独立实例路径和后台环境 |
 | `login-shell-env.mjs` | 一次性登录 shell 环境捕获 |
-| `preferences.mjs` | 关闭行为与外观偏好 |
+| `preferences.mjs` | 关闭行为、外观、语言、更新渠道与常驻服务偏好 |
 | `app-dialog.*`、`cli-confirmation.*` | 宿主确认窗口 |
 | `cli-installation.mjs` | 用户级命令安装 |
 | `compact.css` | 纸张设计 Token 与桌面组件层（服务端注入每个 HTML；唯一颜色来源） |
@@ -113,3 +115,13 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 ## 界面语言
 
 宿主偏好 `desktop-preferences.json` 新增 `language`（`system` / `zh-CN` / `zh-TW` / `en`，与 closeMode、appearance 合并写入）。启动时按偏好或 macOS 首选语言（`BATON_LOCALE` 可覆盖系统语言，供隔离验收）解析语言，读取 `client/locales/<locale>.json` 后构建应用菜单、托盘、原生对话框、系统通知与 CLI 安装确认窗。renderer 只有两条新增受限通道：preload 在页面脚本运行前以 `ipcRenderer.sendSync("desktop:locale:get")` 读取一次只读数据 `batonDesktop.locale`（语言、已解析 locale 与目录；仅主窗口控制台页面，其他框架得到 null），以及 `setLanguage`（`desktop:language:set`，仅设置 → 常规可写）；同步读取让翻译模块无需顶层 await。切换后立即重建菜单与托盘。配置迁移与更新状态文字保持源语言，在显示时翻译。
+
+Baton 菜单提供「连接 iPhone…」与「云端工作空间…」。本地连接在当前实例启动单独的 HTTPS 监听，关闭窗口后仍在菜单栏运行。云端窗口使用沙箱及独立会话，导航限制在所选 HTTPS origin。参见 [工作空间服务](../../docs/31-workspace-service.md)。
+
+## 常驻服务
+
+标准安装（`~/.baton`）默认由 launchd 用户代理运行本机服务，退出 Baton 后手机仍可连接；设置 → 工作空间 → 本机服务可即时切换退出策略，服务进程与端口保持不变。代理以应用可执行文件的 Node 模式运行 `daemon.mjs`，保持 Baton 的代码身份与文件访问授权；本机安装使用 `npm run package:mac:local` 的稳定签名，避免每次重装都要重新授权。宿主只新增设置页可用的 `getServiceStatus` / `setResidentService`。应用更新后服务在空闲时重启到新代码。开发与测试默认不常驻（`BATON_DESKTOP_RESIDENT=1` 显式开启，非标准配置根使用带哈希后缀的独立标签）。单测 `tests/daemon.test.mjs` 使用替身服务与假 launchctl。决策见 [docs/32](../../docs/32-resident-service.md)。
+
+本机服务模式入口位于设置 → 工作空间。工作空间设置单独校验 IPC 发送页。
+
+Mac 登录页保存可选地址并检测工作空间健康。常驻开关即时改变退出策略，运行中的服务保持原连接。

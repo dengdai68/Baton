@@ -1,85 +1,67 @@
-// Automations: switch, rule and next run, latest result, member stack.
+// Automations: two lines per item (title; cron · state), enabled first.
 import { router, Stack } from 'expo-router';
 import { CalendarClock, Plus } from 'lucide-react-native';
 import { useState } from 'react';
-import { FlatList, Pressable, RefreshControl, Switch, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 
-import { formatExactTime, formatRelativeTime } from '@shared/console-projections.mjs';
-import { useManualRefresh, useWorkspaceKey } from '@/api/queries';
-import { outcomeText, useAutomations } from '@/features/automations/model';
-import { useCatalog } from '@/features/catalog';
+import { useManualRefresh } from '@/api/queries';
+import { Chips } from '@/ui/form';
+import { useDebounced } from '@/lib/store';
+import { useAutomations, type AutomationFilter } from '@/features/automations/model';
 import { $t, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
-import { Avatar } from '@/ui/avatar';
-import { Segmented } from '@/ui/form';
-import { HeaderButton } from '@/ui/header';
+import { IconButton } from '@/ui/icon-button';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
-import { Tag } from '@/ui/status';
 import { Txt } from '@/ui/text';
-import { useToast } from '@/ui/toast';
-import { useClient } from '@/workspace/session';
+import { TabToolbar } from '@/ui/toolbar';
 
 export default function Automations() {
   useLocale();
   const { colors } = useTheme();
-  const client = useClient();
-  const toast = useToast();
-  const scope = useWorkspaceKey();
-  const [filter, setFilter] = useState<'all' | 'on' | 'off'>('all');
-  const list = useAutomations(filter);
-  const catalog = useCatalog();
+  const [query, setQuery] = useState('');
+  const [status, setStatus] = useState<AutomationFilter>('all');
+  const search = useDebounced(query.trim(), 300);
+  const list = useAutomations(status, search);
+  const filtered = !!search || status !== 'all';
   const pull = useManualRefresh(list.refetch);
-  const items = (list.data?.pages || []).flatMap((page) => page.items);
-  const agents = catalog.data?.agents || [];
-  async function toggle(item: { id: string; title: string; enabled: boolean }, next: boolean) {
-    try { await client.put(`/api/automations/${encodeURIComponent(item.id)}`, { enabled: next }); await list.refetch(); toast(next ? $t('自动化已启用') : $t('自动化已停用')); }
-    catch (error) { toast((error as Error).message, true); await list.refetch(); }
-  }
+  const items = (list.data?.pages || []).flatMap((page) => page.items)
+    .sort((a, b) => Number(b.enabled) - Number(a.enabled) || a.title.localeCompare(b.title));
   return (
-    <>
-      <Stack.Screen options={{ title: $t('自动化'), headerRight: () => <HeaderButton icon={Plus} label={$t('新建自动化')} onPress={() => router.push({ pathname: '/task/compose', params: { automation: '1' } })} /> }} />
+    <View style={{ flex: 1, backgroundColor: colors.bgCanvas }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <TabToolbar search={query} onSearchChange={setQuery} placeholder={$t('搜索自动化')}>
+        <IconButton icon={Plus} label={$t('新建自动化')} onPress={() => router.push({ pathname: '/task/compose', params: { automation: '1' } })} />
+      </TabToolbar>
+      <View style={{borderBottomWidth:1,borderBottomColor:colors.borderSubtle,paddingBottom:8}}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{paddingHorizontal:12,gap:4}}>
+          <Chips<AutomationFilter> value={status} onChange={setStatus} options={[
+            {value:'all', label:$t('全部')}, {value:'enabled', label:$t('启用中')}, {value:'disabled', label:$t('已停用')},
+          ]}/>
+        </ScrollView>
+      </View>
       <FlatList
-        contentInsetAdjustmentBehavior="automatic"
-        style={{ backgroundColor: colors.bgCanvas }}
         data={items}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={
-          <View style={{ padding: 12 }}>
-            <Segmented value={filter} onChange={setFilter} options={[
-              { value: 'all', label: $t('全部'), count: items.length },
-              { value: 'on', label: $t('已启用'), count: (list.data?.pages || []).flatMap((page) => page.items).filter((item) => item.enabled).length },
-              { value: 'off', label: $t('已停用'), count: (list.data?.pages || []).flatMap((page) => page.items).filter((item) => !item.enabled).length },
-            ]} />
-          </View>
-        }
+        keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
         onEndReached={() => { if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage(); }}
-        renderItem={({ item }) => {
-          const outcome = outcomeText(item.latestTrigger);
-          return (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
-              <Switch value={item.enabled} onValueChange={(next) => void toggle(item, next)} trackColor={{ true: colors.accent, false: colors.borderStrong }} accessibilityLabel={$t('启用 {0}', [item.title])} />
-              <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/automation/[automationId]', params: { automationId: item.id } })} style={{ flex: 1, minWidth: 0, gap: 4 }}>
-                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                  <Txt weight="semibold" numberOfLines={1} style={{ flexShrink: 1 }}>{item.title}</Txt>
-                  {!item.enabled ? <Tag label={$t('已停用')} tone="neutral" /> : null}
-                </View>
-                <Txt variant="small" tone="tertiary" mono numberOfLines={1}>{item.cron}{item.nextTriggerAt ? ' · ' + $t('下次 {0}', [formatExactTime(item.nextTriggerAt)]) : ''}</Txt>
-                <Txt variant="small" tone={outcome.tone === 'done' ? 'done' : outcome.tone === 'failed' ? 'danger' : 'secondary'} numberOfLines={1}>{outcome.label}{item.latestTrigger?.triggeredAt ? ' · ' + formatRelativeTime(item.latestTrigger.triggeredAt) : ''}</Txt>
-                <View style={{ flexDirection: 'row' }}>
-                  {(item.memberAgentIds || []).slice(0, 5).map((id, index) => {
-                    const agent = agents.find((row) => row.id === id);
-                    return agent ? <View key={id + index} style={{ marginLeft: index ? -5 : 0, borderWidth: 2, borderColor: colors.bgCanvas, borderRadius: 7 }}><Avatar member={agent} size={20} /></View> : null;
-                  })}
-                </View>
-              </Pressable>
+        renderItem={({ item }) => (
+          <Pressable accessibilityRole="button" accessibilityLabel={item.title}
+            onPress={() => router.push({ pathname: '/automation/[automationId]', params: { automationId: item.id } })}
+            style={({ pressed }) => ({ paddingHorizontal: 16, paddingVertical: 12, gap: 4, backgroundColor: pressed ? colors.bgHover : colors.bgCanvas, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle })}>
+            <Txt weight="medium" numberOfLines={1} tone={item.enabled ? 'primary' : 'secondary'}>{item.title}</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Txt variant="small" tone="tertiary" mono>{item.cron}</Txt>
+              <Txt variant="small" tone="tertiary">·</Txt>
+              <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: item.enabled ? colors.stDone : colors.textDisabled }} />
+              <Txt variant="small" tone={item.enabled ? 'done' : 'tertiary'}>{item.enabled ? $t('已启用') : $t('已停用')}</Txt>
             </View>
-          );
-        }}
+          </Pressable>
+        )}
         ListEmptyComponent={list.isPending ? <LoadingState /> : list.error ? <ErrorState message={list.error.message} onRetry={() => void list.refetch()} />
-          : <EmptyState icon={CalendarClock} title={$t('暂无自动化')} description={$t('用 Cron 安排重复任务，独立记录每轮执行与成果。')} />}
-        contentContainerStyle={{ paddingBottom: 96 }}
+          : <EmptyState icon={CalendarClock} title={filtered ? $t('没有匹配的自动化') : $t('暂无自动化')} description={filtered ? undefined : $t('用 Cron 安排重复任务，独立记录每轮执行与成果。')} />}
+        contentContainerStyle={{ paddingBottom: 16 }}
       />
-    </>
+    </View>
   );
 }

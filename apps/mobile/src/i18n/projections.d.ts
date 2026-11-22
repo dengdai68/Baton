@@ -10,6 +10,7 @@ declare module '@shared/console-projections.mjs' {
   export function workflowDisplay<T>(snapshot: T): T;
   export function formatRelativeTime(iso: string, now?: number): string;
   export function formatExactTime(iso: string): string;
+  export function formatNextTriggerTime(value: string, timeZone?: string, now?: number): string;
   export function formatMessageTime(iso: string, now?: Date): string;
   export function classifyEvent(event: any): string;
   export function displayText(event: any): string;
@@ -21,9 +22,20 @@ declare module '@shared/console-projections.mjs' {
   export function buildConsoleEntries(events: any[]): any[];
   export function mentionables(agents: any[]): Array<{ id: string; name: string; color?: string }>;
   export function collaborationRecords(workspace: any): any[];
+  export function automationScheduleLabel(cron: string): string;
   export function providerLabel(agent: any): string;
-  export function toolCommandSummary(toolName: string, inputText: string): string;
-  export function consoleContentTokens(value: unknown, options?: { json?: boolean; truncated?: boolean }): any;
+  export function toolCommandSummary(toolName: string, inputText: string | undefined): string | null;
+  export function isShellTool(toolName: string): boolean;
+  export function shellCommandText(toolName: string, inputText: string | undefined): string | null;
+  export function shellTokens(value: string): Array<{ kind: 'plain' | 'command' | 'option' | 'string' | 'comment' | 'variable' | 'operator'; text: string }>;
+  export function toolFileInput(toolName: string, inputText: string | undefined): { filePath: string; content: string | null } | null;
+  export function toolEditInput(toolName: string, inputText: string | undefined): { filePath: string; oldText: string; newText: string } | null;
+  export function consoleContentTokens(value: unknown, options?: { json?: boolean; truncated?: boolean }): { json: boolean; tokens: Array<{ kind: 'plain' | 'attr' | 'string' | 'number' | 'literal'; text: string }> };
   export function workingDirectoryIcon(name: string, type: string): string;
-  export function editDiff(oldText: string, newText: string, options?: { maxCells?: number }): any;
+  export function editDiff(oldText: string, newText: string, options?: { maxCells?: number }): { aligned: boolean; lines: Array<{ type: 'add' | 'del' | 'context'; text: string }> } | null;
+}
+
+declare module '@shared/runtime-providers.mjs' {
+  export const RUNTIME_IDS: readonly string[];
+  export function runtimeLabel(id: string): string;
 }

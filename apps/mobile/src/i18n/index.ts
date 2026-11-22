@@ -34,11 +34,14 @@ export function applyLanguage(preference: LanguagePreference): string {
 export const currentLocale = () => shared.currentLocale() as string;
 export const intlLocale = () => shared.intlLocale() as string;
 
+const subscribeLanguage = (listener: () => void) => {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+};
+const languageVersion = () => version;
+
 /** Re-render on language change; returns the active locale. */
 export function useLocale(): string {
-  useSyncExternalStore(
-    (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
-    () => version,
-  );
+  useSyncExternalStore(subscribeLanguage, languageVersion);
   return currentLocale();
 }

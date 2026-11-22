@@ -215,8 +215,9 @@ function TaskFormBody({ catalog, automation, existing, presetTeamId, onStart }: 
           </>
         ) : (
           <>
-            <Button style={{ flex: 1 }} size="lg" label={existing ? $t('保存修改') : $t('保存草稿')} loading={saving === 'draft'} disabled={Boolean(saving)} onPress={() => void submit('draft')} />
-            <Button style={{ flex: 1 }} size="lg" variant="primary" label={$t('保存并开始')} loading={saving === 'start'} disabled={Boolean(saving)} onPress={() => void submit('start')} />
+            {/* Drafts are not listed on the phone, so a new task always starts; an existing draft (from the Mac) can still be saved. */}
+            {existing ? <Button style={{ flex: 1 }} size="lg" label={$t('保存修改')} loading={saving === 'draft'} disabled={Boolean(saving)} onPress={() => void submit('draft')} /> : null}
+            <Button style={{ flex: 1 }} size="lg" variant="primary" label={existing ? $t('保存并开始') : $t('创建并开始')} loading={saving === 'start'} disabled={Boolean(saving)} onPress={() => void submit('start')} />
           </>
         )}
       </View>

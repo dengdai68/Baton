@@ -28,7 +28,7 @@
 
 控制台提示词完整呈现已脱敏系统层与本轮输入，底部为该调用已确认原生会话 ID，不包含 Provider 隐藏上下文。工具审计详情与空进度摘要不展示；仅按 Trace/原生调用 ID 归并重复阶段，单次调用内相同输入只显示一次，不同调用即使参数相同也各自保留输入输出，无 ID 不猜测合并。团队/工作流支持同行搜索，任务归档/新建进入搜索行，目录操作区上移。图标统一不引入通用桥。
 
-任务/沟通控制台通过共享投影隐藏无内容的常规生命周期与 Provider 状态通知；正文、思考、工具、提示词和异常保留。过滤只影响呈现，不删除原始审计、诊断或原生会话绑定；分页仍以原始事件为准，CLI/API 不变。
+任务/沟通控制台通过共享投影隐藏无内容的常规生命周期与 Provider 状态通知，包括 Pi 的 message_start/update/end、turn_start/end、agent_start/end/settled、tool_execution_update 及 portable 会话/完成的精确“Provider 执行状态”占位；正文、思考、工具、提示词和异常保留。过滤只影响呈现，不删除原始审计、诊断或原生会话绑定；HTTP 与 CLI 继续按原始事件分页。客户端自动跨过纯状态页，分别保存已核对的最新原始事件 ID 和向前翻页的游标。
 
 任务事件自带的 Provider 类型前缀与沟通无前缀事件统一识别，交接保存确认不再单列。
 
@@ -70,7 +70,7 @@ Electron 使用本仓库 renderer 界面，宿主代码位于 `apps/electron/`�
 
 窗口开启隔离与 sandbox，禁用 renderer Node。导航限定当前实例 origin；外链通过宿主处理。preload 只提供关闭偏好、CLI 安装、受限复制和打开当前 Run 工作目录等封闭能力，没有通用文件/进程接口。
 
-主进程拥有确认窗口、菜单栏、关闭/退出和自有子进程。设置可选择关闭窗口退出或保留菜单栏，Cmd+Q 退出。退出会停止自有后台。
+主进程拥有确认窗口、菜单栏、关闭/退出和自有子进程。设置可选择关闭窗口退出或保留菜单栏，Cmd+Q 退出。退出会停止自有后台；常驻模式下服务由 launchd 托管的监督进程拥有，退出应用不停止服务（见「常驻服务」）。
 
 启动后台前一次捕获登录 shell 环境，限时、可取消，内部启动字段受保护；日志不记录完整环境。
 
@@ -177,3 +177,11 @@ DeepSeek Harness 为第三个固定 Runtime，设置与员工选择复用现有�
 Baton使用com.baton.desktop、Baton.app及baton命令；认证数据库和任务历史保留。安装版配置根直接为 `~/.baton`，首次启动在打开认证和持久浏览器之前完成用户授权的旧 `desktop` 配置目录搬迁；中断可继续、冲突或旧实例活动则拒绝启动，错误使用独立内存 partition 的共享提示窗，不创建空实例。数据根仍由显式locator确定，冻结扩展旧地址通过已有映射读取。CLI 使用新根的 endpoint/委托授权；详见 docs/30 与 development/baton-identity-cutover.md。
 
 界面语言：默认跟随 macOS 首选语言（繁体地区与 zh-Hant 解析为繁體中文，其他中文为简体，其余为英文），设置 → 常规 → 语言可显式选择并保存到 `desktop-preferences.json` 的 `language` 键（与其他偏好序列化合并写入）。宿主用 `client/i18n.mjs` 与 `client/locales/` 翻译菜单、托盘、原生对话框、系统通知和 CLI 安装确认；renderer 仅新增两条关闭式通道：preload 同步读取一次的只读 `batonDesktop.locale`（`desktop:locale:get`，仅主窗口控制台页面，返回语言、已解析 locale 与目录，其他框架为 null）与 `setLanguage`（仅常规设置可写），没有通用文件或进程能力。同步交付使翻译模块无需顶层 await，Node 仍可 require 包含它的 ESM。`BATON_LOCALE` 只覆盖“跟随系统”时的系统语言，供隔离验收确定结果。业务数据、提示词、CLI 输出与存储历史不翻译；记录中由平台写入的默认工作流（默认协作 / 完成任务）与操作者“你”等非成员参与方名称以源文字存储，仅在界面展示时翻译。
+
+## 常驻服务
+
+标准安装（`~/.baton`）默认把本机服务交给 launchd 用户代理 `com.baton.daemon`：登录即启动、异常退出后重启，退出 Baton 后手机仍能连接。代理运行应用自身可执行文件的 Node 模式（`ELECTRON_RUN_AS_NODE=1` + `apps/electron/daemon.mjs`），保持 Baton 的代码身份与已授予的文件访问权限；监督进程以与宿主相同的登录 Shell 环境、桌面存储路径和 IPC 协议拥有 `server/index.mjs`。main 经配置根内 0600 的 `daemon.sock` 读取状态（origin、实例 ID、首次设置令牌）、订阅系统通知并预约空闲；更换数据目录由监督进程停机搬运。数据盘不可访问时监督进程拒绝启动，不创建空实例。
+
+宿主新增两条关闭式通道，仅限设置页：`getServiceStatus`（`desktop:service:status`）与 `setResidentService`（`desktop:service:resident`，仅 macOS；开关改变退出策略并保持同一服务和连接）。偏好保存在 `desktop-preferences.json` 的 `residentService`；非标准配置根、开发与测试默认关闭，`BATON_DESKTOP_RESIDENT=0/1` 可显式指定。应用更新不重启常驻服务；应用连接时比较构建标识（版本号 + 可执行文件修改时间，同版本号的本机重装也能识别），服务仍运行旧构建就在空闲时重启它，忙碌时 15 分钟后重试。本机安装应使用稳定签名身份（`npm run package:mac:local`），否则每次重装 macOS 都会收回外接卷等文件授权，服务打开数据时会停在等待授权。决策与公网安全模型见 [docs/32](32-resident-service.md)。
+
+工作空间登录位于登录页及首次设置页。外部地址打开单一沙箱窗口；本机设置 /settings/workspaces 管理目录、设备与后台运行。

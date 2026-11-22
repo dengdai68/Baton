@@ -337,7 +337,7 @@ Skill 可选工具元信息：plugin-compatibility 不以 allowed-tools/allowedT
 
 设计稿复核（纸张期，现以石墨为准）：侧栏命令/导航分组（web/index.html）、员工卡片（web/app.js）、协作消息与输入卡片（web/app.js、styles.css）、沟通成员（styles.css）；仅展示无CLI协议变化。验收 test-redesign、test-collaboration-flow；审查范围见 docs/development/paper-alignment-review.md。
 
-控制台实时阅读由 `web/console-stream.mjs` 统一：任务 SSE/可见控制台5秒补查、沟通2秒轮询持续收新记录；上滚只停止自动滚动。稳定行锚点/ResizeObserver 处理增量、延迟正文与窄屏布局，现有 before 分页补齐断线和突发窗口。入口 app.js/communication.js；验收 scripts/test-console-live.mjs，HTTP/CLI/执行状态协议不变。
+控制台实时阅读由 `web/console-stream.mjs` 统一：任务 SSE/可见控制台5秒补查、沟通2秒轮询持续收新记录；上滚只停止自动滚动。稳定行锚点/ResizeObserver 处理增量、延迟正文与窄屏布局，现有 before 分页补齐断线和突发窗口。首次读取与历史分页按可展示事件计数，后台补查使用原始事件的最新 ID。入口 app.js/communication.js；验收 scripts/test-console-live.mjs，HTTP/CLI/执行状态协议不变。
 
 界面多语言：`client/i18n.mjs` 以简体中文源文本为键（zh-CN 恒等），`client/locales/{en,zh-TW}.json` 提供英文与繁体；renderer 用 `$t`，服务端/系统文字只在展示时经 `$tm` 精确或模板匹配翻译，未知文本（业务内容）原样显示；记录中平台写入的默认工作流与“你”等参与方名称经 `workflowDisplay` / `partyName` 展示翻译，成员与自定义工作流不翻译。Electron 宿主菜单、托盘、对话框、通知与 CLI 安装确认同步翻译；业务数据、提示词、冻结工作流说明、CLI 输出与存储历史不翻译。语言默认跟随 macOS，设置 → 常规可切换并重新加载。宿主经 preload 同步交付 `batonDesktop.locale`（语言与目录），翻译模块不含顶层 await，Node 仍可 require 包含它的 ESM 图。完整性、同步加载与模式校验见 `tests/i18n.test.mjs`，隔离实机验收见 `scripts/test-i18n.mjs`；打包验收 `scripts/test-packaged-electron.mjs` 核对宿主桥接口清单含只读 `locale` 数据与 `setLanguage`。
 
@@ -346,3 +346,11 @@ CLI 根帮助：`cli/output.mjs` 的有序 `catalog` 生成命令目录，须覆
 列表分页与顺序：CLI 所有 list 与记录读取默认每页 20、最新在前（规则见 docs/21）。`server/persistence.mjs` 的 queryEntities 让员工/角色/团队/工作流按写入位置倒序（最新创建在前，App 目录页同序），任务与沟通会话按最近活动；`cli/workspace.mjs` 的 communications get 沿 before 游标每页 20 条、最新在前，拒绝已移除的 `--before`；`cli/main.mjs` 的 tasks questions 按 createdAt 倒序。验收见 tests/state-journal、tests/cli-workspace 与 scripts/test-app-cli-parity.mjs；Runtime 与 MCP 工具无时间字段，保持固定顺序。
 
 应用更新渠道：`apps/electron/updates.mjs` 的 `selectRelease`/`pickRelease` 按渠道选版本——稳定版（默认）只看 GitHub latest 正式版，Beta 版读取最近 Release 列表并另接受 prerelease 的 `vX.Y.Z-beta.N`，取 SemVer 最高、禁止降级；`setChannel` 先经 `preferences.mjs` 保存 `updateChannel` 再重新检查。宿主 `desktop:updates:channel` 仅限设置 → 更新页，preload 暴露 `setAppUpdateChannel`，`web/settings.mjs` 渲染渠道下拉。规则见 docs/24，验收 tests/application-updates、tests/electron 与 scripts/test-application-updates.mjs；CLI 不涉及应用更新。
+
+Pi 控制台降噪：`client/console-projections.mjs` 的已知类型/精确摘要规则补齐 message_start/update/end、turn_start/end、agent_start/end/settled、tool_execution_update 与 portable 会话/完成占位；已保存页与实时追加共用过滤，正文/工具/异常/未知记录保留。仅客户端呈现，CLI/API 和 Runtime 无变化；验证 `tests/client-projections.test.mjs`、`BATON_CONSOLE_NOISE_ONLY=1 node scripts/test-console-live.mjs`（任务/沟通、宽窄布局、实时与重新读取；可用 BATON_CONSOLE_LIVE_APP 验证独立包）。
+
+工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](31-workspace-service.md)。
+
+常驻服务：`apps/electron/daemon.mjs` 由 launchd 用户代理（`apps/electron/daemon-service.mjs` 生成与管理）以应用可执行文件的 Node 模式运行，像宿主一样拥有 `server/index.mjs` 子进程并沿用同一 IPC 协议，经配置根私有 `daemon.sock` 向 main 提供状态、通知订阅与空闲预约；Mac 主进程在两种退出策略下都连接同一服务，设置 → 工作空间 → 本机服务切换（宿主 `getServiceStatus`/`setResidentService` 仅限设置页）。手机网关 `server/workspace-http.mjs` 按设备范围（mobile 只读配置 / desktop）放行、按客户端地址限制认证失败、对远程请求隐藏内部错误；`server/workspace-identity.mjs` 记录设备最近访问并在闲置 30 天后失效。决策与安全模型 docs/32；测试 tests/daemon、tests/workspace-service、tests/electron。
+
+单工作空间登录入口为 web/workspace-choice.js、server/workspace-http.mjs 和 iOS SessionProvider。实时通知从 Store journal 送到两端。详见 docs/31-workspace-service.md。

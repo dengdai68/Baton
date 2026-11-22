@@ -38,7 +38,7 @@ function resolve(name, seen = new Set()) {
   return { light: value, dark: value };
 }
 const camel = (name) => name.replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
-const colorPrefixes = ['bg-', 'border', 'text', 'accent', 'focus', 'st-', 'live', 'code-', 'av-', 'syn-', 'on-solid'];
+const colorPrefixes = ['bg-', 'border', 'text', 'accent', 'focus', 'st-', 'live', 'code-', 'av-', 'syn-', 'on-solid', 'dark'];
 const colorNames = [...raw.keys()].filter((name) => colorPrefixes.some((prefix) => name === prefix || name.startsWith(prefix)) && !name.startsWith('text-on-accent') || name === 'text-on-accent');
 const light = {}, dark = {};
 for (const name of colorNames) {

@@ -47,6 +47,10 @@ test('trigger transaction confirms only finished awaiting acceptance and retains
     const skip=store.triggerAutomation(automation.id);assert.equal(skip.outcome,'skipped');assert.equal(skip.runId,null);
     store.pauseRun(second.runId);assert.equal(store.triggerAutomation(automation.id).outcome,'skipped');
     assert.equal(store.getRun(second.runId).status,'paused');
+    const detail=store.getAutomation(automation.id);
+    assert.equal(detail.latestExecution.runId,second.runId);
+    assert.equal(detail.latestExecution.status,'paused');
+    assert.equal(detail.latestExecution.startedAt,store.getRun(second.runId).startedAt);
   }finally{store.close();}
 });
 test('invalid next configuration cannot accept prior run; disable still works',()=>{

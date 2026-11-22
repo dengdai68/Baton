@@ -895,7 +895,7 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       return this.transaction(() => {
         const current = getRun(runId), question = journal.get("messages", questionId);
         const waiting = journal.select("dispatches", "runId", runId).find(item => item.status === "waiting" && item.waitingMessageId === questionId);
-        if (!current || getTask(current.taskId).archivedAt || !waiting || question?.recipient.id !== sender.id || question?.recipient.type !== sender.type) throw new Error("不存在匹配的待回答问题");
+        if (!current || getTask(current.taskId).archivedAt || !waiting || (sender.type !== "human" && question?.recipient.id !== sender.id) || question?.recipient.type !== sender.type) throw new Error("不存在匹配的待回答问题");
         const message = this.addMessage({ runId, workflowNodeId: question.workflowNodeId, conversationId: question.conversationId, replyToMessageId: questionId, traceId, sender, recipientAgentId: question.sender.id, kind: sender.type === "human" ? "clarification_answer" : "consultation_answer", content, attachmentIds });
         waiting.status = "queued"; waiting.waitingMessageId = null; waiting.nextRetryAt = null; waiting.messageIds.push(message.id); waiting.updatedAt = now();
         this.syncWaiting(runId); return message;
@@ -942,7 +942,7 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       if (!record) throw new Error('附件不属于当前任务或不存在');
       return clone(record);
     },
-    submitHumanMessage(runId, input, { initialize = false } = {}) {
+    submitHumanMessage(runId, input, { initialize = false, actor = humanMember } = {}) {
       return this.transaction(() => {
         const current = getRun(runId), task = getTask(current?.taskId);
         if (input.content !== undefined && typeof input.content !== "string") throw new Error("消息内容必须为文本");
@@ -952,7 +952,7 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
         const clientRequestId = input.clientRequestId;
         if (clientRequestId !== undefined && (typeof clientRequestId !== "string" || !/^[A-Za-z0-9_-]{8,100}$/.test(clientRequestId))) throw new Error("clientRequestId 必须为 8–100 位字母、数字、下划线或连字符");
         const fingerprint = clientRequestId === undefined ? null : createHash("sha256").update(JSON.stringify({ content: input.content ?? "", recipientAgentId: input.recipientAgentId ?? null, replyToMessageId: input.replyToMessageId ?? null, attachmentIds: input.attachmentIds ?? [] })).digest("hex");
-        const previous = clientRequestId === undefined ? null : journal.select("messages", "clientRequestId", clientRequestId).find(message => message.runId === runId);
+        const previous = clientRequestId === undefined ? null : journal.select("messages", "clientRequestId", clientRequestId).find(message => message.runId === runId && message.sender.id === actor.id);
         if (previous) {
           if (previous.clientRequest.fingerprint !== fingerprint) throw Object.assign(new Error("clientRequestId 已用于不同的协作内容、接收人、回复或附件"), { code: "CLIENT_REQUEST_CONFLICT" });
           return { ...clone(previous.clientRequest.receipt), message: clone(previous), replayed: true };
@@ -975,14 +975,14 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
         const interactionOnly = ["completed", "cancelled", "paused"].includes(current.status);
         if (current.status === "awaiting_acceptance" && !input.replyToMessageId) {
           current.status = "running"; current.deliveryReview = null; current.acceptanceRequest = null; task.status = "running"; task.updatedAt = now();
-          addEvent({ type: "run.acceptance_reopened", runId, actor: humanMember, message: "人类追加消息，重新进入团队协作并等待新的验收结论。", data: {} });
+          addEvent({ type: "run.acceptance_reopened", runId, actor, message: "人类追加消息，重新进入团队协作并等待新的验收结论。", data: {} });
         }
-        if (input.replyToMessageId) return receipt({ message: this.answerQuestion(runId, input.replyToMessageId, input.content, { type: "human", id: humanMember.id, name: humanMember.name }, null, input.attachmentIds), resumed: current.status !== "paused", queued: true });
+        if (input.replyToMessageId) return receipt({ message: this.answerQuestion(runId, input.replyToMessageId, input.content, { type: "human", id: actor.id, name: actor.name }, null, input.attachmentIds), resumed: current.status !== "paused", queued: true });
         const recipientId = input.recipientAgentId ?? current.manager.id;
         const recipient = runAgent(current, recipientId);
         if (!recipient) throw new Error("消息接收者不属于当前 Run");
         if (interactionOnly && getAgent(recipient.sourceAgentId || recipient.id)?.status === "deleted") throw new Error("此员工已删除，任务结束后不再接收新答疑");
-        const message = this.addMessage({ runId, recipientAgentId: recipientId, content: input.content, attachmentIds: input.attachmentIds, kind: interactionOnly ? "inquiry" : "instruction" });
+        const message = this.addMessage({ runId, sender: {type:"human",id:actor.id,name:actor.name}, recipientAgentId: recipientId, content: input.content, attachmentIds: input.attachmentIds, kind: interactionOnly ? "inquiry" : "instruction" });
         const ownNode = this.memberResponsibility(runId, recipientId);
         if (interactionOnly) {
           this.enqueueDispatch(runId, { recipientAgentId: recipientId, workflowNodeId: ownNode || task.workflowSnapshot.nodes[0].id, purpose: "inquiry", messageIds: [message.id], sourceMessageId: message.id, dedupeKey: "message:" + message.id });
@@ -1002,16 +1002,16 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       task.status = "done"; task.updatedAt = now();
       addEvent({ type: "run.completed", runId, message: current.summary, data: { confirmedAt: current.confirmedAt, triggerId, completion: "automatic" } }); save(); return clone(current);
     },
-    confirmRunCompletion(runId) {
+    confirmRunCompletion(runId, actor = humanMember) {
       return this.transaction(() => {
         const current = getRun(runId), task = getTask(current?.taskId);
         if (!current || task.archivedAt || current.status !== "awaiting_acceptance") throw new Error("请在人类验收阶段确认完成");
         this.settleCoordinationFollowups(runId);
-        current.status = "completed"; current.completedAt = now(); current.confirmedAt = current.completedAt; current.confirmedBy = humanMember.id;
+        current.status = "completed"; current.completedAt = now(); current.confirmedAt = current.completedAt; current.confirmedBy = actor.id;
         current.summary = "人类已验收并确认任务完成。";
         current.currentFocus = null;
         task.status = "done"; task.updatedAt = now();
-        addEvent({ type: "run.completed", runId, actor: humanMember, message: "人类已验收并确认任务完成。", data: { confirmedAt: current.confirmedAt } }); save(); return clone(current);
+        addEvent({ type: "run.completed", runId, actor, message: "人类已验收并确认任务完成。", data: { confirmedAt: current.confirmedAt } }); save(); return clone(current);
       });
     },
     recordDeliveryReview(runId, traceId, input) {
@@ -1057,6 +1057,19 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       const include=(name,id)=>{if(!id)return;let ids=seen.get(name);if(!ids)seen.set(name,ids=new Set());if(ids.has(id))return;ids.add(id);const row=journal.get(name,id);if(row)sample[name].push(row);return row;};
       for(const {collection,event} of page.rows){sample[collection].push(event);if(collection==='events'){const run=include('runs',event.runId)||getRun(event.runId);if(run)include('tasks',run.taskId);}else{include('communicationConversations',event.conversationId);include('communicationDeliveries',event.deliveryId);}}
       const result=executionLogs(sample,{...query,before:null});return {...result,hasMore:page.hasMore};
+    },
+    subscribeWorkspaceChanges(listener) {
+      return journal.onCommit(changes => {
+        const topics = new Set();
+        for (const name of changes.keys()) {
+          if (name === 'events') topics.add('console');
+          else if (name === 'communicationEvents') topics.add('chat-console');
+          else if (name.startsWith('communication')) topics.add('chats');
+          else if (['tasks','runs','dispatches','traces','messages','decisions','artifacts'].includes(name)) topics.add('tasks');
+          else if (['automations','automationTriggers'].includes(name)) topics.add('automations');
+        }
+        if (topics.size) listener(topics);
+      });
     },
     snapshot: () => clone(state), subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }, subscribeNotifications(listener) { notificationListeners.add(listener); return () => notificationListeners.delete(listener); }, addEvent,
     listAgents: () => state.agents.filter(item => item.status !== "deleted").map(employeeConfiguration), listTeams: () => clone(state.teams.map((item) => {
@@ -1386,10 +1399,42 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       const repositories = { repositorySources: [], repositoryBindings: {} }, effectiveTemplate = clone(template);
       effectiveTemplate.nodes.forEach(node => { node.staffingGuidance ||= node.ownerRole ? `适合由熟悉${node.ownerRole}相关工作的成员承担；请结合成员提示词和能力判断。` : `选择能够完成「${node.title}」交付的成员。`; node.repositoryPath = null; });
       const nodeAssignments = input.nodeAssignments ? assignments({ memberAgentIds: selectedIds.filter(value => value !== managerAgentId) }, effectiveTemplate, input.nodeAssignments) : {};
-      const item = { id: taskId, workspaceManaged: previous ? previous.workspaceManaged : Boolean(workspaceRoot), repositoryMode: "workspace", ...repositories, memberAgentIds: selectedIds, memberSnapshots, managerSnapshot, title: text(input.title, "任务标题"), objective: text(input.objective, "任务目标"), workspacePath: resolve(workspacePath), kind: "manual", workflowTemplateId: template.id, workflowSnapshot: effectiveTemplate, nodeAssignments, deliveryAuthorization: null, managerAgentId, managerRuntime: runtime(input.managerRuntime || managerSnapshot.runtime), status: "backlog", archivedAt: null, acceptanceCriteria: taskAcceptanceCriteria(input.acceptanceCriteria), createdAt: previous?.createdAt || now(), updatedAt: now() };
+      const item = { id: taskId, ...(previous?.access ? {access:clone(previous.access)} : {}), workspaceManaged: previous ? previous.workspaceManaged : Boolean(workspaceRoot), repositoryMode: "workspace", ...repositories, memberAgentIds: selectedIds, memberSnapshots, managerSnapshot, title: text(input.title, "任务标题"), objective: text(input.objective, "任务目标"), workspacePath: resolve(workspacePath), kind: "manual", workflowTemplateId: template.id, workflowSnapshot: effectiveTemplate, nodeAssignments, deliveryAuthorization: null, managerAgentId, managerRuntime: runtime(input.managerRuntime || managerSnapshot.runtime), status: "backlog", archivedAt: null, acceptanceCriteria: taskAcceptanceCriteria(input.acceptanceCriteria), createdAt: previous?.createdAt || now(), updatedAt: now() };
       return item;
     },
-    createTask(input = {}) { const item = this.buildTask(input); state.tasks.push(item); save(); return clone(item); },
+    workspaceRequest(user, key, scope, input, command) {
+      if(key===undefined)return {value:command(),replayed:false};
+      if(typeof key!=='string'||!/^[a-zA-Z0-9_-]{8,100}$/.test(key))throw Error('无效的请求标识');
+      const id='evt_workspace_'+createHash('sha256').update(user.id+'\n'+key).digest('hex');
+      const fingerprint=createHash('sha256').update(JSON.stringify([scope,input])).digest('hex');
+      const previous=journal.get('events',id);
+      if(previous){
+        if(previous.data.fingerprint!==fingerprint)throw Error('请求标识已用于另一项操作');
+        return {value:clone(previous.data.receipt),replayed:true};
+      }
+      return this.transaction(()=>{
+        const value=command();
+        state.events.push({id,type:'workspace.command',runId:null,actor:{type:'human',id:user.id,name:user.name},
+          timestamp:now(),message:scope,data:{fingerprint,receipt:clone(value)}});
+        return {value,replayed:false};
+      });
+    },
+    updateWorkspaceAccess(kind, id, access) {
+      const collection = {task:'tasks',automation:'automations',chat:'communicationConversations'}[kind];
+      const item = collection && journal.get(collection,id);
+      if(!item) throw Error("资源不存在");
+      item.access = clone(access);
+      save();
+    },
+    workspaceAutomationAttention() {
+      return state.tasks.filter(t=>t.automationId && !t.archivedAt && ['failed','paused','blocked','awaiting_human'].includes(t.status)).map(taskReadModel);
+    },
+    workspaceRetry(runId) {
+      const nodeId=failedBusinessTraces(runId).at(-1)?.workflowNodeId;
+      return nodeId?this.retryFailedNode(runId,nodeId):this.retryFailedOrchestration(runId);
+    },
+    workspaceAutomations() { return state.automations.map(item=>this.getAutomation(item.id)); },
+    createTask(input = {}, access = null) { const item = this.buildTask(input); if(access)item.access=clone(access); state.tasks.push(item); save(); return clone(item); },
     updateTask(taskId, input = {}) {
       const current = getTask(taskId);
       if (!current) throw new Error('任务不存在');

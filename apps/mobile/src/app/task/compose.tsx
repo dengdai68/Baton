@@ -1,5 +1,7 @@
+import { plainHeaderItem } from '@/ui/header';
 // New task, edit a draft (?taskId=), or new/edit an automation (?automation=1&id=).
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { X } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { useAutomation } from '@/features/automations/model';
@@ -8,6 +10,7 @@ import { TaskForm, type TaskSource } from '@/features/tasks/task-form';
 import { useTaskDetail } from '@/features/workspace/data';
 import { $t } from '@/i18n';
 import { Button } from '@/ui/button';
+import { IconButton } from '@/ui/icon-button';
 import { ErrorState, LoadingState, Notice } from '@/ui/states';
 import { useToast } from '@/ui/toast';
 import { useClient } from '@/workspace/session';
@@ -39,7 +42,7 @@ export default function ComposeTask() {
   const title = taskId ? $t('编辑任务草稿') : isAutomation ? (id ? $t('编辑自动化') : $t('新建自动化')) : $t('新建任务');
   return (
     <>
-      <Stack.Screen options={{ title, headerLeft: () => <Button size="sm" variant="ghost" label={$t('取消')} onPress={() => router.back()} /> }} />
+      <Stack.Screen options={{ title, unstable_headerLeftItems: () => plainHeaderItem(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
       {isAutomation && id ? <EditAutomation automationId={id} /> : taskId ? <EditDraft taskId={taskId} /> : (
         <TaskForm automation={isAutomation} presetTeamId={teamId} onStart={(id) => startTask(client, id, toast)} />
       )}

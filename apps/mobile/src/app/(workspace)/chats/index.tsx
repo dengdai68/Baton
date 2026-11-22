@@ -1,6 +1,6 @@
 // Conversations: private chats with one employee and group chats, newest first.
 import { router, Stack } from 'expo-router';
-import { MessageSquare, Plus, Search } from 'lucide-react-native';
+import { MessageSquare, Plus } from 'lucide-react-native';
 import { useState } from 'react';
 import { FlatList, Pressable, RefreshControl, View } from 'react-native';
 
@@ -10,10 +10,9 @@ import { type Conversation, useConversations } from '@/features/chats/model';
 import { $t, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Avatar, GroupAvatar } from '@/ui/avatar';
-import { TextField } from '@/ui/form';
-import { HeaderButton } from '@/ui/header';
+import { IconButton } from '@/ui/icon-button';
+import { TabToolbar } from '@/ui/toolbar';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
-import { CountBadge } from '@/ui/status';
 import { Txt } from '@/ui/text';
 
 export default function Chats() {
@@ -41,7 +40,7 @@ export default function Chats() {
             <Txt variant="small" tone={running ? 'running' : 'tertiary'} numberOfLines={1} style={{ flex: 1 }}>
               {running ? $t('{0}正在回复…', [item.members.filter((member) => member.running).map((member) => member.name).join('、')]) : item.preview || (item.kind === 'group' ? $t('{0} 位成员', [item.members.length]) : $t('长期私聊'))}
             </Txt>
-            <CountBadge count={item.unreadCount} tone="accent" />
+            {item.unreadCount ? <View accessibilityLabel={$t('有未读消息')} style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors.accent }} /> : null}
           </View>
         </View>
       </Pressable>
@@ -49,27 +48,23 @@ export default function Chats() {
   };
 
   return (
-    <>
-      <Stack.Screen options={{ title: $t('沟通'), headerRight: () => <HeaderButton icon={Plus} label={$t('发起沟通')} onPress={() => router.push('/chat/new')} /> }} />
+    <View style={{ flex: 1, backgroundColor: colors.bgCanvas }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <TabToolbar search={query} onSearchChange={setQuery} placeholder={$t('搜索会话或成员')}>
+        <IconButton icon={Plus} label={$t('发起沟通')} onPress={() => router.push('/chat/new')} />
+      </TabToolbar>
       <FlatList
-        contentInsetAdjustmentBehavior="automatic"
-        style={{ backgroundColor: colors.bgCanvas }}
+        style={{ backgroundColor: colors.bgCanvas, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}
         data={conversations}
         keyExtractor={(item) => item.id}
         renderItem={row}
-        ListHeaderComponent={
-          <View style={{ margin: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.bgSubtle, borderWidth: 1, borderColor: colors.borderSubtle }}>
-            <Search size={16} color={colors.textTertiary} />
-            <TextField value={query} onChangeText={setQuery} placeholder={$t('搜索会话或成员')} clearButtonMode="while-editing" accessibilityLabel={$t('搜索会话或成员')}
-              style={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0, minHeight: 40 }} />
-          </View>
-        }
+        keyboardDismissMode="on-drag"
         refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
         onEndReached={() => { if (list.hasNextPage && !list.isFetchingNextPage) void list.fetchNextPage(); }}
         ListEmptyComponent={list.isPending ? <LoadingState /> : list.error ? <ErrorState message={list.error.message} onRetry={() => void list.refetch()} />
           : <EmptyState icon={MessageSquare} title={query ? $t('没有匹配的会话') : $t('还没有沟通')} description={query ? undefined : $t('与员工私聊讨论需求，或建立群聊并通过 @ 定向提问。')} />}
-        contentContainerStyle={{ paddingBottom: 96 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
       />
-    </>
+    </View>
   );
 }

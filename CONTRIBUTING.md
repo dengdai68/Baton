@@ -51,7 +51,7 @@ History:
 
 发布操作使用 [baton-release](.codex/skills/baton-release/SKILL.md)。默认 Beta，正式版仅在明确要求时发布；版本递增、标签操作和 Release 标题/说明遵循该 skill。下述旧 CI 入口不能直接用于新的 Beta 发布，格式差异与替代路径见 skill；签名与附件校验要求继续保留。签名状态在交付报告中说明，Release 正文保持 skill 要求的变更列表与底部注。
 
-版本与锁文件保持一致。macOS 构建使用 `npm run package:mac`，产物位于 `release/`。发布标签与源码提交绑定，上传 DMG、ZIP 和 SHA-256 清单；不得把本机数据或凭据打入安装包。
+版本与锁文件保持一致。macOS 构建使用 `npm run package:mac`，产物位于 `release/`。本机安装使用 `npm run package:mac:local`：用钥匙串中的 Apple Development / Developer ID 身份签名 `release/mac-arm64/Baton.app`，重装后 macOS 保留已授予的外接卷与完全磁盘访问权限（ad-hoc 签名每次构建都会变化，授权随之失效，常驻服务会停在等待授权）；从 ad-hoc 版本首次换成稳定签名时需要再授权一次。发布标签与源码提交绑定，上传 DMG、ZIP 和 SHA-256 清单；不得把本机数据或凭据打入安装包。
 
 Release 工作流只在发布成功后删除本次构建输出 ID 对应的 Actions 中转产物；失败时保留最多一天以便重试。正式 Release 附件与 Actions 存储独立，不批量删除其他构建、日志、Git 标签或源码历史。
 

@@ -1,11 +1,11 @@
 // Task workspace data: the task, its Run read model (compact), paged
 // collaboration records and live refresh from the Run's event stream.
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useFocusedInterval, useWorkspaceKey } from '@/api/queries';
 import type { TaskSummary } from '@/features/tasks/model';
-import { useClient } from '@/workspace/session';
+import { $t } from '@/i18n';
+import { useClient, useSession } from '@/workspace/session';
 
 export type Party = { type: string; id: string; name: string };
 export type Agent = { id: string; name: string; color?: string; initials?: string; kind?: string; status?: string; description?: string; runtime?: { provider?: string; model?: string; effort?: string }; sourceAgentId?: string; type?: string };
@@ -51,10 +51,7 @@ export function useTaskDetail(taskId: string) {
 export function useRunWorkspace(runId: string | undefined) {
   const client = useClient();
   const scope = useWorkspaceKey();
-  const queryClient = useQueryClient();
-  const [live, setLive] = useState(false);
-  const [events, setEvents] = useState<any[]>([]);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { live } = useSession();
   const interval = useFocusedInterval(live ? 60_000 : 10_000);
   const query = useQuery({
     queryKey: [...scope, 'run', runId],
@@ -63,47 +60,7 @@ export function useRunWorkspace(runId: string | undefined) {
     refetchInterval: interval,
   });
 
-  useEffect(() => {
-    if (!runId) return;
-    let closed = false;
-    let close: (() => void) | null = null;
-    let retry: ReturnType<typeof setTimeout> | null = null;
-    const refresh = () => {
-      if (timer.current) return;
-      timer.current = setTimeout(() => {
-        timer.current = null;
-        void queryClient.invalidateQueries({ queryKey: [...scope, 'run', runId] });
-        void queryClient.invalidateQueries({ queryKey: [...scope, 'collaboration', runId] });
-      }, 500);
-    };
-    const connect = () => {
-      close = client.stream(`/api/runs/${encodeURIComponent(runId)}/events`, {
-        onEvent(type, data) {
-          if (type === 'ready') { setLive(true); return; }
-          if (type === 'auth-expired') return;
-          if (type !== 'run-event') return;
-          let event: any;
-          try { event = JSON.parse(data); } catch { return; }
-          setEvents((current) => [...current.slice(-300), event]);
-          if (event.type !== 'runtime.event' || event.data?.subtype === 'init') refresh();
-        },
-        onEnd() {
-          setLive(false);
-          if (!closed) retry = setTimeout(connect, 3000);
-        },
-      });
-    };
-    connect();
-    return () => {
-      closed = true;
-      close?.();
-      if (retry) clearTimeout(retry);
-      if (timer.current) { clearTimeout(timer.current); timer.current = null; }
-      setLive(false);
-    };
-  }, [client, runId, queryClient, scope]);
-
-  return { ...query, live, events };
+  return { ...query, live };
 }
 
 /** Paged collaboration records (newest page first, older pages on demand). */
@@ -157,4 +114,14 @@ export function acceptanceReview(workspace: Workspace | undefined, history = fal
     : Array.isArray(review.findings) ? review.findings.filter((finding) => typeof finding === 'string' && finding.trim()).map((finding) => finding.trim()) : [];
   const criteria = Array.isArray(run.task?.acceptanceCriteria) ? run.task.acceptanceCriteria.filter((item) => typeof item === 'string' && item.trim()).map((item) => item.trim()) : [];
   return { findings, criteria, artifactCount: run.artifactCount ?? (workspace?.artifacts || []).length };
+}
+
+/** Members that cannot be removed now, with the reason shown in the picker (same rules as the Mac and the Store). */
+export function lockedMembers(workspace: Workspace): Map<string, string> {
+  const locked = new Map<string, string>();
+  const busy = $t('此员工有尚未结束的执行或交接');
+  for (const trace of workspace.traces || []) if (trace.status === 'running') locked.set(trace.agentId, busy);
+  for (const delivery of workspace.dispatches || []) if (delivery.recipientAgentId && !['done', 'cancelled'].includes(delivery.status)) locked.set(delivery.recipientAgentId, busy);
+  locked.set(workspace.run.manager.id, $t('必须保留当前项目经理'));
+  return locked;
 }

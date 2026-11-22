@@ -1,6 +1,7 @@
 // One member's console in a task Run, with live records from the Run stream.
 import { Stack, useLocalSearchParams } from 'expo-router';
 
+import { workflowDisplay } from '@shared/console-projections.mjs';
 import { ConsoleStream } from '@/features/workspace/console';
 import { useRunWorkspace } from '@/features/workspace/data';
 import { $t } from '@/i18n';
@@ -13,7 +14,8 @@ export default function MemberConsole() {
   return (
     <>
       <Stack.Screen options={{ title: agent?.name || $t('控制台') }} />
-      <ConsoleStream runId={runId} agentId={agentId} traceId={traceId} liveEvents={workspace.events} base={`/api/runs/${encodeURIComponent(runId)}`} />
+      <ConsoleStream runId={runId} agentId={agentId} traceId={traceId} base={`/api/runs/${encodeURIComponent(runId)}`}
+        provider={agent?.runtime?.provider} nodes={(workflowDisplay(run?.task.workflowSnapshot)?.nodes || []) as Array<{ id: string; title?: string }>} />
     </>
   );
 }

@@ -475,11 +475,10 @@ async function runPackagedTask(page) {
       await page.locator(".log-row .log-time").first().waitFor();
       await page.locator(`[data-select-agent="${worker.agent.id}"]`).click();
       await page.locator(".log-row .log-time").first().waitFor();
-      const older = page.locator('[data-console-older]');
-      await older.waitFor();
-      assert.equal(await page.locator('.log-row-trace-prompt').count(), 0, 'partial tail does not pin the earlier prompt');
-      await older.click();
+      // The fixture emits 75 empty init notifications. Its visible history
+      // fits on one page, including the prompt at the start of this call.
       await page.locator('.log-row-trace-prompt').waitFor();
+      assert.equal(await page.locator('[data-console-older]').count(), 0, 'hidden init events do not create an extra UI page');
       assert.equal(await page.locator('.log-row-trace-prompt').count(), 1);
       const inputPrompt = page.locator('.prompt-snapshot').first();
       await inputPrompt.locator('summary').click();
@@ -533,7 +532,7 @@ async function runPackagedTask(page) {
       assert.equal(await page.locator(".log-row:has(.log-time)").first().evaluate((row) => row.querySelector(".log-body").getBoundingClientRect().right <= row.querySelector(".log-time").getBoundingClientRect().left), true, "console timestamp remains right-aligned without overlapping the message");
       await page.locator('[data-console-latest]').click();
       await page.waitForFunction(() => !document.querySelector('.console-history-controls [role="status"]'));
-      assert.equal(await page.locator('.log-row-trace-prompt').count(), 0, 'latest reloads the tail rather than retaining an earlier prompt');
+      assert.equal(await page.locator('.log-row-trace-prompt').count(), 1, 'latest includes the prompt when its whole visible history fits');
       await page.locator('.log-row:not(:has(details)) [data-console-content]').first().scrollIntoViewIfNeeded();
       await page.locator('[data-execution-kind="text"]').first().waitFor();
     }

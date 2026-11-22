@@ -1,25 +1,25 @@
-// Task center: quick views, search, filters and groups ordered by who needs to act.
+// Task center: one top row (short search, archive, filter menu, new), quick
+// views without counts, and cards ordered by who needs to act. Drafts are not
+// shown on the phone.
 import { useQuery } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
-import { Archive, Filter, ListChecks, Plus, Search } from 'lucide-react-native';
-import { useState } from 'react';
-import { ActionSheetIOS, RefreshControl, ScrollView, SectionList, View } from 'react-native';
+import { Archive, Filter, ListChecks, Plus } from 'lucide-react-native';
+import { useMemo, useState } from 'react';
+import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { useFocusedInterval, useManualRefresh, useWorkspaceKey } from '@/api/queries';
 import { useCatalog } from '@/features/catalog';
-import { archiveTask, confirmDeleteTask, deleteTask, startTask } from '@/features/tasks/actions';
-import { taskFilters } from '@/features/tasks/filters';
-import { type Chip, chipOptions, editable, nextAction, readTaskDirectory, type TaskSummary, taskGroups, taskMatchesChip } from '@/features/tasks/model';
+import { archiveTask } from '@/features/tasks/actions';
+import { byNeed, type Chip, chipOptions, readTaskDirectory, rowAction, statusFilters, type TaskSummary, taskMatchesChip } from '@/features/tasks/model';
 import { TaskRow } from '@/features/tasks/task-row';
 import { $t, useLocale } from '@/i18n';
 import { useDebounced } from '@/lib/store';
 import { useTheme } from '@/theme';
-import { Chips, TextField } from '@/ui/form';
-import { HeaderButton, HeaderButtons } from '@/ui/header';
-import { GroupHeader } from '@/ui/layout';
+import { Chips } from '@/ui/form';
+import { IconButton } from '@/ui/icon-button';
+import { type MenuItem, MenuButton } from '@/ui/menu';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
-import { StatusIcon } from '@/ui/status';
-import { Txt } from '@/ui/text';
+import { TabToolbar } from '@/ui/toolbar';
 import { useToast } from '@/ui/toast';
 import { useClient } from '@/workspace/session';
 
@@ -31,104 +31,82 @@ export default function Tasks() {
   const { colors } = useTheme();
   const [chip, setChip] = useState<Chip>('all');
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('all');
+  const [workflow, setWorkflow] = useState('all');
   const [busy, setBusy] = useState<string | null>(null);
   const term = useDebounced(search.trim(), 300);
-  const filters = taskFilters.use();
   const catalog = useCatalog();
   const directory = useQuery({
-    queryKey: [...scope, 'tasks', term, filters.status, filters.workflow],
-    queryFn: () => readTaskDirectory(client, { search: term, ...filters }, false),
+    queryKey: [...scope, 'tasks', term, workflow],
+    queryFn: () => readTaskDirectory(client, { search: term, status: 'all', workflow }, false),
     refetchInterval: useFocusedInterval(10_000),
   });
   const pull = useManualRefresh(directory.refetch);
-  const all = directory.data?.all || [];
-  const visible = all.filter((task) => taskMatchesChip(task.status, chip));
-  const sections = taskGroups().map((group) => ({ ...group, data: visible.filter(group.match) })).filter((group) => group.data.length);
-  const filtered = filters.status !== 'all' || filters.workflow !== 'all';
-
-  async function run(task: TaskSummary, work: () => Promise<unknown>) {
-    setBusy(task.id);
-    try { await work(); await directory.refetch(); }
-    catch (error) { toast((error as Error).message, true); }
-    finally { setBusy(null); }
-  }
-  function open(task: TaskSummary) {
-    if (editable(task)) router.push({ pathname: '/task/compose', params: { taskId: task.id } });
-    else router.push({ pathname: '/task/[taskId]', params: { taskId: task.id } });
-  }
-  function act(task: TaskSummary) {
-    const action = nextAction(task);
-    if (action.kind === 'start') void run(task, () => startTask(client, task.id, toast));
-    else if (action.kind === 'archive') void run(task, () => archiveTask(client, task.id, toast));
-    else open(task);
-  }
-  function menu(task: TaskSummary) {
-    const items: Array<[string, () => void, boolean?]> = [[$t('打开'), () => open(task)]];
-    if (editable(task)) items.push([$t('编辑'), () => router.push({ pathname: '/task/compose', params: { taskId: task.id } })]);
-    if (task.status === 'done') items.push([$t('归档'), () => void run(task, () => archiveTask(client, task.id, toast))]);
-    if (task.deletionBlockedBy === null) items.push([$t('删除任务'), () => confirmDeleteTask(task, () => void run(task, () => deleteTask(client, task.id, toast))), true]);
-    ActionSheetIOS.showActionSheetWithOptions(
-      { title: task.title, options: [$t('取消'), ...items.map(([label]) => label)], cancelButtonIndex: 0, destructiveButtonIndex: items.findIndex((item) => item[2]) + 1 || undefined },
-      (index) => index > 0 && items[index - 1][1](),
-    );
-  }
-
-  const header = (
-    <View style={{ paddingTop: 8, paddingBottom: 8, gap: 8, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
-      <View style={{ marginHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: colors.bgSubtle, borderWidth: 1, borderColor: colors.borderSubtle }}>
-        <Search size={16} color={colors.textTertiary} />
-        <TextField value={search} onChangeText={setSearch} placeholder={$t('筛选任务名称')} returnKeyType="search" clearButtonMode="while-editing"
-          accessibilityLabel={$t('筛选任务名称')} style={{ flex: 1, borderWidth: 0, backgroundColor: 'transparent', paddingHorizontal: 0, minHeight: 40 }} />
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 4, alignItems: 'center' }}>
-        <Chips
-          value={chip}
-          onChange={setChip}
-          options={chipOptions().map((option) => ({ ...option, count: directory.data ? all.filter((task) => taskMatchesChip(task.status, option.value)).length : undefined }))}
-        />
-      </ScrollView>
-      {filtered ? (
-        <Txt variant="small" tone="tertiary" style={{ paddingHorizontal: 16, paddingTop: 6 }}>{$t('已应用筛选条件')}</Txt>
-      ) : null}
-    </View>
+  const statusMatch = statusFilters().find((item) => item.id === status)?.match || (() => true);
+  const tasks = useMemo(
+    () => (directory.data?.all || []).filter((task) => task.status !== 'backlog' && taskMatchesChip(task.status, chip) && statusMatch(task.status)).sort(byNeed),
+    [directory.data, chip, status], // eslint-disable-line react-hooks/exhaustive-deps
   );
+  const workflows = [...new Map([...(catalog.data?.workflowTemplates || []), ...(catalog.data?.taskWorkflows || [])].map((item) => [item.id, item.name]))];
+  const filtered = status !== 'all' || workflow !== 'all';
+  const filterItems: MenuItem[] = [
+    { id: 'status', title: $t('任务状态'), inline: true, children: statusFilters().map((item) => ({ id: 'status:' + item.id, title: item.label, checked: status === item.id })) },
+    { id: 'workflow', title: $t('工作流@@field'), inline: true, children: [{ id: 'workflow:all', title: $t('全部工作流'), checked: workflow === 'all' }, ...workflows.map(([id, name]) => ({ id: 'workflow:' + id, title: name, checked: workflow === id }))] },
+    ...(filtered ? [{ id: 'clear', title: $t('清除筛选'), icon: 'xmark.circle' }] : []),
+  ];
+  function selectFilter(id: string) {
+    if (id === 'clear') { setStatus('all'); setWorkflow('all'); return; }
+    const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
+    if (kind === 'status') setStatus(value);
+    if (kind === 'workflow') setWorkflow(value);
+  }
+
+  async function act(task: TaskSummary) {
+    const action = rowAction(task);
+    if (!action) return;
+    if (action.kind === 'archive') {
+      setBusy(task.id);
+      try { await archiveTask(client, task.id, toast); await directory.refetch(); }
+      catch (error) { toast((error as Error).message, true); }
+      finally { setBusy(null); }
+      return;
+    }
+    if (action.kind === 'accept' && task.runs?.[0]) {
+      router.push({ pathname: '/task/confirm', params: { taskId: task.id, runId: task.runs[0].id } });
+      return;
+    }
+    router.push({ pathname: '/task/[taskId]', params: { taskId: task.id } });
+  }
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          title: $t('任务') + (directory.data ? ' ' + all.length : ''),
-          headerRight: () => (
-            <HeaderButtons>
-              <HeaderButton icon={Archive} label={$t('归档历史')} onPress={() => router.push('/tasks/archive')} />
-              <HeaderButton icon={Filter} label={$t('筛选')} onPress={() => router.push('/tasks/filter')} />
-              <HeaderButton icon={Plus} label={$t('新建任务')} onPress={() => router.push('/task/compose')} />
-            </HeaderButtons>
-          ),
-        }}
-      />
-      <SectionList
-        contentInsetAdjustmentBehavior="automatic"
-        style={{ backgroundColor: colors.bgCanvas }}
-        sections={sections}
+    <View style={{ flex: 1, backgroundColor: colors.bgCanvas }}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <TabToolbar search={search} onSearchChange={setSearch} placeholder={$t('搜索任务')}>
+        <IconButton icon={Archive} label={$t('归档历史')} onPress={() => router.push('/tasks/archive')} />
+        <MenuButton icon={Filter} label={$t('筛选')} items={filterItems} onSelect={selectFilter} active={filtered} />
+        <IconButton icon={Plus} label={$t('新建任务')} onPress={() => router.push('/task/compose')} />
+      </TabToolbar>
+      <View style={{ borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, paddingBottom: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 12, gap: 4 }}>
+          <Chips value={chip} onChange={setChip} options={chipOptions()} />
+        </ScrollView>
+      </View>
+      <FlatList
+        data={tasks}
         keyExtractor={(task) => task.id}
-        stickySectionHeadersEnabled
-        ListHeaderComponent={header}
-        renderSectionHeader={({ section }) => (
-          <GroupHeader icon={<StatusIcon status={section.status} />} title={section.label} count={section.data.length} note={section.id === 'attention' ? $t('回答澄清、验收交付或处理中断') : undefined} />
-        )}
         renderItem={({ item }) => (
-          <TaskRow task={item} agents={catalog.data?.agents || []} busy={busy === item.id} onPress={() => open(item)} onLongPress={() => menu(item)} onAction={() => act(item)} />
+          <TaskRow task={item} busy={busy === item.id} onPress={() => router.push({ pathname: '/task/[taskId]', params: { taskId: item.id } })} onAction={() => void act(item)} />
         )}
         refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
+        keyboardDismissMode="on-drag"
         ListEmptyComponent={
           directory.isPending ? <LoadingState label={$t('正在读取任务')} />
             : directory.error ? <ErrorState title={$t('任务读取失败')} message={directory.error.message} onRetry={() => void directory.refetch()} />
-              : all.length ? <EmptyState icon={ListChecks} title={$t('没有匹配的任务')} description={$t('请调整筛选条件，或清空任务名称查看全部任务。')} />
-                : <EmptyState icon={ListChecks} title={$t('还没有任务')} description={$t('创建一个任务，选择团队或员工，由经理组织协作。')} />
+              : directory.data?.all.length ? <EmptyState icon={ListChecks} title={$t('没有匹配的任务')} description={$t('请调整筛选条件，或清空搜索查看全部任务。')} />
+                : <EmptyState icon={ListChecks} title={$t('还没有任务')} description={$t('点右上角 + 新建任务，选择团队或员工，由经理组织协作。')} />
         }
-        contentContainerStyle={{ paddingBottom: 96 }}
+        contentContainerStyle={{ paddingBottom: 16 }}
       />
-    </>
+    </View>
   );
 }

@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Baton 工作空间</title>
+    <link rel="stylesheet" href="/workspace-ui.css" />
+    <script type="module" src="/workspace-ui.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <strong>Baton</strong><span id="identity"></span
+        ><button id="logout" hidden>退出</button>
+      </header>
+      <p role="status" id="status"></p>
+      <nav id="tabs" aria-label="工作空间"></nav>
+      <section id="content"></section>
+    </main>
+  </body>
+</html>

@@ -22,7 +22,7 @@ let pendingWrite = Promise.resolve();
 function writePreference(path, patch) {
   const write = pendingWrite.then(async () => {
     const current = await readPreferenceFile(path);
-    const next = { closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, updateChannel: normalizeUpdateChannel(current.updateChannel) ?? undefined, ...patch };
+    const next = { workspaceChoices: current.workspaceChoices, closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, updateChannel: normalizeUpdateChannel(current.updateChannel) ?? undefined, residentService: typeof current.residentService === "boolean" ? current.residentService : undefined, ...patch };
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const pending = `${path}.tmp`;
     await writeFile(pending, JSON.stringify(next), { mode: 0o600 });
@@ -49,8 +49,26 @@ export async function saveLanguage(path, language) {
   await writePreference(path, { language });
 }
 /** Application update channel; missing or unknown values mean the default stable channel. */
+/** Resident service preference: true/false when chosen, null when never set (the caller applies its default). */
+export async function readResidentService(path) { const value = (await readPreferenceFile(path)).residentService; return typeof value === "boolean" ? value : null; }
+export async function saveResidentService(path, resident) {
+  if (typeof resident !== "boolean") throw new Error($t("后台服务设置无效"));
+  await writePreference(path, { residentService: resident });
+}
 export async function readUpdateChannel(path) { return normalizeUpdateChannel((await readPreferenceFile(path)).updateChannel) || "stable"; }
 export async function saveUpdateChannel(path, channel) {
   if (!normalizeUpdateChannel(channel)) throw new Error($t("更新渠道无效"));
   await writePreference(path, { updateChannel: channel });
+}
+
+export async function readWorkspaceChoices(path) {
+  const saved = (await readPreferenceFile(path)).workspaceChoices;
+  return {addresses:Array.isArray(saved?.addresses) ? saved.addresses.filter(value => typeof value === 'string') : [], selected:saved?.selected || 'local'};
+}
+export async function selectWorkspace(path, selected) {
+  const {addresses} = await readWorkspaceChoices(path);
+  if (selected !== 'local' && !addresses.includes(selected)) addresses.push(selected);
+  const workspaceChoices = {addresses,selected};
+  await writePreference(path,{workspaceChoices});
+  return workspaceChoices;
 }

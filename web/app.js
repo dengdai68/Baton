@@ -1,5 +1,6 @@
+import { requestId as newRequestId } from './workspace/request-id.mjs';
 import { $t, $tm, localizeStatic, currentLocale, intlLocale } from "../client/i18n.mjs";
-import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail } from './console-stream.mjs';
+import { captureConsoleReading, restoreConsoleReading, followConsoleLatest, onConsoleLatest, readConsoleTail, applyConsoleRead, appendConsoleLive } from './console-stream.mjs';
 import { createToast } from './toast.mjs';
 import {runtimeLabel,RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import { workflowConnections } from '/client/workflow-description.mjs';
@@ -13,7 +14,7 @@ import { createSettingsUI } from "./settings.mjs";
 import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect, extensionAvatarColor } from "./marketplace.mjs";
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
-import { consoleContentTokens, consoleEventWindow, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
+import { consoleContentTokens, retainsConsoleEvent, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
 import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, partyName, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workflowDisplay, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
 
 /* Baton Console：任务空间信息架构 + 轻盈视觉系统。
@@ -21,7 +22,7 @@ import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsole
 function routeFromLocation() {
   const automation = location.pathname.match(/^\/automations(?:\/([^/]+))?$/);
   if (automation) return { view: "automations", automationId: automation[1] || null, runId: null };
-  const settings = location.pathname.match(/^\/settings(?:\/(general|appearance|workspace|cli|repositories|runtime|updates|logs))?$/);
+  const settings = location.pathname.match(/^\/settings(?:\/(general|appearance|workspaces|workspace|cli|repositories|runtime|devices|updates|logs))?$/);
   if (settings) return { view: "settings", runId: null, settingsPage: settings[1] || "general" };
   const chat = location.pathname.match(/^\/communication(?:\/([^/]+))?$/);
   if (chat) return { view: "communication", runId: null, chatId: chat[1] || null };
@@ -234,6 +235,7 @@ async function refresh({ quiet = false } = {}) {
     } catch { /* Storage may be unavailable in this container. */ }
     Object.assign(state, result);
     if (view === 'shell') { state.navigationNotifications = result; state.businessReady = true; }
+    if (state.businessReady) connectEvents(currentView === 'workspace' ? state.selectedRunId : null);
     const directory=refreshDirectory({paint:true});
     if(['tasks','agents','roles','communication','automations','overview'].includes(currentView))void loadCatalogReferences().then(()=>{
       if(request!==refreshRequest || currentView!==state.currentView)return;
@@ -257,7 +259,7 @@ const communicationUI = createCommunicationUI({ api, notify: toast, confirmDialo
   renderAvatar: (agent, className = '') => `<span class="agent-card-avatar ${esc(roleColor(agent))} ${esc(className)}" aria-hidden="true">${esc(initialsOf(agent))}</span>`,
   renderConsole: (stream, result, agent) => {
     if (result.refresh) for (const cache of [consoleContentCache, promptSnapshotCache]) for (const key of cache.keys()) if (key.startsWith(result.basePath + '/')) cache.delete(key);
-    renderChatStream(result.events.map(event => ({ ...event, contentBase: result.basePath })), agent, { stream, runId: null, traces: result.traces.map(trace => ({ ...trace, contentBase: result.basePath })), hasMore: result.hasMore });
+    renderChatStream(result.events.map(event => ({ ...event, contentBase: result.basePath })), agent, { stream, runId: null, traces: result.traces.map(trace => ({ ...trace, contentBase: result.basePath })), boundary: result.boundary, historical: result.historical, hasMore: result.hasMore, showEmpty: result.showEmpty });
   },
   onRead: () => refreshNavigation(),
   prepareContent: () => Promise.all([loadVendor("marked"), loadVendor("dompurify")]),
@@ -459,7 +461,7 @@ function setView(view, { replace = false, taskArchiveView = state.taskArchiveVie
   if (view !== "marketplace") marketplaceUI.unmount();
   if (view !== "workspace") {
     if(state.selectedRunId){const reading=workspaceView();reading.collaborationRequest=(reading.collaborationRequest||0)+1;reading.collaborationPending=null;reading.collaborationLoading=false;}
-    state.eventSource?.close(); state.eventSource = null;
+    if (state.eventSource?.runId) { state.eventSource.close(); state.eventSource = null; }
     clearTimeout(workspaceRefreshTimer); clearTimeout(consoleRenderTimer);
     workspaceRefreshTimer = null; consoleRenderTimer = null;
     workspaceRequest++;
@@ -1631,7 +1633,7 @@ function renderWorkspace() {
   const followConsole = !consoleView || consoleView.following || view.jumpLatest;
   view.jumpLatest = false;
   requestAnimationFrame(() => {
-    if (stream.isConnected && tab === "console" && followConsole) followConsoleLatest(stream);
+    if (stream.isConnected && tab === "console" && followConsole && captureConsoleReading(stream).following) followConsoleLatest(stream);
   });
   if (draftFocused && $("#instruction-text")) {
     $("#instruction-text").focus({ preventScroll: true });
@@ -1669,14 +1671,15 @@ function renderConsolePage({ prepend = false } = {}) {
   if (!stream || !agent) return;
   const page = consolePage(state.selectedRunId, agent.id);
   if (stream.dataset.readingAgent !== agent.id) { followConsoleLatest(stream); stream.dataset.readingAgent = agent.id; }
-  onConsoleLatest(stream, () => { if (page.browsingHistory && !page.traceId) void loadConsolePage(state.selectedRunId, agent.id, { reset: true, traceId: null }); });
+  onConsoleLatest(stream, () => { if (page.browsingHistory) void loadConsolePage(state.selectedRunId, agent.id, { reset: true, traceId: page.traceId }); });
   const reading = captureConsoleReading(stream);
   const open = new Set([...stream.querySelectorAll("details[open][data-console-key]")].map((item) => item.dataset.consoleKey));
   const closed = new Set([...stream.querySelectorAll("details[data-default-open]:not([open])")].map((item) => item.dataset.consoleKey));
-  renderChatStream(page.events, agent, { traceId: page.traceId, hasMore: page.hasMore });
+  const traces = page.loaded ? [...new Map([...(page.traces || []), ...state.workspace.traces].map(trace => [trace.id, trace])).values()] : [];
+  renderChatStream(page.events, agent, { traceId: page.traceId, hasMore: page.hasMore, boundary: page.windowStart, historical: Boolean(page.liveEvents), traces, showEmpty: page.loaded && !page.hasMore && !page.error });
   const controls = document.createElement("div"); controls.className = "console-history-controls";
   controls.innerHTML = `${page.hasMore ? `<button class="small-button" data-console-older>${$t("加载更早记录")}</button>` : ""}${page.traceId ? `<button class="small-button" data-console-reset>${$t("查看该角色全部执行")}</button>` : ""}${page.loading && !page.silent ? `<span role="status">${$t("正在加载记录…")}</span>` : ""}${page.error ? `<span role="alert">${esc(page.error)}</span><button class="small-button" data-console-retry>${$t("重试")}</button>` : ""}`;
-  for (const button of controls.querySelectorAll("button")) button.disabled = page.loading;
+  for (const button of controls.querySelectorAll("button")) button.disabled = page.loading && !page.silent;
   const oldControls = stream.querySelector(".console-history-controls");
   if (!oldControls) stream.prepend(controls);
   else if (oldControls.outerHTML !== controls.outerHTML) oldControls.replaceWith(controls);
@@ -1694,7 +1697,7 @@ async function openCollaborationTurn(traceId, startMessageId) {
   workspaceView().jumpLatest = false; workspaceView().tab = "console";
   renderWorkspace();
   await loadConsolePage(runId, trace.agentId, { reset: true, traceId });
-  if (state.selectedRunId !== runId || state.selectedAgentId !== trace.agentId) return;
+  if (state.currentView !== "workspace" || state.selectedRunId !== runId || state.selectedAgentId !== trace.agentId || workspaceView(runId).tab !== "console" || consolePage(runId, trace.agentId).traceId !== traceId) return;
   const key = startMessageId || trace.inputMessageId || trace.id;
   const prompt = document.querySelector(`[data-turn-message-id="${CSS.escape(key)}"]`);
   if (!prompt) return toast($t("本轮提示词定位失败，请重试。"), true);
@@ -1713,33 +1716,42 @@ async function openCollaborationTurn(traceId, startMessageId) {
 async function loadConsolePage(runId, agentId, { older = false, reset = false, traceId } = {}) {
   if(state.currentView!=='workspace' || state.selectedRunId!==runId || workspaceView(runId).tab!=='console')return;
   const page = consolePage(runId, agentId);
-  if (page.loading && !reset) return;
-  if (reset) { page.loaded = false; page.forceLatest = !traceId; page.browsingHistory = false; page.liveEvents = null; }
-  if (older) { page.liveEvents ||= [...page.events]; page.browsingHistory = true; }
-  if (traceId !== undefined) page.traceId = traceId;
+  if (page.loading && !reset && !(older && page.silent)) return;
+  if (older && (!page.hasMore || !page.nextBefore)) return;
+  if (traceId !== undefined && traceId !== page.traceId) {
+    Object.assign(page, { traceId, events: [], traces: [], loaded: false, browsingHistory: false, liveEvents: null, headId: null, hasMore: false, nextBefore: null });
+  }
   const request = ++page.request;
   const arriving = new Map(); page.loadingEvents = arriving;
   const query = new URLSearchParams({ agentId, limit: "50" });
-  if (older && page.nextBefore) query.set("before", page.nextBefore);
   if (page.traceId) query.set("traceId", page.traceId);
   page.silent = page.loaded && !older && !reset;
   page.loadingMode = reset ? 'reset' : older ? 'older' : 'tail';
   page.loading = true; page.error = null;
   if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage();
   try {
-    const fetchPage = before => { const params = new URLSearchParams(query); if (before) params.set('before', before); return api(`/api/runs/${encodeURIComponent(runId)}/console?${params}`); };
-    const result = older ? await fetchPage() : await readConsoleTail(reset ? [] : page.liveEvents || page.events, fetchPage);
-    if (request !== page.request) return;
-    if(state.currentView==='workspace' && state.workspace?.run.id===runId && state.selectedRunId===runId)state.workspace.traces=[...new Map([...state.workspace.traces,...(result.traces||[])].map(item=>[item.id,item])).values()].slice(-300);
-    const received = [...new Map([...result.events, ...(older ? [] : arriving.values())].map(event => [event.id, event])).values()];
-    if (!older && page.browsingHistory && !page.traceId) { page.liveEvents = consoleEventWindow(page.liveEvents || [], received).events; return; }
-    const window = consoleEventWindow(reset ? [] : page.events, received, { older });
-    page.events = window.events;
-    if (!page.loaded || older || reset || window.reset) { page.hasMore = result.hasMore; page.nextBefore = result.nextBefore; }
-    if (window.trimmedBefore) { page.hasMore = true; page.nextBefore = page.events[0].id; }
-    page.loaded = true;
-  } catch (error) { if (request === page.request) page.error = error.message; }
-  finally { if (request === page.request) { page.loading = false; page.loadingMode = null; page.loadingEvents = null; if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage({ prepend: older }); } }
+    const fetchPage = (before, limit) => { const params = new URLSearchParams(query); params.set("limit", String(limit)); if (before) params.set('before', before); return api(`/api/runs/${encodeURIComponent(runId)}/console?${params}`); };
+    const isCurrent = () => request === page.request && state.currentView === 'workspace' && state.selectedRunId === runId && workspaceView(runId).tab === 'console' && state.selectedAgentId === agentId;
+    const result = await readConsoleTail(older || reset ? [] : page.liveEvents || page.events, fetchPage, {
+      headId: !older && !reset ? page.headId : null, before: older ? page.nextBefore : undefined, isCurrent
+    });
+    if (!result || !isCurrent()) return;
+    const stream = $("#trace-stream");
+    const holdReading = stream && !captureConsoleReading(stream).following;
+    applyConsoleRead(page, result, { older, latest: reset, arriving: [...arriving.values()], holdReading });
+    page.forceLatest = reset && !page.traceId;
+    page.retryOptions = null;
+  } catch (error) {
+    if (request === page.request) {
+      if (reset) appendConsoleLive(page, [...arriving.values()], true);
+      page.error = error.message; page.retryOptions = { older, reset, traceId };
+    }
+  } finally {
+    if (request === page.request) {
+      page.loading = false; page.loadingMode = null; page.loadingEvents = null;
+      if (state.selectedRunId === runId && state.selectedAgentId === agentId) renderConsolePage({ prepend: older && !page.error });
+    }
+  }
 }
 
 function isCurrentRuntimeAudit(event) {
@@ -1865,18 +1877,17 @@ function renderChatEvent(event, trace, agent) {
 }
 
 /* 初次进入跟随最新；后续由 Run 的本地阅读状态决定是否跟随。 */
-function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
+function updateConsoleRows(stream, rows, identity, traceById, showEmpty) {
   if (stream.dataset.consoleIdentity !== identity) { stream.replaceChildren(); stream.dataset.consoleIdentity = identity; }
   // An empty console is a plain centered state, not an execution card.
   if (!rows.length) {
-    if (stream.dataset.consoleEmpty !== "1") {
-      stream.querySelectorAll(':scope > .console-execution').forEach(node => node.remove());
-      stream.insertAdjacentHTML("beforeend", `<div class="directory-empty console-empty-state" role="status"><strong>${$t("尚无执行内容")}</strong><span>${$t("正文、思考、工具调用和异常将在这里显示。")}</span></div>`);
-      stream.dataset.consoleEmpty = "1";
-    }
+    stream.querySelectorAll(':scope > .console-execution').forEach(node => node.remove());
+    const empty = stream.querySelector(':scope > .console-empty-state');
+    if (!showEmpty) empty?.remove();
+    else if (!empty) stream.insertAdjacentHTML("beforeend", `<div class="directory-empty console-empty-state" role="status"><strong>${$t("尚无执行内容")}</strong><span>${$t("正文、思考、工具调用和异常将在这里显示。")}</span></div>`);
     return;
   }
-  if (stream.dataset.consoleEmpty === "1") { stream.querySelector(':scope > .console-empty-state')?.remove(); delete stream.dataset.consoleEmpty; }
+  stream.querySelector(':scope > .console-empty-state')?.remove();
   const existing = new Map([...stream.querySelectorAll('[data-console-row]')].map(node => [node.dataset.consoleRow, node]));
   const existingGroups = new Map([...stream.children].filter(node => node.dataset.consoleExecution).map(node => [node.dataset.consoleExecution, node]));
   const groups = [], occurrences = new Map();
@@ -1944,7 +1955,7 @@ function updateConsoleRows(stream, rows, identity, traceById = new Map()) {
   for (const node of existingGroups.values()) node.remove();
 }
 
-function renderChatStream(events, agent, { traceId = null, hasMore = false, stream = $("#trace-stream"), runId = state.selectedRunId, traces = null } = {}) {
+function renderChatStream(events, agent, { traceId = null, hasMore = false, boundary = null, historical = false, showEmpty = true, stream = $("#trace-stream"), runId = state.selectedRunId, traces = null } = {}) {
   if (!stream) return;
   // Collaboration content has its own view; echoing message.sent here repeats
   // the Provider's final TEXT as a second, misleading "system" response.
@@ -1959,7 +1970,9 @@ function renderChatStream(events, agent, { traceId = null, hasMore = false, stre
   // frames. A prompt is an ordinary timestamped entry, not a header for a
   // partially loaded invocation. Reveal it only when history reaches its time.
   const pageTimes = events.filter((event) => event.actor?.id === agent.id).map((event) => timestamp(event.timestamp)).filter((time) => time !== null);
-  const windowStart = pageTimes.length ? Math.min(...pageTimes) : null;
+  const windowStart = timestamp(boundary) ?? (pageTimes.length ? Math.min(...pageTimes) : null);
+  const windowEnd = historical && pageTimes.length ? Math.max(...pageTimes) : null;
+  const starts = new Set(events.filter(event => ["trace.started", "communication.started"].includes(event.type)).map(event => event.data?.traceId));
   const encountered = new Map();
   const rows = [];
   for (const entry of entries) {
@@ -1975,11 +1988,12 @@ function renderChatStream(events, agent, { traceId = null, hasMore = false, stre
     if (traceId && id !== traceId) continue;
     const trace = traceById.get(id);
     const time = timestamp(trace?.startedAt) ?? encountered.get(id) ?? null;
-    if (!traceId && hasMore && (time === null || (windowStart !== null && time < windowStart))) continue;
+    if (!traceId && windowEnd !== null && time > windowEnd) continue;
+    if (!traceId && hasMore && !starts.has(id) && (time === null || (windowStart !== null && time < windowStart))) continue;
     rows.push({ key: `prompt:${id}`, traceId: id, time, prompt: true, html: trace ? tracePromptMarkup(trace, runId, agent) : tracePromptFallbackMarkup(id) });
   }
   rows.sort((a, b) => (a.time ?? Infinity) - (b.time ?? Infinity) || Number(Boolean(b.prompt)) - Number(Boolean(a.prompt)));
-  updateConsoleRows(stream, rows, `${runId}:${agent.id}:${traceId || ""}`, traceById);
+  updateConsoleRows(stream, rows, `${runId}:${agent.id}:${traceId || ""}`, traceById, showEmpty);
   queueMicrotask(() => observeConsoleContent(stream));
 }
 
@@ -2434,7 +2448,7 @@ function bindTaskAttachments(dock, view, workspace, agents, messagingBlocked) {
       for (const file of event.target.files) {
         if (view.attachments.length >= 10) { toast($t("每条消息最多 10 个附件"), true); break; }
         if (file.size > 20*1024*1024) { toast($t("「{0}」超过单文件 20 MiB 上限", [file.name]), true); continue; }
-        view.attachments.push({id:crypto.randomUUID(),file,uploaded:null,previewURL:imageAttachment(file.name) ? URL.createObjectURL(file) : null});
+        view.attachments.push({id:newRequestId(),file,uploaded:null,previewURL:imageAttachment(file.name) ? URL.createObjectURL(file) : null});
       }
       renderCollaboration(workspace, agents);
     };
@@ -2537,7 +2551,7 @@ function renderCollaboration(workspace, agents) {
       <div class="mention-wrap"><div class="message-composer-input"><div class="communication-draft-attachments" data-task-attachments>${draftAttachments(view.attachments, "task", view.sending || messagingBlocked)}</div><textarea id="instruction-text" name="content" rows="2" placeholder="${$t("输入消息…")}"></textarea></div><div class="mention-list" id="mention-list"></div></div>
       <input type="file" multiple data-task-file hidden><input type="file" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/avif,image/bmp" data-task-image-file hidden>
       <div class="communication-composer-actions">${attachmentControls("task", messagingBlocked || view.sending)}<button type="button" class="composer-icon-button" data-task-mention aria-label="${$t("提及成员")}" title="${$t("提及成员")}" ${messagingBlocked || view.sending ? "disabled" : ""}>@</button><span class="composer-hint">${$t("Enter 发送 · Shift + Enter 换行")}</span><button class="primary-button" type="submit" data-send-instruction ${messagingBlocked || view.sending ? 'disabled' : ''}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg>${$t("发送")}</button></div></div>
-      <p class="directive-note">${run.task.archivedAt ? $t("任务已归档，协作记录只读。") : run.status === "failed" ? $t("任务因错误中断，请先点击重试继续失败员工；当前不能发送消息或 @ 其他成员。") : questions.length ? $t("请先回复待澄清的问题。") : ["completed", "cancelled", "paused"].includes(run.status) ? $t("可继续咨询；仅答疑，不恢复业务流程。") : $t("新指令入队，不打断当前成员。")}</p>
+
     </form>`}`;
   $("#instruction-form")?.addEventListener("submit", sendInstruction);
   $("#reply-question")?.addEventListener("change", event => { view.replyToMessageId = event.target.value; });
@@ -2657,21 +2671,50 @@ function setLiveIndicator(connected) {
   indicator.setAttribute("aria-label", $t("实时同步：{0}", [connected ? $t("已连接") : $t("已断开")]));
   indicator.title = indicator.getAttribute("aria-label");
 }
+let taskListRefreshPending = false;
+let taskListRefreshDirty = false;
+async function refreshLiveTaskList() {
+  taskListRefreshDirty = true;
+  if (taskListRefreshPending) return;
+  taskListRefreshPending = true;
+  try {
+    while (taskListRefreshDirty && state.currentView === 'tasks') {
+      taskListRefreshDirty = false;
+      await refreshDirectory();
+      if (state.currentView === 'tasks') renderTasks();
+    }
+  } catch { /* A subsequent change or foreground refresh retries the read. */ }
+  finally { taskListRefreshPending = false; }
+}
+function refreshWorkspaceTopics(topics) {
+  if (document.visibilityState === 'hidden' || resetRequestActive) return;
+  const tasks = topics.includes('tasks');
+  const chats = topics.includes('chats');
+  if (tasks || chats) void refreshNavigation();
+  if (state.currentView === 'tasks' && tasks) void refreshLiveTaskList();
+  if (state.currentView === 'workspace' && tasks) scheduleWorkspaceRefresh(state.selectedRunId);
+  if (state.currentView === 'automations' && (tasks || topics.includes('automations'))) void automationUI.refreshQuietly();
+  if (state.currentView === 'communication' && (chats || topics.includes('chat-console'))) communicationUI.refreshLive();
+}
 function connectEvents(runId) {
   if (state.eventSource?.runId === runId) return;
   state.eventSource?.close();
   clearTimeout(workspaceRefreshTimer); workspaceRefreshTimer = null;
   clearTimeout(consoleRenderTimer); consoleRenderTimer = null;
-  for (const [key, page] of consolePages) if (key.startsWith(`${runId}:`)) { page.request++; page.loading = false; page.loaded = false; page.events = []; page.error = null; page.hasMore = false; page.nextBefore = null; }
+  for (const [key, page] of consolePages) if (key.startsWith(`${runId}:`)) { page.request++; page.loading = false; page.loaded = false; page.events = []; page.error = null; page.hasMore = false; page.nextBefore = null; page.headId = null; page.liveEvents = null; page.browsingHistory = false; page.traces = []; page.retryOptions = null; }
   for(const key of consolePages.keys())if(!key.startsWith(`${runId}:`))consolePages.delete(key);
-  const source = new EventSource(`/api/runs/${runId}/events`);
+  const source = new EventSource('/api/workspace/events' + (runId ? '?runId=' + encodeURIComponent(runId) : ''));
   source.addEventListener("auth-expired", () => { source.close(); location.replace(`/login?next=${encodeURIComponent(location.pathname)}`); });
+  source.addEventListener("workspace-change", message => {
+    if (state.eventSource === source) refreshWorkspaceTopics(JSON.parse(message.data));
+  });
   source.runId = runId;
   let connected = false;
   source.addEventListener("open", () => {
     if (state.eventSource !== source) return;
     setLiveIndicator(true);
-    if (connected) {
+    refreshWorkspaceTopics(['tasks', 'chats', 'chat-console', 'automations']);
+    if (connected && runId) {
       scheduleWorkspaceRefresh(runId);
       if (workspaceView(runId).tab === "console" && state.selectedAgentId) loadConsolePage(runId, state.selectedAgentId);
     }
@@ -2682,16 +2725,14 @@ function connectEvents(runId) {
     if (state.eventSource !== source || state.currentView !== "workspace" || state.selectedRunId !== runId) return;
     const event = JSON.parse(message.data);
     const page = consolePages.get(`${runId}:${event.actor?.id}`);
-    if (page && (page.loaded || page.loading) && (!page.traceId || page.traceId === event.data?.traceId) && !page.events.some((item) => item.id === event.id)) {
-      if (page.loadingEvents) { page.loadingEvents.set(event.id, event); if (page.loadingEvents.size > 200) page.loadingEvents.delete(page.loadingEvents.keys().next().value); }
+    if (page && retainsConsoleEvent(event) && (page.loaded || page.loading) && (!page.traceId || page.traceId === event.data?.traceId) && !page.events.some((item) => item.id === event.id)) {
+      if (page.loadingEvents) { page.loadingEvents.set(event.id, event); if (page.loadingEvents.size > 201) page.loadingEvents.delete(page.loadingEvents.keys().next().value); }
       // A latest-page replacement buffers concurrent SSE until its response;
       // never attach a new tail to a stale historical window across a gap.
       if (page.loadingMode !== 'reset') {
-        if (page.browsingHistory && !page.traceId) {
-          page.liveEvents = [...new Map([...(page.liveEvents || page.events), event].map(item => [item.id, item])).values()].slice(-200);
-        } else page.events.push(event);
-        // Keep the automatic live window bounded; older events remain available through pagination.
-        if (!page.browsingHistory && page.events.length > 200) { page.events = page.events.slice(-200); page.nextBefore = page.events[0].id; page.hasMore = true; }
+        const stream = event.actor.id === state.selectedAgentId && workspaceView(runId).tab === "console" && $("#trace-stream");
+        const holdReading = page.loadingMode === 'older' || (page.events.length >= 200 && stream && !captureConsoleReading(stream).following);
+        appendConsoleLive(page, [event], holdReading);
         if (event.actor?.id === state.selectedAgentId && workspaceView(runId).tab === "console" && !consoleRenderTimer) consoleRenderTimer = setTimeout(() => { consoleRenderTimer = null; renderConsolePage(); }, 100);
       }
     }
@@ -2766,7 +2807,7 @@ async function sendInstruction(event) {
   const attachments = [...(view.attachments || [])];
   view.outbox ||= new Map();
   const signature=JSON.stringify({content,recipientAgentId:replyToMessageId ? null : target?.id ?? null,replyToMessageId,attachments:attachments.map(item=>item.id)});
-  if(view.sendRequest?.signature!==signature)view.sendRequest={id:crypto.randomUUID(),signature};
+  if(view.sendRequest?.signature!==signature)view.sendRequest={id:newRequestId(),signature};
   const replyQuestion=state.workspace.pendingQuestions?.find(item=>item.id===replyToMessageId) || view.outbox.get(view.sendRequest.id)?.replyQuestion;
   const outgoing={id:view.sendRequest.id,signature,content,draft,draftRevision,createdAt:new Date().toISOString(),status:'sending',attachments,replyToMessageId,replyQuestion,recipientName:replyToMessageId ? replyQuestion?.sender.name : (target || state.workspace.run.manager)?.name};
   view.outbox.set(outgoing.id,outgoing);
@@ -3363,9 +3404,13 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-chat-team]"))) return communicationUI.open("team", target.dataset.chatTeam);
   if ((target = el('[data-new-team-task]'))) return newTaskModal({teamId:target.dataset.newTeamTask});
   if ((target = el("#logout-button"))) {
-    target.disabled = true; target.textContent = $t("退出中…");
-    api("/api/auth/logout", { method: "POST", body: "{}" }).then(() => location.replace("/login")).catch(error => { toast(error.message, true); target.disabled = false; target.textContent = $t("退出登录"); });
-    return;
+    const button = target;
+    return confirmDialog({ title: $t("退出登录"), message: $t("确定退出当前账号？"), confirmLabel: $t("退出登录"), danger: true }).then(async confirmed => {
+      if (!confirmed) return;
+      button.disabled = true; button.textContent = $t("退出中…");
+      try { await api("/api/auth/logout", { method: "POST", body: "{}" }); location.replace("/login"); }
+      catch (error) { toast(error.message, true); button.disabled = false; button.textContent = $t("退出登录"); }
+    });
   }
   if ((target = el("[data-send-instruction]"))) {
     event.preventDefault();
@@ -3476,7 +3521,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-load-more-directory]"))) return loadWorkingDirectory(state.selectedRunId,{path:target.dataset.loadMoreDirectory,more:true});
   if ((target = el("[data-console-older]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { older: true });
   if ((target = el("[data-console-reset]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null });
-  if ((target = el("[data-console-retry]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { older: consolePage(state.selectedRunId, state.selectedAgentId).loaded });
+  if ((target = el("[data-console-retry]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, consolePage(state.selectedRunId, state.selectedAgentId).retryOptions || {});
   if ((target = el("[data-back-to-tasks]"))) { if(state.workspace?.run.task.kind === "automation") { state.automationId=state.workspace.run.task.automationId; return setView("automations"); } return setView("tasks"); }
   if ((target = el("[data-open-acceptance-directory]"))) { workspaceView().tab = "directory"; return renderWorkspace(); }
   if ((target = el("[data-select-working-file]"))) return loadWorkingFile(state.selectedRunId, target.dataset.selectWorkingFile);
@@ -3498,7 +3543,7 @@ document.addEventListener("click", (event) => {
   if ((target = el("[data-answer-message]"))) { workspaceView().replyToMessageId = target.dataset.answerMessage;workspaceView().sendRequest=null; renderWorkspace(); $("#instruction-text").focus({ preventScroll: true }); return; }
   if ((target = el("[data-open-collaboration-trace]"))) { void openCollaborationTurn(target.dataset.openCollaborationTrace, target.dataset.startMessageId); return; }
   if ((target = el("[data-open-acceptance-review]"))) { const trace = state.workspace?.traces.find((item) => item.id === target.dataset.openAcceptanceReview); if (!trace) return toast($t("经理交接记录在当前 Run 中不可读取。"), true); state.selectedAgentId = trace.agentId; workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, trace.agentId, { reset: true, traceId: trace.id }); renderWorkspace(); return; }
-  if ((target = el("[data-console-latest]"))) { workspaceView().jumpLatest = true; workspaceView().tab = "console"; loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null }); renderWorkspace(); const stream = $("#trace-stream"); followConsoleLatest(stream); return; }
+  if ((target = el("[data-console-latest]"))) return loadConsolePage(state.selectedRunId, state.selectedAgentId, { reset: true, traceId: null });
   if ((target = el("[data-collaboration-older]"))) {loadCollaboration(state.selectedRunId,{older:true}).catch(error=>toast(error.message,true));return;}
   if ((target = el("[data-select-agent]"))) { state.selectedAgentId = target.dataset.selectAgent; workspaceView().jumpLatest = true; return renderWorkspace(); }
   if ((target = el("[data-mention-insert]"))) {
@@ -3649,10 +3694,10 @@ async function init() {
   const reconcileConsole = () => {
     if (document.visibilityState === 'hidden' || state.currentView !== 'workspace' || workspaceView().tab !== 'console' || !state.selectedAgentId) return;
     const page = consolePage(state.selectedRunId, state.selectedAgentId);
-    if (page.loaded && !page.loading) void loadConsolePage(state.selectedRunId, state.selectedAgentId);
+    if (page.loaded && !page.loading && !page.retryOptions?.older && !page.retryOptions?.reset) void loadConsolePage(state.selectedRunId, state.selectedAgentId);
   };
   setInterval(reconcileConsole, 5000);
-  document.addEventListener('visibilitychange', reconcileConsole);
+  document.addEventListener('visibilitychange', () => { reconcileConsole(); refreshWorkspaceTopics(['tasks','chats','chat-console','automations']); });
   if (state.currentView === "workspace" && state.selectedRunId) await Promise.all([initialData, loadWorkspace(state.selectedRunId, { quiet: true })]);
   else if (state.currentView === "workspace") renderWorkspace();
 }

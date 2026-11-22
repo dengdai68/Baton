@@ -31,7 +31,7 @@ export function CollapsibleBody({ content, mentions, tone }: { content: string; 
   return (
     <View>
       <View style={expanded ? undefined : { maxHeight: 240, overflow: 'hidden' }}>
-        <Markdown content={content} mentions={mentions} tone={tone} />
+        <Markdown size="body" content={content} mentions={mentions} tone={tone} />
       </View>
       {long ? (
         <Pressable accessibilityRole="button" onPress={() => setExpanded(!expanded)} hitSlop={6} style={{ paddingTop: 6 }}>
@@ -45,18 +45,23 @@ export function CollapsibleBody({ content, mentions, tone }: { content: string; 
 type Sender = { id?: string | null; name?: string | null; color?: string | null };
 
 /** One agent/system message: avatar, name · kind → recipient · time, body, extras. */
-export function AgentMessage({ sender, name, kind, to, time, status, children, attention }: {
+export function AgentMessage({ sender, name, kind, to, time, status, children, attention, accessory }: {
   sender: Sender; name: string; kind?: string; to?: string | null; time: string; status?: string; children: ReactNode; attention?: boolean;
+  /** Small icon actions at the end of the header (console, reply). */
+  accessory?: ReactNode;
 }) {
   const { colors, metrics } = useTheme();
   return (
     <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
       <Avatar member={sender} size={28} />
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
-          <Txt weight="semibold" numberOfLines={1}>{name}</Txt>
-          {kind ? <Txt variant="small" tone="tertiary">{kind}{to ? ' → ' + to : ''}</Txt> : null}
-          <Txt variant="caption" tone="tertiary" numeric>{formatMessageTime(time)}</Txt>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
+          <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', columnGap: 6 }}>
+            <Txt weight="semibold" numberOfLines={1}>{name}</Txt>
+            {kind ? <Txt variant="small" tone="tertiary">{kind}{to ? ' → ' + to : ''}</Txt> : null}
+            <Txt variant="caption" tone="tertiary" numeric>{formatMessageTime(time)}</Txt>
+          </View>
+          {accessory ? <View style={{ flexDirection: 'row', marginTop: -6, marginRight: -6 }}>{accessory}</View> : null}
         </View>
         {status ? <Txt variant="caption" tone={attention ? 'attention' : 'tertiary'}>{status}</Txt> : null}
         {attention ? (

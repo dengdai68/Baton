@@ -30,19 +30,26 @@ async function readJson<T>(key: string, fallback: T): Promise<T> {
   }
 }
 
+const addressesKey = 'baton.login.addresses';
 export const workspaceStore = {
-  list: () => readJson<SavedWorkspace[]>(LIST, []),
-  async saveAll(items: SavedWorkspace[]) {
-    await SecureStore.setItemAsync(LIST, JSON.stringify(items));
+  addresses: () => readJson<string[]>(addressesKey, []),
+  async remember(origin: string) {
+    const addresses = await workspaceStore.addresses();
+    const next = [origin, ...addresses.filter(address => address !== origin)];
+    await SecureStore.setItemAsync(addressesKey, JSON.stringify(next));
+    return next;
   },
-  activeId: () => SecureStore.getItemAsync(ACTIVE),
-  async setActive(id: string | null) {
-    if (id) await SecureStore.setItemAsync(ACTIVE, id);
-    else await SecureStore.deleteItemAsync(ACTIVE);
+  current: () => readJson<{workspace: SavedWorkspace; token: string} | null>('baton.login.v1', null),
+  async save(workspace: SavedWorkspace, token: string) {
+    await SecureStore.setItemAsync('baton.login.v1', JSON.stringify({workspace, token}));
   },
-  token: (id: string) => SecureStore.getItemAsync(tokenKey(id)),
-  setToken: (id: string, token: string) => SecureStore.setItemAsync(tokenKey(id), token),
-  deleteToken: (id: string) => SecureStore.deleteItemAsync(tokenKey(id)),
+  clear: () => SecureStore.deleteItemAsync('baton.login.v1'),
+  async discardLegacy() {
+    const items = await readJson<SavedWorkspace[]>(LIST, []);
+    for (const item of items) await SecureStore.deleteItemAsync(tokenKey(item.id));
+    await SecureStore.deleteItemAsync(LIST);
+    await SecureStore.deleteItemAsync(ACTIVE);
+  },
   preferences: () => readJson<Preferences>(PREFERENCES, defaultPreferences),
   savePreferences: (value: Preferences) => SecureStore.setItemAsync(PREFERENCES, JSON.stringify(value)),
 };

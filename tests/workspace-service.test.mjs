@@ -4,12 +4,15 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import http from "node:http";
 import https from "node:https";
 import { createStore } from "../server/store.mjs";
 import { workspaceIdentity } from "../server/workspace-identity.mjs";
+import {createAuth} from "../server/auth.mjs";
+const credentials = {name:"operator",password:"workspace test password"};
 import { startWorkspace } from "../server/workspace-http.mjs";
 
-async function setup(t, mode, { api } = {}) {
+async function setup(t, mode, { api, isReady, protocol = "https:" } = {}) {
   const root = mkdtempSync(join(tmpdir(), "baton-workspace-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const key = join(root, "key"),
@@ -35,17 +38,19 @@ async function setup(t, mode, { api } = {}) {
     ],
     { stdio: "ignore" },
   );
-  const origin = "https://localhost",
+  const origin = protocol + "//localhost",
     config = { mode, name: "Test", origin, key, cert, port: 0 };
   const store = createStore({
     databasePath: join(root, "business.sqlite"),
     workspaceRoot: root,
     configurationDirectory: root,
   });
-  const identity = workspaceIdentity(root, mode);
+  const administrator = createAuth({databasePath:join(root,'auth.sqlite')});
+  if(mode === 'local') await administrator.setAdministrator(credentials.name,credentials.password);
+  const identity = workspaceIdentity(root, mode,administrator);
   const server = await startWorkspace({
     root,
-    config,
+    config, administrator, isReady,
     ensureBusiness: async () => store,
     canWrite: () => true,
     execute: () => {},
@@ -63,7 +68,7 @@ async function setup(t, mode, { api } = {}) {
   });
   t.after(async () => {
     await new Promise((ok) => server.close(ok));
-    identity.close();
+    identity.close(); administrator.close();
     store.close();
   });
   // extra.method overrides the verb; a null header value removes that header
@@ -80,7 +85,7 @@ async function setup(t, mode, { api } = {}) {
       };
       for (const [key, value] of Object.entries(headers))
         if (value == null) delete headers[key];
-      const req = https.request(
+      const req = (protocol === "https:" ? https : http).request(
         {
           host: "127.0.0.1",
           port: server.address().port,
@@ -105,6 +110,7 @@ async function setup(t, mode, { api } = {}) {
             resolve({
               s: res.statusCode,
               b: parsed,
+              h: res.headers,
               cookie: res.headers["set-cookie"]?.[0].split(";")[0],
             });
           });
@@ -115,8 +121,35 @@ async function setup(t, mode, { api } = {}) {
         Buffer.isBuffer(body) ? body : body ? JSON.stringify(body) : undefined,
       );
     });
-  return { store, identity, request };
+  return { config, store, identity, request, root, port: server.address().port };
 }
+test("explicit HTTP workspace supports mobile and desktop login with same-origin logout", async t => {
+  const {request} = await setup(t, "local", {protocol:"http:"});
+  assert.equal((await request("/healthz")).b.status, "ready");
+  const desktop = await request("/login", {...credentials, device:"Mac"});
+  assert.equal(desktop.s, 200);
+  assert.match(desktop.h["set-cookie"][0], /HttpOnly; SameSite=Strict/);
+  assert.doesNotMatch(desktop.h["set-cookie"][0], /Secure|__Host-/);
+  const mobile = await request("/login", {...credentials, bearer:true, device:"iPhone"});
+  assert.equal((await request("/device-info", null, "", {authorization:"Bearer "+mobile.b.token})).s, 200);
+  const info = await request("/device-info", null, desktop.cookie);
+  assert.equal(info.b.origin, "http://localhost");
+  assert.ok(info.b.devices.some(d => d.label === "iPhone" && d.lastAddress === "127.0.0.1"));
+  assert.equal((await request("/logout", {}, desktop.cookie, {origin:"http://elsewhere"})).s, 403);
+  assert.equal((await request("/logout", {}, desktop.cookie)).s, 200);
+  assert.equal((await request("/device-info", null, desktop.cookie)).s, 401);
+});
+test("the sign-in selector can distinguish a ready workspace from an unavailable service before login", async t => {
+  let ready = true;
+  const {request} = await setup(t, "local", {isReady: () => ready});
+  for (const state of [true,false,true]) {
+    ready = state;
+    const result = await request("/healthz");
+    assert.equal(result.s, state ? 200 : 503);
+    assert.deepEqual(result.b, {service:"baton-workspace",status:state ? "ready" : "unavailable"});
+    assert.equal(result.cookie, undefined);
+  }
+});
 test("cloud: separate private chats, grants, actionable inbox, atomic acceptance and automation inheritance", async (t) => {
   const { identity, store, request } = await setup(t, "cloud");
   const cookies = {};
@@ -201,12 +234,11 @@ test("cloud: separate private chats, grants, actionable inbox, atomic acceptance
     404,
   );
 });
-test("local pairing is one-use, stored as revocable device, grants cannot create accounts", async (t) => {
+test("local workspace uses administrator credentials and revocable device sessions", async (t) => {
   const { identity, request } = await setup(t, "local");
-  const code = identity.invite();
-  const answer = await request("/pair", { code });
+  const answer = await request("/login", credentials);
   assert.equal(answer.s, 200);
-  assert.equal((await request("/pair", { code })).s, 401);
+  assert.equal((await request("/pair", { code:"obsolete" })).s, 404);
   assert.equal(
     (await request("/workspace", undefined, answer.cookie)).b.user.id,
     "human_operator",
@@ -240,7 +272,7 @@ test("local gateway forwards allowed desktop API routes for an explicit device t
   const { identity, request } = await setup(t, "local", { api });
   const native = { origin: null };
   // Native pairing: token in the body, no cookie, no Origin required.
-  const paired = await request("/pair", { code: identity.invite(), bearer: true, device: "iPhone\u0007 Kai" }, "", native);
+  const paired = await request("/login", { ...credentials, bearer: true, device: "iPhone\u0007 Kai" }, "", native);
   console.log("native pairing", paired.s, Object.keys(paired.b), "cookie:", paired.cookie ?? "none");
   assert.equal(paired.s, 200);
   assert.match(paired.b.token, /^[A-Za-z0-9_-]{43}$/);
@@ -252,10 +284,9 @@ test("local gateway forwards allowed desktop API routes for an explicit device t
   assert.deepEqual((await call("/api/tasks?status=all")).b, { forwarded: "/api/tasks" });
   assert.equal((await call("/api/tasks", { title: "手机任务" })).s, 200);
   assert.equal(calls.at(-1).body, JSON.stringify({ title: "手机任务" }), "the JSON body is forwarded unread");
-  assert.equal((await call("/api/agents/agent_x", { name: "Kai" }, { method: "PUT" })).s, 200);
   // Node's client sends DELETE bodies without framing unless Content-Length is explicit.
   assert.equal((await call("/api/tasks/task_x", {}, { method: "DELETE", "content-length": "2" })).s, 200);
-  assert.equal((await call("/api/teams/team_x", undefined, { method: "DELETE" })).s, 200, "DELETE without body");
+  assert.equal((await call("/api/tasks/task_y", undefined, { method: "DELETE" })).s, 200, "DELETE without body");
   assert.equal((await call("/api/settings/workspace")).s, 200, "storage location stays readable");
   const upload = await call("/api/runs/run_abc/attachments?name=a.png", Buffer.from([1, 2, 3]), { "content-type": "application/octet-stream" });
   assert.equal(upload.s, 200, "binary attachment upload is forwarded");
@@ -269,11 +300,11 @@ test("local gateway forwards allowed desktop API routes for an explicit device t
     console.log("denied", method, path, denied.s, denied.b.error);
     assert.equal(denied.s, 403, method + " " + path);
   }
-  assert.equal(calls.length, 7, "denied routes never reach the desktop API");
+  assert.equal(calls.length, 6, "denied routes never reach the desktop API");
   assert.equal((await request("/api/tasks", undefined, "", native)).s, 401, "no credentials");
   assert.equal((await request("/api/tasks", undefined, "", { ...native, authorization: "Bearer short" })).s, 401, "malformed token");
   // Browser cookies are ambient: writes need the workspace Origin.
-  const browser = (await request("/pair", { code: identity.invite() })).cookie;
+  const browser = (await request("/login", { ...credentials })).cookie;
   assert.equal((await request("/api/tasks", {}, browser, native)).s, 403, "cookie write without Origin");
   assert.equal((await request("/api/tasks", {}, browser)).s, 200, "same-origin cookie write");
   // Revoking the device ends forwarded streams and later requests.
@@ -282,14 +313,163 @@ test("local gateway forwards allowed desktop API routes for an explicit device t
   assert.equal((await call("/api/tasks")).s, 401, "revoked token");
   console.log("revoked device rejected; calls", calls.length);
 });
-test("native pairing token is exchanged once and ends with logout", async (t) => {
+test("native account login ends with logout", async (t) => {
   const { identity, request } = await setup(t, "local", { api: async (req, res) => { res.writeHead(200); res.end("{}"); } });
   const native = { origin: null };
-  const { token } = (await request("/pair", { code: identity.invite(), bearer: true }, "", native)).b;
+  const { token } = (await request("/login", { ...credentials, bearer: true }, "", native)).b;
   const bearer = { ...native, authorization: "Bearer " + token };
   assert.equal((await request("/workspace", undefined, "", bearer)).b.user.id, "human_operator", "legacy endpoints accept the token");
-  assert.equal(identity.devices()[0].label, "iOS", "default device label");
+  assert.equal(identity.devices()[0].label, "iPhone", "default device label");
   assert.equal((await request("/logout", {}, "", bearer)).s, 200);
   assert.equal((await request("/api/tasks", undefined, "", bearer)).s, 401, "logout revokes the token");
   console.log("token logout verified");
+});
+
+test("desktop readiness does not wait for business data when phone connection is enabled", () => {
+  // The desktop host kills a service that has not reported "baton-ready" within 30 s;
+  // a large or networked business database can take longer to open.
+  const source = readFileSync(new URL("../server/index.mjs", import.meta.url), "utf8");
+  const start = source.indexOf("server.listen(port, host");
+  const beforeReady = source.slice(start, source.indexOf('process.send({ type: "baton-ready"', start));
+  const awaited = [...beforeReady.matchAll(/^.*await ensureBusiness\(\).*$/gm)].map((match) => match[0].trim());
+  console.log("business waits before baton-ready:", awaited);
+  assert.deepEqual(awaited, ["if(daemon) await ensureBusiness();"], "only the standalone daemon waits for business data");
+  assert.equal(beforeReady.match(/ensureBusiness\(\)/g).length, 1, "the desktop opens business data on its first API request, not during the host handshake");
+});
+
+test("security: phones read configuration but cannot change it; a desktop pairing can", async (t) => {
+  const calls = [];
+  const api = async (req, res, url) => { for await (const _ of req); calls.push(req.method + " " + url.pathname); res.writeHead(200); res.end("{}"); };
+  const { identity, request } = await setup(t, "local", { api });
+  const native = { origin: null };
+  const phone = (await request("/login", { ...credentials, bearer: true, device: "iPhone" }, "", native)).b.token;
+  const mac = (await request("/login", { ...credentials, device:"Mac" })).cookie;
+  const as = (token) => (path, body, method) => request(path, body, "", { ...native, authorization: "Bearer " + token, method });
+  const cases = [
+    ["GET", "/api/agents", undefined, 200], ["GET", "/api/runtime/marketplace", undefined, 200],
+    ["POST", "/api/runtime/mcp-marketplace/mcp_x/tools", {}, 200, "reading MCP tools changes nothing"],
+    ["POST", "/api/tasks", { title: "x" }, 200, "tasks stay writable"],
+    ["PUT", "/api/agents/agent_x", { name: "x" }, 403], ["DELETE", "/api/teams/team_x", undefined, 403],
+    ["POST", "/api/runtime/marketplace", { url: "https://example.invalid/p.git" }, 403, "no plugin installs"],
+    ["PUT", "/api/runtime/mcp-marketplace/mcp_x", {}, 403], ["PUT", "/api/runtime/git-credentials/github", {}, 403],
+    ["PUT", "/api/settings/runtime-profiles/runtime_x", {}, 403],
+  ];
+  for (const [method, path, body, status, why] of cases) {
+    const result = await as(phone)(path, body, method);
+    console.log("phone", method, path, "→", result.s);
+    assert.equal(result.s, status, (why || "") + " " + method + " " + path);
+  }
+  const desktop = await request("/api/agents/agent_x", { name:"x" }, mac, {method:"PUT"});
+  console.log("desktop PUT /api/agents/agent_x →", desktop.s);
+  assert.equal(desktop.s, 200, "a desktop client keeps configuration writes");
+  assert.deepEqual(identity.devices().map((device) => device.scope).sort(), ["desktop", "mobile"]);
+
+});
+
+test("security: failed authentication is throttled per client address", async (t) => {
+  const { identity, request } = await setup(t, "local", { api: async (req, res) => { res.writeHead(200); res.end("{}"); } });
+  const from = (address) => ({ origin: null, "x-forwarded-for": address });
+  for (let attempt = 1; attempt <= 20; attempt += 1) {
+    const result = await request("/login", { ...credentials, password:"wrong-" + attempt, bearer: true }, "", from("203.0.113.5"));
+    assert.equal(result.s, 401);
+  }
+  const blocked = await request("/login", { ...credentials, bearer: true }, "", from("203.0.113.5"));
+  console.log("after 20 failures:", blocked.s, blocked.b.error, "Retry-After", blocked.h["retry-after"]);
+  assert.equal(blocked.s, 429, "even a valid code waits out the block");
+  assert.ok(Number(blocked.h["retry-after"]) > 500);
+  const other = await request("/login", { ...credentials, bearer: true }, "", from("203.0.113.6"));
+  console.log("another client:", other.s);
+  assert.equal(other.s, 200, "other clients are unaffected");
+});
+
+test("security: device sessions record use, expire after 30 idle days, stay private", async (t) => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const { statSync } = await import("node:fs");
+  const { identity, request, root } = await setup(t, "local", { api: async (req, res) => { res.writeHead(200); res.end("{}"); } });
+  const native = { origin: null, "x-forwarded-for": "198.51.100.7" };
+  const token = (await request("/login", { ...credentials, bearer: true, device: "iPhone" }, "", native)).b.token;
+  const [device] = identity.devices();
+  console.log("device", { created: Boolean(device.created), lastSeen: Boolean(device.lastSeen), lastAddress: device.lastAddress, scope: device.scope });
+  assert.equal(device.lastAddress, "198.51.100.7");
+  assert.ok(device.expires - Date.now() > 29 * 86400000, "30 days from the last use");
+  const mode = statSync(join(root, "workspace-access.sqlite")).mode & 0o777;
+  console.log("access database mode", mode.toString(8));
+  assert.equal(mode, 0o600, "token and password hashes are private");
+  // An old session that is used again slides forward; one idle past 30 days is gone.
+  const db = new DatabaseSync(join(root, "workspace-access.sqlite"));
+  db.prepare("UPDATE devices SET lastSeen=?, expires=? WHERE id=?").run(Date.now() - 20 * 86400000, Date.now() + 10 * 86400000, device.id);
+  assert.equal((await request("/api/tasks", undefined, "", { ...native, authorization: "Bearer " + token })).s, 200);
+  const renewed = identity.devices()[0];
+  console.log("renewed expiry in days", Math.round((renewed.expires - Date.now()) / 86400000));
+  assert.ok(renewed.expires - Date.now() > 29 * 86400000, "use renews the idle expiry");
+  db.prepare("UPDATE devices SET expires=? WHERE id=?").run(Date.now() - 1000, device.id);
+  db.close();
+  assert.equal((await request("/api/tasks", undefined, "", { ...native, authorization: "Bearer " + token })).s, 401, "an idle session ends");
+});
+
+test("security: internal errors stay private; headers harden every response; streams are bounded per device", async (t) => {
+  const held = [];
+  const api = async (req, res, url) => {
+    for await (const _ of req);
+    if (url.pathname === "/api/tasks/boom") throw new TypeError("Cannot read properties of undefined (reading '/Users/secret/path')");
+    if (url.pathname.endsWith("/events")) { res.writeHead(200, { "content-type": "text/event-stream" }); res.write(": open\n\n"); held.push(res); return; }
+    res.writeHead(200); res.end("{}");
+  };
+  const { identity, request, root, port } = await setup(t, "local", { api });
+  const native = { origin: null };
+  const token = (await request("/login", { ...credentials, bearer: true }, "", native)).b.token;
+  const auth = { ...native, authorization: "Bearer " + token };
+  const boom = await request("/api/tasks/boom", undefined, "", auth);
+  console.log("internal error response:", boom.s, boom.b);
+  assert.equal(boom.b.error, "请求处理失败");
+  assert.doesNotMatch(JSON.stringify(boom.b), /secret|Cannot read/);
+  const ok = await request("/api/tasks", undefined, "", auth);
+  const hardening = ["strict-transport-security", "x-frame-options", "cross-origin-opener-policy", "cross-origin-resource-policy", "x-content-type-options", "content-security-policy"];
+  for (const header of hardening) assert.ok(ok.h[header], header);
+  // Rejected requests (wrong Host) carry the same headers.
+  const wrongHost = await new Promise((resolve, reject) => {
+    const req = https.request({ host: "127.0.0.1", port, servername: "localhost", ca: readFileSync(join(root, "cert")), path: "/api/tasks", headers: { host: "attacker.example" } }, (res) => { res.resume(); resolve(res); });
+    req.on("error", reject); req.end();
+  });
+  console.log("wrong Host:", wrongHost.statusCode, hardening.filter((header) => wrongHost.headers[header]).length + "/" + hardening.length, "hardening headers");
+  assert.equal(wrongHost.statusCode, 403);
+  for (const header of hardening) assert.ok(wrongHost.headers[header], "rejected response has " + header);
+  // Nine concurrent event streams from one device: the ninth is refused.
+  const streams = [];
+  const certificate = readFileSync(join(root, "cert"));
+  for (let index = 0; index < 9; index += 1) {
+    streams.push(await new Promise((resolve, reject) => {
+      const req = https.request({ host: "127.0.0.1", port, servername: "localhost", ca: certificate, path: "/api/runs/run_x/events", headers: { host: "localhost", authorization: "Bearer " + token } }, (res) => resolve({ status: res.statusCode, req, res }));
+      req.on("error", reject); req.end();
+    }));
+  }
+  console.log("stream statuses:", streams.map((stream) => stream.status).join(","));
+  assert.deepEqual(streams.map((stream) => stream.status), [200, 200, 200, 200, 200, 200, 200, 200, 429]);
+  for (const stream of streams) stream.req.destroy();
+  for (const res of held) res.end();
+});
+
+test("account devices are scoped to the signed-in member and disappear on logout", async t => {
+  const {identity,request}=await setup(t,"cloud");
+  await identity.add("one","password for one"); await identity.add("two","password for two");
+  const first=await request('/login',{name:"one",password:"password for one",device:"Mac A"});
+  const phone=await request('/login',{name:"one",password:"password for one",device:"Phone A",bearer:true});
+  await request('/login',{name:"two",password:"password for two",device:"Mac B"});
+  const list=()=>request('/device-info',undefined,first.cookie);
+  assert.deepEqual((await list()).b.devices.map(d=>d.label).sort(),['Mac A','Phone A']);
+  await request('/logout',{},'',{authorization:'Bearer '+phone.b.token});
+  assert.deepEqual((await list()).b.devices.map(d=>d.label),['Mac A']);
+});
+
+test("resetting the local owner invalidates signed-in devices and their list entries", async t => {
+  const {request, root} = await setup(t, "local", {api:(_req,res)=>{res.writeHead(200);res.end("{}");}});
+  const previous = await request('/login', {...credentials,bearer:true}, '', {origin:null});
+  const token = previous.b.token;
+  const administrator = createAuth({databasePath:join(root,'auth.sqlite')});
+  try { await administrator.setAdministrator(credentials.name, "changed workspace password"); }
+  finally { administrator.close(); }
+  const bearer = {origin:null,authorization:'Bearer '+token};
+  assert.equal((await request('/api/tasks',undefined,'',bearer)).s,401);
+  const current = await request('/login',{name:credentials.name,password:"changed workspace password",device:"Current Mac"});
+  assert.deepEqual((await request('/device-info',undefined,current.cookie)).b.devices.map(item=>item.label),['Current Mac']);
 });

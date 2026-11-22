@@ -268,6 +268,21 @@ refreshProjectionLabels();
 const asArray = (value) => Array.isArray(value) ? value : [];
 const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Automation schedule in words (desktop and phone); matches the task form presets,
+// arbitrary Cron stays visible verbatim next to it.
+export function automationScheduleLabel(cron) {
+  const [minute,hour,day,month,week] = String(cron).trim().split(/\s+/);
+  if (!/^\d+$/.test(minute) || !/^\d+$/.test(hour)) return $t("自定义规则");
+  const time = `${hour.padStart(2,'0')}:${minute.padStart(2,'0')}`;
+  if (day === '*' && month === '*') {
+    if (week === '1-5') return $t("工作日 {0}", [time]);
+    if (week === '*') return $t("每天 {0}", [time]);
+    if (/^[0-7]$/.test(week)) return [$t("每周日 {0}", [time]), $t("每周一 {0}", [time]), $t("每周二 {0}", [time]), $t("每周三 {0}", [time]), $t("每周四 {0}", [time]), $t("每周五 {0}", [time]), $t("每周六 {0}", [time]), $t("每周日 {0}", [time])][Number(week)];
+  }
+  if (/^\d+$/.test(day) && month === '*' && week === '*') return $t("每月 {0} 日 {1}", [day, time]);
+  return $t("自定义规则");
+}
+
 export function providerLabel(agent) {
   return runtimeLabel(agent?.runtime?.provider || "claude-code");
 }
@@ -305,6 +320,17 @@ export function formatRelativeTime(iso, now = Date.now()) {
 
 export function formatExactTime(iso) {
   return new Date(iso).toLocaleString(intlLocale(), { hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+export function formatNextTriggerTime(value, timeZone, now = Date.now()) {
+  const date = new Date(value);
+  if (!value || !Number.isFinite(date.getTime())) return '—';
+  const year = new Intl.DateTimeFormat('en', { timeZone, year: 'numeric' });
+  const crossesYear = year.format(date) !== year.format(now);
+  return new Intl.DateTimeFormat(intlLocale(), {
+    timeZone, ...(crossesYear && { year: 'numeric' }), month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(date);
 }
 
 export function formatMessageTime(iso, now = new Date()) {

@@ -152,3 +152,5 @@ tasks update ID --file patch.json [--workflow ID_OR_NAME] [--start] 与 App 编�
 `plugins import --file source.json` 同样支持裸 Skill 仓库或目录（根 SKILL.md 或 skills/<名称>/SKILL.md），每个 Skill 自动包装为同名同描述插件。后续 list/get/delete、updates/check-updates 与普通插件相同；本地目录重新 import 更新，不新增 Skill 命令。
 
 Skill allowed-tools/allowedTools 不参与平台兼容性判断；已有插件用 `plugins check-compatibility ID` 刷新目录摘要即可，无需重新导入。get、员工/角色绑定与 App 使用同一当前计算，字段保留，其他不兼容原因仍拒绝。
+
+automations get 包含最近实际运行 latestExecution；列表中的 latestTrigger 仍包含跳过及失败的触发。

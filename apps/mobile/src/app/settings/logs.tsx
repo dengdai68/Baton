@@ -1,35 +1,50 @@
-// Execution logs overview from the instance's diagnostics.
-import { useQuery } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+// 运行日志 (read-only): where the Mac writes diagnostics, and the latest
+// execution records; a record opens its task or conversation.
+import { router, Stack } from 'expo-router';
+import { View } from 'react-native';
 
-import { useWorkspaceKey } from '@/api/queries';
-import { $t } from '@/i18n';
+import { formatRelativeTime } from '@shared/console-projections.mjs';
+import { type ExecutionLog, useExecutionLogs, useLogFiles } from '@/features/settings';
+import { $t, $tm, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
-import { Fact } from '@/ui/layout';
-import { LoadingState, ErrorState } from '@/ui/states';
+import { CopyButton, GroupedBlock, GroupedPage, GroupedRow, GroupedSection } from '@/ui/grouped';
 import { Txt } from '@/ui/text';
-import { useClient } from '@/workspace/session';
 
-export default function Logs() {
-  const client = useClient();
-  const scope = useWorkspaceKey();
+function LogRow({ item }: { item: ExecutionLog & { taskId?: string | null; conversationId?: string | null } }) {
   const { colors } = useTheme();
-  const status = useQuery({ queryKey: [...scope, 'settings-logs'], queryFn: () => client.get<{ directory?: string; fileCount?: number; latestFile?: string; recentErrors?: number }>('/api/settings/log-files') });
+  const color = item.level === 'error' ? colors.stFailed : item.level === 'warn' || item.level === 'warning' ? colors.stAttention : colors.textDisabled;
+  const open = item.taskId ? () => router.push({ pathname: '/task/[taskId]', params: { taskId: item.taskId! } })
+    : item.conversationId ? () => router.push({ pathname: '/chat/[chatId]', params: { chatId: item.conversationId! } }) : undefined;
   return (
-    <>
-      <Stack.Screen options={{ title: $t('日志') }} />
-      {status.isPending ? <LoadingState /> : status.error ? <ErrorState message={status.error.message} onRetry={() => void status.refetch()} /> : (
-        <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 16, gap: 8 }}>
-          <View style={{ padding: 14, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgRaised }}>
-            <Fact label={$t('日志目录')} value={status.data?.directory || '—'} />
-            <Fact label={$t('文件数')} value={String(status.data?.fileCount ?? 0)} />
-            <Fact label={$t('最新文件')} value={status.data?.latestFile || '—'} />
-            <Fact label={$t('近期错误')} value={String(status.data?.recentErrors ?? 0)} />
-          </View>
-          <Txt variant="caption" tone="tertiary">{$t('完整日志文件在 Mac 的日志目录中；这里仅显示运行概览。')}</Txt>
-        </ScrollView>
-      )}
-    </>
+    <GroupedRow title={$tm(item.message)} titleLines={2} onPress={open} chevron={false}
+      leading={<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />}
+      subtitle={[item.name, formatRelativeTime(item.timestamp)].filter(Boolean).join(' · ')} />
+  );
+}
+
+export default function LogSettings() {
+  useLocale();
+  const files = useLogFiles();
+  const logs = useExecutionLogs();
+  const items = (logs.data?.pages || []).flatMap((page) => page.items);
+  const data = files.data;
+  return (
+    <GroupedPage>
+      <Stack.Screen options={{ title: $t('运行日志') }} />
+      <GroupedSection title={$t('日志文件')} footer={data?.retention ? $t('{0} 格式；{1}', [data.format || 'JSONL', data.retention]) : null}>
+        {files.isPending ? <GroupedBlock><Txt variant="small" tone="tertiary">{$t('正在读取…')}</Txt></GroupedBlock> : null}
+        {files.error ? <GroupedBlock><Txt variant="small" tone="danger">{files.error.message}</Txt></GroupedBlock> : null}
+        {data?.directory ? <GroupedRow title={$t('日志目录')} subtitle={data.directory} mono numberOfLines={4} trailing={<CopyButton value={data.directory} />} /> : null}
+        {data?.filePath ? <GroupedRow title={$t('当前服务日志')} subtitle={data.filePath} mono numberOfLines={4} trailing={<CopyButton value={data.filePath} />} /> : null}
+        {data && !data.available && data.error ? <GroupedBlock><Txt variant="small" tone="danger">{data.error}</Txt></GroupedBlock> : null}
+      </GroupedSection>
+      <GroupedSection title={$t('最近执行记录')}>
+        {logs.isPending ? <GroupedBlock><Txt variant="small" tone="tertiary">{$t('正在读取…')}</Txt></GroupedBlock> : null}
+        {logs.error ? <GroupedBlock><Txt variant="small" tone="danger">{logs.error.message}</Txt></GroupedBlock> : null}
+        {logs.data && !items.length ? <GroupedBlock><Txt variant="small" tone="tertiary">{$t('暂无执行记录')}</Txt></GroupedBlock> : null}
+        {items.map((item) => <LogRow key={item.id} item={item} />)}
+        {logs.hasNextPage ? <GroupedRow title={logs.isFetchingNextPage ? $t('正在加载…') : $t('加载更多')} onPress={() => { if (!logs.isFetchingNextPage) void logs.fetchNextPage(); }} chevron={false} /> : null}
+      </GroupedSection>
+    </GroupedPage>
   );
 }

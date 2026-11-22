@@ -5,11 +5,12 @@ const form = document.querySelector("#login-form"), password = document.querySel
 const setupGuidance = document.querySelector("#setup-guidance");
 function showLogin() {
   form.hidden = false;
-  document.querySelector(".intro").textContent = $t("本机工作区 · 单管理员");
+  document.querySelector(".intro").hidden = true;
   form.username.focus();
 }
 function showUnconfigured(status = {}) {
   form.hidden = true;
+  document.querySelector(".intro").hidden = false;
   setupGuidance.hidden = false;
   document.querySelector("#desktop-setup-guidance").hidden = false;
   document.querySelector("h1").textContent = $t("还没有管理员");

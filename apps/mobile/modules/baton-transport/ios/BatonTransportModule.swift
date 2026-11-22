@@ -59,9 +59,26 @@ final class PinStore: @unchecked Sendable {
   }
 }
 
+/// Probe the named HTTPS origin with no credentials and stop at the TLS handshake.
+final class CertificateProbe: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+  var fingerprint: String?
+  var trusted = false
+  func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge,
+                  completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+    if let trust = challenge.protectionSpace.serverTrust,
+       let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate], let leaf = chain.first {
+      fingerprint = SHA256.hash(data: SecCertificateCopyData(leaf) as Data).map { String(format: "%02x", $0) }.joined()
+      trusted = SecTrustEvaluateWithError(trust, nil)
+    }
+    completionHandler(.cancelAuthenticationChallenge, nil)
+  }
+}
+
 /// Trusts a pinned host only when its leaf certificate matches the paired fingerprint;
 /// hosts without a pin use the system trust store (cloud workspaces).
-class PinningDelegate: NSObject, URLSessionDelegate {
+class PinningDelegate: NSObject, URLSessionTaskDelegate {
+  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
+
   func urlSession(
     _ session: URLSession,
     didReceive challenge: URLAuthenticationChallenge,
@@ -215,6 +232,19 @@ public class BatonTransportModule: Module {
       }
     }
 
+    AsyncFunction("inspectCertificate") { (origin: String) async throws -> [String: Any] in
+      guard let url = URL(string: origin), url.scheme == "https", url.host != nil else { throw TransportFailure("INVALID_URL") }
+      let probe = CertificateProbe()
+      let config = URLSessionConfiguration.ephemeral
+      config.timeoutIntervalForRequest = 15
+      let session = URLSession(configuration: config, delegate: probe, delegateQueue: nil)
+      defer { session.invalidateAndCancel() }
+      do { _ = try await session.data(from: url) }
+      catch { if probe.fingerprint == nil { throw error } }
+      guard let fingerprint = probe.fingerprint else { throw TransportFailure("无法读取服务器证书") }
+      return ["fingerprint":fingerprint, "trusted":probe.trusted]
+    }
+
     AsyncFunction("request") { (options: TransportRequest) async throws -> [String: Any?] in
       try await self.perform(options)
     }
@@ -252,7 +282,7 @@ public class BatonTransportModule: Module {
 
   /// Validate the URL, register its pin and build the URLRequest (without body).
   private func prepare(_ options: TransportRequest) throws -> URLRequest {
-    guard let url = URL(string: options.url), url.scheme == "https", let host = url.host, !host.isEmpty else {
+    guard let url = URL(string: options.url), (url.scheme == "https" || (url.scheme == "http" && options.pin == nil)), let host = url.host, !host.isEmpty else {
       throw TransportFailure("INVALID_URL: \(options.url.prefix(80))")
     }
     if let pin = options.pin {
@@ -270,6 +300,9 @@ public class BatonTransportModule: Module {
   private func perform(_ options: TransportRequest) async throws -> [String: Any?] {
     var request = try prepare(options)
     let key = pinKey(host: request.url?.host ?? "", port: request.url?.port)
+    // Credentials always use a fresh TLS connection with the leaf observed at login.
+    let loginSession = request.url?.path == "/login" ? URLSession(configuration: .ephemeral, delegate: requestDelegate, delegateQueue: nil) : nil
+    defer { loginSession?.invalidateAndCancel() }
     let cachedFile = options.cacheKey.map { Self.cacheFile(for: $0, fileName: options.fileName) }
     if options.responseType == "file", let cachedFile, FileManager.default.fileExists(atPath: cachedFile.path) {
       return ["status": 200, "headers": [String: String](), "body": nil, "fileUri": cachedFile.absoluteString, "cached": true]
@@ -287,7 +320,7 @@ public class BatonTransportModule: Module {
         } else if let text = options.body {
           request.httpBody = Data(text.utf8)
         }
-        (data, response) = try await requestSession.data(for: request)
+        (data, response) = try await (loginSession ?? requestSession).data(for: request)
       }
     } catch let failure as TransportFailure {
       throw failure

@@ -1,7 +1,12 @@
-// Task directory semantics shared with the Mac task center: quick views, groups
-// ordered by who needs to act, the row's status line and its next action.
-import { STATUS_TEXT, taskActionLabel, taskNeedsAttention } from '@shared/console-projections.mjs';
+// Task directory semantics shared with the Mac task center: quick views, the
+// "who needs to act" order, the row's status line and its single next action.
+import {
+  Archive, CircleHelp, ClipboardCheck, type LucideIcon, Play, RotateCcw,
+} from 'lucide-react-native';
+
+import { STATUS_TEXT, taskNeedsAttention } from '@shared/console-projections.mjs';
 import type { ApiClient } from '@/api/client';
+import type { IconTone } from '@/ui/icon-button';
 import { $t, $tm } from '@/i18n';
 
 export type Member = { id: string; name: string; color?: string; initials?: string; status?: string; kind?: string; description?: string };
@@ -14,35 +19,43 @@ export type TaskSummary = {
   runs?: RunSummary[];
 };
 export type TaskPage = { tasks: TaskSummary[]; total: number; page: number; pageSize: number; totalPages: number; hasMore: boolean };
-export type Chip = 'all' | 'attention' | 'active' | 'backlog' | 'done';
+export type Chip = 'all' | 'attention' | 'active' | 'done';
 export type TaskFilters = { search: string; status: string; workflow: string };
 
 export const ACTIVE = ['planning', 'running', 'review'];
-export const FILTER_STATUSES = ['backlog', 'planning', 'running', 'awaiting_human', 'review', 'awaiting_acceptance', 'paused', 'blocked', 'failed', 'done', 'cancelled'];
 
 export function taskMatchesChip(status: string, chip: Chip): boolean {
   if (chip === 'attention') return taskNeedsAttention(status);
   if (chip === 'active') return ACTIVE.includes(status);
   if (chip === 'done') return ['done', 'completed'].includes(status);
-  return chip === 'all' || status === chip;
+  return true;
 }
 
-export const chipOptions = (): Array<{ value: Chip; label: string; attention?: boolean }> => [
+export const chipOptions = (): Array<{ value: Chip; label: string }> => [
   { value: 'all', label: $t('全部') },
-  { value: 'attention', label: $t('待我处理'), attention: true },
+  { value: 'attention', label: $t('待我处理') },
   { value: 'active', label: $t('进行中') },
-  { value: 'backlog', label: $t('草稿') },
   { value: 'done', label: $t('已完成') },
 ];
 
-/** Groups in the order "who needs to act": attention first, paused after running. */
-export const taskGroups = () => [
-  { id: 'attention', label: $t('待我处理'), status: 'awaiting_human', match: (task: TaskSummary) => task.status !== 'paused' && taskNeedsAttention(task.status) },
-  { id: 'active', label: $t('进行中'), status: 'running', match: (task: TaskSummary) => ACTIVE.includes(task.status) },
-  { id: 'paused', label: $t('已暂停'), status: 'paused', match: (task: TaskSummary) => task.status === 'paused' },
-  { id: 'backlog', label: $t('草稿'), status: 'backlog', match: (task: TaskSummary) => task.status === 'backlog' },
-  { id: 'done', label: $t('已完成'), status: 'done', match: (task: TaskSummary) => ['done', 'completed', 'cancelled'].includes(task.status) },
+/** Finer status filters for the filter menu (labels are unique; merged where the Mac shows one label). */
+export const statusFilters = () => [
+  { id: 'all', label: $t('全部状态'), match: () => true },
+  { id: 'awaiting_human', label: STATUS_TEXT.awaiting_human, match: (status: string) => status === 'awaiting_human' },
+  { id: 'awaiting_acceptance', label: STATUS_TEXT.awaiting_acceptance, match: (status: string) => status === 'awaiting_acceptance' },
+  { id: 'paused', label: STATUS_TEXT.paused, match: (status: string) => status === 'paused' },
+  { id: 'failed', label: STATUS_TEXT.failed, match: (status: string) => ['failed', 'blocked'].includes(status) },
+  { id: 'cancelled', label: STATUS_TEXT.cancelled, match: (status: string) => status === 'cancelled' },
 ];
+
+/** Mac order (web/app.js taskGroupOrder): needs you, running, paused, then the rest; newest first inside. */
+export function groupOrder(status: string): number {
+  if (status === 'paused') return 2;
+  if (taskNeedsAttention(status)) return 0;
+  if (ACTIVE.includes(status)) return 1;
+  return status === 'backlog' ? 3 : 4;
+}
+export const byNeed = (a: TaskSummary, b: TaskSummary) => groupOrder(a.status) - groupOrder(b.status) || Date.parse(b.updatedAt) - Date.parse(a.updatedAt);
 
 export const runOfTask = (task: TaskSummary): RunSummary | undefined => task.runs?.[0];
 
@@ -60,12 +73,17 @@ export function taskRowStatus(task: TaskSummary): { label: string; detail: strin
   return { label, detail };
 }
 
-/** The one next step shown on a row (the rest lives in the row menu). */
-export function nextAction(task: TaskSummary): { kind: 'start' | 'archive' | 'open' | 'edit'; label: string } {
-  if (task.status === 'backlog' && !runOfTask(task)) return { kind: 'start', label: $t('启动') };
-  if (task.status === 'done') return { kind: 'archive', label: $t('归档') };
-  if (runOfTask(task)) return { kind: 'open', label: taskActionLabel(task.status) };
-  return { kind: 'edit', label: $t('编辑') };
+export type RowAction = { kind: 'archive' | 'accept' | 'open'; icon: LucideIcon; label: string; tone: IconTone };
+
+/** The one next step of a row, as an icon (Mac labels kept for accessibility). */
+export function rowAction(task: TaskSummary): RowAction | null {
+  if (task.status === 'done' && !task.archivedAt) return { kind: 'archive', icon: Archive, label: $t('归档'), tone: 'neutral' };
+  if (!runOfTask(task)) return null;
+  if (task.status === 'awaiting_acceptance') return { kind: 'accept', icon: ClipboardCheck, label: $t('去验收'), tone: 'attention' };
+  if (task.status === 'awaiting_human') return { kind: 'open', icon: CircleHelp, label: $t('去澄清'), tone: 'attention' };
+  if (task.status === 'paused') return { kind: 'open', icon: Play, label: $t('查看并继续'), tone: 'accent' };
+  if (['failed', 'blocked'].includes(task.status)) return { kind: 'open', icon: RotateCcw, label: $t('查看恢复选项'), tone: 'danger' };
+  return null;
 }
 
 export const editable = (task: TaskSummary) => task.status === 'backlog' && !runOfTask(task);
@@ -80,10 +98,4 @@ export async function readTaskDirectory(client: ApiClient, filters: TaskFilters,
     all.push(...result.tasks);
   }
   return { ...result, all };
-}
-
-export function membersOf(task: TaskSummary, agents: Member[], limit = 5): Member[] {
-  return (task.memberAgentIds || []).slice(0, limit)
-    .map((id) => task.memberSnapshots?.find((agent) => agent.id === id) || agents.find((agent) => agent.id === id))
-    .filter(Boolean) as Member[];
 }

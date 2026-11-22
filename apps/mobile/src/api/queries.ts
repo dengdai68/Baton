@@ -44,8 +44,6 @@ export function useApiMutation<TInput, TResult = unknown>(
   });
 }
 
-export type Notifications = { taskAttentionCount: number; communicationUnreadCount: number };
-export const useNotifications = () => useApi<Notifications>('/api/notifications', undefined, { refetchInterval: 15_000 });
 
 /** Poll only while this screen is focused (hidden tab/stack screens stop polling). */
 export function useFocusedInterval(ms: number): number | false {

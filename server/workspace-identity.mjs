@@ -8,33 +8,51 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 import { join } from "node:path";
+import { chmodSync, statSync } from "node:fs";
 
 const derive = promisify(scrypt);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
 const day = 86400000;
 export const localUser = "human_operator";
+/** A device session ends after this long without use (sliding, renewed on use). */
+export const deviceIdleMs = 30 * day;
+/** Use is recorded (last seen, address, renewed expiry) at most this often per device. */
+const touchIntervalMs = 60000;
+/** Paired clients: "mobile" (phone, no configuration changes) or "desktop" (a Mac client). */
+export const deviceScopes = Object.freeze(["mobile", "desktop"]);
 
-export function workspaceIdentity(root, mode) {
-  const db = new DatabaseSync(join(root, "workspace-access.sqlite"));
+export function workspaceIdentity(root, mode, administrator = null) {
+  const path = join(root, "workspace-access.sqlite");
+  const db = new DatabaseSync(path);
+  // Token and password hashes stay private to the instance user.
+  try { if ((statSync(path).mode & 0o777) !== 0o600) chmodSync(path, 0o600); } catch {}
   db.exec(`PRAGMA busy_timeout=3000;
     CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY, name TEXT UNIQUE, salt TEXT, hash BLOB);
     CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, hash TEXT UNIQUE, member TEXT, label TEXT, expires INTEGER);
     CREATE TABLE IF NOT EXISTS invites (hash TEXT PRIMARY KEY, expires INTEGER);
     CREATE TABLE IF NOT EXISTS failures (name TEXT PRIMARY KEY, count INTEGER, since INTEGER);`);
+  // Columns added for the device audit and scopes; existing rows keep working.
+  const columns = (table) => new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
+  const ensure = (table, column, definition) => { if (!columns(table).has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`); };
+  ensure("devices", "accountVersion", "TEXT");
+  ensure("devices", "created", "INTEGER");
+  ensure("devices", "lastSeen", "INTEGER");
+  ensure("devices", "lastAddress", "TEXT");
+  ensure("devices", "scope", "TEXT NOT NULL DEFAULT 'mobile'");
+  ensure("invites", "scope", "TEXT NOT NULL DEFAULT 'mobile'");
+  // Sessions issued before this record held a fixed 30-day expiry from pairing.
+  db.prepare("UPDATE devices SET created=expires-? WHERE created IS NULL").run(30 * day);
   const members = () =>
     mode === "local"
-      ? [{ id: localUser, name: "本机用户" }]
+      ? [{ id: localUser, name: administrator?.administratorIdentity()?.name || "本机用户" }]
       : db.prepare("SELECT id,name FROM members ORDER BY name").all();
-  const issue = (id, label) => {
-    db.prepare("DELETE FROM devices WHERE expires<=?").run(Date.now());
+  const issue = (id, label, scope = "mobile", address = null, version = null) => {
+    const now = Date.now();
+    db.prepare("DELETE FROM devices WHERE expires<=?").run(now);
     const token = secret();
-    db.prepare("INSERT INTO devices VALUES (?,?,?,?,?)").run(
-      randomUUID(),
-      digest(token),
-      id,
-      label,
-      Date.now() + 30 * day,
+    db.prepare("INSERT INTO devices (id,hash,member,label,expires,created,lastSeen,lastAddress,scope,accountVersion) VALUES (?,?,?,?,?,?,?,?,?,?)").run(
+      randomUUID(), digest(token), id, label, now + deviceIdleMs, now, now, address, scope, version,
     );
     return token;
   };
@@ -61,7 +79,11 @@ export function workspaceIdentity(root, mode) {
         hash,
       );
     },
-    async login(name, password) {
+    async login(name, password, {label = "登录设备", scope = "mobile", address = null} = {}) {
+      if (mode === "local") {
+        const owner = await administrator?.verifyAdministrator(name, password);
+        return owner ? issue(localUser, label, scope, address, owner.version) : null;
+      }
       if (
         mode !== "cloud" ||
         typeof name !== "string" ||
@@ -86,42 +108,25 @@ export function workspaceIdentity(root, mode) {
       );
       if (!member || !timingSafeEqual(hash, member.hash)) return null;
       db.prepare("DELETE FROM failures WHERE name=?").run(key);
-      return issue(member.id, "登录设备");
+      return issue(member.id, label, scope, address);
     },
-    invite() {
-      if (mode !== "local") throw Error("仅本地模式允许配对");
-      const token = secret();
-      db.prepare("DELETE FROM invites WHERE expires<=?").run(Date.now());
-      db.prepare("INSERT INTO invites VALUES (?,?)").run(
-        digest(token),
-        Date.now() + 300000,
-      );
-      return token;
-    },
-    /** Redeem a one-time invite for a device session; label names it in the device list. */
-    pair(token, label = "iOS") {
-      if (mode !== "local" || typeof token !== "string") return null;
-      if (
-        !db
-          .prepare(
-            "DELETE FROM invites WHERE hash=? AND expires>? RETURNING hash",
-          )
-          .get(digest(token), Date.now())
-      )
-        return null;
-      return issue(localUser, label);
-    },
-    session(token) {
+    /** The member behind a token; use renews the idle expiry and records when and from where. */
+    session(token, { address = null } = {}) {
       if (!token) return null;
-      const row = db
-        .prepare("SELECT id,member FROM devices WHERE hash=? AND expires>?")
-        .get(digest(token), Date.now());
-      if (!row) return null;
+      const now = Date.now();
+      const row = db.prepare("SELECT id,member,scope,lastSeen,accountVersion FROM devices WHERE hash=? AND expires>?").get(digest(token), now);
+      if (!row || (mode === "local" && (!row.accountVersion || row.accountVersion !== administrator?.administratorIdentity()?.version))) return null;
+      if (!row.lastSeen || now - row.lastSeen >= touchIntervalMs)
+        db.prepare("UPDATE devices SET lastSeen=?, expires=?, lastAddress=COALESCE(?,lastAddress) WHERE id=?").run(now, now + deviceIdleMs, address, row.id);
       const member = members().find((m) => m.id === row.member);
-      return member && { ...member, deviceId: row.id };
+      return member && { ...member, deviceId: row.id, scope: row.scope || "mobile" };
+    },
+    accountDevices(member) {
+      const version = mode === 'local' ? administrator?.administratorIdentity()?.version : null;
+      return db.prepare('SELECT id,label,scope,created,lastSeen,lastAddress FROM devices WHERE member=? AND accountVersion IS ? AND expires>? ORDER BY lastSeen DESC').all(member, version ?? null, Date.now());
     },
     devices: () =>
-      db.prepare("SELECT id,member,label,expires FROM devices").all(),
+      db.prepare("SELECT id,member,label,expires,created,lastSeen,lastAddress,scope FROM devices ORDER BY created").all(),
     revoke: (id) => db.prepare("DELETE FROM devices WHERE id=?").run(id),
     close: () => db.close(),
   };

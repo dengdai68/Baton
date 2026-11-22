@@ -220,13 +220,13 @@ export function createSqlitePersistence(databasePath = ":memory:", { onSaveDiagn
       page=Number(page);pageSize=Number(pageSize);if(!Number.isSafeInteger(page)||page<1||!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100)throw new Error('分页参数无效');
       const where=['e.collection=?'],values=[automationId?'automationTriggers':'automations'];
       if(automationId){where.push("json_extract(e.value_json,'$.automationId')=?");values.push(automationId);if(status&&status!=='all'){where.push("COALESCE(json_extract(r.value_json,'$.status'),json_extract(e.value_json,'$.outcome'))=?");values.push(status);}}
-      else {if(search.trim()){where.push("instr(lower(json_extract(e.value_json,'$.title')||' '||json_extract(e.value_json,'$.objective')),?)>0");values.push(search.trim().toLowerCase());}if(status&&status!=='all'){where.push("json_extract(e.value_json,'$.enabled')=?");values.push(status==='enabled'?1:0);}}
+      else {if(search.trim()){where.push("instr(lower(json_extract(e.value_json,'$.title')||' '||json_extract(e.value_json,'$.objective')||' '||json_extract(e.value_json,'$.cron')),?)>0");values.push(search.trim().toLowerCase());}if(status&&status!=='all'){where.push("json_extract(e.value_json,'$.enabled')=?");values.push(status==='enabled'?1:0);}}
       const from="workspace_entities e LEFT JOIN workspace_entities r ON r.collection='runs' AND r.id=json_extract(e.value_json,'$.runId')",filter=where.join(' AND ');
       const total=database.prepare(`SELECT count(*) total FROM ${from} WHERE ${filter}`).get(...values).total,totalPages=Math.max(1,Math.ceil(total/pageSize));page=Math.min(page,totalPages);
       const items=database.prepare(`SELECT e.id FROM ${from} WHERE ${filter} ORDER BY json_extract(e.value_json,'$.${automationId?'plannedAt':'updatedAt'}') DESC,e.id DESC LIMIT ? OFFSET ?`).all(...values,pageSize,(page-1)*pageSize).map(row=>row.id);
       return {items,page,pageSize,total,totalPages};
     },
-    latestAutomationTrigger(id) { return database.prepare("SELECT id FROM workspace_entities WHERE collection='automationTriggers' AND json_extract(value_json,'$.automationId')=? ORDER BY json_extract(value_json,'$.createdAt') DESC,id DESC LIMIT 1").get(id)?.id; },
+    latestAutomationTrigger(id, executedOnly = false) { return database.prepare(`SELECT id FROM workspace_entities WHERE collection='automationTriggers' AND json_extract(value_json,'$.automationId')=? ${executedOnly ? "AND json_extract(value_json,'$.runId') IS NOT NULL" : ''} ORDER BY json_extract(value_json,'$.createdAt') DESC,id DESC LIMIT 1`).get(id)?.id; },
     executionLogPage({source='all',level='all',before=null,limit=100}={}) {
       if(!['all','task','private','group'].includes(source)||!['all','error'].includes(level))throw new Error('日志筛选无效');
       if(!Number.isSafeInteger(limit)||limit<1||limit>200)throw new Error('分页大小必须为 1–200');

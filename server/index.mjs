@@ -1,8 +1,7 @@
-import QRCode from 'qrcode';
-import {networkInterfaces} from 'node:os';
+import {networkInterfaces, hostname} from 'node:os';
 import {workspaceIdentity} from './workspace-identity.mjs';
-import {provisionWorkspace,pairingLink} from './workspace-config.mjs';
-import {startWorkspace} from './workspace-http.mjs';
+import {provisionWorkspace,workspaceOrigin} from './workspace-config.mjs';
+import {publicErrorMessage, startWorkspace} from './workspace-http.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {RUNTIME_IDS} from "../client/runtime-providers.mjs";
 import { closeExecutionBudget } from './execution-budget.mjs';
@@ -12,10 +11,10 @@ import { createAutomationScheduler } from "./automation-scheduler.mjs";
 import { previewSchedule } from "./automation-schedule.mjs";
 import { createServer } from "node:http";
 import { pipeline } from "node:stream/promises";
-import { randomUUID } from "node:crypto";
+import { randomUUID, X509Certificate } from "node:crypto";
 import { diagnostic, diagnostics, installProcessDiagnostics } from "./diagnostics.mjs";
 import { readFile, realpath, stat, access, mkdir, chmod } from "node:fs/promises";
-import { constants } from "node:fs";
+import { constants, readFileSync, writeFileSync, renameSync } from "node:fs";
 import { extname, join, normalize, isAbsolute, parse, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import hljs from "highlight.js";
@@ -37,6 +36,11 @@ import { createDataReset } from "./data-reset.mjs";
 import {createPluginUpdates} from './plugin-updates.mjs';
 import {validateStorageDestination} from './storage-layout.mjs';
 import {createConfigurationStore} from './configuration-store.mjs';
+
+function localAccountDevice() {
+  const address = Object.values(networkInterfaces()).flat().find(ip => ip?.family === 'IPv4' && !ip.internal);
+  return {id:'local', label:hostname(), scope:'desktop', lastAddress:address?.address || '127.0.0.1'};
+}
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const webRoot = join(root, "web");
@@ -135,20 +139,28 @@ function ensureBusiness() {
   if (businessInitialization) return businessInitialization;
   businessInitialization = (async () => {
     const started = performance.now();
-    let phase = 'workspace';
+    let phase = 'workspace', phaseStarted = started;
+    // Record a phase that took over 10 s once it ends (a timer cannot fire while the
+    // store opens synchronously), e.g. an external volume waiting for macOS to grant
+    // the app file access; "business.starting" already names a phase that never ends.
+    const enter = next => {
+      const elapsedMs = Math.round(performance.now() - phaseStarted);
+      if (elapsedMs > 10000) diagnostic('business.slow', { phase, elapsedMs });
+      phase = next; phaseStarted = performance.now();
+    };
     try {
       diagnostic('business.starting', { phase });
       if (usesDefaultRoot) { await mkdir(storage.dataRoot, { recursive: true, mode: 0o700 }); await chmod(storage.dataRoot, 0o700); }
       if(workspaceConfig)lockWorkspace();
-      phase = 'reset_recovery'; await dataReset.recover();
-      phase = 'store'; diagnostic('business.starting', { phase });
+      enter('reset_recovery'); await dataReset.recover();
+      enter('store'); diagnostic('business.starting', { phase });
       store = createStore(storeOptions); subscribeDesktopNotifications(store); runFiles = communicationFiles();
-      phase = 'deletion_recovery';
+      enter('deletion_recovery');
       try {
         const recovery = await runFiles.recoverStagedTaskDeletions(runId => store.hasRun(runId));
         if (recovery.failed) diagnostic('business.deletion_recovery_incomplete', { failed: recovery.failed });
       } catch (error) { diagnostic('business.deletion_recovery_failed', { error }); }
-      phase = 'execution_recovery';
+      enter('execution_recovery');
       communications = createCommunicationService(store, { root: join(workspaceRoot, 'communications'), files: runFiles });
       communications.recover();
       for (const runId of store.listRecoveryRunIds()) {
@@ -158,6 +170,7 @@ function ensureBusiness() {
       }
       startSchedulers();
       void communications.poll().catch(error => diagnostic('communication.recovery_error', { error }));
+      enter('ready');
       diagnostic('business.ready', { elapsedMs: performance.now() - started });
       return store;
     } catch (error) {
@@ -295,14 +308,25 @@ async function withTaskDeletionLock(locks, taskId, work) {
   finally { locks.delete(taskId); }
 }
 
-// context.sessionValid lets a caller that authenticated the request elsewhere
-// (the workspace gateway's device session) keep long-lived streams authorized.
 async function routeApi(request, response, pathname, searchParams = new URLSearchParams(), context = {}) {
+  // context.sessionValid lets a caller that authenticated the request elsewhere
+  // (the workspace gateway's device session) keep long-lived streams authorized.
+  if (pathname === '/api/settings/current-workspace' && request.method === 'GET') {
+    const identity = workspaceConfig?.mode === 'local' ? workspaceIdentity(storage.controlRoot,'local',auth) : null;
+    try {
+      const local = localAccountDevice();
+      sendJson(response,200,{local:true, connectionError:workspaceError || null, deviceId:'local', name:workspaceConfig?.name || hostname(), username:auth.session(request)?.username,
+        origin:workspaceConfig?.accessOrigin || workspaceConfig?.pairingOrigin || workspaceConfig?.origin,
+        fingerprint:workspaceConfig?.cert && new X509Certificate(readFileSync(workspaceConfig.cert)).fingerprint256,
+        devices:[local, ...(identity?.accountDevices('human_operator') || [])]});
+    } finally { identity?.close(); }
+    return true;
+  }
   if (pathname.startsWith('/api/phone/')) {
     if(workspaceConfig?.mode==='cloud'){sendJson(response,403,{error:'云端使用账号登录'});return true;}
     if(pathname==='/api/phone/status' && request.method==='GET'){
       const address=Object.values(networkInterfaces()).flat().find(a=>a?.family==='IPv4'&&!a.internal)?.address;
-      sendJson(response,200,{origin:workspaceConfig?.origin || null,error:workspaceError||null,suggested:address?'https://'+address+':9443':''});return true;
+      sendJson(response,200,{origin:workspaceConfig?.origin || null,pairingOrigin:workspaceConfig?.accessOrigin || workspaceConfig?.pairingOrigin || workspaceConfig?.origin || null,error:workspaceError||null,suggested:address?'https://'+address+':9443':''});return true;
     }
     if(pathname==='/api/phone/enable' && request.method==='POST'){
       const {origin,relay}=await readJson(request);
@@ -319,15 +343,17 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
       sendJson(response,200,{ok:true});return true;
     }
     if(!workspaceConfig)throw Error('请先启用手机连接');
-    const devices=workspaceIdentity(storage.controlRoot,'local');
-    try {
-      if(pathname==='/api/phone/pair' && request.method==='POST'){
-        const link=pairingLink(workspaceConfig,devices);
-        sendJson(response,200,{link,qr:await QRCode.toDataURL(link,{width:300,margin:2})});return true;
-      }
-      if(pathname==='/api/phone/devices' && request.method==='GET'){sendJson(response,200,{items:devices.devices()});return true;}
-      if(pathname==='/api/phone/revoke' && request.method==='POST'){devices.revoke((await readJson(request)).id);sendJson(response,200,{ok:true});return true;}
-    }finally{devices.close();}
+    if (pathname === '/api/phone/address' && request.method === 'PUT') {
+      const { origin } = await readJson(request);
+      const next = workspaceOrigin(origin);
+      const file = join(storage.controlRoot,'workspace-service.json');
+      const temp = file + '.' + randomUUID();
+      writeFileSync(temp, JSON.stringify({...workspaceConfig, accessOrigin:next}, null, 2), {mode:0o600, flag:'wx'});
+      renameSync(temp,file);
+      workspaceConfig.accessOrigin = next;
+      sendJson(response,200,{origin:next}); return true;
+    }
+    return false;
   }
   if (request.method === 'GET' && pathname === '/api/bootstrap' && searchParams.get('view') === 'connection') {
     sendJson(response,200,{settings:{workspaceRoot,source:'startup'},businessReady:Boolean(communications && !businessFailure)});
@@ -970,9 +996,10 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     return true;
   }
   const streamMatch = pathname.match(/^\/api\/runs\/([^/]+)\/events$/);
-  if (request.method === "GET" && streamMatch) {
-    const runId = streamMatch[1];
-    store.getRun(runId);
+  const workspaceStream = pathname === '/api/workspace/events';
+  if (request.method === "GET" && (streamMatch || workspaceStream)) {
+    const runId = streamMatch?.[1] || searchParams.get('runId');
+    if (runId) store.getRun(runId);
     response.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no" });
     eventStreams.add(response);
     response.write(`event: ready\ndata: ${JSON.stringify({ runId })}\n\n`);
@@ -987,9 +1014,19 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     response.on('drain',()=>{congested=false;});
     const sessionValid = context.sessionValid || (() => Boolean(auth.session(request)));
     const authorized = () => { if (response.writableEnded) return false; if (sessionValid()) return true; response.write("event: auth-expired\ndata: {}\n\n"); response.end(); return false; };
-    const unsubscribe = store.subscribe((event) => { if (event.runId === runId && authorized()) write(`event: run-event\ndata: ${JSON.stringify(event)}\n\n`); });
+    const pending = new Set();
+    let flush;
+    const unsubscribeChanges = workspaceStream && store.subscribeWorkspaceChanges(topics => {
+      for (const topic of topics) pending.add(topic);
+      flush ??= setTimeout(() => {
+        flush = null;
+        if (authorized()) write(`event: workspace-change\ndata: ${JSON.stringify([...pending])}\n\n`);
+        pending.clear();
+      }, 350);
+    });
+    const unsubscribe = runId && store.subscribe((event) => { if (event.runId === runId && authorized()) write(`event: run-event\ndata: ${JSON.stringify(event)}\n\n`); });
     const heartbeat = setInterval(() => { if (authorized()) write(": heartbeat\n\n"); }, 15000);
-    request.on("close", () => { eventStreams.delete(response); clearInterval(heartbeat); unsubscribe(); });
+    request.on("close", () => { eventStreams.delete(response); clearInterval(heartbeat); clearTimeout(flush); if (unsubscribeChanges) unsubscribeChanges(); if (unsubscribe) unsubscribe(); });
     return true;
   }
   if (request.method === "GET" && pathname === "/api/health") {
@@ -999,11 +1036,11 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
   return false;
 }
 
-async function serveStatic(response, pathname) {
+async function serveStatic(response, pathname, remote = false) {
   async function presented(content, extension) {
     if (extension !== ".html") return content;
     const css = (await Promise.all(["web/tokens.css", "apps/electron/compact.css"].map(path => readFile(join(root, path), "utf8")))).join("\n");
-    return content.toString("utf8").replace("</head>", `<style id="baton-desktop-style">${css}</style></head>`);
+    return content.toString("utf8").replace("</head>", `${remote ? '<meta name="baton-remote-workspace" content="true">' : ''}<style id="baton-desktop-style">${css}</style></head>`);
   }
   const bundles = { "/vendor/marked.js": markedBundle, "/vendor/dompurify.js": domPurifyBundle, "/vendor/highlight.css": highlightStylesheet, "/vendor/x6.js": x6Bundle, "/vendor/elk.js": elkBundle };
   if (bundles[pathname]) {
@@ -1040,7 +1077,7 @@ async function serveStatic(response, pathname) {
 }
 
 /** Count writes, refuse work during restart/reset and map failures to the shared HTTP error shape. */
-async function accountRequest(request, response, handle) {
+async function accountRequest(request, response, handle, { remote = false } = {}) {
   const write = !["GET", "HEAD"].includes(request.method);
   if (write && updateRestartLease) { sendJson(response, 503, { error: "应用正在准备重启更新，请稍后重试" }); return; }
   if (resettingData) { sendJson(response, 503, { error: "正在清除数据，请稍后重试" }); return; }
@@ -1048,7 +1085,8 @@ async function accountRequest(request, response, handle) {
   try { await handle(); }
   catch (error) {
     diagnostic("http.request_failed", { method: request.method, pathname: (request.url || "").split("?")[0], error });
-    sendJson(response, error.committed ? 503 : error.code === "CLIENT_REQUEST_CONFLICT" ? 409 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: error.message || "请求处理失败" });
+    // Requests from paired devices get only user-facing messages; details stay in the local log.
+    sendJson(response, error.committed ? 503 : error.code === "CLIENT_REQUEST_CONFLICT" ? 409 : error instanceof RequestBodyTooLargeError ? 413 : 400, { error: (remote ? publicErrorMessage(error) : error.message) || "请求处理失败" });
   } finally { if (write) --writeRequests; }
 }
 
@@ -1083,11 +1121,14 @@ const server = createServer(async (request, response) => {
 function gatewayApi(request, response, url, context) {
   return accountRequest(request, response, async () => {
     if (!(await serveApi(request, response, url, context))) sendJson(response, 404, { error: "not_found" });
-  });
+  }, { remote: true });
 }
 
 function listenWorkspace() {
   return startWorkspace({config:workspaceConfig,root:storage.controlRoot,ensureBusiness,readJson,sendJson,api:gatewayApi,
+      administrator:auth, desktopAssets:(response, path) => serveStatic(response, path, true),
+      isReady:()=>!resettingData && !businessFailure && (workspaceConfig.mode !== "local" || auth.configured()),
+      hostDevice:()=>auth.hasSession() ? [localAccountDevice()] : [],
       execute:runId=>{void executeRun(store,runId,runExecutionOptions).catch(error=>diagnostic('workspace.execute_failed',{error,runId}));},
       wake:wakeCommunication,pause:id=>pauseRun(store,id,'用户暂停'),resume:id=>resumeRun(store,id),
       canWrite:()=>!updateRestartLease && !resettingData});
@@ -1097,14 +1138,25 @@ server.listen(port, host, async () => {
   const listeningPort = server.address().port;
   authOptions.origins = [`http://127.0.0.1:${listeningPort}`];
   auth = createAuth(authOptions);
+  if (!workspaceConfig && process.env.BATON_AUTO_WORKSPACE === '1') {
+    const address = Object.values(networkInterfaces()).flat().find(ip => ip?.family === 'IPv4' && !ip.internal)?.address;
+    try {
+      workspaceConfig = provisionWorkspace(storage.controlRoot,{mode:'local',origin:'https://'+(address || hostname())+':9443',port:9443,bind:'0.0.0.0'});
+    } catch (error) { workspaceError=error.message; diagnostic('workspace.provision_failed',{error}); }
+  }
   if(workspaceConfig) {
+    const daemon=process.env.BATON_WORKSPACE_DAEMON==='1';
     try {
       lockWorkspace();
       await listenWorkspace();
-      await ensureBusiness();
+      // A standalone workspace fails fast on unreadable business data. The desktop
+      // opens it on the first API request, as without phone connection: its host
+      // allows 30 s for "baton-ready" plus a 1.5 s health check, and a large or
+      // networked database can take longer to open (gateway routes wait for it).
+      if(daemon) await ensureBusiness();
       console.log('Workspace online '+workspaceConfig.origin);
     } catch(error) {
-      if(process.env.BATON_WORKSPACE_DAEMON==='1' || !instanceLock)throw error;
+      if(daemon || !instanceLock)throw error;
       workspaceError=error.message;
       diagnostic('workspace.start_failed',{error});
     }

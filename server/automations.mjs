@@ -36,7 +36,12 @@ export function automationCommands(state, journal, persistence) {
       if (task?.kind !== 'automation') return;
       if (state.runs.some(value=>value.id!==runId && state.tasks.find(item=>item.id===value.taskId)?.automationId===task.automationId && (active.has(value.status) || journal.select("traces", "runId", value.id).some(trace => trace.status==='running')))) throw new Error('此自动化已有其他轮次执行中，请先结束该轮再重试');
     },
-    getAutomation(id) { return view(get(id)); },
+    getAutomation(id) {
+      const result = view(get(id));
+      const tick = result.latestTrigger?.runId ? result.latestTrigger : journal.get('automationTriggers', persistence.latestAutomationTrigger(id, true));
+      const run = tick && journal.get('runs', tick.runId);
+      return {...result, latestExecution: run ? {runId:run.id, taskId:run.taskId, startedAt:run.startedAt, status:run.status} : null};
+    },
     listAutomations(query = {}) {
       if (query.status && !['all','enabled','disabled'].includes(query.status)) throw new Error('自动化状态无效');
       const page=persistence.automationPage(null,query);return {...page,items:page.items.map(id=>view(get(id)))};
@@ -47,7 +52,7 @@ export function automationCommands(state, journal, persistence) {
       if (query.status && !statuses.includes(query.status)) throw new Error('触发记录状态无效');
       const page=persistence.automationPage(id,query);return {...page,items:page.items.map(id=>recordView(journal.get('automationTriggers',id)))};
     },
-    saveAutomation(input, automationId = null, at = new Date()) {
+    saveAutomation(input, automationId = null, at = new Date(), access = null) {
       if (!input || typeof input !== 'object' || Array.isArray(input) || !Object.keys(input).length || Object.keys(input).some(key => !fields.has(key))) throw new Error('自动化字段无效，不接受优先级或执行状态');
       const previous = automationId ? get(automationId) : null;
       if (previous && Object.keys(input).length === 1 && input.enabled === false) return this.transaction(() => { previous.enabled=false; previous.nextTriggerAt=null; previous.updatedAt=at.toISOString(); previous.version++; this.addEvent({type:'automation.saved',message:'自动化已停用',data:{automationId}}); return view(previous); });
@@ -57,7 +62,7 @@ export function automationCommands(state, journal, persistence) {
       const times = previewSchedule(next.cron, next.timeZone, at);
       const task = this.buildTask({ title: next.title, objective: next.objective, memberAgentIds: next.memberAgentIds, managerAgentId: next.managerAgentId, teamIds: input.teamIds, workflowTemplateId: next.workflowTemplateId, acceptanceCriteria: next.acceptanceCriteria });
       return this.transaction(() => {
-        const item = { id: previous?.id || 'automation_' + randomUUID(), version: (previous?.version || 0) + 1, title: task.title, objective: task.objective, memberAgentIds: task.memberAgentIds, managerAgentId: task.managerAgentId, workflowTemplateId: task.workflowTemplateId, acceptanceCriteria: task.acceptanceCriteria, cron: next.cron.trim().replace(/\s+/g,' '), timeZone: next.timeZone, enabled: next.enabled ?? true, nextTriggerAt: null, createdAt: previous?.createdAt || at.toISOString(), updatedAt: at.toISOString() };
+        const item = { ...(access ? {access:clone(access)} : {}), id: previous?.id || 'automation_' + randomUUID(), version: (previous?.version || 0) + 1, title: task.title, objective: task.objective, memberAgentIds: task.memberAgentIds, managerAgentId: task.managerAgentId, workflowTemplateId: task.workflowTemplateId, acceptanceCriteria: task.acceptanceCriteria, cron: next.cron.trim().replace(/\s+/g,' '), timeZone: next.timeZone, enabled: next.enabled ?? true, nextTriggerAt: null, createdAt: previous?.createdAt || at.toISOString(), updatedAt: at.toISOString() };
         item.nextTriggerAt = item.enabled ? times[0] : null;
         if (previous) Object.assign(previous, item); else state.automations.push(item);
         this.addEvent({ type: 'automation.saved', message: '自动化配置已保存', data: { automationId: item.id, version: item.version } });
@@ -81,14 +86,14 @@ export function automationCommands(state, journal, persistence) {
       });
     },
     dueAutomations(at = new Date()) { return persistence.dueAutomations(at); },
-    triggerAutomation(id, { plannedAt = null, at = new Date() } = {}) {
+    triggerAutomation(id, { plannedAt = null, at = new Date(), actor = null } = {}) {
       const item = get(id), source = plannedAt ? 'schedule' : 'manual';
       if (plannedAt) {
         const existing = journal.select("automationTriggers", "automationId", id).find(record => record.source === 'schedule' && record.plannedAt === plannedAt);
         if (existing) return recordView(existing);
         if (!item.enabled || item.nextTriggerAt !== plannedAt || Date.parse(plannedAt) > +at) throw new Error('计划触发已失效');
       }
-      const record = { id: 'trigger_' + randomUUID(), automationId: id, version: item.version, configuration: clone(item), source, plannedAt: plannedAt || at.toISOString(), createdAt: at.toISOString(), outcome: 'started', taskId: null, runId: null, reason: null };
+      const record = { id: 'trigger_' + randomUUID(), automationId: id, version: item.version, configuration: clone(item), source, ...(actor ? {triggeredBy:actor.id} : {}), plannedAt: plannedAt || at.toISOString(), createdAt: at.toISOString(), outcome: 'started', taskId: null, runId: null, reason: null };
       const advance = () => { if (plannedAt) get(id).nextTriggerAt = previewSchedule(item.cron, item.timeZone, at, 1)[0]; };
       const busy = state.runs.some(run => journal.get("tasks", run.taskId)?.automationId === id && (active.has(run.status) || journal.select("traces", "runId", run.id).some(trace => trace.status === 'running') || (run.status === 'awaiting_acceptance' && !this.canCompleteRun(run.id))));
       if (busy || plannedAt && +at - Date.parse(plannedAt) >= 60000) {
@@ -97,7 +102,7 @@ export function automationCommands(state, journal, persistence) {
       }
       try {
         return this.transaction(() => {
-          const task = this.createTask({ title: automationTaskTitle(item.title, record.plannedAt, item.timeZone), objective: item.objective, memberAgentIds: item.memberAgentIds, managerAgentId: item.managerAgentId, workflowTemplateId: item.workflowTemplateId, acceptanceCriteria: item.acceptanceCriteria });
+          const task = this.createTask({ title: automationTaskTitle(item.title, record.plannedAt, item.timeZone), objective: item.objective, memberAgentIds: item.memberAgentIds, managerAgentId: item.managerAgentId, workflowTemplateId: item.workflowTemplateId, acceptanceCriteria: item.acceptanceCriteria }, item.access);
           Object.assign(journal.get("tasks", task.id), { kind: 'automation', automationId: id, automationTriggerId: record.id, automationVersion: item.version });
           const run = this.createRun(task.id); record.taskId = task.id; record.runId = run.id;
           for (const previous of state.runs.filter(value => value.id !== run.id && value.status === 'awaiting_acceptance' && journal.get("tasks", value.taskId)?.automationId === id)) {

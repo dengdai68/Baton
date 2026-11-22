@@ -38,6 +38,9 @@ CLI 资源单测使用真实权限受限的连接文件和明确的 health 夹�
 - 工作目录保存用真实临时文件系统测试缺失目录创建、已有文件保留、根/相对路径/文件阻挡拒绝与失败不保存；协作按发送者（不按接收者）布局，市场状态在卡片网格外，加载失败不误报空态。
 - `client-projections.test.mjs`：跨客户端纯投影与认证静态资源入口。
 - `electron.test.mjs`：宿主边界与打包清单。
+- `daemon.test.mjs`：常驻服务监督进程（替身服务讲真实 IPC 协议）、私有 socket、空闲预约、缺失数据盘拒绝启动与 launchd 代理定义；launchctl 为注入的假实现，不触碰真实 launchd 或 `~/.baton`。
+- `workspace-service.test.mjs`：工作空间网关的设备范围、认证限流、会话续期与闲置失效、私有文件权限、错误脱敏、安全响应头与实时连接上限。
+- `package-mac-local.test.mjs`：本机签名构建的签名身份选择。
 - `ai-contract.test.mjs`：规则入口、模块联动和提交检查。
 
 UI 使用隔离 Electron 实例检查宽窄布局、搜索、展开和滚动。真实 Provider E2E 为显式专项命令，不以夹具冒充模型执行。夹具、截图、日志、数据库和凭据不得提交。

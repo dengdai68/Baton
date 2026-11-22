@@ -22,7 +22,7 @@
         ],
         "NSLocalNetworkUsageDescription": "连接本地 Baton 工作空间",
         "NSAppTransportSecurity": {
-          "NSAllowsLocalNetworking": true
+          "NSAllowsArbitraryLoads": true
         },
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -50,7 +50,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "扫描 Baton 工作空间配对码",
+          "cameraPermission": "拍摄图片作为任务或沟通的附件",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

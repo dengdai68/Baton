@@ -79,6 +79,13 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
       db.exec("COMMIT"); return true;
     } catch (error) { db.exec("ROLLBACK"); throw error; }
   }
+  async function verifyAdministrator(username, password) {
+    const admin = account();
+    if (!admin || typeof username !== 'string' || typeof password !== 'string' || password.length > 128) return null;
+    const hash = await hashPassword(password, admin.salt);
+    if (!timingSafeEqual(hash, Buffer.from(admin.password_hash, 'hex')) || username !== admin.username || account()?.salt !== admin.salt) return null;
+    return {name:admin.username, version:digest(admin.salt)};
+  }
   function validateAdministrator(username, password) {
     if (typeof username !== "string" || !/^[A-Za-z0-9_.-]{1,64}$/.test(username)) throw new Error("用户名需为 1–64 位字母、数字、点、下划线或连字符");
     if (typeof password !== "string" || password.length < 10 || password.length > 128) throw new Error("密码长度需为 10–128 字符");
@@ -105,6 +112,12 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
   return {
     close: () => db.close(),
     session,
+    verifyAdministrator,
+    administratorIdentity() {
+      const admin = account();
+      return admin && {name:admin.username, version:digest(admin.salt)};
+    },
+    hasSession: () => Boolean(db.prepare('SELECT 1 FROM sessions WHERE expires_at=0 OR expires_at>? LIMIT 1').get(now())),
     configured: () => Boolean(account()),
     async reauthenticate(request, password) {
       const current = session(request), admin = account();
@@ -168,8 +181,7 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
         let input;
         try { input = await credentials(request); } catch { json(response, 400, { error: "无效登录请求" }); return true; }
         if (!input || typeof input.username !== "string" || typeof input.password !== "string" || input.password.length > 128) { json(response, 401, { error: "用户名或密码错误" }); return true; }
-        const hash = await hashPassword(input.password, admin.salt);
-        if (!timingSafeEqual(hash, Buffer.from(admin.password_hash, "hex")) || input.username !== admin.username || account()?.password_hash !== admin.password_hash) {
+        if (!await verifyAdministrator(input.username, input.password)) {
           json(response, 401, { error: "用户名或密码错误" }); return true;
         }
         json(response, 200, issueSession(request, response, request.headers.origin)); return true;
@@ -180,7 +192,7 @@ export function createAuth({ databasePath, origins = [], bootstrapToken = "", no
       // Pre-auth pages render brand assets too; icons/vendor are inert presentation files.
       // The interface translator module is equally inert; its catalog comes from the desktop
       // preload, so login and setup appear in the operator's language.
-      if (request.method === "GET" && (["/login", "/login.js", "/login.css", "/api/health", "/client/i18n.mjs"].includes(path) || path.startsWith("/icons/") || path.startsWith("/vendor/"))) return false;
+      if (request.method === "GET" && (["/login", "/workspace-choice.js", "/login.js", "/login.css", "/api/health", "/client/i18n.mjs"].includes(path) || path.startsWith("/icons/") || path.startsWith("/vendor/"))) return false;
       const current = session(request);
       if (!current) {
         if (path.startsWith("/api/")) json(response, 401, { error: "authentication_required" });

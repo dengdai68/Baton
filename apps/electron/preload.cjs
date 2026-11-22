@@ -31,10 +31,15 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
     if (event.target === restoredNavigation) clearRestoredFocus();
   }, true);
   contextBridge.exposeInMainWorld("batonDesktop", Object.freeze({
+    openExternalWorkspace: (address,name,password) => ipcRenderer.invoke("desktop:workspace:login", address,name,password),
+    workspaceChoices: address => ipcRenderer.invoke("desktop:workspace:choices",address),
+    workspaceHealth: address => ipcRenderer.invoke("desktop:workspace:health",address),
     copyWorkspacePath: (text) => ipcRenderer.invoke("desktop:workspace:copy-path", text),
     openWorkspaceDirectory: () => ipcRenderer.invoke("desktop:workspace:open-directory"),
     getPreferences: () => ipcRenderer.invoke("desktop:preferences:get"),
     setCloseMode: (mode) => ipcRenderer.invoke("desktop:preferences:set", mode),
+    getServiceStatus: () => ipcRenderer.invoke("desktop:service:status"),
+    setResidentService: (resident) => ipcRenderer.invoke("desktop:service:resident", resident),
     setAppearance: (theme) => ipcRenderer.invoke("desktop:appearance:set", theme),
     locale: readLocale(),
     setLanguage: (language) => ipcRenderer.invoke("desktop:language:set", language),

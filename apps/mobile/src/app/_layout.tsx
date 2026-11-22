@@ -1,4 +1,5 @@
 // Root: theme, data cache, workspace session and toasts around one Stack.
+import { backHeaderItems } from '@/ui/header';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider as NavigationThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -13,8 +14,8 @@ import { ToastProvider } from '@/ui/toast';
 import { SessionProvider, useSession } from '@/workspace/session';
 
 void SplashScreen.preventAutoHideAsync();
-// Known benign React Native dev warning from native-driven animations (no app action needed).
-LogBox.ignoreLogs(['Sending `onAnimatedValueUpdate` with no listeners registered.']);
+// Known benign React Native dev warnings (native-driven animations, dev-server socket); no app action needed.
+LogBox.ignoreLogs(['Sending `onAnimatedValueUpdate` with no listeners registered.', 'Sending `websocketMessage` with no listeners registered.']);
 
 function Shell() {
   const { scheme, colors } = useTheme();
@@ -37,7 +38,7 @@ function Shell() {
           headerTintColor: colors.accentText,
           headerTitleStyle: { color: colors.text },
           headerShadowVisible: false,
-          headerBackButtonDisplayMode: 'minimal',
+          headerBackButtonDisplayMode: 'minimal', unstable_headerLeftItems: backHeaderItems,
           contentStyle: { backgroundColor: colors.bgCanvas },
         }}
       >

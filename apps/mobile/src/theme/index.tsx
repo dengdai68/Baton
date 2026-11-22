@@ -74,7 +74,7 @@ export function usePreferences(): PreferencesContextValue {
 const identityKeys = ['avViolet', 'avCyan', 'avBlue', 'avOrange', 'avGreen'] as const;
 export function identityColor(colors: Colors, color?: string | null, id?: string | null): string {
   const named: Record<string, string> = {
-    violet: colors.avViolet, cyan: colors.avCyan, blue: colors.avBlue, orange: colors.avOrange, green: colors.avGreen, system: colors.avSystem,
+    violet: colors.avViolet, cyan: colors.avCyan, blue: colors.avBlue, orange: colors.avOrange, amber: colors.avOrange, green: colors.avGreen, system: colors.avSystem,
   };
   if (color && named[color]) return named[color];
   let hash = 0;

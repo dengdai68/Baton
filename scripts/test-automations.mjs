@@ -70,11 +70,15 @@ try {
     assert.equal(await page.locator('.automation-reason').first().evaluate(el=>getComputedStyle(el).display),'block');
     assert.equal(await page.locator('[data-auto-run]').count(),0,'rolled-back triggers have no task details');
     await page.screenshot({path:join(root,`trigger-list-${theme}-${width}.png`)});
-    await page.locator('[data-auto-tab=config]').click();await page.locator('.automation-config-members').waitFor();
-    const layout=await page.evaluate(()=>{const rect=s=>document.querySelector(s).getBoundingClientRect(),facts=rect('.automation-facts'),tab=rect('.automation-detail-tabs'),avatar=rect('.automation-config-member .agent-card-avatar');return {factsX:facts.x,tabX:tab.x,tabPadding:getComputedStyle(document.querySelector('.automation-detail-tabs')).paddingLeft,edit:rect('.automation-detail-header [data-auto-edit]').height,trigger:rect('.automation-detail-header [data-auto-trigger]').height,avatar:[avatar.width,avatar.height],initials:[...document.querySelectorAll('.automation-config-member .agent-card-avatar')].map(n=>Array.from(n.textContent.trim()).length)};});
-    assert.equal(layout.tabX,layout.factsX,'tabs align with fact cards at the page edge');assert.equal(layout.tabPadding,'0px');assert.equal(layout.edit,28);assert.equal(layout.trigger,28);assert.deepEqual(layout.avatar,[24,24]);assert.ok(layout.initials.every(n=>n===1));
-    assert.equal(await page.locator('.automation-config-section dt').filter({hasText:'验收标准'}).count(),0);assert.equal(await page.locator('.automation-config-member small').count(),0);assert.equal(await page.locator('.automation-config-section').first().evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px');assert.notEqual(await page.locator('.automation-config-member .agent-card-avatar').first().evaluate(n=>getComputedStyle(n).backgroundColor),'rgba(0, 0, 0, 0)');await page.screenshot({path:join(root,`config-${theme}-${width}.png`)});await page.locator('[data-auto-workflow]').click();await page.locator('#workflow-node-detail').waitFor();await page.locator('[data-close-modal]').last().click();await page.locator('[data-auto-tab=records]').click();await page.locator('[data-pagination=automation-triggers]').waitFor();
-    const tabStyle=await page.locator('[data-auto-tab=records]').evaluate(el=>{const s=getComputedStyle(el);return {color:s.color,border:s.borderBottomWidth,background:s.backgroundColor};});assert.equal(tabStyle.border,'0px');assert.notEqual(tabStyle.background,'rgba(0, 0, 0, 0)');
+    await page.locator('.automation-config-members').waitFor();
+    const title = await page.locator('.automation-detail-identity').boundingBox();
+    const actions = await page.locator('.automation-detail-header [data-auto-header-actions]').boundingBox();
+    assert.ok(Math.abs((title.y + title.height / 2) - (actions.y + actions.height / 2)) < 2);
+    assert.ok(title.x + title.width <= actions.x && actions.x + actions.width <= width);
+    await page.getByRole('button',{name:'配置',exact:true}).click();
+    await page.locator('#task-form [name=title]').waitFor();
+    await page.locator('#task-form').getByRole('button',{name:'取消',exact:true}).click();
+    assert.equal(await page.locator('.automation-config-section dt').filter({hasText:'验收标准'}).count(),0);assert.equal(await page.locator('.automation-config-member small').count(),0);assert.equal(await page.locator('.automation-config-section').first().evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px');assert.notEqual(await page.locator('.automation-config-member .agent-card-avatar').first().evaluate(n=>getComputedStyle(n).backgroundColor),'rgba(0, 0, 0, 0)');await page.screenshot({path:join(root,`config-${theme}-${width}.png`)});await page.locator('[data-auto-workflow]').click();await page.locator('#workflow-node-detail').waitFor();await page.locator('[data-close-modal]').last().click();await page.locator('[data-pagination=automation-triggers]').waitFor();
     await page.locator('[data-pagination=automation-triggers] [data-page="2"]').click();
     const taskTitle=storeTitle;
     await page.locator('.automation-trigger-title').filter({hasText:taskTitle}).waitFor();
@@ -100,7 +104,7 @@ try {
     await action.click();await page.locator('#collaboration-panel').waitFor();await page.getByRole('button',{name:'返回触发记录',exact:true}).click();
   }
   await page.unroute(triggersUrl);
-  await page.locator('[data-auto-tab=config]').click();await page.locator('.nav-item[data-view=automations]').click();
+  await page.locator('.nav-item[data-view=automations]').click();
   await page.locator('#automation-search [name=search]').fill('无匹配结果');await page.getByText('没有匹配的自动化',{exact:true}).waitFor();
   await page.locator('#automation-search [name=search]').fill('分页自动化 1');await page.locator('[data-auto-open]').first().waitFor();
   assert.equal(await page.locator('[data-auto-results] tbody tr').count(),11);assert.ok(await page.locator('#automation-search [name=search]').evaluate(el=>el===document.activeElement));
@@ -119,7 +123,7 @@ try {
   for(const workflowTemplateId of [undefined,null,'']){await writeFile(file,JSON.stringify({managerAgentId:'system_project_manager',title:'CLI 默认协作',objective:'无需模板',memberAgentIds:input.memberAgentIds,workflowTemplateId}));const result=JSON.parse((await promisify(execFile)(process.execPath,[resolve('cli/main.mjs'),'tasks','create','--file',file,'--endpoint-file',join(data,'desktop-endpoint.json'),'--json'],{env:{...process.env,HOME:home}})).stdout);const detail=JSON.parse((await promisify(execFile)(process.execPath,[resolve('cli/main.mjs'),'tasks','get',result.data.task.id,'--endpoint-file',join(data,'desktop-endpoint.json'),'--json'],{env:{...process.env,HOME:home}})).stdout);assert.equal(detail.data.workflow.id,null);assert.equal(detail.data.workflow.name,'默认协作');}
   await writeFile(file,JSON.stringify({...input,timeZone:'UTC'}));await assert.rejects(cli('create','--file',file));
  await writeFile(file,JSON.stringify({...input,title:'CLI 创建自动化',workflowTemplateId:null}));const created=await cli('create','--file',file);assert.ok(created.ok);
-  await page.goto(origin+`/automations/${created.data.automation.id}`);await page.getByRole('button',{name:'编辑',exact:true}).click();await page.locator('#task-form [name=title]').fill('App 编辑自动化');await page.getByRole('button',{name:'保存修改',exact:true}).click();await page.locator('.automation-detail-header h2').filter({hasText:'App 编辑自动化'}).waitFor();assert.equal((await cli('get',created.data.automation.id)).data.automation.title,'App 编辑自动化');
+  await page.goto(origin+`/automations/${created.data.automation.id}`);await page.getByRole('button',{name:'配置',exact:true}).click();await page.locator('#task-form [name=title]').fill('App 编辑自动化');await page.getByRole('button',{name:'保存修改',exact:true}).click();await page.locator('.automation-detail-header h2').filter({hasText:'App 编辑自动化'}).waitFor();assert.equal((await cli('get',created.data.automation.id)).data.automation.title,'App 编辑自动化');
   await writeFile(file,JSON.stringify({enabled:false}));assert.ok((await cli('update',created.data.automation.id,'--file',file)).ok);assert.ok((await cli('delete',created.data.automation.id,'--yes')).ok);
   const preserved=(await api('/api/tasks')).data.tasks.filter(item=>item.kind!=='automation').map(item=>item.id).sort();
   const removed=await cli('delete',automation.id,'--yes');assert.ok(removed.ok);assert.ok(removed.data.runIds.includes(first.runId));
