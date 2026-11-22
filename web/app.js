@@ -1597,7 +1597,7 @@ function renderWorkspace() {
             const execution = roleExecutionStatus(run, traces, agent.id);
             return `<button class="role-card ${agent.id === selected?.id ? "selected" : ""}" data-execution-state="${execution.state}" data-select-agent="${agent.id}" aria-pressed="${agent.id === selected?.id}" aria-label="${$t("查看 {0} 的控制台，{1}", [esc(agent.name), esc(execution.label)])}">
               <span class="role-avatar ${roleColor(agent)}">${esc(initialsOf(agent))}</span>
-              <span><strong title="${esc(agent.name)}">${esc(agent.name)}</strong><small>${providerLabel(agent)} · ${esc(execution.label)}</small></span>
+              <span><strong title="${esc(agent.name)}">${esc(agent.name)}</strong><small><span>${providerLabel(agent)} ·</span> <span>${esc(execution.label)}</span></small></span>
               <span class="role-console-affordance">${execution.active ? `<span class="member-running-dot" aria-label="${$t("正在执行")}"></span>` : ""}<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></svg></span>
             </button>`;
           }).join("")}

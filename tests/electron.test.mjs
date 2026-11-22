@@ -492,7 +492,8 @@ test("Electron reduces chrome spacing without shrinking reading text or scaling 
   assert.match(css, /\.table-actions \{ flex-wrap:wrap; gap:4px/);
   assert.match(css, /\.team-directory-row \{[^}]*padding:8px 16px 8px var\(--pad-page\)/);
   assert.match(css, /body \{[^}]*font:var\(--fs-body\)\/var\(--lh-body\)/);
-  assert.match(css, /\.communication-body \{[^}]*font-size:var\(--fs-body\); line-height:21px/, "message bodies use the smaller reading size");
+  assert.match(css, /\.communication-body \{[^}]*font-size:var\(--fs-body\); line-height:var\(--lh-body\)/, "chat records use the 13/20 body size, one step under the old 14/22");
+  assert.match(css, /#run-workspace \.collaboration-row \.collaboration-content \{[^}]*font-size:var\(--fs-body\); line-height:var\(--lh-body\)/, "task collaboration records match the chat body size");
   assert.doesNotMatch(css, /(?:zoom|font-size-adjust)\s*:|transform\s*:\s*scale|\.markdown-preview[^}]*font-size/);
   assert.match(css, /@media \(max-width:760px\) \{\s*\.communication-layout \{ grid-template-columns:minmax\(0,1fr\); height:auto; min-height:0/);
   assert.match(css, /@media \(max-width:760px\), \(max-height:620px\) \{\s*\.collaboration-row \{ grid-template-columns:minmax\(0,1fr\); gap:4px/);
