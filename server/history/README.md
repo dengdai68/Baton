@@ -1,5 +1,7 @@
 # 历史查询
 
+`index.mjs` 导出历史查询入口，`bridge.mjs` 组装查询工具及权限上下文，`mcp.mjs` 提供 MCP 通信入口。查询依据和可见性范围见 [Agent 历史](../../docs/19-agent-history.md)。
+
 Bridge 的 env 是历史 MCP 自己的启动环境，Codex 必须全部转发；打包版的 ELECTRON_RUN_AS_NODE 不得遗漏，也不能泄漏到 Provider 环境。required=true 将历史初始化失败交回原有执行错误链。提示词里的能力说明不是工具就绪证据，验收必须实际调用。
 
 Bridge 仅保留简短的历史核对行为规则；工具名、连接说明和分页参数不再重复注入应用系统指令，而由 MCP tools/list 的描述/schema 及服务 instructions 提供。原生注册后回调保存平台脱敏分层快照，不包含 Provider 自动生成的技能目录和工具定义。历史不重放，需要过去资料时按需查询。

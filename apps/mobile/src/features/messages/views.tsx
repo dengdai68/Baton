@@ -52,7 +52,7 @@ export function AgentMessage({ sender, name, kind, to, time, status, children, a
 }) {
   const { colors, metrics } = useTheme();
   return (
-    <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
+    <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingVertical: 12 }}>
       <Avatar member={sender} size={28} />
       <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4 }}>
@@ -79,7 +79,7 @@ export function AgentMessage({ sender, name, kind, to, time, status, children, a
 export function HumanMessage({ name, kind, to, time, children, footer, testID }: { name: string; kind?: string; to?: string | null; time: string; children: ReactNode; footer?: ReactNode; testID?: string }) {
   const { colors } = useTheme();
   return (
-    <View testID={testID ? 'human:' + testID : undefined} accessibilityLabel={$t('你发送的消息')} style={{ alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 12, gap: 4, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
+    <View testID={testID ? 'human:' + testID : undefined} accessibilityLabel={$t('你发送的消息')} style={{ alignItems: 'flex-end', paddingHorizontal: 16, paddingVertical: 12, gap: 4 }}>
       <Txt variant="caption" tone="tertiary" numberOfLines={1}>
         {[kind, to ? '→ ' + to : null, formatMessageTime(time)].filter(Boolean).join(' · ')}{'  '}
         <Txt variant="caption" weight="semibold" tone="secondary">{name}</Txt>

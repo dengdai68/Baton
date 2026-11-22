@@ -3,6 +3,7 @@ import { formatMessageTime, retainsConsoleEvent } from '../client/console-projec
 import { communicationDayLabel } from '../web/communication.js';
 import { appendConsoleLive } from "../web/console-stream.mjs";
 import test from "node:test";
+import { Readable } from "node:stream";
 import { workflowConnections } from "../client/workflow-description.mjs";
 import { mkdirSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
@@ -256,9 +257,12 @@ test("HTTP JSON reader bounds oversized bodies while accepting normal input", as
   const source = await readFile(new URL("../server/index.mjs", import.meta.url), "utf8");
   const start = source.indexOf("const maxJsonBodyBytes"), end = source.indexOf("\n\nasync function routeApi", start);
   const { maxJsonBodyBytes, RequestBodyTooLargeError, readJson } = new Function(`${source.slice(start, end)}; return { maxJsonBodyBytes, RequestBodyTooLargeError, readJson };`)();
-  const request = (chunks) => ({ async *[Symbol.asyncIterator]() { yield* chunks; } });
+  const request = (chunks) => Readable.from(chunks.map(chunk => Buffer.from(chunk)));
   assert.deepEqual(await readJson(request(['{"title":"small request"}'])), { title: "small request" });
   await assert.rejects(readJson(request([JSON.stringify({ payload: "x".repeat(maxJsonBodyBytes) })])), (error) => error instanceof RequestBodyTooLargeError && /1 MiB/.test(error.message));
+  const unicode = Buffer.from('{"title":"沟通"}');
+  assert.deepEqual(await readJson(request([unicode.subarray(0, 11), unicode.subarray(11)])), { title: "沟通" });
+  await assert.rejects(readJson(request(["1234", "5678"]), 6), RequestBodyTooLargeError);
   assert.match(source, /error instanceof RequestBodyTooLargeError \? 413 : 400/);
 });
 

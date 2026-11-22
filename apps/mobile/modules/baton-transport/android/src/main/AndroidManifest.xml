@@ -1,0 +1,6 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.INTERNET" />
+  <!-- An explicit http:// workspace address uses plain HTTP, like NSAllowsArbitraryLoads on iOS.
+       Merged into the app manifest; addresses without a scheme still default to HTTPS. -->
+  <application android:usesCleartextTraffic="true" />
+</manifest>

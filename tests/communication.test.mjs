@@ -250,7 +250,7 @@ test("communication reader distinguishes pending, empty and failed reads without
   f.take("/a").reject(new Error("history unavailable")); f.take("").resolve({ conversations: [] }); await f.flush();
   assert.match(f.query(".communication-error").textContent, /history unavailable/);
   assert.match(f.query(".communication-messages").innerHTML, /读取失败/);
-  assert.equal(f.query(".communication-heading").textContent, "会话读取失败");
+  assert.equal(f.query(".communication-heading").textContent, "沟通");
   assert.match(f.query(".communication-list").innerHTML, /还没有会话/);
   f.tick(); f.take("").reject(new Error("list unavailable")); f.take("/a").resolve(f.result([])); await f.flush();
   assert.match(f.query(".communication-error").textContent, /list unavailable/);

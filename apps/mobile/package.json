@@ -47,7 +47,9 @@
   "scripts": {
     "start": "expo start --dev-client",
     "ios": "expo run:ios",
+    "android": "expo run:android",
     "prebuild": "expo prebuild --clean --platform ios",
+    "prebuild:android": "expo prebuild --clean --platform android",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test tests/*.test.ts",
@@ -55,5 +57,10 @@
   },
   "private": true,
   "license": "Apache-2.0",
-  "description": "Baton for iPhone: the Mac workspace on a phone (React Native + Expo)"
+  "description": "Baton for iPhone and Android: the Mac workspace on a phone (React Native + Expo)",
+  "overrides": {
+    "@expo/fingerprint": {
+      "minimatch": "11.0.1"
+    }
+  }
 }

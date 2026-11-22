@@ -1,5 +1,9 @@
 # 控制面
 
+`index.mjs` 装配桌面接口、工作空间网关和后台恢复。`workspace-admin.mjs` 是独立部署入口，`workspace-http.mjs` 与 `workspace-identity.mjs` 负责远端访问和设备会话。`store.mjs`、`persistence.mjs` 与 `orchestrator.mjs` 分别处理领域状态、SQLite 持久化和执行调度。`run-files.mjs` 管理运行文件。[runtime/](runtime/README.md) 连接各 Provider，[history/](history/README.md) 提供受控历史查询。
+
+本机工作空间信息及登录页的地址取自工作空间服务配置的 origin。公网网关独立限制登录请求大小、校验并发和来源失败次数，详见 docs/31-workspace-service.md。
+
 安装版认证、配置与 Runtime 默认根为 `~/.baton`，CLI/宿主共用新定位。配置目录搬迁由 Electron 的 configuration-root-migration 在业务初始化前完成，不由 Store 改写历史。storage-layout 与 data-reset 仅允许配置根内专用 workspace/workspace-dev 业务子树；其他私有资源仍受保护。
 
 扩展目录内容变化不再触发整树 SHA256 拒绝；插件详情、员工绑定和任务启动与 App 共用该规则，既有冻结引用也生效。清单文件摘要、执行计划和路径读取规则仍校验；命令参数、输入 schema 与输出字段不变。
@@ -199,6 +203,6 @@ Store.subscribeNotifications 发布未来已提交的任务待验收/完成及�
 
 ## 工作空间网关安全
 
-`workspace-http.mjs` 是公网可达的唯一入口：默认拒绝，只转发白名单路由；设备会话按配对范围授权（`mobile` 只读配置，`desktop` 为另一台 Mac 的客户端），认证失败按客户端地址计数（10 分钟 20 次封禁 10 分钟，只有回环反向代理的 `X-Forwarded-For` 被采信）；远程请求的非预期内部错误只返回「请求处理失败」并写本机诊断；所有响应带 HSTS、CSP、`X-Frame-Options: DENY`、COOP/CORP 与 Permissions-Policy；每台设备最多 8 条实时事件流，网关最多 256 个并发连接。`workspace-identity.mjs` 只存令牌摘要，记录设备配对时间、最近访问时间与地址，会话闲置 30 天失效、使用即续期（每分钟最多写一次），访问库文件为 0600。安全模型与加密取舍见 [docs/32](../docs/32-resident-service.md)，测试 `tests/workspace-service.test.mjs`。
+`workspace-http.mjs` 是公网可达的唯一入口：默认拒绝，只转发白名单路由；设备会话按配对范围授权（`mobile` 只读配置，`desktop` 为另一台 Mac 的客户端），按 IP 短期限流，并按账号与 IP 组合持久封禁 24 小时（`X-Forwarded-For` 仅信任已配置的直接代理来源）；远程请求的非预期内部错误只返回「请求处理失败」并写本机诊断；所有响应带 HSTS、CSP、`X-Frame-Options: DENY`、COOP/CORP 与 Permissions-Policy；每台设备最多 8 条实时事件流，网关最多 256 个并发连接。`workspace-identity.mjs` 只存令牌摘要，记录设备配对时间、最近访问时间与地址，会话闲置 30 天失效、使用即续期（每分钟最多写一次），访问库文件为 0600。安全模型与加密取舍见 [docs/32](../docs/32-resident-service.md)，测试 `tests/workspace-service.test.mjs`。
 
 工作空间事件流、Mac 配对目录及网关访问范围见 docs/31-workspace-service.md。配对目录只对本机管理 API 开放。

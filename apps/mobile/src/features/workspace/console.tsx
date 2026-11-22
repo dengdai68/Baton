@@ -16,7 +16,7 @@ import {
 import { runtimeLabel } from '@shared/runtime-providers.mjs';
 import { useWorkspaceKey } from '@/api/queries';
 import { $t, $tm, useLocale } from '@/i18n';
-import { type Colors, useTheme } from '@/theme';
+import { type Colors, monoFont, useTheme } from '@/theme';
 import { Button } from '@/ui/button';
 import { Markdown } from '@/ui/markdown';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
@@ -143,7 +143,7 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 function Code({ children, dark, accent, wrap, tone }: { children: ReactNode; dark?: boolean; accent?: string; wrap?: boolean; tone?: string }) {
   const { colors, metrics } = useTheme();
   const box = { borderRadius: metrics.radius.sm, backgroundColor: dark ? colors.dark : colors.codeBg, borderWidth: dark ? 0 : 1, borderColor: colors.borderSubtle, borderLeftWidth: accent ? 3 : dark ? 0 : 1, borderLeftColor: accent || colors.borderSubtle };
-  const text = <Text selectable style={{ fontFamily: 'Menlo', fontSize: 12, lineHeight: 18, color: tone || (dark ? colors.onSolidText : colors.text) }}>{children}</Text>;
+  const text = <Text selectable style={{ fontFamily: monoFont, fontSize: 12, lineHeight: 18, color: tone || (dark ? colors.onSolidText : colors.text) }}>{children}</Text>;
   if (wrap) return <View style={[box, { paddingHorizontal: 10, paddingVertical: 8 }]}>{text}</View>;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={box} contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 8 }}>{text}</ScrollView>

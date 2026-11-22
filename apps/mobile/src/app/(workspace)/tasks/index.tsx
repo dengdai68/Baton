@@ -8,7 +8,6 @@ import { useMemo, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
 
 import { useFocusedInterval, useManualRefresh, useWorkspaceKey } from '@/api/queries';
-import { useCatalog } from '@/features/catalog';
 import { archiveTask } from '@/features/tasks/actions';
 import { byNeed, type Chip, chipOptions, readTaskDirectory, rowAction, statusFilters, type TaskSummary, taskMatchesChip } from '@/features/tasks/model';
 import { TaskRow } from '@/features/tasks/task-row';
@@ -32,13 +31,11 @@ export default function Tasks() {
   const [chip, setChip] = useState<Chip>('all');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('all');
-  const [workflow, setWorkflow] = useState('all');
   const [busy, setBusy] = useState<string | null>(null);
   const term = useDebounced(search.trim(), 300);
-  const catalog = useCatalog();
   const directory = useQuery({
-    queryKey: [...scope, 'tasks', term, workflow],
-    queryFn: () => readTaskDirectory(client, { search: term, status: 'all', workflow }, false),
+    queryKey: [...scope, 'tasks', term],
+    queryFn: () => readTaskDirectory(client, term),
     refetchInterval: useFocusedInterval(10_000),
   });
   const pull = useManualRefresh(directory.refetch);
@@ -47,18 +44,14 @@ export default function Tasks() {
     () => (directory.data?.all || []).filter((task) => task.status !== 'backlog' && taskMatchesChip(task.status, chip) && statusMatch(task.status)).sort(byNeed),
     [directory.data, chip, status], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const workflows = [...new Map([...(catalog.data?.workflowTemplates || []), ...(catalog.data?.taskWorkflows || [])].map((item) => [item.id, item.name]))];
-  const filtered = status !== 'all' || workflow !== 'all';
+  const filtered = status !== 'all';
   const filterItems: MenuItem[] = [
     { id: 'status', title: $t('任务状态'), inline: true, children: statusFilters().map((item) => ({ id: 'status:' + item.id, title: item.label, checked: status === item.id })) },
-    { id: 'workflow', title: $t('工作流@@field'), inline: true, children: [{ id: 'workflow:all', title: $t('全部工作流'), checked: workflow === 'all' }, ...workflows.map(([id, name]) => ({ id: 'workflow:' + id, title: name, checked: workflow === id }))] },
     ...(filtered ? [{ id: 'clear', title: $t('清除筛选'), icon: 'xmark.circle' }] : []),
   ];
   function selectFilter(id: string) {
-    if (id === 'clear') { setStatus('all'); setWorkflow('all'); return; }
-    const [kind, value] = [id.slice(0, id.indexOf(':')), id.slice(id.indexOf(':') + 1)];
-    if (kind === 'status') setStatus(value);
-    if (kind === 'workflow') setWorkflow(value);
+    if (id === 'clear') setStatus('all');
+    else if (id.startsWith('status:')) setStatus(id.slice('status:'.length));
   }
 
   async function act(task: TaskSummary) {

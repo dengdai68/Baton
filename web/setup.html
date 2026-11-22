@@ -18,13 +18,16 @@
     </form>
     <div id="workspace-choice" hidden>
         <label for="workspace-mode">工作空间</label>
-        <select id="workspace-mode"><option value="local">本机工作空间</option></select>
+        <button id="workspace-mode" type="button" popovertarget="workspace-list" aria-expanded="false" aria-controls="workspace-list">
+          <span class="workspace-dot" aria-hidden="true"></span><span class="workspace-origin"></span><span class="workspace-chevron" aria-hidden="true"></span>
+        </button>
+        <div id="workspace-list" popover="auto" role="group" aria-label="工作空间"></div>
       </div>
   </main>
   <dialog id="workspace-dialog" aria-labelledby="workspace-dialog-title">
       <form id="workspace-add"><h2 id="workspace-dialog-title">添加工作空间</h2>
         <label for="workspace-address">工作空间地址</label>
-        <input id="workspace-address" placeholder="mac.local:9443" autocomplete="url" spellcheck="false" required>
+        <input id="workspace-address" placeholder="https://www.baton.com" autocomplete="url" spellcheck="false" required>
         <p role="alert" id="address-error"></p>
         <div class="dialog-actions"><button type="button" id="workspace-cancel">取消</button><button class="submit" type="submit">添加</button></div>
       </form></dialog>

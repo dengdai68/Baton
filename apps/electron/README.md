@@ -1,5 +1,7 @@
 # Electron
 
+`main.mjs` 装配桌面窗口、菜单和 IPC，`preload.cjs` 提供受限的宿主接口。后台服务管理见 `daemon.mjs`、`daemon-service.mjs`，启动路径和进程环境见 `runtime-paths.mjs`。应用窗口加载 [web/](../../web/README.md)，服务端业务由 [server/](../../server/README.md) 实现。
+
 安装版配置直接放在 `~/.baton`，开发实例仍隔离在 `desktop-dev`。`configuration-root-migration.mjs` 在打开认证库与持久浏览器前，将已授权的旧 `desktop` 配置逐项 rename 到父目录；私有意图记录支持中断恢复，冲突/旧实例活动明确拒绝，错误提示使用共享内存 partition，不启动空实例。Runtime 旧根仅追加到 locator 的读取映射；工作目录和业务记录原位保留。
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
@@ -116,7 +118,7 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 宿主偏好 `desktop-preferences.json` 新增 `language`（`system` / `zh-CN` / `zh-TW` / `en`，与 closeMode、appearance 合并写入）。启动时按偏好或 macOS 首选语言（`BATON_LOCALE` 可覆盖系统语言，供隔离验收）解析语言，读取 `client/locales/<locale>.json` 后构建应用菜单、托盘、原生对话框、系统通知与 CLI 安装确认窗。renderer 只有两条新增受限通道：preload 在页面脚本运行前以 `ipcRenderer.sendSync("desktop:locale:get")` 读取一次只读数据 `batonDesktop.locale`（语言、已解析 locale 与目录；仅主窗口控制台页面，其他框架得到 null），以及 `setLanguage`（`desktop:language:set`，仅设置 → 常规可写）；同步读取让翻译模块无需顶层 await。切换后立即重建菜单与托盘。配置迁移与更新状态文字保持源语言，在显示时翻译。
 
-Baton 菜单提供「连接 iPhone…」与「云端工作空间…」。本地连接在当前实例启动单独的 HTTPS 监听，关闭窗口后仍在菜单栏运行。云端窗口使用沙箱及独立会话，导航限制在所选 HTTPS origin。参见 [工作空间服务](../../docs/31-workspace-service.md)。
+Baton 菜单提供「连接 iPhone…」与「云端工作空间…」。本地连接在当前实例默认启动单独的 HTTP 监听，关闭窗口后仍在菜单栏运行。云端窗口使用沙箱及独立会话，导航限制在所选 HTTPS origin。参见 [工作空间服务](../../docs/31-workspace-service.md)。
 
 ## 常驻服务
 
@@ -124,4 +126,4 @@ Baton 菜单提供「连接 iPhone…」与「云端工作空间…」。本地�
 
 本机服务模式入口位于设置 → 工作空间。工作空间设置单独校验 IPC 发送页。
 
-Mac 登录页保存可选地址并检测工作空间健康。常驻开关即时改变退出策略，运行中的服务保持原连接。
+Mac 登录页保存可选地址并检测连通状态。移除已选的外部地址后，选择器回到当前本机服务地址。常驻开关即时改变退出策略，运行中的服务保持原连接。

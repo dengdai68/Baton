@@ -2,7 +2,8 @@ node_modules/
 .DS_Store
 *.log
 .env
-data/*.json
+# Local instance data and test fixtures.
+/data/*.json
 .data/
 
 # Local credentials and environment files are never committed.

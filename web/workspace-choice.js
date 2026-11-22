@@ -11,28 +11,64 @@ if (host?.workspaceChoices) {
   const title = document.querySelector('h1'), originalTitle = title.textContent;
   const label = form.querySelector('[for=username]'), originalLabel = label.textContent;
   const originalSubmit = submit.textContent;
+  const menu = document.querySelector('#workspace-list');
   const status = new Map();
   let selected = 'local', generation = 0;
-  function caption(origin) {
-    const name = origin === 'local' ? $t("本机工作空间") : origin.startsWith('http://') ? origin : new URL(origin).host;
+  const localOrigin = document.querySelector('meta[name="baton-workspace-origin"]')?.content;
+  const localCaption = localOrigin ? localOrigin+' ('+$t("本机")+')' : $t("本机工作空间");
+  const caption = origin => origin === 'local' ? localCaption : origin;
+
+  function paint(button, origin) {
     const state = status.get(origin);
-    return (state === undefined ? '⚪️' : state === 'ready' ? '🟢' : '🔴')+' '+name;
+    const label = caption(origin);
+    button.querySelector('.workspace-origin').textContent = label;
+    button.querySelector('.workspace-dot').dataset.state = state || 'pending';
+    const health = state === undefined ? $t("检测中") : state === 'ready' ? $t("健康") : $t("无法连接");
+    button.setAttribute('aria-label',label+' · '+health);
+    button.title = label;
   }
   async function refresh() {
     const current = ++generation;
-    await Promise.all(Array.from(select.options).filter(option => option.value !== 'add').map(async option => {
-      const ok = await host.workspaceHealth(option.value).catch(() => false);
+    await Promise.all(Array.from(menu.querySelectorAll('.workspace-pick'), async button => {
+      const origin = button.dataset.origin;
+      const state = await host.workspaceHealth(origin).catch(() => 'offline');
       if (current !== generation) return;
-      status.set(option.value,ok); option.textContent = caption(option.value);
-      const name = option.value === 'local' ? $t("本机工作空间") : new URL(option.value).host;
-      option.setAttribute('aria-label',name+' · '+(ok === 'ready' ? $t("健康") : $t("无法连接")));
+      status.set(origin,state);
+      paint(button,origin);
+      if (selected === origin) paint(select,origin);
     }));
+  }
+  function menuButton(className) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    return button;
   }
   function render(choices) {
     selected = choices.selected;
-    const origins = ['local', ...choices.addresses];
-    select.replaceChildren(...origins.map(origin => new Option(caption(origin),origin)),new Option('＋ '+$t("添加工作空间"),'add'));
-    select.value = selected;
+    paint(select,selected);
+    const rows = ['local', ...choices.addresses].map(origin => {
+      const row = document.createElement('div');
+      row.className = 'workspace-row';
+      const pick = menuButton('workspace-pick');
+      pick.dataset.origin = origin;
+      pick.setAttribute('aria-pressed',String(selected === origin));
+      pick.append(select.querySelector('.workspace-dot').cloneNode(false),select.querySelector('.workspace-origin').cloneNode(false));
+      paint(pick,origin);
+      row.append(pick);
+      if (origin !== 'local') {
+        const remove = menuButton('workspace-remove');
+        remove.dataset.origin = origin;
+        remove.textContent = '−';
+        remove.title = $t("移除")+' '+origin;
+        remove.setAttribute('aria-label',remove.title);
+        row.append(remove);
+      }
+      return row;
+    });
+    const addRow = menuButton('workspace-add-row');
+    addRow.textContent = '＋ '+$t("添加工作空间");
+    menu.replaceChildren(...rows,addRow);
     if (setup) {
       const external = selected !== 'local';
       document.body.classList.toggle('external-setup',external);
@@ -46,12 +82,40 @@ if (host?.workspaceChoices) {
   }
   render(await host.workspaceChoices());
   document.querySelector('#workspace-choice').hidden = false;
-  select.addEventListener('change',async () => {
-    if (select.value === 'add') {
-      select.value = selected; address.value = ''; document.querySelector('#address-error').textContent = '';
+  menu.addEventListener('toggle',event => {
+    const open = event.newState === 'open';
+    select.setAttribute('aria-expanded',String(open));
+    if (open) {
+      menu.querySelector('[aria-pressed="true"]')?.focus();
+      void refresh();
+    }
+  });
+  menu.addEventListener('keydown',event => {
+    if (!['ArrowUp','ArrowDown','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const items = [...menu.querySelectorAll('.workspace-pick,.workspace-add-row')];
+    const index = items.findIndex(item => item === event.target || item.parentElement === event.target.parentElement);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? items.length-1 : (index + (event.key === 'ArrowUp' ? -1 : 1) + items.length) % items.length;
+    items[next].focus();
+  });
+  menu.addEventListener('click',async event => {
+    const button = event.target.closest('button');
+    if (!button || select.disabled) return;
+    menu.hidePopover();
+    select.focus();
+    if (button.classList.contains('workspace-add-row')) {
+      address.value = ''; document.querySelector('#address-error').textContent = '';
       dialog.showModal(); address.focus(); return;
     }
-    render(await host.workspaceChoices(select.value));
+    const origin = button.dataset.origin;
+    const remove = button.classList.contains('workspace-remove');
+    select.disabled = true; submit.disabled = true;
+    try {
+      const choices = await host.workspaceChoices(origin,remove ? 'remove' : 'select');
+      if (remove) status.delete(origin);
+      render(choices);
+    } catch { form.querySelector('[role=alert]').textContent = $t("保存失败，已恢复原设置；请重新选择。"); }
+    finally { select.disabled = false; submit.disabled = false; select.focus(); }
   });
   document.querySelector('#workspace-cancel').onclick = () => dialog.close();
   add.onsubmit = async event => {

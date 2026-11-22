@@ -17,6 +17,10 @@ const data = bundle ? join(home, '.baton') : join(root, 'client'), work = join(r
 const password = randomBytes(24).toString('hex'), auth = createAuth({ databasePath: join(data, 'auth.sqlite') });
 await auth.setAdministrator('loading-qa', password); auth.close();
 const store = createCatalogFixtureStore({ databasePath: join(work, 'records/baton.sqlite'), configurationDirectory: data, workspaceRoot: work });
+const workspaceOrigin = 'http://workspace.test:19443';
+await writeFile(join(data, 'workspace-service.json'), JSON.stringify({
+  mode: 'local', name: 'QA', origin: workspaceOrigin, accessOrigin: 'https://outside.test', bind: '127.0.0.1', port: 0
+}), { mode: 0o600 });
 const input = { managerAgentId: 'system_project_manager', objective: '仅隔离加载验证，不执行 Provider', memberAgentIds: ['system_project_manager', 'agent_analyst'], workflowTemplateId: 'software_delivery' };
 const task = store.createTask({ ...input, title: '渐进加载 A' }), run = store.createRun(task.id);
 const trace = store.createTrace(run.id, { agentId: 'agent_analyst', workflowNodeId: 'requirements' });
@@ -40,7 +44,19 @@ try {
   await page.waitForURL(/^http:\/\/127\.0\.0\.1:/);
   const origin = new URL(page.url()).origin;
   page.on('pageerror', error => evidence.errors.push(error.message));
-  await page.goto(origin + '/login'); await page.locator('#username').fill('loading-qa'); await page.locator('#password').fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.locator('#account-name').waitFor();
+  await page.goto(origin + '/login');
+  const chooser = page.locator('#workspace-mode');
+  await chooser.waitFor();
+  assert.equal((await chooser.innerText()).trim(), workspaceOrigin + ' (本机)');
+  await chooser.click();
+  assert.equal(await page.locator('[data-origin="local"] .workspace-origin').innerText(), workspaceOrigin + ' (本机)');
+  await page.keyboard.press('Escape');
+  await page.locator('#username').fill('loading-qa'); await page.locator('#password').fill(password); await page.getByRole('button', { name: '登录', exact: true }).click(); await page.locator('#account-name').waitFor();
+  const currentWorkspace = await (await page.request.get(origin + '/api/settings/current-workspace')).json();
+  assert.equal(currentWorkspace.local, true);
+  assert.equal(currentWorkspace.origin, workspaceOrigin);
+  await page.goto(origin + '/settings/workspaces');
+  await page.locator('[data-current-workspace]').getByText(workspaceOrigin, { exact: true }).waitFor();
   const started = Date.now();
   page.on('request', request => { const url = new URL(request.url()); if (url.pathname.startsWith('/api/')) evidence.requests.push({ at: Date.now() - started, path: url.pathname + url.search, method: request.method() }); });
   await page.route('**/api/**', async route => {
@@ -62,7 +78,9 @@ try {
   const taskRequestStart = evidence.requests.length;
   await page.goto(origin + '/tasks'); await waitHit(delayed); await rowCount(20);
   const scans = evidence.requests.slice(taskRequestStart).filter(item => item.path.startsWith('/api/tasks?') && item.path.includes('pageSize=100'));
-  assert.equal(scans.length, 1); assert.match(await page.locator('[data-task-chip="all"]').innerText(), /44/);
+  // Opening the live connection reconciles the same page after the initial read.
+  assert.ok(scans.length >= 1 && scans.length <= 2);
+  assert.equal(new Set(scans.map(request => request.path)).size, 1); assert.match(await page.locator('[data-task-chip="all"]').innerText(), /44/);
   await page.locator('[data-pagination="tasks"] [data-page="2"]').click();
   await page.waitForFunction(() => document.querySelector('[data-pagination="tasks"] .list-pagination-page')?.textContent === '2 / 3');
   await rowCount(20);
@@ -175,7 +193,7 @@ try {
   } finally { releaseCount(); await page.unroute('**/api/runtime/marketplace?*', marketRoute); }
 
   delayed = hold(url => url.pathname === '/api/catalog-references');
-  await page.goto(origin + '/automations/' + automation.id); await waitHit(delayed); await page.locator('[data-auto-tab="config"]').click();
+  await page.goto(origin + '/automations/' + automation.id); await waitHit(delayed);
   await page.getByText('正在读取工作流', { exact: true }).waitFor();
   assert.equal(await page.locator('[data-auto-detail]').getByText('默认协作', { exact: true }).count(), 0, 'unresolved reference is not an empty workflow selection');
   release(delayed); await page.locator(`[data-auto-workflow="${input.workflowTemplateId}"]`).waitFor();

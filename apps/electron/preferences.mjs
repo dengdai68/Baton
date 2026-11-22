@@ -22,11 +22,12 @@ let pendingWrite = Promise.resolve();
 function writePreference(path, patch) {
   const write = pendingWrite.then(async () => {
     const current = await readPreferenceFile(path);
-    const next = { workspaceChoices: current.workspaceChoices, closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, updateChannel: normalizeUpdateChannel(current.updateChannel) ?? undefined, residentService: typeof current.residentService === "boolean" ? current.residentService : undefined, ...patch };
+    const next = { workspaceChoices: current.workspaceChoices, closeMode: normalizeCloseMode(current.closeMode) ?? undefined, appearance: normalizeAppearance(current.appearance) ?? undefined, language: normalizeLanguage(current.language) ?? undefined, updateChannel: normalizeUpdateChannel(current.updateChannel) ?? undefined, residentService: typeof current.residentService === "boolean" ? current.residentService : undefined, ...(typeof patch === "function" ? patch(current) : patch) };
     await mkdir(dirname(path), { recursive: true, mode: 0o700 });
     const pending = `${path}.tmp`;
     await writeFile(pending, JSON.stringify(next), { mode: 0o600 });
     await rename(pending, path);
+    return next;
   });
   pendingWrite = write.catch(() => {});
   return write;
@@ -61,14 +62,22 @@ export async function saveUpdateChannel(path, channel) {
   await writePreference(path, { updateChannel: channel });
 }
 
-export async function readWorkspaceChoices(path) {
-  const saved = (await readPreferenceFile(path)).workspaceChoices;
-  return {addresses:Array.isArray(saved?.addresses) ? saved.addresses.filter(value => typeof value === 'string') : [], selected:saved?.selected || 'local'};
+function workspaceChoices(saved) {
+  const addresses = Array.isArray(saved?.addresses) ? saved.addresses.filter(value => typeof value === 'string' && value !== 'local') : [];
+  return { addresses, selected: addresses.includes(saved?.selected) ? saved.selected : 'local' };
 }
-export async function selectWorkspace(path, selected) {
-  const {addresses} = await readWorkspaceChoices(path);
-  if (selected !== 'local' && !addresses.includes(selected)) addresses.push(selected);
-  const workspaceChoices = {addresses,selected};
-  await writePreference(path,{workspaceChoices});
-  return workspaceChoices;
+export async function readWorkspaceChoices(path) {
+  return workspaceChoices((await readPreferenceFile(path)).workspaceChoices);
+}
+export async function selectWorkspace(path, origin, action = 'select') {
+  const saved = await writePreference(path, current => {
+    const { addresses, selected } = workspaceChoices(current.workspaceChoices);
+    if (action === 'remove') {
+      return { workspaceChoices: { addresses: addresses.filter(address => address !== origin), selected: selected === origin ? 'local' : selected } };
+    }
+    if (action !== 'select') throw new TypeError('Invalid workspace action');
+    if (origin !== 'local' && !addresses.includes(origin)) addresses.push(origin);
+    return { workspaceChoices: { addresses, selected: origin } };
+  });
+  return saved.workspaceChoices;
 }

@@ -47,5 +47,5 @@ declare class BatonTransportModule extends NativeModule<TransportEvents> {
   clearCache(): Promise<void>;
 }
 
-/** Native certificate-pinned transport (iOS). Android support is not implemented yet. */
+/** Native certificate-pinned transport: ios/ (URLSession) and android/ (OkHttp) share this contract. */
 export default requireNativeModule<BatonTransportModule>('BatonTransport');

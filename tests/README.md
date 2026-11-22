@@ -1,5 +1,7 @@
 # 测试
 
+根目录运行 `npm test` 执行本目录的 Node 测试。按需运行 `node --test tests/workspace-service.test.mjs` 验证工作空间网关，或运行 `node --test tests/client-projections.test.mjs` 验证共享投影。隔离测试数据与构造工具集中在 `fixture-*.mjs`。桌面专项验收见 [scripts/](../scripts/README.md)，手机测试见 [apps/mobile/tests/](../apps/mobile/tests/README.md)。
+
 仓库更名为 `dengdai68/Baton`：应用更新 API、严格附件来源、设置 GitHub 链接与打包发布配置使用新地址；应用身份、数据目录和 CLI 业务协议保持不变。README 仅介绍能力，安装/开发入口见 CONTRIBUTING。
 
 本仓库仅验收客户端。HTTP 夹具模拟自有 IPC 子服务，不是独立 Web 产品；UI 只操作隔离 Electron，真实任务用 test-prompt-e2e，沟通用 test-communication-workbench。

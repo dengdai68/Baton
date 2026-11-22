@@ -1,9 +1,10 @@
 // Message composer shared by task collaboration and chats: reply context,
 // attachments, images, @mentions with suggestions and a round send arrow.
+import { requireNativeView } from 'expo';
 import { Image } from 'expo-image';
 import { ArrowUp, AtSign, Image as ImageIcon, Paperclip, X } from 'lucide-react-native';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { type ReactNode, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, type ViewProps } from 'react-native';
 
 import { $t } from '@/i18n';
 import { fileExtension, isImageName, type LocalAttachment } from '@/lib/attachments';
@@ -12,6 +13,35 @@ import { Avatar } from './avatar';
 import { Txt } from './text';
 
 export type Mentionable = { id: string; name: string; color?: string };
+
+/** Message lists above a composer: iOS drags the keyboard away interactively, Android dismisses it on drag. */
+export const listKeyboardDismissMode = Platform.OS === 'ios' ? 'interactive' : 'on-drag';
+
+type KeyboardInsetsProps = ViewProps & {
+  onKeyboardOverlap: (event: { nativeEvent: { overlap: number } }) => void;
+};
+const AndroidKeyboardInsets = Platform.OS === 'android'
+  ? requireNativeView<KeyboardInsetsProps>('BatonKeyboardInsets')
+  : null;
+
+/** Shared screen container for the chat and collaboration composers. */
+export function ComposerLayout({ children, style }: { children: ReactNode; style: ViewProps['style'] }) {
+  const [keyboardOverlap, setKeyboardOverlap] = useState(0);
+  if (!AndroidKeyboardInsets) {
+    return <KeyboardAvoidingView behavior="padding" style={style}>{children}</KeyboardAvoidingView>;
+  }
+  return (
+    <View style={[style, { paddingBottom: keyboardOverlap }]}>
+      {children}
+      <AndroidKeyboardInsets
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+        importantForAccessibility="no-hide-descendants"
+        onKeyboardOverlap={({ nativeEvent }) => setKeyboardOverlap(nativeEvent.overlap)}
+      />
+    </View>
+  );
+}
 
 type Props = {
   value: string;
@@ -52,7 +82,7 @@ export function Composer({ value, onChange, onSend, sending, disabled, placehold
   );
 
   return (
-    <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, backgroundColor: colors.bgCanvas, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
+    <View style={{ paddingHorizontal: 12, paddingTop: 8, paddingBottom: 8, backgroundColor: colors.bgCanvas }}>
       {suggestions.length ? (
         <View style={{ marginBottom: 6, borderRadius: metrics.radius.md, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.bgRaised, overflow: 'hidden' }}>
           {suggestions.map((member) => (

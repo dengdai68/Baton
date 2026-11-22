@@ -1,5 +1,6 @@
 import { createServer as httpsServer } from "node:https";
 import { createServer as httpServer } from "node:http";
+import { isIP } from "node:net";
 import { readFileSync } from "node:fs";
 import { workspaceIdentity, localUser } from "./workspace-identity.mjs";
 import { diagnostic } from "./diagnostics.mjs";
@@ -10,7 +11,8 @@ const assets = new Map([
   ["/workspace-ui.js", ["app.js", "text/javascript"]],
   ["/workspace-ui.css", ["style.css", "text/css"]],
 ]);
-const fail = (status, message) => Object.assign(Error(message), { status });
+const publicFailure = Symbol("workspace public error");
+const fail = (status, message) => Object.assign(Error(message), { status, [publicFailure]: true });
 const defaultAccess = (ownerId) => ({
   createdBy: ownerId,
   ownerId,
@@ -79,13 +81,21 @@ export function deviceApiAllowed(method, path, scope = "mobile") {
   return true;
 }
 
-const loopback = new Set(["127.0.0.1", "::1"]);
-/** The client's address; a forwarded address counts only when a local reverse proxy sent it. */
-export function clientAddress(req) {
-  const peer = String(req.socket?.remoteAddress || "").replace(/^::ffff:/, "");
+function normalizeAddress(value) {
+  if (typeof value !== "string" || value.includes("%")) return null;
+  const address = value.replace(/^::ffff:/i, "");
+  if (isIP(address) === 4) return address;
+  if (isIP(value) === 6) return new URL("http://[" + value + "]").hostname.slice(1, -1);
+  return null;
+}
+
+/** Use the rightmost forwarded address only for a configured immediate proxy peer. */
+export function clientAddress(req, trustedProxies = new Set()) {
+  const peer = normalizeAddress(req.socket?.remoteAddress);
   const forwarded = req.headers["x-forwarded-for"];
-  if (loopback.has(peer) && typeof forwarded === "string" && forwarded.trim())
-    return forwarded.split(",").at(-1).trim().slice(0, 64) || peer;
+  if (trustedProxies.has(peer) && typeof forwarded === "string") {
+    return normalizeAddress(forwarded.split(",").at(-1).trim()) || peer;
+  }
   return peer || "unknown";
 }
 
@@ -116,10 +126,9 @@ export function createAuthThrottle({ limit = 20, windowMs = 600000, blockMs = 60
   };
 }
 
-/** Messages meant for people carry an explicit status or the product language; other errors stay in the local log. */
+/** Only messages explicitly defined by the public gateway may cross this boundary. */
 export function publicErrorMessage(error) {
-  const message = String(error?.message || "");
-  return error?.status || /[\u4e00-\u9fff]/.test(message) ? message || "请求处理失败" : "请求处理失败";
+  return error?.[publicFailure] ? error.message : "请求处理失败";
 }
 const streamsPerDevice = 8;
 const attachmentUpload =
@@ -170,19 +179,23 @@ export async function startWorkspace({
   )
     throw Error("工作空间需要准确的 HTTP 或 HTTPS origin");
   const secure = origin.protocol === "https:";
-  const sessionCookie = secure ? "__Host-baton_workspace" : "baton_workspace_http";
+  const cookieName = https => https ? "__Host-baton_workspace" : "baton_workspace_http";
+  const proxyAddresses = config.trustedProxyAddresses ?? [];
+  if (!Array.isArray(proxyAddresses) || proxyAddresses.some(address => !normalizeAddress(address)))
+    throw Error("工作空间可信代理需要有效的 IP 地址列表");
+  const trustedProxies = new Set(proxyAddresses.map(normalizeAddress));
   const identity = workspaceIdentity(root, config.mode, administrator);
-  const issueCookie = (res, token, days) =>
+  const issueCookie = (res, token, days, https) =>
     res.setHeader(
       "Set-Cookie",
-      sessionCookie +
+      cookieName(https) +
         "=" +
         token +
-        (secure ? "; Secure" : "") + "; Path=/; HttpOnly; SameSite=Strict; Max-Age=" +
+        (https ? "; Secure" : "") + "; Path=/; HttpOnly; SameSite=Strict; Max-Age=" +
         days * 86400,
     );
   /** Forward an allowed /api request of a paired local device to the desktop API. */
-  async function deviceApi(req, res, url, credentials, address) {
+  async function deviceApi(req, res, url, credentials, address, requestOrigin) {
     if (config.mode !== "local" || !api) throw fail(404, "未找到");
     if (!apiMethods.includes(req.method)) throw fail(405, "不支持的操作");
     const user = identity.session(credentials.token, { address });
@@ -196,7 +209,7 @@ export async function startWorkspace({
         attachmentUpload.test(url.pathname) &&
         /^application\/octet-stream(?:;|$)/i.test(type);
       // Cookies are ambient, so only same-origin pages may write with them.
-      if (!credentials.bearer && req.headers.origin !== origin.protocol + '//' + req.headers.host)
+      if (!credentials.bearer && req.headers.origin !== requestOrigin.origin)
         throw fail(403, "需要同源请求");
       if (!upload && !/^application\/json(?:;|$)/i.test(type))
         throw fail(403, "需要 JSON 请求");
@@ -217,6 +230,7 @@ export async function startWorkspace({
     });
   }
   const throttle = createAuthThrottle();
+  let pendingPasswordChecks = 0;
   const streams = new Map();
   const authFailed = (address, path) => {
     const { count, blocked } = throttle.fail(address);
@@ -231,14 +245,19 @@ export async function startWorkspace({
       headersTimeout: 15000,
     },
     async (req, res) => {
-      const address = clientAddress(req);
+      const address = clientAddress(req, trustedProxies);
       let path = "";
       try {
+        // TLS can terminate at the registered public origin while Baton listens on HTTP.
+        const external = config.accessOrigin || config.pairingOrigin;
+        const publicOrigin = external ? new URL(external) : null;
+        const requestOrigin = publicOrigin && publicOrigin.host === req.headers.host ? publicOrigin : origin;
+        const https = requestOrigin.protocol === "https:";
         // Hardening headers go on every response, including rejected ones.
+        if (secure || https) res.setHeader("Strict-Transport-Security", "max-age=31536000");
         res.setHeader("Cache-Control", "no-store");
         res.setHeader("Referrer-Policy", "no-referrer");
         res.setHeader("X-Content-Type-Options", "nosniff");
-        if (secure) res.setHeader("Strict-Transport-Security", "max-age=31536000");
         res.setHeader("X-Frame-Options", "DENY");
         res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
         res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
@@ -247,19 +266,14 @@ export async function startWorkspace({
           "Content-Security-Policy",
           "default-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'; object-src 'none'",
         );
-        const wait = throttle.blocked(address);
-        if (wait) {
-          res.setHeader("Retry-After", String(wait));
-          throw fail(429, "尝试次数过多，请稍后再试");
-        }
-        if (req.headers.host !== origin.host && (!(config.accessOrigin || config.pairingOrigin) || req.headers.host !== new URL(config.accessOrigin || config.pairingOrigin).host)) throw fail(403, "Host 不匹配");
-        const url = new URL(req.url, origin);
+        if (requestOrigin.host !== req.headers.host) throw fail(403, "Host 不匹配");
+        const url = new URL(req.url, requestOrigin);
         path = url.pathname;
         if (path === '/healthz' && req.method === 'GET') {
           const ready = isReady();
           return sendJson(res, ready ? 200 : 503, {service:'baton-workspace', status:ready ? 'ready' : 'unavailable'});
         }
-        const credentials = credentialsOf(req, sessionCookie);
+        const credentials = credentialsOf(req, cookieName(https));
         const desktopUser = !credentials.bearer && credentials.token && identity.session(credentials.token, {address});
         if (desktopUser?.scope === 'desktop' && config.mode === 'local' && desktopAssets && req.method === 'GET' &&
             (path === '/tasks' || path.startsWith('/settings/') || (!path.startsWith('/api/') && path !== '/' && !assets.has(path) && !['/device-info','/workspace','/login','/logout','/signed-out'].includes(path)))) {
@@ -278,7 +292,7 @@ export async function startWorkspace({
           return sendJson(res, 200, {username:desktopUser.name});
         if (path === '/api/auth/logout' && req.method === 'POST') path = '/logout';
         if (path.startsWith('/api/') && path !== '/api/settings/current-workspace')
-          return await deviceApi(req, res, url, credentials, address);
+          return await deviceApi(req, res, url, credentials, address, requestOrigin);
         if (path === '/pair') throw fail(404, '未找到');
         const write = req.method === "POST";
         if (req.method !== "GET" && !write) throw fail(405, "不支持的操作");
@@ -287,7 +301,17 @@ export async function startWorkspace({
           !/^application\/json(?:;|$)/i.test(req.headers["content-type"] || "")
         )
           throw fail(403, "需要同源 JSON 请求");
-        const data = write ? await readJson(req) : {};
+        const signingIn = write && path === "/login";
+        const user = !signingIn && (desktopUser || identity.session(credentials.token, {address}));
+        if (!signingIn && !user) throw fail(401, "请重新登录");
+        if (signingIn && Number(req.headers["content-length"]) > 8192)
+          throw fail(413, "登录请求过大");
+        let data;
+        try { data = write ? await readJson(req, signingIn ? 8192 : undefined) : {}; }
+        catch (error) {
+          if (error.name === "RequestBodyTooLargeError" || error.status === 413) throw fail(413, "请求体过大");
+          throw fail(400, "请求体不是有效 JSON");
+        }
         if (!data || typeof data !== "object" || Array.isArray(data))
           throw fail(400, "需要 JSON 对象");
         // A native client asks for its token in the body and receives no cookie,
@@ -298,13 +322,42 @@ export async function startWorkspace({
           write &&
           !native &&
           !credentials.bearer &&
-          req.headers.origin !== origin.protocol + '//' + req.headers.host
+          req.headers.origin !== requestOrigin.origin
         )
           throw fail(403, "需要同源 JSON 请求");
-        if (write && path === "/login") {
+        if (signingIn) {
+          const name = typeof data.name === "string" ? data.name.trim() : "";
+          const recordAccount = name.length > 0 && name.length <= 80;
+          const accountWait = () => recordAccount ? identity.loginRetryAfter(name, address) : 0;
+          const rejectLogin = (seconds) => {
+            res.setHeader("Retry-After", String(seconds));
+            throw fail(429, "尝试次数过多，请稍后再试");
+          };
+          const wait = Math.max(accountWait(), throttle.blocked(address));
+          if (wait) rejectLogin(wait);
           const label = deviceLabel(data.device || (native ? 'iPhone' : 'Mac'));
-          const token = await identity.login(data.name, data.password, {label, scope:native ? 'mobile' : 'desktop', address});
-          if (!token) throw fail(401, "用户名或密码错误");
+          if (pendingPasswordChecks >= 4) {
+            res.setHeader("Retry-After", "1");
+            throw fail(429, "登录请求繁忙，请稍后再试");
+          }
+          let token;
+          pendingPasswordChecks++;
+          try {
+            token = await identity.login(data.name, data.password, {
+              label, scope: native ? "mobile" : "desktop", address, canIssue: () => !accountWait(),
+            });
+          }
+          finally { pendingPasswordChecks--; }
+          if (!token) {
+            authFailed(address, "/login");
+            const wait = recordAccount && identity.recordLoginFailure(name, address);
+            if (wait) {
+              diagnostic("workspace.account_ip_throttled", { address, retryAfter: wait });
+              rejectLogin(wait);
+            }
+            throw fail(401, "用户名或密码错误");
+          }
+          if (recordAccount) identity.clearLoginFailures(name, address);
           if (credentials.token) {
             const previous = identity.session(credentials.token);
             if (previous) identity.revoke(previous.deviceId);
@@ -312,19 +365,17 @@ export async function startWorkspace({
           diagnostic('workspace.member_signed_in', {address, label});
           const facts = {workspace:config.name, mode:config.mode};
           if (native) return sendJson(res, 200, { ...facts, ok:true, token });
-          issueCookie(res, token, 30);
+          issueCookie(res, token, 30, https);
           return sendJson(res, 200, { ...facts, ok:true });
         }
-        const user = identity.session(credentials.token, { address });
-        if (!user) throw fail(401, "请重新登录");
         if (!write && ['/device-info','/api/settings/current-workspace'].includes(path)) {
-          return sendJson(res,200,{name:config.name, origin:origin.protocol+'//'+req.headers.host, username:user.name,
+          return sendJson(res,200,{name:config.name, origin:requestOrigin.origin, username:user.name,
             deviceId:user.deviceId, local:false, ...(user.scope === 'desktop' && {
               devices:[...(config.mode === 'local' ? hostDevice?.() || [] : []), ...identity.accountDevices(user.id)]})});
         }
         if (write && path === "/logout") {
           identity.revoke(user.deviceId);
-          if (!credentials.bearer) issueCookie(res, "", 0);
+          if (!credentials.bearer) issueCookie(res, "", 0, https);
           return sendJson(res, 200, { ok: true });
         }
         const store = await ensureBusiness();
@@ -602,7 +653,6 @@ export async function startWorkspace({
         sendJson(res, 200, result);
       } catch (error) {
         const status = error.status || 400;
-        if (status === 401) authFailed(address, path);
         if (!error.status && publicErrorMessage(error) !== error.message) diagnostic("workspace.request_failed", { address, path, error });
         sendJson(res, status, { error: publicErrorMessage(error) });
       }

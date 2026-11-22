@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { join } from "node:path";
 import { isConsoleURL, isExternalURL, isPreferencesSender, isCliSender, health, initialRoute } from "../apps/electron/policy.mjs";
 import { desktopBrowserPaths, desktopControlPlaneEnvironment, desktopStoragePaths, legacyDesktopDataRoot, resolveDesktopDataRoot } from "../apps/electron/runtime-paths.mjs";
-import { normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel } from "../apps/electron/preferences.mjs";
+import { readWorkspaceChoices, selectWorkspace, normalizeAppearance, normalizeCloseMode, readAppearance, readCloseMode, saveAppearance, saveCloseMode, readLanguage, saveLanguage, readUpdateChannel, saveUpdateChannel } from "../apps/electron/preferences.mjs";
 import { confirmCliInstallation } from "../apps/electron/cli-confirmation.mjs";
 import { EventEmitter } from "node:events";
 import { createHash } from "node:crypto";
@@ -85,6 +85,20 @@ test("Mac close preference is explicit, persistent and fails without changing sa
   assert.equal(await readCloseMode(path), "quit", "preserve an existing explicit choice");
   await writeFile(join(root, "blocked"), "not a directory");
   await assert.rejects(saveCloseMode(join(root, "blocked", "preferences.json"), "tray"));
+});
+
+test("forgetting a login address preserves other choices and falls back to the built-in workspace", async t => {
+  const root = await mkdtemp(join((await import("node:os")).tmpdir(), "baton-login-choices-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const path = join(root, "preferences.json");
+  const first = "https://one.example", second = "http://127.0.0.1:9443";
+  await Promise.all([selectWorkspace(path, first), selectWorkspace(path, second)]);
+  await selectWorkspace(path, first, "remove");
+  assert.deepEqual(await readWorkspaceChoices(path), { addresses: [second], selected: second });
+  await selectWorkspace(path, second, "remove");
+  assert.deepEqual(await readWorkspaceChoices(path), { addresses: [], selected: "local" });
+  await selectWorkspace(path, "local", "remove");
+  assert.equal((await readWorkspaceChoices(path)).selected, "local");
 });
 
 test("host appearance mirrors only light/dark/system and never drops the close preference", async t => {

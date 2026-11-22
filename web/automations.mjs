@@ -121,7 +121,7 @@ export function createAutomationUI({ api, esc, pill, exactTime, edit, navigate, 
       if(headerActions){headerActions.innerHTML='';headerActions.onclick=click;headerActions.onchange=change;}
       target.onclick = click; target.onchange = change;
       if(!id){listShell(target);paintCounts(target,['all','enabled','disabled'].map(status=>[status,null]));}
-      else target.innerHTML=`<div class="directory-empty is-loading" role="status" aria-busy="true"><strong>${$t("正在读取自动化")}</strong>${$t("计划信息正在加载。")}</div>`;
+      else target.innerHTML=`<section data-auto-detail><div class="directory-empty is-loading" role="status" aria-busy="true"><strong>${$t("正在读取自动化")}</strong>${$t("计划信息正在加载。")}</div></section>`;
       target.oninput = event => {if(id || event.target.name!=='search')return;query.search=event.target.value;query.page=1;++request;clearTimeout(searchTimer);searchTimer=setTimeout(()=>{searchTimer=null;void load();},250);};
       target.onsubmit = event => { event.preventDefault(); clearTimeout(searchTimer); searchTimer = null; void load(); };
       void load(); clearInterval(timer); timer=setInterval(()=>{if(document.visibilityState==='visible' && !searchTimer)void load({quiet:true});},15000);

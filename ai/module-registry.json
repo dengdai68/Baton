@@ -3032,6 +3032,7 @@
     },
     {
       "id": "workspace.api",
+      "transport": "The Mac control session uses loopback internally. Local login choices and settings display the configured workspace service origin. External sessions use the configured ingress, origin-specific cookies and browser write checks. Password verification has separate request-size, concurrency and failed-login limits. The gateway uses explicit proxy addresses and persists the 24-hour account and IP lockout in the workspace identity database.",
       "path": "server/workspace-http.mjs",
       "kind": "workspace",
       "owner": "client-platform",
@@ -3061,31 +3062,6 @@
       "kind": "workspace",
       "owner": "client-platform",
       "purpose": "Workspace provisioning and service launch",
-      "sourceOfTruth": [
-        "docs/31-workspace-service.md"
-      ],
-      "tests": [
-        "tests/workspace-service.test.mjs"
-      ],
-      "allowedDependencies": [
-        "node:*",
-        "Baton Store"
-      ],
-      "forbiddenDependencies": [
-        "Relay business state"
-      ],
-      "whenChanged": {
-        "mustUpdate": [
-          "docs/31-workspace-service.md"
-        ]
-      }
-    },
-    {
-      "id": "workspace.ios",
-      "path": "apps/ios/",
-      "kind": "workspace",
-      "owner": "client-platform",
-      "purpose": "iOS workspace selection, QR pairing and pinned HTTPS",
       "sourceOfTruth": [
         "docs/31-workspace-service.md"
       ],
@@ -3207,16 +3183,21 @@
     },
     {
       "id": "workspace.mobile",
+      "taskFiltersAndComposer": "Mobile task lists filter by status and search. Both message screens use ComposerLayout, with Android keyboard overlap measured against native IME insets.",
+      "loginAddressPicker": "Desktop and iOS display the full origin on one line with a shared health dot in the trigger and list. Removing an address updates only local login choices.",
       "path": "apps/mobile/",
       "kind": "mobile-client",
       "owner": "client-platform",
-      "purpose": "React Native + Expo iOS client: full Mac workspace features over the certificate-pinned HTTPS gateway (device pairing, tasks/collaboration, chats, automations, directories, settings).",
+      "purpose": "React Native + Expo iOS and Android client (one code base, same features): full Mac workspace features over the certificate-pinned HTTPS gateway (device pairing, tasks/collaboration, chats, automations, directories, settings).",
+      "androidParity": "modules/baton-transport/android (OkHttp) implements the Swift transport contract: SHA-256 leaf pins without host matching, system trust otherwise, fresh TLS for /login, no redirects or cookies, identical SSE framing, caches and CODE: detail errors; its manifest enables cleartext for explicit http:// workspaces. Header actions, menus, action lists, rename and image zoom use each platform's system controls via src/ui (header, menu, form, image-viewer). Android permissions are camera and network only. tests/e2e/android.mjs drives the same step JSON over adb; tests/e2e/workspace.mjs serves an isolated offline fixture workspace.",
       "sourceOfTruth": [
         "apps/mobile/README.md",
         "docs/31-workspace-service.md"
       ],
       "tests": [
         "apps/mobile/tests/link.test.ts",
+        "apps/mobile/tests/android-driver.test.ts",
+        "apps/mobile/modules/baton-transport/android/src/test/java/expo/modules/batontransport/TransportSupportTest.kt",
         "tests/i18n.test.mjs"
       ],
       "whenChanged": {
@@ -3228,7 +3209,8 @@
         "reviewIf": [
           "authentication",
           "networking",
-          "iOS"
+          "iOS",
+          "Android"
         ]
       }
     }

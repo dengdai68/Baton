@@ -109,6 +109,8 @@ npm start
 
 Interface text lives in `client/locales/` (`en.json`, `zh-TW.json`), keyed by the Simplified Chinese source text; `npm test` checks that every interface string has both translations.
 
+See the [repository directory index](README.md#仓库目录) for module entry points and [Git tracking rules](CONTRIBUTING.md#git-跟踪与本机文件) for source files and local build output.
+
 ---
 
 [Documentation (Chinese)](docs/README.md) · [Changelog](CHANGELOG.md) · [Apache-2.0](LICENSE) · [Third-party notices](NOTICE)

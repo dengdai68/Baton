@@ -14,7 +14,7 @@ import { useWorkspaceKey } from '@/api/queries';
 import { $t } from '@/i18n';
 import { formatBytes } from '@/lib/attachments';
 import { fileTreeRows } from '@/lib/file-tree';
-import { type Colors, useTheme } from '@/theme';
+import { type Colors, monoFont, useTheme } from '@/theme';
 import { IconButton } from '@/ui/icon-button';
 import { Segmented } from '@/ui/form';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
@@ -219,7 +219,7 @@ export function CodeView({ html, text }: { html?: string | null; text: string })
   const segments = html ? highlightSegments(html) : [{ text, classes: [] }];
   return (
     <ScrollView horizontal style={{ backgroundColor: colors.codeBg }} contentContainerStyle={{ padding: 14 }}>
-      <Text selectable style={{ fontFamily: 'Menlo', fontSize: 13, lineHeight: 20, color: colors.text }}>
+      <Text selectable style={{ fontFamily: monoFont, fontSize: 13, lineHeight: 20, color: colors.text }}>
         {segments.map((segment, index) => {
           const style = syntaxColor(colors, segment.classes);
           return <Text key={index} style={{ color: style.color, fontStyle: style.italic ? 'italic' : 'normal' }}>{segment.text}</Text>;
@@ -266,7 +266,7 @@ export function FilePreview({ runId, path, source, artifactId, repo }: { runId: 
     }
   }
 
-  if (preview.isPending) return <LoadingState label={$t('正在读取文件…')} />;
+  if (preview.isPending) return <LoadingState screen label={$t('正在读取文件…')} />;
   if (preview.error) return <ErrorState message={preview.error.message} onRetry={() => void preview.refetch()} />;
   const data = preview.data as Preview & { lines?: DiffLine[]; hunks?: Array<{ header?: string; lines?: DiffLine[] }>; diff?: string; patch?: string };
   const markdown = /\.(md|markdown)$/i.test(name) && typeof data.content === 'string';
@@ -285,7 +285,7 @@ export function FilePreview({ runId, path, source, artifactId, repo }: { runId: 
         <ScrollView horizontal contentContainerStyle={{ padding: 12 }}>
           <View>
             {text.split('\n').map((line, index) => (
-              <Text key={index} selectable style={{ fontFamily: 'Menlo', fontSize: 12.5, lineHeight: 20, paddingHorizontal: 4, color: line.startsWith('+') ? colors.codeAddText : line.startsWith('-') ? colors.codeDelText : colors.text, backgroundColor: line.startsWith('+') ? colors.codeAdd : line.startsWith('-') ? colors.codeDel : 'transparent' }}>{line || ' '}</Text>
+              <Text key={index} selectable style={{ fontFamily: monoFont, fontSize: 12.5, lineHeight: 20, paddingHorizontal: 4, color: line.startsWith('+') ? colors.codeAddText : line.startsWith('-') ? colors.codeDelText : colors.text, backgroundColor: line.startsWith('+') ? colors.codeAdd : line.startsWith('-') ? colors.codeDel : 'transparent' }}>{line || ' '}</Text>
             ))}
           </View>
         </ScrollView>

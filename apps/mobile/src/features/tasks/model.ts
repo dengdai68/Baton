@@ -20,7 +20,6 @@ export type TaskSummary = {
 };
 export type TaskPage = { tasks: TaskSummary[]; total: number; page: number; pageSize: number; totalPages: number; hasMore: boolean };
 export type Chip = 'all' | 'attention' | 'active' | 'done';
-export type TaskFilters = { search: string; status: string; workflow: string };
 
 export const ACTIVE = ['planning', 'running', 'review'];
 
@@ -89,11 +88,11 @@ export function rowAction(task: TaskSummary): RowAction | null {
 export const editable = (task: TaskSummary) => task.status === 'backlog' && !runOfTask(task);
 
 /** Read every page of the current task directory (the Mac does the same before client-side views). */
-export async function readTaskDirectory(client: ApiClient, filters: TaskFilters, archived: boolean, page = 1): Promise<TaskPage & { all: TaskSummary[] }> {
-  const query = { page, pageSize: archived ? 20 : 100, search: filters.search, status: filters.status, workflow: filters.workflow, archived: String(archived) };
+export async function readTaskDirectory(client: ApiClient, search: string): Promise<TaskPage & { all: TaskSummary[] }> {
+  const query = { page: 1, pageSize: 100, search, status: 'all', archived: 'false' };
   let result = await client.get<TaskPage>('/api/tasks', query);
   const all = [...result.tasks];
-  while (!archived && result.page < result.totalPages) {
+  while (result.page < result.totalPages) {
     result = await client.get<TaskPage>('/api/tasks', { ...query, page: result.page + 1 });
     all.push(...result.tasks);
   }

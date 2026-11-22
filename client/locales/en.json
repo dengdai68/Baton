@@ -3281,5 +3281,8 @@
   "健康": "Healthy",
   "无法连接": "Unreachable",
   "选择工作空间": "Select workspace",
-  "服务未就绪": "Service unavailable"
+  "服务未就绪": "Service unavailable",
+  "外观偏好保存在这台手机，选择后立即生效。": "Appearance is saved on this phone and applies immediately.",
+  "切换后界面立即更新；跟随系统使用手机的首选语言。": "The interface updates immediately; Follow system uses the phone's preferred language.",
+  "Android 应用": "Android app"
 }

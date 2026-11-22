@@ -1,12 +1,15 @@
 // Graphite theme for the phone: semantic colors generated from web/tokens.css,
 // phone type scale and touch metrics. Appearance follows the saved preference.
 import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useState } from 'react';
-import { Appearance, useColorScheme } from 'react-native';
+import { Appearance, Platform, useColorScheme } from 'react-native';
 
 import { applyLanguage, type LanguagePreference } from '@/i18n';
 import { refreshProjectionLabels } from '@shared/console-projections.mjs';
 import { defaultPreferences, type Preferences, workspaceStore } from '@/workspace/store';
 import { darkColors, lightColors, metrics, typeScale } from './tokens.generated';
+
+/** Monospaced family for code, terminals and diffs (Menlo ships only on iOS). */
+export const monoFont = Platform.select({ ios: 'Menlo', default: 'monospace' });
 
 export type Colors = { [K in keyof typeof lightColors]: string };
 export type Scheme = 'light' | 'dark';

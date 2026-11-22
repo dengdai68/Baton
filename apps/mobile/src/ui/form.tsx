@@ -1,12 +1,19 @@
 // Form controls: labelled fields, inputs (16pt so iOS never zooms), segmented
 // choice with filled selection, switch rows and checkbox choices.
 import { Check } from 'lucide-react-native';
-import type { ReactNode } from 'react';
-import { Pressable, Switch, TextInput, type TextInputProps, View } from 'react-native';
+import { type ReactNode, useEffect, useState } from 'react';
+import { Modal, Platform, Pressable, Switch, TextInput, type TextInputProps, View } from 'react-native';
 
 import { $t } from '@/i18n';
 import { useTheme } from '@/theme';
+import { Button } from './button';
 import { Txt } from './text';
+
+// Android autofill reads autoComplete while iOS reads textContentType; derive one from the other.
+const ANDROID_AUTOFILL: Partial<Record<NonNullable<TextInputProps['textContentType']>, TextInputProps['autoComplete']>> = {
+  username: 'username',
+  password: 'password',
+};
 
 export function Field({ label, required, optional, hint, error, children }: { label: string; required?: boolean; optional?: boolean; hint?: string; error?: string | null; children: ReactNode }) {
   return (
@@ -24,12 +31,14 @@ export function Field({ label, required, optional, hint, error, children }: { la
 
 export function TextField({ multiline, style, invalid, ...rest }: TextInputProps & { invalid?: boolean }) {
   const { colors, metrics } = useTheme();
+  const autofill = Platform.OS === 'android' && rest.textContentType ? ANDROID_AUTOFILL[rest.textContentType] : undefined;
   return (
     <TextInput
       placeholderTextColor={colors.textTertiary}
       multiline={multiline}
       textAlignVertical={multiline ? 'top' : 'center'}
       {...rest}
+      autoComplete={rest.autoComplete ?? autofill}
       style={[
         {
           minHeight: multiline ? 96 : 44, maxHeight: multiline ? 240 : undefined, paddingHorizontal: 12, paddingVertical: multiline ? 10 : 0,
@@ -121,5 +130,33 @@ export function ChoiceRow({ selected, onPress, children, disabled }: { selected:
       </View>
       <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 10 }}>{children}</View>
     </Pressable>
+  );
+}
+
+/** One-field text dialog (rename): the Android counterpart of the iOS Alert.prompt. */
+export function PromptDialog({ visible, title, label, value: initial, confirmLabel, onCancel, onSubmit }: {
+  visible: boolean; title: string; label: string; value: string; confirmLabel: string; onCancel: () => void; onSubmit: (value: string) => void;
+}) {
+  const { colors, metrics } = useTheme();
+  const [value, setValue] = useState(initial);
+  useEffect(() => {
+    if (visible) setValue(initial);
+  }, [visible, initial]);
+  const submit = () => {
+    if (value.trim()) onSubmit(value);
+  };
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={{ flex: 1, backgroundColor: colors.bgOverlay, justifyContent: 'center', padding: 24 }}>
+        <View accessibilityViewIsModal style={{ width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: colors.bgRaised, borderRadius: metrics.radius.lg, padding: 20, gap: 12 }}>
+          <Txt variant="titleSm" weight="semibold">{title}</Txt>
+          <TextField autoFocus selectTextOnFocus accessibilityLabel={label} value={value} onChangeText={setValue} returnKeyType="done" onSubmitEditing={submit} />
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+            <Button label={$t('取消')} onPress={onCancel} />
+            <Button variant="primary" label={confirmLabel} disabled={!value.trim()} onPress={submit} />
+          </View>
+        </View>
+      </View>
+    </Modal>
   );
 }

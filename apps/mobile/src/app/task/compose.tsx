@@ -1,4 +1,4 @@
-import { plainHeaderItem } from '@/ui/header';
+import { headerLeftOptions } from '@/ui/header';
 // New task, edit a draft (?taskId=), or new/edit an automation (?automation=1&id=).
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -19,7 +19,7 @@ function EditDraft({ taskId }: { taskId: string }) {
   const client = useClient();
   const toast = useToast();
   const task = useTaskDetail(taskId);
-  if (task.isPending) return <LoadingState />;
+  if (task.isPending) return <LoadingState screen />;
   if (task.error) return <ErrorState message={task.error.message} onRetry={() => void task.refetch()} />;
   const draft = task.data;
   if (draft.kind !== 'manual' || draft.status !== 'backlog' || draft.runs?.length)
@@ -29,7 +29,7 @@ function EditDraft({ taskId }: { taskId: string }) {
 
 function EditAutomation({ automationId }: { automationId: string }) {
   const automation = useAutomation(automationId);
-  if (automation.isPending) return <LoadingState />;
+  if (automation.isPending) return <LoadingState screen />;
   if (automation.error) return <ErrorState message={automation.error.message} onRetry={() => void automation.refetch()} />;
   return <TaskForm automation existing={automation.data as unknown as TaskSource} />;
 }
@@ -42,7 +42,7 @@ export default function ComposeTask() {
   const title = taskId ? $t('编辑任务草稿') : isAutomation ? (id ? $t('编辑自动化') : $t('新建自动化')) : $t('新建任务');
   return (
     <>
-      <Stack.Screen options={{ title, unstable_headerLeftItems: () => plainHeaderItem(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
+      <Stack.Screen options={{ title, ...headerLeftOptions(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
       {isAutomation && id ? <EditAutomation automationId={id} /> : taskId ? <EditDraft taskId={taskId} /> : (
         <TaskForm automation={isAutomation} presetTeamId={teamId} onStart={(id) => startTask(client, id, toast)} />
       )}

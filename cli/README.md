@@ -1,5 +1,7 @@
 # CLI
 
+`main.mjs` 定义命令入口，`commands.mjs` 和 `workspace.mjs` 处理配置资源、任务与沟通命令，`client.mjs` 负责已认证 HTTP 请求，`output.mjs` 格式化文本和 JSON。源码帮助使用 `npm run cli -- help`，操作示例见 [配置 CLI](../docs/21-configuration-cli.md)。
+
 tasks collaboration 与桌面共用报告投影：已知 summary/handoff 信封只输出报告正文，包含边界完整但正文引号未转义的历史两字段信封。原始消息、路由与执行事实不变；未知内容保留原文。列表分页、--all、时间戳和字段不变，视觉累加及本地时间标签只属于 App。
 
 安装版默认 endpoint 为 `~/.baton/desktop-endpoint.json`，宿主委托授权在同一目录。旧 `~/.baton/desktop` 由安装版首次启动停机搬迁，CLI 不访问认证数据库、不自行迁移或回退旧目录。storage get 输出的 configurationRoot、命令帮助和连接校验同步新位置。

@@ -33,7 +33,7 @@ export default function TaskMembers() {
   const [selected, setSelected] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
   const screen = <Stack.Screen options={{ title: $t('任务成员') }} />;
-  if (workspace.isPending || catalog.isPending) return <>{screen}<LoadingState /></>;
+  if (workspace.isPending || catalog.isPending) return <>{screen}<LoadingState screen /></>;
   if (workspace.error || !data) return <>{screen}<ErrorState message={workspace.error?.message || ''} onRetry={() => void workspace.refetch()} /></>;
   const chosen = selected ?? current.map((agent) => agent.id);
   const run = data.run;

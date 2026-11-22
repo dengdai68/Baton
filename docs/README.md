@@ -1,5 +1,7 @@
 # 文档
 
+本目录收录产品、架构、操作和部署文档。[development/](development/README.md) 保存开发设计与验收记录，[media/](media/README.md) 保存文档引用的截图和演示文件。仓库各目录的职责见 [根 README](../README.md#仓库目录)。
+
 | 主题 | 文档 |
 | --- | --- |
 | 第一次使用 | [安装、配置员工与检查第一次文件交付](quickstart.md) |
@@ -30,6 +32,6 @@
 
 待实施设计：[团队共享协作记录与分层提示词方案](development/prompt-assembly-and-shared-collaboration-design.md)。分别提供 Leader、成员、自动化、私聊和群聊的完整 systemPrompt 与每轮 userPrompt，另列响应协议和模型回复。固定文案是拟实施全文，动态数据使用 mock；尚未修改运行逻辑，不与上方当前行为混用。
 
-[31 · 工作空间服务与 iOS](31-workspace-service.md) 说明两种部署、成员权限和 Relay 的职责。
+[31 · 工作空间服务与手机客户端](31-workspace-service.md) 说明两种部署、成员权限和 Relay 的职责。
 
 [32 · 本机常驻服务与公网访问安全](32-resident-service.md)：launchd 常驻服务、daemon 与客户端的配对范围、公网暴露的软件层安全模型与加密取舍。

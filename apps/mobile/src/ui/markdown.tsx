@@ -5,7 +5,7 @@ import { type Token, type Tokens, lexer } from 'marked';
 import { type ReactNode, useMemo } from 'react';
 import { Linking, ScrollView, Text, type TextStyle, View } from 'react-native';
 
-import { useTheme } from '@/theme';
+import { monoFont, useTheme } from '@/theme';
 
 type Props = { content: string; mentions?: string[]; size?: 'read' | 'body' | 'small'; tone?: string };
 
@@ -30,7 +30,7 @@ export function Markdown({ content, mentions = [], size = 'read', tone }: Props)
 
   const step = type[size];
   const baseText: TextStyle = { color: tone || colors.text, fontSize: step.size, lineHeight: step.line };
-  const codeText: TextStyle = { fontFamily: 'Menlo', fontSize: step.size - 2, color: colors.text, backgroundColor: colors.codeBg };
+  const codeText: TextStyle = { fontFamily: monoFont, fontSize: step.size - 2, color: colors.text, backgroundColor: colors.codeBg };
 
   function textWithMentions(value: string, key: string): ReactNode {
     const text = decodeEntities(value);
@@ -111,7 +111,7 @@ export function Markdown({ content, mentions = [], size = 'read', tone }: Props)
         const code = token as Tokens.Code;
         return (
           <ScrollView key={key} horizontal showsHorizontalScrollIndicator={false} style={{ borderRadius: 6, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.codeBg }} contentContainerStyle={{ padding: 10 }}>
-            <Text selectable style={{ fontFamily: 'Menlo', fontSize: 13, lineHeight: 19, color: colors.text }}>{code.text}</Text>
+            <Text selectable style={{ fontFamily: monoFont, fontSize: 13, lineHeight: 19, color: colors.text }}>{code.text}</Text>
           </ScrollView>
         );
       }

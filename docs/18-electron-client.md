@@ -184,4 +184,4 @@ Baton使用com.baton.desktop、Baton.app及baton命令；认证数据库和任�
 
 宿主新增两条关闭式通道，仅限设置页：`getServiceStatus`（`desktop:service:status`）与 `setResidentService`（`desktop:service:resident`，仅 macOS；开关改变退出策略并保持同一服务和连接）。偏好保存在 `desktop-preferences.json` 的 `residentService`；非标准配置根、开发与测试默认关闭，`BATON_DESKTOP_RESIDENT=0/1` 可显式指定。应用更新不重启常驻服务；应用连接时比较构建标识（版本号 + 可执行文件修改时间，同版本号的本机重装也能识别），服务仍运行旧构建就在空闲时重启它，忙碌时 15 分钟后重试。本机安装应使用稳定签名身份（`npm run package:mac:local`），否则每次重装 macOS 都会收回外接卷等文件授权，服务打开数据时会停在等待授权。决策与公网安全模型见 [docs/32](32-resident-service.md)。
 
-工作空间登录位于登录页及首次设置页。外部地址打开单一沙箱窗口；本机设置 /settings/workspaces 管理目录、设备与后台运行。
+工作空间登录位于登录页及首次设置页。本机项显示当前桌面服务 URL 与「(本机)」，移除外部地址只更新登录偏好。外部地址打开单一沙箱窗口；本机设置 /settings/workspaces 管理目录、设备与后台运行。

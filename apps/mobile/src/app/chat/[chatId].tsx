@@ -1,12 +1,12 @@
-import { plainHeaderItem } from '@/ui/header';
+import { Divider } from '@/ui/layout';
+import { headerRightOptions, useContentTopInset } from '@/ui/header';
 // One conversation: messages (agents left, you right), "正在回复…", failed replies
 // with retry/console, read receipts, @mentions in groups and attachments.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Ellipsis, MessageSquare, RotateCcw, SquareTerminal, Undo2 } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, View } from 'react-native';
+import { FlatList, View } from 'react-native';
 
 import { useWorkspaceKey } from '@/api/queries';
 import { type ChatMessage, chatMessages, useConversation } from '@/features/chats/model';
@@ -18,7 +18,7 @@ import { type LocalAttachment, pickFiles, pickImages } from '@/lib/attachments';
 import { useTheme } from '@/theme';
 import { Avatar } from '@/ui/avatar';
 import { Button } from '@/ui/button';
-import { Composer } from '@/ui/composer';
+import { Composer, ComposerLayout, listKeyboardDismissMode } from '@/ui/composer';
 import { IconButton } from '@/ui/icon-button';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
 import { Txt } from '@/ui/text';
@@ -36,7 +36,7 @@ export default function Conversation() {
   const toast = useToast();
   const scope = useWorkspaceKey();
   const queryClient = useQueryClient();
-  const headerHeight = useHeaderHeight();
+  const topInset = useContentTopInset();
   const conversation = useConversation(chatId);
   const first = conversation.data?.pages[0];
   const chat = first?.conversation;
@@ -171,20 +171,21 @@ export default function Conversation() {
   }
 
   const running = members.filter((member) => member.running);
-  const screen = <Stack.Screen options={{ title: chat?.name || $t('沟通'), unstable_headerRightItems: () => plainHeaderItem(<IconButton icon={Ellipsis} label={$t('会话信息')} disabled={!chat} onPress={() => router.push({ pathname: '/chat/info', params: { chatId } })} />) }} />;
-  if (conversation.isPending) return <>{screen}<LoadingState label={$t('正在读取聊天记录…')} /></>;
+  const screen = <Stack.Screen options={{ title: chat?.name || $t('沟通'), ...headerRightOptions(<IconButton icon={Ellipsis} label={$t('会话信息')} disabled={!chat} onPress={() => router.push({ pathname: '/chat/info', params: { chatId } })} />) }} />;
+  if (conversation.isPending) return <>{screen}<LoadingState screen label={$t('正在读取聊天记录…')} /></>;
   if (conversation.error && !first) return <>{screen}<ErrorState message={conversation.error.message} onRetry={() => void conversation.refetch()} /></>;
 
   return (
-    <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.bgCanvas, paddingTop: headerHeight }}>
+    <ComposerLayout style={{ flex: 1, backgroundColor: colors.bgCanvas, paddingTop: topInset }}>
       {screen}
       <FlatList
+        ItemSeparatorComponent={Divider}
         ref={list}
         data={rows}
         keyExtractor={(row) => row.kind + ':' + row.item.id}
         renderItem={renderRow}
         initialNumToRender={80}
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={listKeyboardDismissMode}
         keyboardShouldPersistTaps="handled"
         onContentSizeChange={() => { if (following.current) requestAnimationFrame(() => list.current?.scrollToEnd({ animated: false })); }}
         onLayout={() => { if (following.current) list.current?.scrollToEnd({ animated: false }); }}
@@ -215,6 +216,6 @@ export default function Conversation() {
         onRemoveAttachment={(key) => setAttachments((current) => current.filter((item) => item.key !== key))}
         mentionables={group ? members : []}
       />
-    </KeyboardAvoidingView>
+    </ComposerLayout>
   );
 }

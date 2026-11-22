@@ -13,7 +13,7 @@ import { TriggerRow } from '@/features/automations/trigger-row';
 import { $t, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
 import { GroupedBlock, GroupedPage, GroupedRow, GroupedSection } from '@/ui/grouped';
-import { HeaderButtons, plainHeaderItem } from '@/ui/header';
+import { HeaderButtons, headerRightOptions } from '@/ui/header';
 import { IconButton } from '@/ui/icon-button';
 import { Markdown } from '@/ui/markdown';
 import { ErrorState, LoadingState } from '@/ui/states';
@@ -77,7 +77,7 @@ export default function AutomationDetail() {
         // Like a task: the title is the page; no generic "自动化" heading.
         title: item?.title || '',
         headerLargeTitle: false,
-        unstable_headerRightItems: () => plainHeaderItem(
+        ...headerRightOptions(
           <HeaderButtons>
             <IconButton icon={Play} label={$t('立即执行')} loading={busy === 'trigger'} disabled={!item?.enabled} onPress={runNow} />
             <IconButton icon={History} label={$t('触发记录')} onPress={() => router.push({ pathname: '/automation/triggers', params: { automationId } })} />
@@ -87,7 +87,7 @@ export default function AutomationDetail() {
       }}
     />
   );
-  if (automation.isPending) return <>{screen}<LoadingState /></>;
+  if (automation.isPending) return <>{screen}<LoadingState screen /></>;
   if (automation.error || !item) return <>{screen}<ErrorState message={automation.error?.message || ''} onRetry={() => void automation.refetch()} /></>;
   const recent = (triggers.data?.items || []).slice(0, RECENT_ROUNDS);
   const openTask = (taskId?: string) => (taskId ? () => router.push({ pathname: '/task/[taskId]', params: { taskId } }) : undefined);

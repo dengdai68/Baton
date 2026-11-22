@@ -1,5 +1,7 @@
 # 本机 Runtime
 
+`registry.mjs` 登记、查询和终止活动执行，`configuration.mjs` 管理 Runtime 配置，`marketplace.mjs` 处理扩展目录，`local-cli.mjs`、`codex-app-server.mjs` 和 `dsh.mjs` 对接各自执行协议。DeepSeek Harness 的内置桥接副本及来源在 [vendor/dsh-hooks/](vendor/dsh-hooks/README.md)。
+
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
 
 local-cli 按原生最终完成与进程退出结算恢复：早期错误在后续明确成功且 exit=0 时不再作为最终失败；非零退出、无成功完成、或后续新失败继续失败。Codex 的错误展示只标记实际错误事件，不污染其后的正文/思考/完成事件；原历史错误不删除。

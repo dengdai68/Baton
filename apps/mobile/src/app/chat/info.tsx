@@ -1,11 +1,11 @@
-import { plainHeaderItem } from '@/ui/header';
+import { headerRightOptions } from '@/ui/header';
 // Conversation management (replaces the action sheet): identity, rename,
 // members each with their console, add/remove members, delete the group.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Pencil, SquareTerminal, Trash2, UserPlus, X } from 'lucide-react-native';
 import { useState } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, Platform, ScrollView, View } from 'react-native';
 
 import { providerLabel } from '@shared/console-projections.mjs';
 import { useWorkspaceKey } from '@/api/queries';
@@ -16,6 +16,7 @@ import { $t, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Avatar, GroupAvatar } from '@/ui/avatar';
 import { Button } from '@/ui/button';
+import { PromptDialog } from '@/ui/form';
 import { DetailHeader, GroupedRow, GroupedSection } from '@/ui/grouped';
 import { IconButton } from '@/ui/icon-button';
 import { ErrorState, LoadingState } from '@/ui/states';
@@ -36,6 +37,7 @@ export default function ConversationInfo() {
   const chat = conversation.data?.pages[0]?.conversation;
   const [editing, setEditing] = useState<string[] | null>(null);
   const [saving, setSaving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const group = chat?.kind === 'group';
   const openConsole = (agentId: string) => router.push({ pathname: '/chat/console', params: { chatId, agentId } });
 
@@ -53,9 +55,15 @@ export default function ConversationInfo() {
       setSaving(false);
     }
   }
+  function applyName(name?: string) {
+    const next = name?.trim();
+    if (chat && next && next !== chat.name) void update({ name: next }, $t('群聊名称已更新'));
+  }
   function rename() {
     if (!chat) return;
-    Alert.prompt($t('重命名群聊'), undefined, (name) => { if (name?.trim() && name.trim() !== chat.name) void update({ name: name.trim() }, $t('群聊名称已更新')); }, 'plain-text', chat.name);
+    // iOS has a native text prompt; Android shows the same field in a dialog.
+    if (Platform.OS === 'ios') Alert.prompt($t('重命名群聊'), undefined, applyName, 'plain-text', chat.name);
+    else setRenaming(true);
   }
   function remove() {
     if (!chat) return;
@@ -72,13 +80,13 @@ export default function ConversationInfo() {
     ]);
   }
 
-  if (conversation.isPending) return <LoadingState />;
+  if (conversation.isPending) return <LoadingState screen />;
   if (!chat) return <ErrorState message={conversation.error?.message || ''} onRetry={() => void conversation.refetch()} />;
 
   if (editing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bgCanvas }}>
-        <Stack.Screen options={{ title: $t('编辑成员'), unstable_headerRightItems: () => plainHeaderItem(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => setEditing(null)} />) }} />
+        <Stack.Screen options={{ title: $t('编辑成员'), ...headerRightOptions(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => setEditing(null)} />) }} />
         <MemberPicker agents={catalog.data?.agents || []} selected={editing} onChange={setEditing} />
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: 12, paddingBottom: 28, backgroundColor: colors.bgSubtle, borderTopWidth: 1, borderTopColor: colors.borderSubtle }}>
           <Button variant="primary" size="lg" label={$t('保存成员（{0} 人）', [editing.length])} loading={saving} disabled={editing.length < 2}
@@ -91,7 +99,9 @@ export default function ConversationInfo() {
   const member = chat.members[0];
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ backgroundColor: colors.bgSubtle }} contentContainerStyle={{ paddingBottom: 48 }}>
-      <Stack.Screen options={{ title: group ? $t('群聊信息') : $t('会话信息'), unstable_headerRightItems: group ? () => plainHeaderItem(<IconButton icon={Pencil} label={$t('重命名群聊')} onPress={rename} />) : undefined }} />
+      <Stack.Screen options={{ title: group ? $t('群聊信息') : $t('会话信息'), ...(group ? headerRightOptions(<IconButton icon={Pencil} label={$t('重命名群聊')} onPress={rename} />) : {}) }} />
+      <PromptDialog visible={renaming} title={$t('重命名群聊')} label={$t('群聊名称')} value={chat.name} confirmLabel={$t('保存')}
+        onCancel={() => setRenaming(false)} onSubmit={(name) => { setRenaming(false); applyName(name); }} />
       <DetailHeader
         visual={group ? <GroupAvatar members={chat.members} size={56} /> : <Avatar member={member || { name: chat.name }} size={56} live={member?.running} />}
         title={chat.name}

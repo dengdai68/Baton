@@ -27,7 +27,7 @@ export default function ConfirmCompletion() {
   const [sending, setSending] = useState(false);
   const review = acceptanceReview(workspace.data);
   const screen = <Stack.Screen options={{ title: $t('确认任务完成') }} />;
-  if (workspace.isPending) return <>{screen}<LoadingState /></>;
+  if (workspace.isPending) return <>{screen}<LoadingState screen /></>;
   if (workspace.error) return <>{screen}<ErrorState message={workspace.error.message} onRetry={() => void workspace.refetch()} /></>;
   if (!review) return <>{screen}<View style={{ padding: 16 }}><Notice tone="attention" text={$t('当前任务尚未提交人类验收。')} /></View></>;
 

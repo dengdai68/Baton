@@ -1,5 +1,13 @@
 # 代码导航
 
+手机任务状态筛选在 `apps/mobile/src/app/(workspace)/tasks/index.tsx`。沟通和协作记录共用 `ComposerLayout`，Android 由 `BatonKeyboardInsetsModule.kt` 提供系统键盘遮挡尺寸。
+
+公网登录限流由 `server/workspace-http.mjs` 执行。账号与 IP 的 24 小时封禁持久保存于 `server/workspace-identity.mjs` 的工作空间访问库。
+
+手机客户端源码统一在 `apps/mobile/`，iPhone 原生工程在 `apps/mobile/ios/`。独立工作空间服务的启动命令见 [工作空间服务](31-workspace-service.md#独立运行服务)。
+
+Mac 登录和设置展示的服务端地址与公网登录限制见 docs/31 和 server/workspace-http.mjs。手机的整页和列表加载提示共用 apps/mobile/src/ui/states.tsx。
+
 英文布局与记录字号：`client/locales/en.json` 仅缩短实测超出区域的群聊副标题与任务筛选译文；`web/styles.css` 将协作记录与沟通正文降为 `--fs-body`/`--lh-body`，≤860px 设置导航换行、目录搜索保持可收缩 220px，`web/app.js` 让控制台成员元信息按 Runtime/状态分段换行。仅呈现，CLI/HTTP/Store 不变；隔离 Electron 英文宽窄截图验证。
 
 附件与收起侧栏：web/communication.js 共用图片按钮（持久附件和本地发送反馈均直接显示图片），web/styles.css 统一56px待发卡片、320px消息图片上限及有界预览；≤1000px自动收起与手动收起都隐藏计数。验收 scripts/test-communication-media.mjs 覆盖源/包内、横竖小图、失败回退、下载、任务/沟通、两主题宽窄及零 Provider；HTTP/CLI 附件协议无变化。
@@ -351,8 +359,10 @@ CLI 根帮助：`cli/output.mjs` 的有序 `catalog` 生成命令目录，须覆
 
 Pi 控制台降噪：`client/console-projections.mjs` 的已知类型/精确摘要规则补齐 message_start/update/end、turn_start/end、agent_start/end/settled、tool_execution_update 与 portable 会话/完成占位；已保存页与实时追加共用过滤，正文/工具/异常/未知记录保留。仅客户端呈现，CLI/API 和 Runtime 无变化；验证 `tests/client-projections.test.mjs`、`BATON_CONSOLE_NOISE_ONLY=1 node scripts/test-console-live.mjs`（任务/沟通、宽窄布局、实时与重新读取；可用 BATON_CONSOLE_LIVE_APP 验证独立包）。
 
-工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](31-workspace-service.md)。
+工作空间账号、任务负责人、远程授权与手机入口见[工作空间服务](31-workspace-service.md)。
+
+手机客户端 `apps/mobile` 是 iOS 与 Android 共用的 React Native 代码：平台分支集中在 `src/ui`（header 栏按钮、menu 操作列表、form 重命名对话框、image-viewer 缩放、composer 键盘收起）；原生传输 `modules/baton-transport` 的 `ios/`（Swift）与 `android/`（Kotlin/OkHttp）实现同一 `index.ts` 契约，`android/src/test` 为 JVM 单测；`tests/e2e/run.mjs` 以 `android[:serial]` 走 adb 驱动 `tests/e2e/android.mjs`，`tests/e2e/workspace.mjs` 提供离线隔离验收工作空间。
 
 常驻服务：`apps/electron/daemon.mjs` 由 launchd 用户代理（`apps/electron/daemon-service.mjs` 生成与管理）以应用可执行文件的 Node 模式运行，像宿主一样拥有 `server/index.mjs` 子进程并沿用同一 IPC 协议，经配置根私有 `daemon.sock` 向 main 提供状态、通知订阅与空闲预约；Mac 主进程在两种退出策略下都连接同一服务，设置 → 工作空间 → 本机服务切换（宿主 `getServiceStatus`/`setResidentService` 仅限设置页）。手机网关 `server/workspace-http.mjs` 按设备范围（mobile 只读配置 / desktop）放行、按客户端地址限制认证失败、对远程请求隐藏内部错误；`server/workspace-identity.mjs` 记录设备最近访问并在闲置 30 天后失效。决策与安全模型 docs/32；测试 tests/daemon、tests/workspace-service、tests/electron。
 
-单工作空间登录入口为 web/workspace-choice.js、server/workspace-http.mjs 和 iOS SessionProvider。实时通知从 Store journal 送到两端。详见 docs/31-workspace-service.md。
+登录地址在桌面偏好或 iOS 钥匙串内增删，连通圆点由健康检查驱动。工作空间的内网 HTTP 和代理公网 HTTPS 共用同一服务，入口配置见 docs/31。单工作空间登录入口为 web/workspace-choice.js、server/workspace-http.mjs 和 iOS SessionProvider。实时通知从 Store journal 送到两端。详见 docs/31-workspace-service.md。

@@ -1,6 +1,9 @@
 {
-  "platforms": ["apple"],
+  "platforms": ["apple", "android"],
   "apple": {
     "modules": ["BatonTransportModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.batontransport.BatonTransportModule", "expo.modules.batontransport.BatonKeyboardInsetsModule"]
   }
 }

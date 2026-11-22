@@ -32,7 +32,7 @@ if (process.isMainFrame && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin)) 
   }, true);
   contextBridge.exposeInMainWorld("batonDesktop", Object.freeze({
     openExternalWorkspace: (address,name,password) => ipcRenderer.invoke("desktop:workspace:login", address,name,password),
-    workspaceChoices: address => ipcRenderer.invoke("desktop:workspace:choices",address),
+    workspaceChoices: (address, action) => ipcRenderer.invoke("desktop:workspace:choices",address,action),
     workspaceHealth: address => ipcRenderer.invoke("desktop:workspace:health",address),
     copyWorkspacePath: (text) => ipcRenderer.invoke("desktop:workspace:copy-path", text),
     openWorkspaceDirectory: () => ipcRenderer.invoke("desktop:workspace:open-directory"),

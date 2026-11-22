@@ -1,5 +1,11 @@
 # 工程脚本
 
+打包验收为每个实例建立隔离 HOME，在 `.data/packaged-*` 使用短路径以满足 macOS Unix socket 的长度限制。
+
+`run-tests.mjs` 是根目录 `npm test` 的入口。`verify-ai-contract.mjs` 和 `check-module-impact.mjs` 核对开发约定与模块登记。`package-mac-local.mjs` 构建本机签名包，`test-*.mjs` 执行各场景的独立验收。先查看脚本顶部的环境要求，部分真实 Runtime 验收会调用已配置的模型。
+
+渐进加载回归会在隔离工作空间验证本机登录选择器和设置展示的服务端地址、首屏与实时连接的列表读取，以及合并后的自动化详情。
+
 媒体专项：node scripts/test-communication-media.mjs 在本机临时目录的隔离 HOME 中验证沟通/协作直接图片预览、等高待发卡片、横竖比例/小图不放大、有界预览/关闭/下载、损坏图片及收起侧栏无计数；两主题×宽窄窗口，不调用 Provider。设置 BATON_MEDIA_APP=/绝对路径/Baton.app 验证打包版。保留自动化触发/配置布局检查。
 
 协作呈现回归 `node scripts/test-collaboration-flow.mjs` 覆盖向前累加、可见锚点、居中入口、月日时间、App/CLI 历史信封正文一致、回复成功/失败及宽窄布局；使用本机临时目录中的隔离 Store 素材，不调用 Provider。仅运行分页与回复滚动可设置 BATON_COLLABORATION_SCROLL_ONLY=1。

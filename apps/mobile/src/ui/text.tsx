@@ -1,7 +1,7 @@
 // Graphite typography on the phone: one variant per type step, semantic tones only.
 import { Text, type TextProps } from 'react-native';
 
-import { type Colors, useTheme } from '@/theme';
+import { type Colors, monoFont, useTheme } from '@/theme';
 
 export type TextVariant = 'caption' | 'small' | 'body' | 'read' | 'titleSm' | 'title' | 'display';
 export type Tone =
@@ -39,7 +39,7 @@ export function Txt({ variant = 'body', weight = 'regular', tone = 'primary', co
           fontSize: step.size,
           lineHeight: step.line,
           fontWeight: metrics.weight[weight],
-          fontFamily: mono ? 'Menlo' : undefined,
+          fontFamily: mono ? monoFont : undefined,
           fontVariant: numeric ? ['tabular-nums'] : undefined,
         },
         style,

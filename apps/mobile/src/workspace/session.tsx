@@ -2,7 +2,7 @@
 // pairing, switching and forgetting. A 401 marks the session expired so the UI
 // can ask the user to pair again instead of failing silently.
 import { useQueryClient } from '@tanstack/react-query';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -25,7 +25,7 @@ const SessionContext = createContext<Session | null>(null);
 
 /** Device name shown in the Mac's device list. */
 function deviceLabel(): string {
-  return (Device.deviceName || Device.modelName || 'iPhone').slice(0, 60);
+  return (Device.deviceName || Device.modelName || (Platform.OS === 'ios' ? 'iPhone' : 'Android')).slice(0, 60);
 }
 
 export function SessionProvider({ children }: { children: ReactNode }) {

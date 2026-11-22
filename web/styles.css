@@ -4240,3 +4240,10 @@ html:root #modal-backdrop .workflow-editor-modal .workflow-advanced-fields input
 .workspace-cert {padding:6px 12px;font-size:var(--fs-small);}
 .workspace-cert summary {cursor:pointer;}
 .workspace-cert code {display:block;padding-top:4px;}
+
+/* A pending task has no inline task header yet. Keep the page title above its content. */
+html:root .main-content:has(#workspace-view.active #run-workspace > .empty-state) > .topbar { display:flex; }
+html:root #run-workspace > .empty-state { align-self:center; }
+html:root #run-workspace .human-message-list > :nth-last-child(1 of .collaboration-row),
+html:root .communication-chat .communication-messages > :nth-last-child(1 of .communication-message) { border-bottom:0; }
+html:root #run-workspace .collaboration-panel .instruction-form, html:root .communication-chat .communication-composer { border-top:0; }

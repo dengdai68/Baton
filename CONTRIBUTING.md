@@ -1,5 +1,7 @@
 # Contributing
 
+仓库目录及各模块入口见 [根 README](README.md#仓库目录)。
+
 本仓库是 Baton 客户端的独立源码，默认 `npm start` 启动 Electron。`web/` 和 `server/` 均是应用的本机组成部分；不要求检出 Baton 原仓库。抽取边界见 [docs/23](docs/23-desktop-extraction.md)。测试与包构建使用隔离数据，不覆盖现有安装。
 
 先阅读 [AGENTS.md](AGENTS.md)、[代码导航](docs/00-ai-map.md) 和目标模块的 README。
@@ -66,3 +68,17 @@ Release 工作流只在发布成功后删除本次构建输出 ID 对应的 Acti
 当前存储归属以 [配置目录与工作目录](docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
+
+
+## Git 跟踪与本机文件
+
+| 位置 | 文件归属和处理方式 |
+| --- | --- |
+| `package-lock.json`、`apps/mobile/package-lock.json` | 跟踪两端各自的 npm 依赖锁；`node_modules/` 由 npm 安装 |
+| `apps/mobile/ios/`、`apps/mobile/android/` | 由 Expo 按 `apps/mobile/app.json` 及原生模块生成；iOS 首次打包前按[构建文档](apps/mobile/README.md)准备 Xcode 工程，Android 打包脚本在原生工程缺失时会预生成 |
+| `apps/mobile/modules/` | 跟踪 Swift、Kotlin、Gradle 配置和测试；Gradle 缓存、编译输出以及 C/C++ 中间文件留在本机 |
+| `apps/mobile/build/`、`release/` | 本机签名包和发布构建产物 |
+| `.data/`、`screenshots/`、`.visualizations/`、`coverage/`、`test-results/`、`playwright-report/` | 本机测试、报告和截图；供文档长期引用的媒体使用 [docs/media/](docs/media/README.md) |
+| `~/.baton/`、当前实例工作目录 | 实例配置、会话和业务资料默认保存在仓库外；仓库内的 SQLite、数据库旁文件、环境文件、日志和指定目录下的本机数据由忽略规则覆盖 |
+
+查看具体匹配使用 `git check-ignore -v -- <路径>`。检查已跟踪文件是否又命中了忽略规则，使用 `git ls-files -ci --exclude-standard`。手机端的签名材料和 `.xcode.env.local` 保存在本机。

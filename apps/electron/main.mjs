@@ -751,10 +751,10 @@ async function start() {
     if(event.sender !== contents || event.senderFrame !== contents.mainFrame || !isConsoleURL(event.senderFrame?.url,controlOrigin) ||
        !['/login','/setup.html'].includes(new URL(event.senderFrame.url).pathname)) throw Error($t("请从登录页选择工作空间"));
   }
-  ipcMain.handle("desktop:workspace:choices", async (event,address) => {
+  ipcMain.handle("desktop:workspace:choices", async (event,address,action) => {
     requireLoginPage(event);
     if (address === undefined) return readWorkspaceChoices(preferencesFile);
-    return selectWorkspace(preferencesFile,address === 'local' ? address : workspaceOrigin(address));
+    return selectWorkspace(preferencesFile,address === 'local' ? address : workspaceOrigin(address),action);
   });
   ipcMain.handle("desktop:workspace:health", async (event,address) => {
     requireLoginPage(event);

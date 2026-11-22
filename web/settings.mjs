@@ -552,7 +552,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
       const device = devices.find(item => item.id === info.deviceId);
       panel.innerHTML = `<div class="settings-group"><h4>${$t("当前工作空间")}</h4><div class="settings-box">
         ${row($t("名称"),info.name)}${row($t("当前机器"),device?.label)}${row($t("当前账号"),info.username)}
-        ${info.origin ? row($t("登录地址"),info.origin) : ''}${info.connectionError ? row($t("无法连接"),info.connectionError) : ''}${info.fingerprint ? `<details class="workspace-cert" ${expanded ? 'open' : ''}><summary>${$t("证书指纹")}</summary><code>${escape(info.fingerprint)}</code></details>` : ''}</div></div>
+        ${info.origin ? row(info.local ? $t("工作空间地址") : $t("登录地址"),info.origin) : ''}${info.connectionError ? row($t("无法连接"),info.connectionError) : ''}${info.fingerprint ? `<details class="workspace-cert" ${expanded ? 'open' : ''}><summary>${$t("证书指纹")}</summary><code>${escape(info.fingerprint)}</code></details>` : ''}</div></div>
         <div class="settings-group"><h4>${$t("当前账号登录的设备")}</h4><div class="settings-box">
         ${devices.map(item => row(item.label, [item.lastAddress?.replace(/^::ffff:/i,''), item.id === info.deviceId ? $t("当前设备") : item.lastSeen ? new Date(item.lastSeen).toLocaleString() : $t("本机工作空间")].filter(Boolean).join(' · '))).join('')}</div></div>`;
     } catch (error) { if (panel.isConnected) panel.textContent = error.message; }

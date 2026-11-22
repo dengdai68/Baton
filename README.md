@@ -109,8 +109,23 @@ npm start
 
 界面文字的译文位于 `client/locales/`（`en.json`、`zh-TW.json`），以简体中文源文本为键；`npm test` 会检查每条界面文字都有英文和繁体译文，隔离实机验收见 `node scripts/test-i18n.mjs`。
 
+## 仓库目录
+
+| 目录 | 职责 |
+| --- | --- |
+| [apps/](apps/README.md) | Electron 桌面宿主与 React Native 手机客户端 |
+| [web/](web/README.md) | Electron 中显示的主界面，以及服务端工作空间网页 |
+| [client/](client/README.md) | 多语言、展示投影和跨端共用定义 |
+| [server/](server/README.md) | 登录和设备授权、业务存储、任务调度及 Runtime |
+| [cli/](cli/README.md) | Baton 命令行、认证 HTTP 客户端和输出格式 |
+| [scripts/](scripts/README.md) · [tests/](tests/README.md) | 构建、专项验收、自动回归和夹具 |
+| [docs/](docs/README.md) · [ai/](ai/README.md) | 文档导航、架构说明和模块注册表 |
+| [.github/](.github/README.md) · [.codex/](.codex/README.md) · [.interface-design/](.interface-design/README.md) | CI 与发布、仓库工作流程、界面规范及原型 |
+
+依赖、原生工程、安装包、日志和测试产物的归属见 [Git 跟踪与本机文件](CONTRIBUTING.md#git-跟踪与本机文件)。
+
 ---
 
 [使用文档](docs/README.md) · [更新记录](CHANGELOG.md) · [Apache-2.0](LICENSE) · [第三方声明](NOTICE)
 
-iOS 客户端（React Native + Expo 重写，全量功能）见 [apps/mobile](apps/mobile/README.md)；旧版 Web 壳归档于 [apps/ios](apps/ios/README.md)。手机地址登录、云端多人工作空间及本机服务设置见 [工作空间服务](docs/31-workspace-service.md)。
+iOS 与 Android 客户端（React Native + Expo 同一套代码，全量功能）见 [apps/mobile](apps/mobile/README.md)。手机地址登录、云端多人工作空间及本机服务设置见 [工作空间服务](docs/31-workspace-service.md)。

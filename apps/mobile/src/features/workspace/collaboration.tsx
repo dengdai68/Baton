@@ -1,3 +1,4 @@
+import { Divider } from '@/ui/layout';
 // Task collaboration: paged records, question cards, the acceptance and failure
 // banners above, and a composer with the Mac's send rules (web/app.js
 // sendInstruction): reply to the pending question first, at most one @member,
@@ -16,7 +17,7 @@ import { $t, $tm } from '@/i18n';
 import { type LocalAttachment, pickFiles, pickImages } from '@/lib/attachments';
 import { useTheme } from '@/theme';
 import { Button } from '@/ui/button';
-import { Composer } from '@/ui/composer';
+import { Composer, listKeyboardDismissMode } from '@/ui/composer';
 import { IconButton } from '@/ui/icon-button';
 import { Markdown } from '@/ui/markdown';
 import { EmptyState, ErrorState, LoadingState } from '@/ui/states';
@@ -191,11 +192,12 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
   return (
     <View style={{ flex: 1 }}>
       <FlatList
+        ItemSeparatorComponent={Divider}
         ref={list}
         data={rows}
         keyExtractor={(row) => row.kind + ':' + row.item.id}
         renderItem={renderRow}
-        keyboardDismissMode="interactive"
+        keyboardDismissMode={listKeyboardDismissMode}
         keyboardShouldPersistTaps="handled"
         initialNumToRender={80}
         onContentSizeChange={() => { if (following.current) requestAnimationFrame(() => list.current?.scrollToEnd({ animated: false })); }}

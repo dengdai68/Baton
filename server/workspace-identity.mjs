@@ -14,6 +14,9 @@ const derive = promisify(scrypt);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
 const secret = () => randomBytes(32).toString("base64url");
 const day = 86400000;
+const loginFailureLimit = 20;
+const maxLoginFailurePairs = 10000;
+const loginFailureKey = (name, address) => digest(JSON.stringify([name, address]));
 export const localUser = "human_operator";
 /** A device session ends after this long without use (sliding, renewed on use). */
 export const deviceIdleMs = 30 * day;
@@ -31,7 +34,9 @@ export function workspaceIdentity(root, mode, administrator = null) {
     CREATE TABLE IF NOT EXISTS members (id TEXT PRIMARY KEY, name TEXT UNIQUE, salt TEXT, hash BLOB);
     CREATE TABLE IF NOT EXISTS devices (id TEXT PRIMARY KEY, hash TEXT UNIQUE, member TEXT, label TEXT, expires INTEGER);
     CREATE TABLE IF NOT EXISTS invites (hash TEXT PRIMARY KEY, expires INTEGER);
-    CREATE TABLE IF NOT EXISTS failures (name TEXT PRIMARY KEY, count INTEGER, since INTEGER);`);
+    CREATE TABLE IF NOT EXISTS failures (name TEXT PRIMARY KEY, count INTEGER, since INTEGER);
+    CREATE TABLE IF NOT EXISTS workspace_login_failures (key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
+    CREATE INDEX IF NOT EXISTS workspace_login_expiry ON workspace_login_failures(expires);`);
   // Columns added for the device audit and scopes; existing rows keep working.
   const columns = (table) => new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((column) => column.name));
   const ensure = (table, column, definition) => { if (!columns(table).has(column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`); };
@@ -58,6 +63,31 @@ export function workspaceIdentity(root, mode, administrator = null) {
   };
   return {
     members,
+    loginRetryAfter(name, address) {
+      const time = Date.now();
+      const row = db.prepare("SELECT expires FROM workspace_login_failures WHERE key=? AND count>=? AND expires>?")
+        .get(loginFailureKey(name, address), loginFailureLimit, time);
+      return row ? Math.ceil((row.expires - time) / 1000) : 0;
+    },
+    recordLoginFailure(name, address) {
+      const time = Date.now();
+      db.prepare("DELETE FROM workspace_login_failures WHERE expires<=?").run(time);
+      const key = loginFailureKey(name, address);
+      const row = db.prepare(`
+        INSERT INTO workspace_login_failures
+        SELECT ?, 1, ?
+        WHERE EXISTS (SELECT 1 FROM workspace_login_failures WHERE key=?)
+           OR (SELECT count(*) FROM workspace_login_failures) < ?
+        ON CONFLICT(key) DO UPDATE SET
+          count = MIN(count+1, ?),
+          expires = CASE WHEN count=? THEN excluded.expires ELSE expires END
+        RETURNING count, expires
+      `).get(key, time + day, key, maxLoginFailurePairs, loginFailureLimit, loginFailureLimit - 1);
+      return row?.count >= loginFailureLimit ? Math.ceil((row.expires - time) / 1000) : 0;
+    },
+    clearLoginFailures(name, address) {
+      db.prepare("DELETE FROM workspace_login_failures WHERE key=?").run(loginFailureKey(name, address));
+    },
     async add(name, password) {
       if (
         mode !== "cloud" ||
@@ -79,10 +109,10 @@ export function workspaceIdentity(root, mode, administrator = null) {
         hash,
       );
     },
-    async login(name, password, {label = "登录设备", scope = "mobile", address = null} = {}) {
+    async login(name, password, {label = "登录设备", scope = "mobile", address = null, canIssue = () => true} = {}) {
       if (mode === "local") {
         const owner = await administrator?.verifyAdministrator(name, password);
-        return owner ? issue(localUser, label, scope, address, owner.version) : null;
+        return owner && canIssue() ? issue(localUser, label, scope, address, owner.version) : null;
       }
       if (
         mode !== "cloud" ||
@@ -106,7 +136,7 @@ export function workspaceIdentity(root, mode, administrator = null) {
         member?.salt || "unknown-account",
         64,
       );
-      if (!member || !timingSafeEqual(hash, member.hash)) return null;
+      if (!member || !timingSafeEqual(hash, member.hash) || !canIssue()) return null;
       db.prepare("DELETE FROM failures WHERE name=?").run(key);
       return issue(member.id, label, scope, address);
     },

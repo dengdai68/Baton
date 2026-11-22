@@ -1,4 +1,4 @@
-import { plainHeaderItem } from '@/ui/header';
+import { headerLeftOptions } from '@/ui/header';
 // Start a conversation: one employee opens the private chat, several create a group.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack } from 'expo-router';
@@ -40,7 +40,7 @@ export default function NewChat() {
   }
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ title: $t('发起沟通'), unstable_headerLeftItems: () => plainHeaderItem(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
+      <Stack.Screen options={{ title: $t('发起沟通'), ...headerLeftOptions(<IconButton icon={X} label={$t('取消')} tone="neutral" onPress={() => router.back()} />) }} />
       {catalog.isPending ? <LoadingState /> : catalog.error ? <ErrorState message={catalog.error.message} onRetry={() => void catalog.refetch()} /> : (
         <MemberPicker agents={catalog.data.agents} selected={selected} onChange={setSelected} />
       )}

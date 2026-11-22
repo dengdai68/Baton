@@ -1,49 +1,47 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
-node_modules/
+# Repository-wide dependencies, logs and environment files inherit the root rules.
 
 # Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
+/.expo/
+/dist/
+/web-build/
+/expo-env.d.ts
 
-# Native
+# Native IDE and signing files
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.pem
 
 # Metro
 .metro-health-check*
 
-# debug
+# Package manager diagnostics, including suffixed logs
 npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
+# Xcode environment override
+.xcode.env.local
 
 # typescript
 *.tsbuildinfo
 
-example
+# Expo-generated application projects. Native module source lives under modules/.
+/ios/
+/android/
 
-# generated native folders
-/ios
-/android
+# Gradle and native compiler output inside local modules
+/modules/*/android/build/
+/modules/*/android/.cxx/
+/modules/*/android/.gradle/
 
 # UI-test derived data
-/tests/e2e/build
+/tests/e2e/build/
 
 # Locally signed device packages
 /build/

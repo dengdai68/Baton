@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Run a step file against the installed Baton app in a booted simulator (or device id).
-// Usage: node tests/e2e/run.mjs <steps.json> <out-dir> [destination-id]
-// Builds the UI-test bundle on first use (tests/e2e/build, git-ignored), then runs
+// Usage: node tests/e2e/run.mjs <steps.json> <out-dir> [destination-id | android[:serial]]
+// iOS builds the UI-test bundle on first use (tests/e2e/build, git-ignored), then runs
 // test-without-building with the steps passed through TEST_RUNNER_ environment variables.
+// "android" drives a USB device or emulator through adb instead (tests/e2e/android.mjs).
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -11,11 +12,15 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const [stepsArg, outArg, idArg] = process.argv.slice(2);
 if (!stepsArg || !outArg) {
-  console.error('usage: node tests/e2e/run.mjs <steps.json> <out-dir> [destination-id]');
+  console.error('usage: node tests/e2e/run.mjs <steps.json> <out-dir> [destination-id | android[:serial]]');
   process.exit(2);
 }
 const steps = resolve(stepsArg), out = resolve(outArg);
 mkdirSync(out, { recursive: true });
+if (idArg === 'android' || idArg?.startsWith('android:')) {
+  const { runAndroid } = await import('./android.mjs');
+  process.exit(await runAndroid(steps, out, idArg.slice('android:'.length) || undefined));
+}
 const booted = spawnSync('xcrun', ['simctl', 'list', 'devices', 'booted', '-j'], { encoding: 'utf8' });
 const device = idArg || Object.values(JSON.parse(booted.stdout).devices).flat().find((item) => item.state === 'Booted')?.udid;
 if (!device) { console.error('No booted simulator; boot one or pass a destination id.'); process.exit(2); }

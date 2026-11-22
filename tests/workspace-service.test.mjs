@@ -10,9 +10,9 @@ import { createStore } from "../server/store.mjs";
 import { workspaceIdentity } from "../server/workspace-identity.mjs";
 import {createAuth} from "../server/auth.mjs";
 const credentials = {name:"operator",password:"workspace test password"};
-import { startWorkspace } from "../server/workspace-http.mjs";
+import { clientAddress, startWorkspace } from "../server/workspace-http.mjs";
 
-async function setup(t, mode, { api, isReady, protocol = "https:" } = {}) {
+async function setup(t, mode, { api, isReady, protocol = "https:", trustedProxyAddresses = ["127.0.0.1"] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "baton-workspace-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const key = join(root, "key"),
@@ -39,7 +39,7 @@ async function setup(t, mode, { api, isReady, protocol = "https:" } = {}) {
     { stdio: "ignore" },
   );
   const origin = protocol + "//localhost",
-    config = { mode, name: "Test", origin, key, cert, port: 0 };
+    config = { mode, name: "Test", origin, key, cert, port: 0, trustedProxyAddresses };
   const store = createStore({
     databasePath: join(root, "business.sqlite"),
     workspaceRoot: root,
@@ -121,7 +121,7 @@ async function setup(t, mode, { api, isReady, protocol = "https:" } = {}) {
         Buffer.isBuffer(body) ? body : body ? JSON.stringify(body) : undefined,
       );
     });
-  return { config, store, identity, request, root, port: server.address().port };
+  return { config, store, identity, administrator, request, root, port: server.address().port };
 }
 test("explicit HTTP workspace supports mobile and desktop login with same-origin logout", async t => {
   const {request} = await setup(t, "local", {protocol:"http:"});
@@ -138,6 +138,25 @@ test("explicit HTTP workspace supports mobile and desktop login with same-origin
   assert.equal((await request("/logout", {}, desktop.cookie, {origin:"http://elsewhere"})).s, 403);
   assert.equal((await request("/logout", {}, desktop.cookie)).s, 200);
   assert.equal((await request("/device-info", null, desktop.cookie)).s, 401);
+});
+test("public HTTPS login and writes use the registered public origin behind an HTTP listener", async t => {
+  const api = (_req, res) => { res.writeHead(200); res.end('{"ok":true}'); };
+  const {config, request} = await setup(t, "local", {protocol:"http:", api});
+  config.accessOrigin = "https://baton.example";
+  const external = {host:"baton.example", origin:config.accessOrigin};
+  const login = await request("/login", credentials, "", external);
+  assert.equal(login.s, 200);
+  assert.match(login.h["set-cookie"][0], /^__Host-baton_workspace=.*; Secure;/);
+  assert.ok(login.h["strict-transport-security"]);
+  const info = await request("/device-info", undefined, login.cookie, external);
+  assert.equal(info.b.origin, config.accessOrigin);
+  assert.equal((await request("/api/tasks", {}, login.cookie, external)).s, 200);
+  assert.equal((await request("/api/tasks", {}, login.cookie, {...external, origin:config.origin})).s, 403);
+  const logout = await request("/logout", {}, login.cookie, external);
+  assert.equal(logout.s, 200);
+  assert.match(logout.h["set-cookie"][0], /^__Host-baton_workspace=; Secure;/);
+  assert.equal((await request("/healthz", undefined, "", {host:"other.example"})).s, 403);
+  assert.equal((await request("/login", credentials, "", {...external, host:"localhost", "x-forwarded-proto":"https"})).s, 403);
 });
 test("the sign-in selector can distinguish a ready workspace from an unavailable service before login", async t => {
   let ready = true;
@@ -371,17 +390,99 @@ test("security: failed authentication is throttled per client address", async (t
   const from = (address) => ({ origin: null, "x-forwarded-for": address });
   for (let attempt = 1; attempt <= 20; attempt += 1) {
     const result = await request("/login", { ...credentials, password:"wrong-" + attempt, bearer: true }, "", from("203.0.113.5"));
-    assert.equal(result.s, 401);
+    assert.equal(result.s, attempt < 20 ? 401 : 429);
   }
   const blocked = await request("/login", { ...credentials, bearer: true }, "", from("203.0.113.5"));
   console.log("after 20 failures:", blocked.s, blocked.b.error, "Retry-After", blocked.h["retry-after"]);
   assert.equal(blocked.s, 429, "even a valid code waits out the block");
-  assert.ok(Number(blocked.h["retry-after"]) > 500);
+  assert.ok(Number(blocked.h["retry-after"]) > 86390);
   const other = await request("/login", { ...credentials, bearer: true }, "", from("203.0.113.6"));
   console.log("another client:", other.s);
   assert.equal(other.s, 200, "other clients are unaffected");
 });
 
+test("only configured proxy peers provide a valid client address", () => {
+  const req = {socket:{remoteAddress:"::ffff:192.0.2.3"}, headers:{"x-forwarded-for":"203.0.113.99, 2001:0db8::8"}};
+  assert.equal(clientAddress(req), "192.0.2.3");
+  const proxies = new Set(["192.0.2.3"]);
+  assert.equal(clientAddress(req, proxies), "2001:db8::8");
+  req.headers["x-forwarded-for"] = "invalid";
+  assert.equal(clientAddress(req, proxies), "192.0.2.3");
+});
+
+test("the account and IP lockout counts spaced failures and survives reopening the login database", async t => {
+  let time = Date.now();
+  t.mock.method(Date, "now", () => time);
+  const {administrator, request, root} = await setup(t, "local", {protocol:"http:"});
+  const from = {"x-forwarded-for":"203.0.113.5"};
+  const wrong = {...credentials, password:"incorrect password"};
+  const day = 86400000;
+  for (let attempt = 1; attempt <= 20; attempt++) {
+    time += 30 * 60000;
+    const reply = await request("/login", wrong, "", from);
+    assert.equal(reply.s, attempt < 20 ? 401 : 429);
+    if (attempt === 20) assert.equal(reply.h["retry-after"], "86400");
+  }
+  const reopened = workspaceIdentity(root, "local", administrator);
+  try {
+    assert.equal(reopened.loginRetryAfter(credentials.name, "203.0.113.5"), 86400);
+    assert.equal(reopened.loginRetryAfter("another-account", "203.0.113.5"), 0);
+    assert.equal(reopened.loginRetryAfter(credentials.name, "203.0.113.6"), 0);
+  } finally { reopened.close(); }
+  time += day - 1000;
+  const denied = await request("/login", credentials, "", from);
+  assert.equal(denied.s, 429);
+  assert.equal(denied.h["retry-after"], "1");
+  time += 1000;
+  assert.equal((await request("/login", credentials, "", from)).s, 200);
+});
+
+test("a successful login resets the failure count for that account and address", async t => {
+  const {identity,request} = await setup(t, "local", {protocol:"http:"});
+  const address = "203.0.113.5";
+  const from = {"x-forwarded-for":address};
+  for (let i = 0; i < 19; i++) identity.recordLoginFailure(credentials.name, address);
+  assert.equal((await request("/login", credentials, "", from)).s, 200);
+  assert.equal((await request("/login", {...credentials,password:"invalid"}, "", from)).s, 401);
+});
+
+test("password verification capacity frees up after pending logins finish", async t => {
+  const {administrator, request} = await setup(t, "local", {protocol:"http:"});
+  const started = Promise.withResolvers(), release = Promise.withResolvers();
+  let calls = 0;
+  t.mock.method(administrator, "verifyAdministrator", async () => {
+    if (++calls === 4) started.resolve();
+    await release.promise;
+    return null;
+  });
+  const pending = Promise.all(Array.from({length:4}, () => request("/login", credentials)));
+  try {
+    await started.promise;
+    const busy = await request("/login", credentials);
+    assert.equal(busy.s, 429);
+    assert.ok(Number(busy.h["retry-after"]) > 0);
+    assert.equal(calls, 4);
+  } finally {
+    release.resolve();
+    await pending;
+  }
+  assert.equal((await request("/login", credentials)).s, 401);
+  assert.equal(calls, 5);
+});
+
+test("login throttling preserves existing sessions and bounds unauthenticated input", async t => {
+  const {request} = await setup(t, "local", {protocol:"http:"});
+  const login = await request("/login", credentials);
+  assert.equal(login.s, 200);
+  const oversized = await request("/login", {name:"operator", password:"x".repeat(8192)});
+  assert.equal(oversized.s, 413);
+  for (let i = 0; i < 21; i++) assert.equal((await request("/device-info")).s, 401);
+  assert.equal((await request("/login", credentials)).s, 200);
+  for (let i = 0; i < 20; i++) await request("/login", {name:"operator",password:"invalid"});
+  assert.equal((await request("/login", credentials)).s, 429);
+  assert.equal((await request("/device-info", undefined, login.cookie)).s, 200);
+  assert.equal((await request("/healthz")).s, 200);
+});
 test("security: device sessions record use, expire after 30 idle days, stay private", async (t) => {
   const { DatabaseSync } = await import("node:sqlite");
   const { statSync } = await import("node:fs");
@@ -411,7 +512,7 @@ test("security: internal errors stay private; headers harden every response; str
   const held = [];
   const api = async (req, res, url) => {
     for await (const _ of req);
-    if (url.pathname === "/api/tasks/boom") throw new TypeError("Cannot read properties of undefined (reading '/Users/secret/path')");
+    if (url.pathname === "/api/tasks/boom") throw new TypeError("内部错误 /Users/secret/path");
     if (url.pathname.endsWith("/events")) { res.writeHead(200, { "content-type": "text/event-stream" }); res.write(": open\n\n"); held.push(res); return; }
     res.writeHead(200); res.end("{}");
   };

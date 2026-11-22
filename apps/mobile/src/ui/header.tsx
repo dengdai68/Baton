@@ -1,8 +1,9 @@
 // Header icon buttons for native navigation bars (accent tint, 44pt targets).
 import { router } from 'expo-router';
+import { useHeaderHeight } from 'expo-router/react-navigation';
 import { $t } from '@/i18n';
 import { ChevronLeft, type LucideIcon } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { useTheme } from '@/theme';
 
@@ -27,4 +28,30 @@ export function plainHeaderItem(element: React.ReactElement) {
 
 export function backHeaderItems({canGoBack}: {canGoBack?: boolean}) {
   return canGoBack ? plainHeaderItem(<HeaderButton icon={ChevronLeft} label={$t('后退')} onPress={() => router.back()} />) : [];
+}
+
+/**
+ * Trailing header actions on both platforms: iOS renders only `unstable_headerRightItems`
+ * (bar items without glass), Android renders only `headerRight` (toolbar views).
+ */
+export function headerRightOptions(element: React.ReactElement) {
+  return Platform.OS === 'ios'
+    ? { unstable_headerRightItems: () => plainHeaderItem(element) }
+    : { headerRight: () => element };
+}
+
+/** Leading header action (cancel) that replaces the back button on both platforms. */
+export function headerLeftOptions(element: React.ReactElement) {
+  return Platform.OS === 'ios'
+    ? { unstable_headerLeftItems: () => plainHeaderItem(element) }
+    : { headerLeft: () => element };
+}
+
+/**
+ * Top padding for non-scrolling pages under a native header: iOS draws them beneath its
+ * translucent bar, while Android already lays the page out below the toolbar.
+ */
+export function useContentTopInset(): number {
+  const headerHeight = useHeaderHeight();
+  return Platform.OS === 'ios' ? headerHeight : 0;
 }

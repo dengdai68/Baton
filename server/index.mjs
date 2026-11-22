@@ -283,17 +283,22 @@ function sendJson(response, status, payload) {
 
 const maxJsonBodyBytes = 1024 * 1024;
 class RequestBodyTooLargeError extends Error {
-  constructor(message = "请求体超过 1 MiB 上限") { super(message); }
+  constructor(message = "请求体超过 1 MiB 上限") { super(message); this.status = 413; }
 }
 
-async function readJson(request) {
-  let body = "", bytes = 0;
-  for await (const chunk of request) {
-    bytes += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
-    if (bytes > maxJsonBodyBytes) throw new RequestBodyTooLargeError();
-    body += chunk;
+async function readJson(request, limit = maxJsonBodyBytes) {
+  const chunks = [];
+  let bytes = 0;
+  for await (const chunk of request.iterator({ destroyOnReturn: false })) {
+    bytes += chunk.length;
+    if (bytes > limit) {
+      request.resume();
+      throw new RequestBodyTooLargeError();
+    }
+    chunks.push(chunk);
   }
-  if (!body) return {};
+  if (!bytes) return {};
+  const body = Buffer.concat(chunks, bytes).toString("utf8");
   try {
     return JSON.parse(body);
   } catch {
@@ -316,7 +321,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     try {
       const local = localAccountDevice();
       sendJson(response,200,{local:true, connectionError:workspaceError || null, deviceId:'local', name:workspaceConfig?.name || hostname(), username:auth.session(request)?.username,
-        origin:workspaceConfig?.accessOrigin || workspaceConfig?.pairingOrigin || workspaceConfig?.origin,
+        origin:workspaceConfig?.origin || null,
         fingerprint:workspaceConfig?.cert && new X509Certificate(readFileSync(workspaceConfig.cert)).fingerprint256,
         devices:[local, ...(identity?.accountDevices('human_operator') || [])]});
     } finally { identity?.close(); }
@@ -326,7 +331,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     if(workspaceConfig?.mode==='cloud'){sendJson(response,403,{error:'云端使用账号登录'});return true;}
     if(pathname==='/api/phone/status' && request.method==='GET'){
       const address=Object.values(networkInterfaces()).flat().find(a=>a?.family==='IPv4'&&!a.internal)?.address;
-      sendJson(response,200,{origin:workspaceConfig?.origin || null,pairingOrigin:workspaceConfig?.accessOrigin || workspaceConfig?.pairingOrigin || workspaceConfig?.origin || null,error:workspaceError||null,suggested:address?'https://'+address+':9443':''});return true;
+      sendJson(response,200,{origin:workspaceConfig?.origin || null,pairingOrigin:workspaceConfig?.accessOrigin || workspaceConfig?.pairingOrigin || workspaceConfig?.origin || null,error:workspaceError||null,suggested:address?'http://'+address+':9443':''});return true;
     }
     if(pathname==='/api/phone/enable' && request.method==='POST'){
       const {origin,relay}=await readJson(request);
@@ -1040,7 +1045,12 @@ async function serveStatic(response, pathname, remote = false) {
   async function presented(content, extension) {
     if (extension !== ".html") return content;
     const css = (await Promise.all(["web/tokens.css", "apps/electron/compact.css"].map(path => readFile(join(root, path), "utf8")))).join("\n");
-    return content.toString("utf8").replace("</head>", `${remote ? '<meta name="baton-remote-workspace" content="true">' : ''}<style id="baton-desktop-style">${css}</style></head>`);
+    let workspaceMeta = remote ? '<meta name="baton-remote-workspace" content="true">' : '';
+    if (!remote && (pathname === "/login" || pathname === "/setup.html") && workspaceConfig?.origin) {
+      const address = workspaceConfig.origin.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+      workspaceMeta = `<meta name="baton-workspace-origin" content="${address}">`;
+    }
+    return content.toString("utf8").replace("</head>", () => `${workspaceMeta}<style id="baton-desktop-style">${css}</style></head>`);
   }
   const bundles = { "/vendor/marked.js": markedBundle, "/vendor/dompurify.js": domPurifyBundle, "/vendor/highlight.css": highlightStylesheet, "/vendor/x6.js": x6Bundle, "/vendor/elk.js": elkBundle };
   if (bundles[pathname]) {
@@ -1096,7 +1106,7 @@ async function serveApi(request, response, url, context = {}) {
   const configurationRead = request.method === 'GET' && ['/api/settings/workspace','/api/settings/log-files','/api/runtime/git-credentials','/api/runtime/marketplace','/api/runtime/mcp-marketplace','/api/runtime/marketplace/updates'].includes(url.pathname);
   if (url.pathname.startsWith('/api/') && url.pathname !== '/api/health' && !connectionRead && !configurationRead) {
     try { await ensureBusiness(); }
-    catch (error) { sendJson(response, 503, { error: `业务数据未就绪：${error.message}` }); return true; }
+    catch (error) { sendJson(response, 503, { error: context.remote ? "业务数据未就绪" : `业务数据未就绪：${error.message}` }); return true; }
     if(store.configurationBlocked()){sendJson(response,503,{error:'配置发布尚未完成，请修复配置目录后重启恢复；不要重复提交'});return true;}
   }
   return routeApi(request, response, url.pathname, url.searchParams, context);
@@ -1141,7 +1151,7 @@ server.listen(port, host, async () => {
   if (!workspaceConfig && process.env.BATON_AUTO_WORKSPACE === '1') {
     const address = Object.values(networkInterfaces()).flat().find(ip => ip?.family === 'IPv4' && !ip.internal)?.address;
     try {
-      workspaceConfig = provisionWorkspace(storage.controlRoot,{mode:'local',origin:'https://'+(address || hostname())+':9443',port:9443,bind:'0.0.0.0'});
+      workspaceConfig = provisionWorkspace(storage.controlRoot,{mode:'local',origin:'http://'+(address || hostname())+':9443',port:9443,bind:'0.0.0.0'});
     } catch (error) { workspaceError=error.message; diagnostic('workspace.provision_failed',{error}); }
   }
   if(workspaceConfig) {

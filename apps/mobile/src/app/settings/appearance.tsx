@@ -1,7 +1,7 @@
-// 外观: this iPhone's appearance mode, as three previews (Mac: theme options).
+// 外观: this phone's appearance mode, as three previews (Mac: theme options).
 import { Stack } from 'expo-router';
 import { CircleCheck } from 'lucide-react-native';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { themeName } from '@/features/settings';
 import { $t, useLocale } from '@/i18n';
@@ -39,7 +39,7 @@ export default function AppearanceSettings() {
   return (
     <GroupedPage>
       <Stack.Screen options={{ title: $t('外观') }} />
-      <GroupedSection title={$t('外观模式')} footer={$t('外观偏好保存在这台 iPhone，选择后立即生效。')}>
+      <GroupedSection title={$t('外观模式')} footer={Platform.OS === 'ios' ? $t('外观偏好保存在这台 iPhone，选择后立即生效。') : $t('外观偏好保存在这台手机，选择后立即生效。')}>
         <View style={{ flexDirection: 'row', gap: 12, padding: 14 }}>
           {(['system', 'light', 'dark'] as Mode[]).map((mode) => {
             const selected = preferences.theme === mode;

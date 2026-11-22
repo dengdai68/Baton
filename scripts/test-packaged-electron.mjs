@@ -20,7 +20,7 @@ const appBundle = resolve(process.env.BATON_PACKAGED_APP || "release/mac-arm64/B
 const executable = join(appBundle, "Contents", "MacOS", "Baton");
 await access(executable);
 await mkdir(".data", { recursive: true });
-const evidenceRoot = await mkdtemp(resolve(".data/packaged-electron-e2e-"));
+const evidenceRoot = await mkdtemp(resolve(".data/packaged-"));
 const profile = join(evidenceRoot, "profile");
 // The packaged instance state lives under an isolated HOME fixture, never the
 // operator's real ~/.baton; Chromium-managed files stay in --user-data-dir.
@@ -252,6 +252,10 @@ const shellProof = randomBytes(16).toString('hex');
 await mkdir(shellBin, { recursive: true });
 await writeFile(join(shellRoot, '.zprofile'), 'export AF_PROFILE_LOADED=yes\n');
 await writeFile(join(shellRoot, '.zshrc'), `print -r -- "$ZSH_EXECUTION_STRING"\nprint -r -- 'startup-noise-${shellProof}'\nexport AF_SHELL_PROOF=${shellProof}\nexport PATH='${shellBin}':/usr/bin:/bin:/usr/sbin:/sbin\nexport BATON_DB_PATH='${join(evidenceRoot, 'shell-must-not-be-used.sqlite')}'\n`);
+
+// launchd gives the managed service the isolated HOME and its own environment.
+await cp(join(shellRoot, '.zprofile'), join(home, '.zprofile'));
+await cp(join(shellRoot, '.zshrc'), join(home, '.zshrc'));
 
 async function api(page, path, { method = "GET", body } = {}) {
   const result = await page.evaluate(async ({ path, method, body }) => {
@@ -855,6 +859,7 @@ try {
   // A second desktop with its own HOME owns an isolated ~/.baton instance.
   const reusedHome = join(evidenceRoot, 'reused-home');
   await mkdir(reusedHome, { mode: 0o700 });
+  await cp(join(reuseShell, '.zshrc'), join(reusedHome, '.zshrc'));
   const reused = await electron.launch({ ...launchOptions, args: [`--user-data-dir=${join(evidenceRoot, 'reused-profile')}`], env: { ...launchOptions.env, HOME: reusedHome, ZDOTDIR: reuseShell } });
   try {
     const reusedPage = await reused.firstWindow();
@@ -891,7 +896,7 @@ try {
   if (process.platform === "darwin") {
     await page.goto(urlFor(page, "/settings/general"));
     await page.getByText("尚未设置；首次关闭窗口时会询问，取消不会保存选择。", { exact: true }).waitFor();
-    assert.deepEqual(await page.evaluate(() => Object.keys(window.batonDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage"]);
+    assert.deepEqual(await page.evaluate(() => Object.keys(window.batonDesktop).sort()), ["checkAppUpdate", "copyWorkspacePath", "downloadAppUpdate", "getAppUpdateState", "getCliInstallation", "getPreferences", "getServiceStatus", "installAppUpdate", "installCli", "locale", "onAppUpdate", "openExternalWorkspace", "openWorkspaceDirectory", "setAppUpdateChannel", "setAppearance", "setCloseMode", "setLanguage", "setResidentService", "workspaceChoices", "workspaceHealth"]);
     // The read-only language handoff is plain data for the console main frame, never a function.
     assert.deepEqual(await page.evaluate(() => { const value = window.batonDesktop.locale; return { type: typeof value, locale: value?.locale, language: value?.language }; }), { type: "object", locale: "zh-CN", language: "system" });
     await page.locator('[data-settings-page="cli"]').click();
@@ -952,6 +957,8 @@ try {
     }
     await page.goto(urlFor(page, "/settings/general"));
     await assert.rejects(page.evaluate(() => window.batonDesktop.getCliInstallation()), /仅允许/);
+    // Unconfigure the gateway in this fixture to exercise the separate desktop close preference.
+    await unlink(join(controlRoot, 'workspace-service.json')).catch(error => { if (error.code !== 'ENOENT') throw error; });
     // First close asks through the app-styled dialog window; cancel keeps the
     // main window visible and saves no preference.
     const closingEvent = desktop.waitForEvent('window');
@@ -1023,7 +1030,7 @@ try {
   const logStatus = await api(page, '/api/settings/log-files');
   const logText = (await Promise.all((await readdir(logStatus.directory)).filter(name => name.endsWith('.jsonl')).map(name => readFile(join(logStatus.directory, name), 'utf8')))).join('\n');
   assert.equal(logText.includes(shellProof), false, 'shell environment and startup noise must never be logged');
-  const shellRecords = logText.split('\n').filter(Boolean).map(JSON.parse).filter(row => row.event === 'desktop.shell_environment');
+  const shellRecords = logText.split('\n').filter(Boolean).map(JSON.parse).filter(row => ['daemon.shell_environment', 'desktop.shell_environment'].includes(row.event));
   assert.equal(shellRecords.filter(row => row.status === 'applied').length, 1, 'resolve shell environment once per host');
   assert.equal(shellRecords.find(row => row.status === 'applied').afterPath.split(':')[0], shellBin);
   await writeFile(join(evidenceRoot, 'shell-startup-evidence.json'), JSON.stringify(shellRecords, null, 2));
@@ -1031,6 +1038,7 @@ try {
   await page.locator('[data-view="settings"]').click();
   await page.locator('[data-settings-page="general"]').click();
   await page.locator("#logout-button").click();
+  await page.locator('dialog[open]').getByRole('button', { name: '退出登录', exact: true }).click();
   await page.locator("#username").waitFor();
   await page.locator("#username").fill(username);
   await page.locator("#password").fill("incorrect-password");
@@ -1066,6 +1074,7 @@ if (process.platform === "darwin") {
     await reopenedPage.locator('input[name="closeMode"][value="quit"]').check();
     await reopenedPage.getByText("✓ 已保存；后续关闭窗口按此设置执行。", { exact: true }).waitFor();
     await waitFor("saved quit preference", async () => JSON.parse(await readFile(join(controlRoot, "desktop-preferences.json"), "utf8")).closeMode === "quit");
+    await unlink(join(controlRoot, 'workspace-service.json')).catch(error => { if (error.code !== 'ENOENT') throw error; });
     const exited = new Promise(resolve => reopenedProcess.once("exit", resolve));
     await reopened.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close()).catch(error => { if (!/closed/i.test(error.message)) throw error; });
     await Promise.race([exited, new Promise((_, reject) => setTimeout(() => reject(new Error("close in quit mode did not exit")), 10000).unref())]);
@@ -1082,6 +1091,7 @@ if (process.platform === "darwin") {
   const slowDatabase = join(slowHome, '.baton', 'workspace', 'records', 'baton.sqlite');
   const shellPidFile = join(slowShell, 'shell.pid'), lateFile = join(slowShell, 'late-marker');
   await writeFile(join(slowShell, '.zshenv'), `print -r -- $$ > '${shellPidFile}'\n/bin/sleep 30\nprint late > '${lateFile}'\n`);
+  await cp(join(slowShell, '.zshenv'), join(slowHome, '.zshenv'));
   // Playwright's app connection waits for the first navigated page. For this
   // pre-navigation case use the same loopback Node inspector directly.
   const cancellingProcess = spawn(executable, ['--inspect=127.0.0.1:0', `--user-data-dir=${slowProfile}`], { env: { ...launchOptions.env, HOME: slowHome, ZDOTDIR: slowShell }, stdio: ['ignore', 'ignore', 'pipe'] });

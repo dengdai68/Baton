@@ -261,7 +261,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
       const failed = [...state.deliveries.values()].filter(item => item.messageId === message.id && item.status === 'failed');
       const recovery = failed.map(item => `<div class="communication-recovery"><span>${$t("{0} 回复失败", [escapeHtml(state.conversation.members.find(member=>member.id===item.agentId)?.name || $t("员工"))])}</span><button type="button" class="text-action" data-chat-failure-console="${escapeHtml(item.agentId)}">${$t("查看控制台")}</button><button type="button" class="text-action" data-retry-chat-delivery="${escapeHtml(item.id)}">${$t("重试")}</button></div>`).join('');
       return `${dayDivider}<article class="communication-message ${human ? "from-human" : ""}" data-chat-message="${escapeHtml(message.id)}"${message.outgoing ? ` data-outgoing-state="${escapeHtml(message.outgoing.status)}"` : ''} data-tone="${communicationSenderTone(message.sender)}" data-sender-color="${escapeHtml(member.color || 'system')}"><header>${avatar}<strong>${escapeHtml(partyName(message.sender.type, message.sender.name))}</strong><time title="${escapeHtml(date(message.createdAt))}" datetime="${escapeHtml(message.createdAt)}">${escapeHtml(formatMessageTime(message.createdAt))}</time></header><div class="communication-body communication-markdown">${content}</div>${attachments ? `<div class="communication-message-attachments">${attachments}</div>` : ''}${outgoingMessageFeedback(message.outgoing, 'chat')}${recovery}</article>`;
-    }).join("") || `<div class="communication-empty">${state.latestError ? $t("聊天记录读取失败，正在重连。") : state.loaded ? $t("从一句话开始沟通。消息将持续保留。") : $t("正在读取聊天记录…")}</div>`;
+    }).join("") || `<div class="communication-empty" role="${state.latestError ? 'alert' : 'status'}">${state.latestError ? $t("聊天记录读取失败，正在重连。") : state.loaded ? $t("从一句话开始沟通。消息将持续保留。") : $t("正在读取聊天记录…")}</div>`;
     const running = (state.conversation?.members || []).filter(member => member.running);
     const rendered = html + (running.length ? `<div class="communication-typing" role="status"><span class="communication-member-avatar">${renderAvatar(running[0])}<span class="member-running-dot" aria-hidden="true"></span></span><span>${$t("{0}正在回复…", [escapeHtml(running.map(member => member.name).join('、'))])}</span></div>` : '');
     if (state.renderedMessages !== rendered || state.messageList !== list) {
@@ -339,7 +339,6 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
     } catch (error) {
       if (!isCurrent(key, token) || (older && request.epoch !== state.historyEpoch)) return;
       state[errorSlot] = older ? $t("更早消息读取失败：{0}（历史和草稿保留，可再次加载更早消息）", [error.message]) : $t("聊天记录读取失败：{0}（历史和草稿保留，正在重连）", [error.message]);
-      if (!state.loaded) query(".communication-heading").textContent = $t("会话读取失败");
       renderReadErrors(); renderMessages();
     } finally {
       if (state[slot] === request) state[slot] = null;
@@ -475,7 +474,7 @@ export function createCommunicationUI({ api, navigate, notify, confirmDialog = a
   function renderHeading() {
     const state = view(currentId), conversation = state.conversation, heading = query('.communication-heading');
     const group = conversation?.kind === 'group';
-    heading.textContent = conversation?.name || (state.latestError ? $t("会话读取失败") : $t("加载会话…"));
+    heading.textContent = conversation?.name || $t("沟通");
     heading.hidden = Boolean(state.nameEditing);
     heading.setAttribute('tabindex', group ? '0' : '-1');
     heading.setAttribute('title', conversation?.name || '');

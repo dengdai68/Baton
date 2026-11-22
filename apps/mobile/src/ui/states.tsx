@@ -1,20 +1,25 @@
 // Loading, empty and error are three distinct states; errors offer an in-place retry.
 import { CircleAlert, type LucideIcon } from 'lucide-react-native';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { $t } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Button } from './button';
 import { Txt } from './text';
 
-export function LoadingState({ label }: { label?: string }) {
+export function LoadingState({ label, screen = false }: { label?: string; screen?: boolean }) {
   const { colors } = useTheme();
-  return (
+  const indicator = (
     <View accessibilityRole="progressbar" accessibilityLabel={label || $t('正在加载…')} style={{ padding: 40, alignItems: 'center', gap: 10 }}>
       <ActivityIndicator color={colors.textTertiary} />
       {label ? <Txt variant="small" tone="tertiary">{label}</Txt> : null}
     </View>
   );
+  return screen ? (
+    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{flexGrow:1, justifyContent:'center'}}>
+      {indicator}
+    </ScrollView>
+  ) : indicator;
 }
 
 export function EmptyState({ icon: Icon, title, description, action }: { icon: LucideIcon; title: string; description?: string; action?: React.ReactNode }) {

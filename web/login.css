@@ -38,8 +38,23 @@ input[aria-invalid="true"]:focus { box-shadow:0 0 0 3px var(--st-failed-bg); out
 
 #workspace-choice {display:flex;align-items:center;justify-content:center;gap:6px;margin-top:20px;}
 #workspace-choice label {margin:0;}
-#workspace-choice select {field-sizing:content;max-width:75%;min-height:32px;padding:0 2px;border:0;background:transparent;color:var(--accent);font:inherit;cursor:pointer;}
-#workspace-choice select:focus-visible {outline:2px solid var(--focus);outline-offset:2px;}
+#workspace-choice {position:relative;anchor-name:--workspace-choice;}
+#workspace-choice label {white-space:nowrap;}
+#workspace-mode,.workspace-pick,.workspace-remove,.workspace-add-row {display:flex;align-items:center;gap:7px;min-width:0;padding:0 8px;border:0;background:transparent;color:var(--text);white-space:nowrap;}
+#workspace-mode {min-height:32px;max-width:75%;color:var(--accent-text,var(--accent));}
+.workspace-dot {display:inline-block;flex:0 0 7px;width:7px;height:7px;border-radius:50%;background:var(--text-disabled);}
+.workspace-dot[data-state="ready"] {background:var(--st-done);}
+.workspace-dot:is([data-state="offline"],[data-state="unavailable"]) {background:var(--st-failed);}
+.workspace-origin {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.workspace-chevron {flex:none;width:7px;height:7px;border:solid var(--text-secondary);border-width:0 1.5px 1.5px 0;transform:translateY(-2px) rotate(45deg);}
+#workspace-list {position:fixed;position-anchor:--workspace-choice;position-area:bottom center;position-try-fallbacks:flip-block;margin:4px 0;width:min(360px,calc(100vw - 32px));max-height:min(240px,40vh);overflow:auto;padding:4px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-raised);color:var(--text);}
+.workspace-row {display:flex;align-items:center;}
+.workspace-pick,.workspace-add-row {flex:1;min-height:36px;text-align:left;}
+.workspace-pick[aria-pressed="true"] {color:var(--accent-text,var(--accent));font-weight:600;}
+.workspace-remove {flex:none;justify-content:center;width:36px;height:36px;color:var(--text-secondary);}
+.workspace-remove:hover {color:var(--st-failed);}
+.workspace-row button:hover,.workspace-add-row:hover {background:var(--bg-hover);border-radius:var(--r-sm);}
+.workspace-add-row {width:100%;border-top:1px solid var(--border);color:var(--accent-text,var(--accent));}
 #workspace-dialog {width:min(360px,90vw);padding:20px;border:1px solid var(--border);border-radius:var(--r-md);background:var(--bg-raised);color:var(--text);}
 #workspace-dialog::backdrop {background:rgb(0 0 0 / .32);}
 #workspace-dialog h2 {font-size:var(--fs-title-sm);margin:0;}

@@ -39,6 +39,11 @@ export const workspaceStore = {
     await SecureStore.setItemAsync(addressesKey, JSON.stringify(next));
     return next;
   },
+  async forget(origin: string) {
+    const addresses = (await workspaceStore.addresses()).filter(address => address !== origin);
+    await SecureStore.setItemAsync(addressesKey, JSON.stringify(addresses));
+    return addresses;
+  },
   current: () => readJson<{workspace: SavedWorkspace; token: string} | null>('baton.login.v1', null),
   async save(workspace: SavedWorkspace, token: string) {
     await SecureStore.setItemAsync('baton.login.v1', JSON.stringify({workspace, token}));

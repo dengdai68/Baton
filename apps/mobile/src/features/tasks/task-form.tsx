@@ -11,7 +11,7 @@ import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native'
 import { useWorkspaceKey } from '@/api/queries';
 import { type Catalog, useCatalog } from '@/features/catalog';
 import { $t } from '@/i18n';
-import { useTheme } from '@/theme';
+import { monoFont, useTheme } from '@/theme';
 import { Avatar, GroupAvatar } from '@/ui/avatar';
 import { Button } from '@/ui/button';
 import { ChoiceRow, Field, TextField } from '@/ui/form';
@@ -34,7 +34,7 @@ export function TaskForm({ automation = false, existing, presetTeamId, onStart }
   automation?: boolean; existing?: TaskSource | null; presetTeamId?: string; onStart?: (taskId: string) => Promise<void>;
 }) {
   const catalog = useCatalog();
-  if (catalog.isPending) return <LoadingState label={$t('正在读取成员与工作流')} />;
+  if (catalog.isPending) return <LoadingState screen label={$t('正在读取成员与工作流')} />;
   if (catalog.error) return <ErrorState title={$t('配置读取失败')} message={catalog.error.message} onRetry={() => void catalog.refetch()} />;
   return <TaskFormBody catalog={catalog.data} automation={automation} existing={existing} presetTeamId={presetTeamId} onStart={onStart} />;
 }
@@ -138,7 +138,7 @@ function TaskFormBody({ catalog, automation, existing, presetTeamId, onStart }: 
           </Field>
           {automation ? (
             <Field label={$t('Cron · 分 时 日 月 周')} required error={errors.cron} hint={$t('例如 0 9 * * 1-5 表示工作日 9:00。')}>
-              <TextField value={cron} onChangeText={setCron} autoCapitalize="none" autoCorrect={false} placeholder="0 9 * * 1-5" invalid={Boolean(errors.cron)} style={{ fontFamily: 'Menlo' }} accessibilityLabel="Cron" />
+              <TextField value={cron} onChangeText={setCron} autoCapitalize="none" autoCorrect={false} placeholder="0 9 * * 1-5" invalid={Boolean(errors.cron)} style={{ fontFamily: monoFont }} accessibilityLabel="Cron" />
             </Field>
           ) : null}
         </View>

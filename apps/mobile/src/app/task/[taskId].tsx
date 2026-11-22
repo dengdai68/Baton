@@ -3,10 +3,9 @@
 // task actions (pause, resume, terminate, archive, restore, delete).
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useHeaderHeight } from 'expo-router/react-navigation';
 import { CircleCheck, Ellipsis, FolderOpen, Info, Pencil, Play, RotateCcw } from 'lucide-react-native';
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import { workflowDisplay } from '@shared/console-projections.mjs';
 import { useWorkspaceKey } from '@/api/queries';
@@ -17,7 +16,8 @@ import { acceptanceReview, failedRunRecovery, retryableDispatches, useRunWorkspa
 import { $t, $tm, useLocale } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Button } from '@/ui/button';
-import { HeaderButtons, plainHeaderItem } from '@/ui/header';
+import { ComposerLayout } from '@/ui/composer';
+import { HeaderButtons, headerRightOptions, useContentTopInset } from '@/ui/header';
 import { IconButton } from '@/ui/icon-button';
 import { Markdown } from '@/ui/markdown';
 import { type MenuItem, MenuButton } from '@/ui/menu';
@@ -46,7 +46,7 @@ export default function TaskWorkspace() {
   const toast = useToast();
   const scope = useWorkspaceKey();
   const queryClient = useQueryClient();
-  const headerHeight = useHeaderHeight();
+  const topInset = useContentTopInset();
   const [busy, setBusy] = useState<string | null>(null);
   const task = useTaskDetail(taskId);
   const runId = runParam || task.data?.runs?.[0]?.id;
@@ -90,7 +90,7 @@ export default function TaskWorkspace() {
     <Stack.Screen
       options={{
         title: current?.title || $t('任务'),
-        unstable_headerRightItems: () => plainHeaderItem(
+        ...headerRightOptions(
           <HeaderButtons>
             {runId ? <IconButton icon={FolderOpen} label={$t('文件')} onPress={() => router.push({ pathname: '/task/files', params: { taskId, runId } })} /> : null}
             {runId ? <IconButton icon={Info} label={$t('任务详情')} onPress={() => router.push({ pathname: '/task/details', params: { taskId, runId } })} /> : null}
@@ -101,7 +101,7 @@ export default function TaskWorkspace() {
     />
   );
 
-  if (task.isPending || (runId && workspace.isPending)) return <>{screen}<LoadingState label={$t('正在读取协作记录与当前状态')} /></>;
+  if (task.isPending || (runId && workspace.isPending)) return <>{screen}<LoadingState screen label={$t('正在读取协作记录与当前状态')} /></>;
   if (task.error || !current) return <>{screen}<ErrorState title={$t('任务加载失败')} message={task.error?.message || ''} onRetry={() => void task.refetch()} /></>;
 
   if (!runId) {
@@ -148,7 +148,7 @@ export default function TaskWorkspace() {
   ) : null;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.bgCanvas, paddingTop: headerHeight }} behavior="padding">
+    <ComposerLayout style={{ flex: 1, backgroundColor: colors.bgCanvas, paddingTop: topInset }}>
       {screen}
       <View style={{ paddingHorizontal: 16, paddingVertical: 10, gap: 10, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 32 }}>
@@ -171,6 +171,6 @@ export default function TaskWorkspace() {
       <View style={{ flex: 1 }}>
         <Collaboration workspace={data} onOpenConsole={(agentId, traceId) => openConsole(taskId, run.id, agentId, traceId)} onSent={() => void workspace.refetch()} />
       </View>
-    </KeyboardAvoidingView>
+    </ComposerLayout>
   );
 }

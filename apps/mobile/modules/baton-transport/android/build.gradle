@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.batontransport'
+version = '1.0.0'
+
+android {
+  namespace 'expo.modules.batontransport'
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}
+
+dependencies {
+  // The OkHttp line React Native ships (gradle/libs.versions.toml), so the app keeps one HTTP stack.
+  implementation 'com.squareup.okhttp3:okhttp:4.9.2'
+  testImplementation 'junit:junit:4.13.2'
+}

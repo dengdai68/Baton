@@ -16,7 +16,7 @@ import { $t, useLocale } from '@/i18n';
 import { identityColor, useTheme } from '@/theme';
 import { Avatar } from '@/ui/avatar';
 import { DetailHeader, GroupedBlock, GroupedPage, GroupedRow, GroupedSection, IconTile } from '@/ui/grouped';
-import { HeaderButtons, plainHeaderItem } from '@/ui/header';
+import { HeaderButtons, headerRightOptions } from '@/ui/header';
 import { IconButton } from '@/ui/icon-button';
 import { ErrorState, LoadingState, Notice } from '@/ui/states';
 import { Tag } from '@/ui/status';
@@ -88,8 +88,8 @@ type Loadable = { isPending: boolean; error: Error | null; refetch: () => unknow
 
 /** Page frame: native title + header icons, loading/error, grouped scroll body. */
 function DetailPage({ title, actions, state, children }: { title: string; actions?: ReactNode; state: Loadable; children: () => ReactNode }) {
-  const screen = <Stack.Screen options={{ title, unstable_headerRightItems: actions ? () => plainHeaderItem(<HeaderButtons>{actions}</HeaderButtons>) : undefined }} />;
-  if (state.isPending) return <>{screen}<LoadingState /></>;
+  const screen = <Stack.Screen options={{ title, ...(actions ? headerRightOptions(<HeaderButtons>{actions}</HeaderButtons>) : {}) }} />;
+  if (state.isPending) return <>{screen}<LoadingState screen /></>;
   if (state.error) return <>{screen}<ErrorState message={state.error.message} onRetry={() => void state.refetch()} /></>;
   return <GroupedPage>{screen}{children()}</GroupedPage>;
 }
