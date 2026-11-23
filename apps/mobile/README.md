@@ -76,7 +76,7 @@ node --test ../../tests/i18n.test.mjs           # 仓库根：手机文案必须
 (cd android && ./gradlew :baton-transport:testDebugUnitTest)     # Kotlin 传输规则单测（SSE 分帧、指纹、文件名）
 ```
 
-隔离验收工作空间（仓库根执行）：`node apps/mobile/tests/e2e/workspace.mjs [--port 9543] [--http]`。脚本在新建的临时目录里创建本机工作空间、管理员账号、自签名证书和示例数据（暂停中带图片附件的任务、待验收任务、已归档任务、带图片的私聊、群聊、自动化），打印地址、账号、密码和证书指纹；Ctrl-C 停止服务并删除整个目录。示例员工使用 Codex Runtime，而隔离 HOME 中没有它的 CLI 与凭据，发送消息会很快失败并进入重试界面，不会调用任何模型。Android 设备经 `adb reverse tcp:9543 tcp:9543` 访问 Mac 回环地址，登录地址填 `https://127.0.0.1:9543`。
+隔离验收工作空间（仓库根执行）：`node apps/mobile/tests/e2e/workspace.mjs [--port 9543] [--http]`。脚本在新建的临时目录里创建本机工作空间、管理员账号和示例数据（暂停中带图片附件的任务、待验收任务、已归档任务、带图片的私聊、群聊、自动化），打印地址、账号和密码；Ctrl-C 停止服务并删除整个目录。默认创建自签名 HTTPS 工作空间（首次连接需核对证书指纹）；本机按约定只暴露 HTTP 时加 `--http`。示例员工使用 Codex Runtime，而隔离 HOME 中没有它的 CLI 与凭据，发送消息会很快失败并进入重试界面，不会调用任何模型。Android 设备经 `adb reverse tcp:9543 tcp:9543` 访问 Mac 回环地址，登录地址填 `http://127.0.0.1:9543`。
 
 E2E 驱动通过 bundle id / 包名驱动已安装的 App；步骤 JSON 支持 launch/activate/tab/tap/tapPoint/type/set/back/swipe/alert/shot/dump 等（`^` 前缀匹配、`~` 包含匹配）。示例：
 
@@ -84,7 +84,7 @@ E2E 驱动通过 bundle id / 包名驱动已安装的 App；步骤 JSON 支持 l
 [{"action":"tab","value":"更多"},{"action":"tap","value":"^数字员工"},{"action":"shot","value":"agents"}]
 ```
 
-预期：`<out-dir>/agents.png` 为数字员工列表；任一步找不到元素时退出码非 0，并保存 `failure-*.png` 与界面树（iOS `failure-tree.txt`，Android `failure-tree.xml`）。Android 按 content-desc（accessibilityLabel）、文本或 resource-id 匹配，`back` 发送系统返回键，`type`/`set` 经 `adb shell input text` 只能输入 ASCII，仅 Android 的 `hideKeyboard` 在键盘弹出时收起键盘（未弹出时不动作）。真机或模拟器验收：起隔离工作空间、生成配对链接、打开 App 走完整流程，浅色与深色各看一遍。
+预期：`<out-dir>/agents.png` 为数字员工列表；任一步找不到元素时退出码非 0，并保存 `failure-*.png` 与界面树（iOS `failure-tree.txt`，Android `failure-tree.xml`）。Android 按 content-desc（accessibilityLabel）、文本或 resource-id 匹配，`back` 发送系统返回键，`type`/`set` 逐词经 `adb shell input text` 输入（只支持 ASCII；中文输入法合成状态会吞掉注入文本，驱动会在运行期临时切换拉丁输入法并在退出时恢复），输入后校验文本确实进入输入框。仅 Android 的 `hideKeyboard` 在键盘弹出时收起键盘（未弹出时不动作，避免根页面返回键退出应用）。真机运行时驱动会自动唤醒屏幕、滑动解锁并临时保持唤醒。真机或模拟器验收：起隔离工作空间、生成配对链接、打开 App 走完整流程，浅色与深色各看一遍。
 
 ## 打包真机
 

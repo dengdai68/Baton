@@ -227,20 +227,20 @@ export async function runAndroid(stepsPath, out, serial) {
         // type word by word with real KEYCODE_SPACE between. Then verify the text actually
         // reached the field's accessibility node: composition keyboards can leave the native
         // buffer empty while looking fine on screen.
+        // Keyboards commit a word only on a terminator, so follow EVERY word with a real
+        // KEYCODE_SPACE; the field keeps one trailing space (senders trim or keep it harmlessly).
+        // A Delete after the space races the commit and eats characters, so never send one.
         const words = value.split(' ').filter(Boolean);
-        for (const [index, word] of words.entries()) {
-          if (index > 0) { run(['shell', 'input', 'keyevent', '62']); await sleep(150); }
+        for (const word of words) {
           run(['shell', 'input', 'text', inputText(word)]);
           await sleep(200);
+          run(['shell', 'input', 'keyevent', '62']);
+          await sleep(250);
         }
-        // Keyboards commit a word only on a terminator: space commits the previous word, so the
-        // final word stays composing until it sees one. Space then Delete commits it net-unchanged.
-        run(['shell', 'input', 'keyevent', '62']);
-        await sleep(250);
-        run(['shell', 'input', 'keyevent', '67']);
-        await sleep(400);
+        await sleep(300);
         const needle = value.toLowerCase().slice(0, 24);
-        const entered = parseNodes(await dump()).some((node) => node.className.endsWith('EditText') && node.text.toLowerCase().replace(/\s+/g, ' ').includes(needle));
+        const norm = (text) => text.toLowerCase().replace(/\s+/g, ' ').trim();
+        const entered = parseNodes(await dump()).some((node) => node.className.endsWith('EditText') && norm(node.text).includes(needle));
         if (!entered) throw new StepError('输入未完整进入输入框（当前内容未被键盘提交），请检查输入法状态');
         return;
       }
