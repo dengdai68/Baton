@@ -1,6 +1,6 @@
 # 代码导航
 
-Baton 业务 SQLite 和派生历史索引固定在配置根的 `sqlite/`。工作目录的 `records` 保存执行文件。App 与 CLI 共享实际路径查询和 Run Files 搬运契约。
+Baton 业务 SQLite 和派生历史索引固定在配置根的 `sqlite/`。工作目录的 `records` 保存执行文件。App 与 CLI 共享实际路径查询和 Run Files 搬运契约。清除数据保留工作目录和 records 目录，以便重启。
 
 手机任务状态筛选在 `apps/mobile/src/app/(workspace)/tasks/index.tsx`。沟通和协作记录共用 `ComposerLayout`，Android 由 `BatonKeyboardInsetsModule.kt` 提供系统键盘遮挡尺寸。
 

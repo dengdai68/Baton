@@ -161,7 +161,7 @@ Runtime 固定目录与本机安装门禁覆盖九项；任务/沟通/探测复�
 
 工作目录由宿主启动参数提供，生产 Store 以当前启动工作根分配新任务，不再让旧库内工作目录设置覆盖它。业务 SQLite 固定在配置根；Run Files 使用工作根。HTTP storage 查询/修改先冻结调度与写入，再通知唯一 IPC 父进程停机整理；Runtime 与目录读取只解析受管资源地址，不变更冻结事实。数据清理包含独立 Git 凭据，日志实例以稳定认证位置标识；完整协议见 docs/30。
 
-当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清空工作目录与业务 SQLite，保留用于重启的工作目录和 `records` 目录。配置和登录保留。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 

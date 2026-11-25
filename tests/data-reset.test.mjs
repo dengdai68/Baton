@@ -1,16 +1,18 @@
 import test from 'node:test';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,access,readdir,realpath} from 'node:fs/promises';
+import {mkdtemp,mkdir,writeFile,readFile,rm,symlink,access,readdir,realpath,stat} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createDataReset} from '../server/data-reset.mjs';
 import {createStore} from '../server/store.mjs';
 import {createAuth} from '../server/auth.mjs';
 async function fixture(t){const root=await realpath(await mkdtemp(join(tmpdir(),'af-work-reset-')));t.after(()=>rm(root,{recursive:true,force:true}));const configurationRoot=join(root,'private/desktop'),workspaceRoot=join(root,'private/workspace');await mkdir(configurationRoot,{recursive:true});await mkdir(workspaceRoot);const options={workspaceRoot,configurationRoot};return {root,options,reset:createDataReset(options)};}
-test('reset deletes the entire current work root and preserves authentication, configuration, and outside files',async t=>{
+test('reset clears workspace and SQLite contents while preserving directories needed for restart',async t=>{
  const {root,options,reset}=await fixture(t),databasePath=join(options.configurationRoot,'sqlite/baton.sqlite'),authPath=join(options.configurationRoot,'auth.sqlite');
  await mkdir(join(databasePath,'..'),{mode:0o700});
+ const records=join(options.workspaceRoot,'records');await mkdir(records);await writeFile(join(records,'old-run'),'fixture');
+ const workspaceInode=(await stat(options.workspaceRoot)).ino,recordsInode=(await stat(records)).ino;
  let store=createStore({databasePath,workspaceRoot:options.workspaceRoot,configurationDirectory:options.configurationRoot});const before=store.getBootstrap().installationId;
  const employee=store.createAgent({name:'Business employee'});store.openCommunication({kind:'agent',targetId:employee.id});store.registerExtensions([{id:randomUUID(),kind:'mcp',name:'Retained service',createdAt:new Date().toISOString(),providers:['codex']}]);
  const auth=createAuth({databasePath:authPath});await auth.setAdministrator('fixture-admin','Fixture-only-reset-2847');
@@ -18,7 +20,10 @@ test('reset deletes the entire current work root and preserves authentication, c
  await writeFile(join(options.workspaceRoot,'user-file.txt'),'also deleted');await symlink(files[3],join(options.workspaceRoot,'external-link'));await reset.begin();store.close();
  await writeFile(databasePath+'.history.sqlite','derived history');
  await writeFile(databasePath+'-wal','interrupt proof');
- assert.equal(await createDataReset(options).recover(),true);assert.deepEqual(await readdir(options.workspaceRoot),[]);
+ assert.equal(await createDataReset(options).recover(),true);assert.deepEqual(await readdir(options.workspaceRoot),['records']);
+ assert.deepEqual(await readdir(records),[]);
+ assert.equal((await stat(options.workspaceRoot)).ino,workspaceInode);
+ assert.equal((await stat(records)).ino,recordsInode);
  for(const path of [databasePath,databasePath+'-wal',databasePath+'.history.sqlite'])await assert.rejects(access(path),{code:'ENOENT'});
  for(const path of files)assert.equal(await readFile(path,'utf8'),'preserved');assert.equal(auth.configured(),true);auth.close();
  store=createStore({databasePath,workspaceRoot:options.workspaceRoot,configurationDirectory:options.configurationRoot});try{assert.notEqual(store.getBootstrap().installationId,before);assert.equal(store.listAgents().some(item=>item.id===employee.id),false);assert.deepEqual(store.listCommunications(),[]);assert.equal(store.queryExtensions('mcp').total,1);}finally{store.close();}
@@ -41,6 +46,6 @@ test('Store refuses reset while execution is active',t=>{const store=createStore
 test('flat configuration reset owns its default workspace only and retains credentials and login',async t=>{
  const {root}=await fixture(t),configurationRoot=join(root,'.baton'),workspaceRoot=join(configurationRoot,'workspace');await mkdir(workspaceRoot,{recursive:true});
  const auth=join(configurationRoot,'auth.sqlite');await writeFile(auth,'unchanged-auth');await writeFile(join(workspaceRoot,'result.md'),'remove only business files');
- const reset=createDataReset({configurationRoot,workspaceRoot});await reset.begin();await reset.recover();assert.deepEqual(await readdir(workspaceRoot),[]);assert.equal(await readFile(auth,'utf8'),'unchanged-auth');
+ const reset=createDataReset({configurationRoot,workspaceRoot});await reset.begin();await reset.recover();assert.deepEqual(await readdir(workspaceRoot),['records']);assert.equal(await readFile(auth,'utf8'),'unchanged-auth');
  for(const name of ['credentials','browser','runtime-configs','other'])await assert.rejects(createDataReset({configurationRoot,workspaceRoot:join(configurationRoot,name)}).begin(),/受保护/);
 });

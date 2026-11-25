@@ -392,6 +392,7 @@
     },
     {
       "id": "server.data-reset",
+      "workspaceDirectories": "Reset clears SQLite and workspace contents while retaining the workspace and records directories required by the desktop host for restart.",
       "taskIdentity": "Managed Task validation accepts UUID hyphens while retaining exact path/marker ownership checks; traversal, siblings and external projects remain protected.",
       "path": "server/data-reset.mjs",
       "kind": "instance-lifecycle",

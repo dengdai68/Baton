@@ -1,7 +1,7 @@
-import {lstat,open,readFile,rename,rm,mkdir,realpath,unlink} from 'node:fs/promises';
+import {lstat,open,readFile,readdir,rename,rm,mkdir,realpath,unlink} from 'node:fs/promises';
 import {join,resolve,isAbsolute,parse,dirname,sep} from 'node:path';
 import {homedir} from 'node:os';
-import {configurationOverlapsWorkspace,storageDatabasePath,storageDatabaseFiles} from './storage-layout.mjs';
+import {configurationOverlapsWorkspace,storageBusinessRoot,storageDatabasePath,storageDatabaseFiles} from './storage-layout.mjs';
 
 // The intent survives clearing both the work root and the business database.
 export function createDataReset({workspaceRoot,configurationRoot,databasePath,protectedPaths=[]}){
@@ -31,6 +31,20 @@ export function createDataReset({workspaceRoot,configurationRoot,databasePath,pr
     }
     return owned;
   }
+  async function clearWorkspaceFiles() {
+    const records = storageBusinessRoot(work);
+    const info = await lstat(records).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+    if (info && !info.isDirectory()) await unlink(records);
+    await mkdir(records, { recursive: true, mode: 0o700 });
+    // The desktop host needs both directories to open this workspace again.
+    // Keep them available while a committed reset removes their contents.
+    for (const directory of [work, records]) {
+      for (const name of await readdir(directory)) {
+        const path = join(directory, name);
+        if (path !== records) await rm(path, { recursive: true, force: true });
+      }
+    }
+  }
   return {
     async begin(){await validate();await ownedDatabaseFiles();await mkdir(control,{recursive:true,mode:0o700});try{await lstat(journal);throw new Error('已有数据清除尚未完成，请重启后继续');}catch(error){if(error.code!=='ENOENT')throw error;}
       const fd=await open(pending,'wx',0o600);try{await fd.writeFile(JSON.stringify(plan));await fd.sync();}finally{await fd.close();}await rename(pending,journal);
@@ -39,9 +53,9 @@ export function createDataReset({workspaceRoot,configurationRoot,databasePath,pr
       if(intent?.version!==plan.version||intent.workspaceRoot!==work||intent.databasePath!==database||Object.keys(intent).length!==3)throw new Error('数据清除记录归属无效');
       await validate();
       const owned=await ownedDatabaseFiles();
-      await rm(work,{recursive:true,force:true});
+      await clearWorkspaceFiles();
       for(const path of owned)await unlink(path).catch(error=>{if(error.code!=='ENOENT')throw error;});
-      await mkdir(work,{recursive:true,mode:0o700});await rm(journal);return true;
+      await rm(journal);return true;
     }
   };
 }
