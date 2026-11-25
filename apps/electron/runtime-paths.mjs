@@ -2,7 +2,7 @@ import { $t } from "../../client/i18n.mjs";
 import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { defaultTaskWorkspaceRoot } from "../../server/data-home.mjs";
-import {storageBusinessRoot} from '../../server/storage-layout.mjs';
+import {storageBusinessRoot, storageDatabasePath} from '../../server/storage-layout.mjs';
 
 // Installed configuration lives directly under ~/.baton; source development
 // stays isolated, including Chromium-managed cookies, cache and preferences.
@@ -33,7 +33,7 @@ export function desktopStoragePaths(configurationDirectory, { home = homedir(),c
   return {
     dataRoot,
     BATON_AUTH_DB_PATH: join(controlRoot, "auth.sqlite"),
-    BATON_DB_PATH: join(dataRoot, "baton.sqlite"),
+    BATON_DB_PATH: storageDatabasePath(controlRoot),
     BATON_RUN_FILES_ROOT: dataRoot,
     BATON_RUNTIME_CONFIG_ROOT: join(controlRoot, "runtime-configs"),
     BATON_WORKSPACE_ROOT: workspaceRoot,

@@ -432,7 +432,7 @@
       "path": "server/data-home.mjs",
       "kind": "runtime",
       "owner": "server",
-      "purpose": "Resolve unified configured business storage and separate local authentication/credentials; explicit paths remain authoritative and existing task workspaces are never rewritten.",
+      "purpose": "Use the private sqlite directory for the business database and the work root for Run Files. Refuse initializing an empty managed database when previous SQLite data exists. Explicit service paths remain authoritative.",
       "sourceOfTruth": [
         "docs/02-system-architecture.md",
         "docs/18-electron-client.md",
@@ -2340,7 +2340,7 @@
       "path": "server/storage-layout.mjs",
       "kind": "filesystem-layout",
       "owner": "client-platform",
-      "purpose": "Single workspaceRoot locator; records root is always derived as workspaceRoot/records. Reject persisted businessRoot; retain frozen extension address metadata without domain or credential mutation.",
+      "purpose": "Derive Run Files from workspaceRoot/records and business SQLite from configurationRoot/sqlite. Keep one workspaceRoot locator and frozen extension address metadata.",
       "sourceOfTruth": [
         "docs/30-storage-layout.md"
       ],
@@ -2376,7 +2376,7 @@
       "path": "apps/electron/storage-relocation.mjs",
       "kind": "desktop-host",
       "owner": "client-platform",
-      "purpose": "Explicit stopped-service storage relocation: copy owned entries, verify bytes, atomic locator switch and post-health source cleanup; never moves Task workspace or authentication.",
+      "purpose": "Relocate Run Files while stopped, verify bytes, atomically switch the locator, and clean up the old copies after health. SQLite, Task workspaces, and authentication stay in place.",
       "sourceOfTruth": [
         "docs/30-storage-layout.md",
         "docs/18-electron-client.md"

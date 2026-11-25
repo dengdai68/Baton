@@ -1,5 +1,7 @@
 # 代码导航
 
+Baton 业务 SQLite 和派生历史索引固定在配置根的 `sqlite/`。工作目录的 `records` 保存执行文件。App 与 CLI 共享实际路径查询和 Run Files 搬运契约。
+
 手机任务状态筛选在 `apps/mobile/src/app/(workspace)/tasks/index.tsx`。沟通和协作记录共用 `ComposerLayout`，Android 由 `BatonKeyboardInsetsModule.kt` 提供系统键盘遮挡尺寸。
 
 公网登录限流由 `server/workspace-http.mjs` 执行。账号与 IP 的 24 小时封禁持久保存于 `server/workspace-identity.mjs` 的工作空间访问库。

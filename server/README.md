@@ -159,13 +159,13 @@ Runtime 固定目录与本机安装门禁覆盖九项；任务/沟通/探测复�
 
 工作目录 content?media=1 的 GET/HEAD 使用 Run Files 视频描述符，单段 Range 返回206/416；保护认证及文件边界，有界流与断连清理，不转码。Runtime 保存的 model/effort 与 App/CLI 共用原生目录。
 
-工作目录由宿主启动参数提供，生产 Store 以当前启动工作根分配新任务，不再让旧库内工作目录设置覆盖它。数据库、Run Files、Runtime 配置同盘；认证及 Git 凭据独立。HTTP storage 查询/修改先冻结调度与写入，再通知唯一 IPC 父进程停机整理；Runtime 与目录读取只解析受管资源地址，不变更冻结事实。数据清理包含独立 Git 凭据，日志实例以稳定认证位置标识；完整协议见 docs/30。
+工作目录由宿主启动参数提供，生产 Store 以当前启动工作根分配新任务，不再让旧库内工作目录设置覆盖它。业务 SQLite 固定在配置根；Run Files 使用工作根。HTTP storage 查询/修改先冻结调度与写入，再通知唯一 IPC 父进程停机整理；Runtime 与目录读取只解析受管资源地址，不变更冻结事实。数据清理包含独立 Git 凭据，日志实例以稳定认证位置标识；完整协议见 docs/30。
 
-当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../docs/30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+执行正文与校验记录位于 `<工作目录>/records`，业务数据库与历史索引位于配置根的 `sqlite/`；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 

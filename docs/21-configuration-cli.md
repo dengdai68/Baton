@@ -78,7 +78,7 @@ CLI 专属于客户端：源码和安装版都只发现运行中的客户端，�
 
 新实例数据根默认 ~/.baton/workspace，当前位置由宿主私有启动定位提供；业务 SQLite、Trace、插件/MCP 与任务文件使用同一配置根，认证、CLI 连接发现和运行日志保留 ~/.baton。已有 Task/Run 路径不改写。
 
-`baton storage get` 无 ID，返回实际数据根、业务资料、数据库、Run Files、扩展、认证和日志位置；`baton storage update --file location.json` 接受唯一必填 `workspaceRoot`（非文件系统根的绝对路径）。与设置页同一 HTTP：忙碌返回 409，不排队搬运；空闲时验证目标、锁住实例并返回 `restarting:true`，表示已接受整理，不代表搬运已完成。客户端停机校验整理后重新发布原位置的 endpoint/CLI 委托。调用者应再次 `storage get` 验证实际位置，不能因切换期间连接中断盲目重发。help/schema 离线可用；不支持直连数据库、目标路径参数或额外权限。完整目录协议见 docs/30。
+`baton storage get` 无 ID，返回实际工作目录、Run Files、配置根下的业务 SQLite、扩展、认证和日志位置。`baton storage update --file location.json` 接受唯一必填 `workspaceRoot`（非文件系统根的绝对路径）。与设置页同一 HTTP：忙碌返回 409，不排队搬运；空闲时验证目标、锁住实例并返回 `restarting:true`，表示已接受整理，不代表搬运已完成。客户端停机校验整理后重新发布原位置的 endpoint/CLI 委托。调用者应再次 `storage get` 验证实际位置，不能因切换期间连接中断盲目重发。help/schema 离线可用；不支持直连数据库、目标路径参数或额外权限。完整目录协议见 docs/30。
 
 `plugins import --file source.json` 安装时展开来源目录/所属 Git 仓库内的符号链接，形成不依赖原目录的普通文件副本；中文、空格等文件名保留。断链、循环、越界目标和特殊文件返回插件名/相对路径，整批不发布，不静默忽略。输入仍只有 url/path 二选一，`--help` 和 schema 同步说明，无额外兼容开关；员工选择及详情查询协议不变。
 
@@ -211,7 +211,7 @@ mcps tools支持--search名称/说明筛选后分页，默认每页20条，--pag
 
 runtimes models 的新增目标返回原生可选模型与逐模型 levels，非统一空目录；runtimes update 同一 model/effort 校验。OpenCode effort 可以是模型目录里的自定义 variant（单行安全标识），其余按 Provider 集合校验；Cursor/Gemini/OpenCode 非空 effort 需 model。工作目录视频播放器为客户端能力，不新增 CLI 播放命令；已有下载命令返回原字节。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 

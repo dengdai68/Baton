@@ -673,7 +673,6 @@ async function start() {
   applyLanguage();
   const location=await readStorageLocation(controlRoot,defaultDesktopLocation({controlRoot,packaged:app.isPackaged,env:process.env}));
   storage=desktopStoragePaths(controlRoot,{controlRoot,instance:app.isPackaged?'desktop':'desktop-dev',workspaceRoot:location.workspaceRoot,previousRuntimeRoots:location.previousRuntimeRoots});
-  if(controlRoot!==storage.dataRoot&&await legacyDataRequiresMigration({legacyRoot:controlRoot,currentDatabasePath:storage.BATON_DB_PATH}))throw new Error($t("旧位置仍有实例资料。请先退出 Baton，显式整理到配置的数据根目录；未创建空实例。参见 docs/30-storage-layout.md。"));
   // A saved locator is authoritative. A disconnected data volume must never
   // look like a fresh instance on the system disk.
   const savedLocator=await lstat(join(controlRoot,'storage.json')).catch(error=>{if(error.code==='ENOENT')return null;throw error;});

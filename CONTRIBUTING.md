@@ -19,7 +19,7 @@ npm ci
 npm start
 ```
 
-`npm start` / `npm run dev` 启动 Electron 及其自有随机端口子服务，不复用 4310，也不提供独立 Web 部署。数据根默认 `~/.baton/workspace`，业务资料位于 `<数据根>/records/`，任务文件为该根下独立 Task/Run；安装版认证、配置、浏览器、Runtime 和启动定位直接位于 `~/.baton`，旧 desktop 配置由首次启动搬迁，开发配置仍隔离在 desktop-dev。目录整理与现有实例显式搬运见 docs/30-storage-layout.md。仓库改名不改变应用身份。数字员工以当前本机用户权限执行，Runtime bypass 不是沙箱；当前为本机单管理员应用。
+`npm start` / `npm run dev` 启动 Electron 及其自有随机端口子服务，不复用 4310，也不提供独立 Web 部署。数据根默认 `~/.baton/workspace`，执行资料位于 `<数据根>/records/`，任务文件为该根下独立 Task/Run，业务 SQLite 位于 `~/.baton/sqlite/`；安装版认证、配置、浏览器、Runtime 和启动定位直接位于 `~/.baton`，旧 desktop 配置由首次启动搬迁，开发配置仍隔离在 desktop-dev。目录整理与现有实例显式搬运见 docs/30-storage-layout.md。仓库改名不改变应用身份。数字员工以当前本机用户权限执行，Runtime bypass 不是沙箱；当前为本机单管理员应用。
 
 安装版启动时提供用户级 `baton` 命令，可在「设置 → CLI」查看及修复；源码入口为 `npm run cli -- help`。CLI 连接运行中的客户端并复用当前登录授权，完整指南见 [docs/21](docs/21-configuration-cli.md)。
 
@@ -65,7 +65,7 @@ Release 工作流只在发布成功后删除本次构建输出 ID 对应的 Acti
 
 本机网络无法上传大文件时，可调用现有 Beta 构建工作流的 `draft_assets_only=true`：按指定已存在标签构建并验收，将同次构建的六个附件上传到已存在草稿，拒绝替换公开 Release；不自动公开。仍需上述 ad-hoc 授权及工作流确认词。操作者核对摘要、安装方式和说明后再将草稿发布为所需正式版或预发布；正式签名工作流保持独立。
 
-当前存储归属以 [配置目录与工作目录](docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](docs/30-storage-layout.md) 为准：配置、认证、Runtime 与扩展位于 `~/.baton`。业务 SQLite 位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 

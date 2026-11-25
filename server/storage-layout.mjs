@@ -7,6 +7,13 @@ export function storageBusinessRoot(workspaceRoot,instance='desktop') {
   if(!['desktop','desktop-dev'].includes(instance))throw new Error('实例类型无效');
   return join(resolve(workspaceRoot),'records');
 }
+export function storageDatabasePath(configurationRoot) {
+  return join(assertStorageRoot(configurationRoot),'sqlite','baton.sqlite');
+}
+export function storageDatabaseFiles(databasePath) {
+  return ['', '-wal', '-shm', '-journal', '.history.sqlite', '.history.sqlite-wal', '.history.sqlite-shm', '.history.sqlite-journal']
+    .map(suffix => databasePath + suffix);
+}
 export function assertStorageRoot(path) {
   if(typeof path!=='string'||!isAbsolute(path)||path.includes('\0')||path.length>4096||resolve(path)===parse(path).root)throw new Error('数据根目录必须是非文件系统根的绝对路径');
   return resolve(path);

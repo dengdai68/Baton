@@ -332,19 +332,21 @@ console.log(JSON.stringify({ type: "result", result: JSON.stringify(result) }));
 async function runPackagedTask(page) {
   const workspaceRoot = join(evidenceRoot, "configured-workspaces");
   await mkdir(workspaceRoot, { recursive: true });
-  await page.locator('[data-view="settings"]').click();
-  await page.locator('[data-settings-page="workspace"]').click();
+  await page.goto(new URL('/settings/workspace', page.url()).href);
+  const { databasePath } = await api(page, '/api/settings/workspace');
   await page.locator("#default-workspace-root").fill(workspaceRoot);
   const previousOrigin=new URL(page.url()).origin;
   await page.getByRole("button", { name: "保存并整理目录", exact: true }).click();
   await waitFor('configured storage restarts the owned service',()=>new URL(page.url()).origin!==previousOrigin&&new URL(page.url()).pathname==='/settings/workspace');
   await page.locator('#default-workspace-root').waitFor();
   ownedOrigin=new URL(page.url()).origin;
-  assert.equal((await api(page,'/api/settings/workspace')).workspaceRoot,workspaceRoot);
+  const storage = await api(page, '/api/settings/workspace');
+  assert.equal(storage.workspaceRoot, workspaceRoot);
+  assert.equal(storage.databasePath, databasePath);
   // Independent CLI sessions bind the exact origin; authentication stays local
   // but an explicit terminal must sign in to the new service origin.
   await packagedCli(['auth','login','--username',username,'--password-stdin'],password);
-  console.log('PASS packaged App storage change copies business data, restarts its service and preserves the logged-in client');
+  console.log('PASS packaged App moves Run Files, keeps SQLite in place and preserves the logged-in client after restart');
   await page.screenshot({ path: join(evidenceRoot, "packaged-workspace-settings.png"), animations: "disabled" });
   const fixture = await installFixtureProvider();
   const connection = (await api(page,'/api/settings/runtime-profiles')).profiles.find(item=>item.provider==='claude-code');
@@ -1088,7 +1090,7 @@ if (process.platform === "darwin") {
   // This pre-navigation instance gets its own HOME so its data root is fresh.
   const slowHome = join(evidenceRoot, 'cancel-home');
   await mkdir(slowHome, { mode: 0o700 });
-  const slowDatabase = join(slowHome, '.baton', 'workspace', 'records', 'baton.sqlite');
+  const slowDatabase = join(slowHome, '.baton', 'sqlite', 'baton.sqlite');
   const shellPidFile = join(slowShell, 'shell.pid'), lateFile = join(slowShell, 'late-marker');
   await writeFile(join(slowShell, '.zshenv'), `print -r -- $$ > '${shellPidFile}'\n/bin/sleep 30\nprint late > '${lateFile}'\n`);
   await cp(join(slowShell, '.zshenv'), join(slowHome, '.zshenv'));

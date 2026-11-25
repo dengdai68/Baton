@@ -6,7 +6,7 @@
 
 只有两个用户可理解的根：配置目录 `~/.baton`，工作目录由用户设置，默认 `~/.baton/workspace`。源码开发使用独立的 `workspace-dev` 和 `desktop-dev` 配置命名空间，不得与正式实例共用清除范围。配置目录不随工作目录更换而搬迁。
 
-`storage.json` 只保存工作根 `workspaceRoot` 和协议/冻结扩展地址元数据；不接受 `businessRoot`。所有实例的业务记录根都由 `workspaceRoot/records` 推导，开发实例通过独立工作根隔离。App/CLI 查询中的 `businessRoot` 是只读计算结果，不能作为设置输入，也不写回配置文件。
+`storage.json` 保存工作根 `workspaceRoot` 和冻结扩展地址元数据。`workspaceRoot/records` 保存执行文件。业务数据库和派生历史索引固定在配置根的 `sqlite/`，源码开发使用 `~/.baton/desktop-dev/sqlite/`。App 和 CLI 的 `businessRoot` 和 `databasePath` 是只读定位信息。
 
 ```json
 {"version":1,"workspaceRoot":"/absolute/workspace","previousRuntimeRoots":[]}
@@ -21,6 +21,9 @@
   runtime-configs/                  # 导入插件、MCP 原文和不可变执行配置
   credentials/                     # Git 凭据
   auth.sqlite                      # 登录、认证、会话
+  sqlite/
+    baton.sqlite                   # 员工、角色、团队、工作流、任务、自动化与沟通元数据
+    baton.sqlite.history.sqlite    # 派生历史索引，SQLite 日志和共享内存文件也位于此目录
   desktop-preferences.json          # 界面偏好
   desktop-endpoint.json             # CLI 发现当前宿主，不包含登录凭据
   desktop-cli-session.json          # 宿主委托给 CLI 的私有授权
@@ -31,9 +34,7 @@
   workspace/                       # 未配置时的默认工作目录
 
 <工作目录>/
-  records/                         # 业务记录统一根；不再嵌套 .baton/desktop
-    baton.sqlite              # 员工、角色、团队、工作流、自动化、任务与沟通
-    baton.sqlite.history.sqlite
+  records/                         # Run Files 的根
     runs/<RunID>/                  # 任务 Trace、正文、提示词、快照、附件和产物
     communications/<会话ID>/       # 沟通提示词、执行输出、正文与历史内容引用
   tasks/<TaskID>/<RunID>/           # 普通/自动化任务的员工 cwd、业务工作文件
@@ -63,13 +64,13 @@ JSON 清单由 `server/configuration-store.mjs` 负责，启动读取并缓存�
 
 ## 更换工作目录
 
-App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主只搬运业务数据库、历史索引和 Run Files，不读取领域状态，不搬配置目录、不搬外部项目。拷贝到同盘临时目录，逐文件 SHA256 校验，再切换 `storage.json`；新服务健康后才清除旧业务副本。无法访问原数据盘时报错，不回退系统盘创建空实例。
+App 和 CLI 通过同一认证 HTTP 更换工作目录，实例忙碌时拒绝。宿主将 Run Files 拷贝到目标盘的临时目录，逐文件校验 SHA-256，再切换 `storage.json`。新服务健康后清除旧执行文件副本。SQLite、历史索引和配置目录固定在原位置。无法访问原数据盘时报告错误。
 
 已有任务的实际路径保持冻结；更换目录影响新任务。受管扩展旧物理地址仅在读取和调用边界映射，不改变提示词、SHA、Trace、原生会话。更换目录前必须完成任何 pending 配置提交或数据清除。
 
 ## 清除所有数据
 
-客户端当前密码及明确文字确认后，删除**整个当前工作目录**，包括其中用户自行放入的文件。保留配置目录、账号/登录、Runtime 设置、插件/MCP 清单与源文件、Git 凭据、偏好和诊断日志；不返回首次管理员设置。重新创建业务数据库和工作目录。员工/角色/团队/工作流/自动化/任务/沟通及其关联均重置。
+客户端经当前密码及明确文字确认后清除整个当前工作目录及固定 SQLite 路径的业务主库、历史索引和关联文件。保留账号、登录、Runtime 设置、插件/MCP 清单与源文件、Git 凭据、偏好和诊断日志。随后重新创建业务数据库和工作目录。
 
 清除意图写在配置目录，删除中断后启动继续完成；不跟随工作目录符号链接，不允许清除 Home、配置目录、仓库或它们的祖先。配置根内只允许专用 `workspace` / `workspace-dev` 业务子树作为工作目录；清除这些目录不包含同级的认证、浏览器、凭据、Runtime 或日志。其他配置子目录仍受保护。历史冻结在当前工作目录之外的旧任务文件不扩展删除范围。真实实例整理不调用清除功能。
 
@@ -79,15 +80,15 @@ App 和 CLI 经同一认证 HTTP 更换工作目录，忙碌时拒绝；宿主�
 
 私聊和群聊首次执行时由 Store 分配 `<工作目录>/communications/<会话ID>`，持久记录 conversation.workspacePath。群聊全员使用同一 cwd，可以通过相对文件名共享文件；不同会话隔离目录，每个成员仍有独立原生会话、输入游标及串行队列。更换工作根后，已分配的沟通目录和其文件保持原位，后续会话才使用新根。
 
-任务与沟通统一由工作根的 records 保存正文、不可变提示词、执行输出、校验元数据和历史索引。SQLite 存沟通消息、会话与执行元数据，Run Files 存大正文；内容引用仍是逻辑相对路径并逐次验证字节数与 SHA-256。沟通附件直接存共享 cwd 的 attachments 下，不另设“会话资料目录”，也不向模型暴露 records。群聊各员工的 attempt/原生会话仍独立。更换工作根搬运 records，已分配的沟通 cwd 及附件保持原位，通过 Store 冻结路径解析；不重放已确认消息，不搬动外部业务文件。
+工作根的 `records` 保存任务与沟通的正文、不可变提示词和执行输出。SQLite 存沟通消息、会话与执行元数据。内容引用使用逻辑相对路径，读取时验证字节数与 SHA-256。沟通附件保存在共享 cwd 的 `attachments` 下。更换工作根时移动 Run Files，已分配的沟通 cwd 和附件通过 Store 的冻结路径读取。
 
-目录协议只有这一套，不启动时猜测或回退旧路径。当前实例的人工整理须先停止服务，逐文件校验数据库、Run Files 和附件，提交定位后验证历史读取，再移除已核验旧副本。历史提示词中的旧文字和已冻结任务 cwd 不重写；无需因记录物理位置改变而重建原生会话。
+旧版本把业务库放在 `records`。升级旧实例时先退出 Baton，将已验证的业务数据库放入配置根的 `sqlite/`，使用该库对应的 WAL（如有未合并事务）。历史索引可重建。启动时发现旧库而缺少新库会报告业务数据未就绪。手动切换数据库时保留现有工作目录和全部 Run Files。
 
 ## 配置读取与业务打开
 
 登录、health、`bootstrap?view=connection`、工作目录定位、日志列表、Git 凭据状态及插件/MCP清单读取不要求先打开业务 SQLite。清单使用 `configuration.json` 的只读视图，不扫描扩展文件；检测到 `configuration.pending.json` 时拒绝只读恢复，由业务初始化核对数据库 revision 后处理。涉及员工/角色关联的详情、配置写入与执行仍通过原 Store 事务。运行中的 Store 是配置清单的最新读源，数据库失败不影响独立配置文件读取。
 
 
-Baton当前身份使用~/.baton及records/baton.sqlite。品牌切换只显式搬运本机配置、切换数据库文件名和启动定位，不重写Task/Run/Trace或历史文件路径，不在产品保留旧身份探测/双协议。既有用户选择的工作根可以保留原目录名，不能把目录名当品牌配置推断或自动重置。详见development/baton-identity-cutover.md。
+Baton 当前业务库位于 `~/.baton/sqlite/baton.sqlite`。配置和工作目录的历史背景见 [Baton 身份切换](development/baton-identity-cutover.md)。
 
 界面语言偏好与关闭行为、外观一起保存在配置根的 `desktop-preferences.json`（`language` 键），属于宿主界面偏好，不进入业务数据库；清除工作目录不影响该偏好。

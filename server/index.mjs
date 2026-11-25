@@ -25,7 +25,7 @@ import { createRunFiles } from "./run-files.mjs";
 import { hasActiveExecution } from "./runtime/registry.mjs";
 import { createAuth } from "./auth.mjs";
 import { createRuntimeConfiguration } from "./runtime/configuration.mjs";
-import { desktopServiceStoragePaths } from "./data-home.mjs";
+import { desktopServiceStoragePaths, prepareBusinessDatabase } from "./data-home.mjs";
 import { createMarketplace } from "./runtime/marketplace.mjs";
 import { probeRuntime } from "./runtime/probe.mjs";
 import { runtimeInstalled } from "./runtime/cli-environment.mjs";
@@ -78,7 +78,7 @@ const runtimeConfigRoot = storage.runtimeConfigRoot;
 // targets stay exactly as the operator configured them.
 const usesDefaultRoot = [storage.databasePath, storage.authDatabasePath, storage.runFilesRoot, storage.runtimeConfigRoot, storage.workspaceRoot].some(path => path === storage.dataRoot || path.startsWith(storage.dataRoot + sep));
 const authOptions = { databasePath: storage.authDatabasePath, origins: [], bootstrapToken };
-const dataReset = createDataReset({workspaceRoot,configurationRoot:storage.controlRoot,protectedPaths:[root,diagnostics().status().directory]});
+const dataReset = createDataReset({workspaceRoot,configurationRoot:storage.controlRoot,databasePath,protectedPaths:[root,diagnostics().status().directory]});
 let auth;
 const storeOptions = { databasePath, workspaceRoot,workspaceRootAuthoritative:true, configurationDirectory:storage.controlRoot, runtimeInstalled, onSaveDiagnostic: (record) => {
   if (record.outcome === "error" || record.elapsedMs >= 250) diagnostic("persistence.save", record);
@@ -154,6 +154,7 @@ function ensureBusiness() {
       if(workspaceConfig)lockWorkspace();
       enter('reset_recovery'); await dataReset.recover();
       enter('store'); diagnostic('business.starting', { phase });
+      await prepareBusinessDatabase(storage);
       store = createStore(storeOptions); subscribeDesktopNotifications(store); runFiles = communicationFiles();
       enter('deletion_recovery');
       try {

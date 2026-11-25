@@ -1,7 +1,7 @@
 // Packaged old-to-new upgrade acceptance. Isolated HOME, no Provider calls.
 import assert from 'node:assert/strict';
 import {_electron as electron} from 'playwright-core';
-import {mkdtemp,mkdir,readFile,writeFile,lstat,rm,realpath} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,writeFile,copyFile,lstat,rm,realpath} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomBytes,createHash} from 'node:crypto';
@@ -40,6 +40,12 @@ try{
  const whileRunning=await launch(newBundle),refusal=await pageFor(whileRunning);await refusal.getByText('现有配置已保留，客户端未按空实例启动。',{exact:true}).waitFor();await refusal.getByText(/旧 Baton 客户端仍在运行/).waitFor();
  await assert.rejects(lstat(join(control,'auth.sqlite')),{code:'ENOENT'});await assert.rejects(lstat(join(control,'browser')),{code:'ENOENT'});await close(whileRunning);evidence.cases.push('active old instance refused before configuration or browser initialization');
  await close(oldApp);await waitFor(()=>fetch(oldOrigin+'/api/health').then(()=>false,()=>true),'old owned service exit');
+ const databaseDirectory=join(control,'sqlite');await mkdir(databaseDirectory,{mode:0o700});
+ for(const name of ['baton.sqlite','baton.sqlite-wal']) {
+   const copy=copyFile(join(work,'records',name),join(databaseDirectory,name));
+   if(name==='baton.sqlite') await copy;
+   else await copy.catch(error=>{if(error.code!=='ENOENT')throw error;});
+ }
  const tracked=['configuration.json','desktop-preferences.json','credentials/proof.txt'],before=Object.fromEntries(await Promise.all(tracked.map(async name=>[name,await hash(join(legacy,name))]))),authInode=(await lstat(join(legacy,'auth.sqlite'),{bigint:true})).ino;
  const newApp=await launch(newBundle),page=await pageFor(newApp);await page.waitForURL(/^http:\/\/127\.0\.0\.1:/);await page.waitForFunction(()=>document.querySelector('#account-name')?.textContent.includes('cutover-qa'));
  const origin=new URL(page.url()).origin;
@@ -49,7 +55,7 @@ try{
  await assert.rejects(lstat(legacy),{code:'ENOENT'});await assert.rejects(lstat(join(control,'.configuration-root-migration.json')),{code:'ENOENT'});
  const location=await readStorageLocation(control,{});assert.equal(location.workspaceRoot,work);assert.ok(location.previousRuntimeRoots.includes(join(legacy,'runtime-configs')));
  await waitFor(()=>readFile(join(control,'desktop-cli-session.json'),'utf8').then(text=>JSON.parse(text).origin===origin,()=>false),'new desktop delegation');
- const storage=await cli(['storage','get'],{home});assert.equal(storage.configurationRoot,control);assert.equal(storage.workspaceRoot,work);assert.equal(storage.businessRoot,join(work,'records'));
+ const storage=await cli(['storage','get'],{home});assert.equal(storage.configurationRoot,control);assert.equal(storage.workspaceRoot,work);assert.equal(storage.businessRoot,join(work,'records'));assert.equal(storage.databasePath,join(control,'sqlite/baton.sqlite'));
  assert.equal((await cli(['auth','status'],{home})).username,'cutover-qa');
  assert.equal((await cli(['mcps','get',mcp.id],{home})).id,mcp.id);
  const progress=await cli(['tasks','progress',task.id],{home});assert.equal(progress.runId,run.id);assert.equal(progress.runStatus,'paused');

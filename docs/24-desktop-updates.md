@@ -38,4 +38,4 @@ macOS Developer ID 签名的安装版使用原生自动安装。当前 ad-hoc �
 
 更新下载缓存位于私有配置目录的 `updates/`。更换工作目录时不允许并发下载；更新缓存不随业务目录搬运，打开安装包时解析当前配置缓存路径。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime 与扩展位于 `~/.baton`。业务 SQLite 位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。

@@ -616,7 +616,7 @@ test("packaged Electron keeps mutable control-plane data outside its resources",
   assert.equal(storage.BATON_AUTH_DB_PATH, "/private/var/folders/baton-profile/auth.sqlite");
   assert.equal(storage.BATON_RUNTIME_CONFIG_ROOT, "/private/var/folders/baton-profile/runtime-configs");
   assert.equal(storage.BATON_WORKSPACE_ROOT, "/fixture-home/.baton/workspace");
-  assert.equal(storage.BATON_DB_PATH, "/fixture-home/.baton/workspace/records/baton.sqlite");
+  assert.equal(storage.BATON_DB_PATH, "/private/var/folders/baton-profile/sqlite/baton.sqlite");
   const environment = desktopControlPlaneEnvironment({ environment: { PATH: "/usr/bin", BATON_DB_PATH: "/existing/state.sqlite", BATON_RUNTIME_CONFIG_ROOT: "/existing/config", BATON_PUBLIC_ORIGIN: "https://unexpected.example", HOST: "0.0.0.0" }, storage, electronExecutable: "/Applications/Baton.app/Contents/MacOS/Baton", bootstrapToken: "a".repeat(64) });
   assert.equal(environment.PATH, "/usr/bin");
   assert.equal(environment.BATON_DB_PATH, storage.BATON_DB_PATH);
@@ -640,7 +640,7 @@ test("desktop data roots default under ~/.baton with per-instance isolation", ()
   assert.equal(legacyDesktopDataRoot({ packaged: false, env: {}, sourceRoot: "/repo" }), "/repo/.data/desktop-dev");
   assert.equal(legacyDesktopDataRoot({ packaged: false, env: { BATON_DESKTOP_DATA_ROOT: "/isolated/e2e" }, sourceRoot: "/repo" }), null);
   const storage = desktopStoragePaths(resolveDesktopDataRoot({ packaged: true, env: {}, home }), { home });
-  assert.equal(storage.BATON_DB_PATH, "/private/var/fixture-home/.baton/workspace/records/baton.sqlite");
+  assert.equal(storage.BATON_DB_PATH, "/private/var/fixture-home/.baton/sqlite/baton.sqlite");
   assert.equal(storage.BATON_WORKSPACE_ROOT, "/private/var/fixture-home/.baton/workspace");
 });
 test("macOS package configuration is local-only and contains the control plane", async () => {

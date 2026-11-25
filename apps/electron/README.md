@@ -45,7 +45,7 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 运行与边界见 [Electron 文档](../../docs/18-electron-client.md)。共享业务 UI 在 `web/`，此目录不拥有 Store 或 Provider 状态。
 
-`runtime-paths.mjs` 同时定义 Chromium userData/sessionData、日志和崩溃目录，作为认证 profile/日志默认位于 ~/.baton 的实例目录；main 在 ready 前设置。业务资料与任务文件共用工作目录；设置、认证、Runtime、扩展与启动定位留在配置目录。
+`runtime-paths.mjs` 同时定义 Chromium userData/sessionData、日志和崩溃目录，作为认证 profile/日志默认位于 ~/.baton 的实例目录；main 在 ready 前设置。执行资料与任务文件使用工作目录。业务 SQLite、设置、认证、Runtime、扩展与启动定位使用配置目录。
 
 员工和插件/MCP 市场使用响应式紧凑卡片，保留既有命令与信息；创建员工也可停用，插件与 MCP 搜索器分行。插件详情用概要和组件标签页，不扩展宿主接口。
 
@@ -102,9 +102,9 @@ runtime-paths.mjs 与 server/data-home.mjs 共用存储布局，默认根 ~/.bat
 
 更新缓存属于配置目录，不随工作目录更换搬运；宿主仍保护正在下载的文件。
 
-当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](../../docs/30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
-业务记录统一位于 `<工作目录>/records`：数据库、历史索引及 runs/communications 执行正文与校验记录共享此根；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
+执行正文与校验记录位于 `<工作目录>/records`，业务数据库与历史索引位于配置根的 `sqlite/`；沟通 cwd/上传附件在 `<工作目录>/communications/<会话ID>`。不再创建 `.baton/desktop/baton-runs`；配置仍在 Home。路径与目录切换契约见 docs/30。App/CLI storage get/update 使用同一 HTTP 定位，不直接读取数据库。
 
 工作目录定位只持久化 workspaceRoot，records 路径固定由 workspaceRoot/records 推导；storage.json 不接受 businessRoot。App/CLI 返回的 businessRoot 为只读计算结果，开发实例通过独立工作根隔离，见 docs/30。
 

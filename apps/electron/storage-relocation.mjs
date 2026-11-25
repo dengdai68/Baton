@@ -6,7 +6,7 @@ import {join,resolve,relative,dirname} from 'node:path';
 import {assertStorageRoot,storageBusinessRoot,storageLocation,writeStorageLocation,validateStorageDestination} from '../../server/storage-layout.mjs';
 import {pathToFileURL} from 'node:url';
 
-const entries=['baton.sqlite','baton.sqlite-wal','baton.sqlite-shm','baton.sqlite.history.sqlite','baton.sqlite.history.sqlite-wal','baton.sqlite.history.sqlite-shm','runs','communications','.deleting'];
+const entries=['runs','communications','.deleting'];
 const cleanupName='.storage-relocation.json';
 async function exists(path){try{return await lstat(path);}catch(error){if(error.code==='ENOENT')return null;throw error;}}
 async function fingerprint(root,exclude=null){

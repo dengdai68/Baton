@@ -124,7 +124,7 @@ Orchestrator 每轮按 removedParticipantIds 过滤当前派工名单；已有�
 
 六种新增 Runtime 的扩展适配决策见 docs/29：市场拥有源解析/不可变安装/兼容计划，Store 拥有当前目录摘要与冻结绑定，portable-extensions 仅生成原生调用配置。复用既有 MCP 私有启动器和历史桥，不引入第二套工具协议、模型客户端或全局安装服务；兼容性检查通过受认证命令更新目录派生数据，列表仍为数据库分页。
 
-当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime、插件/MCP 清单及源文件保存在 `~/.baton`；员工、角色、团队、工作流、自动化、任务与沟通及执行内容保存在工作目录，默认 `~/.baton/workspace`。清除所有数据删除整个当前工作目录，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
+当前存储归属以 [配置目录与工作目录](30-storage-layout.md) 为准：配置、认证、Runtime 与扩展保存在 `~/.baton`。业务数据库与历史索引位于 `~/.baton/sqlite/`，执行文件位于工作目录。清除所有数据会清除当前工作目录和业务 SQLite，保留配置和登录。插件/MCP 列表与 Runtime 设置使用私有 JSON，SQLite 只存业务关联及配置提交 revision。
 
 员工启动目录：新普通任务与自动化采用 `<工作目录>/tasks/<TaskID>/<RunID>`；沟通采用 Store 首次分配并持久保存的 `<工作目录>/communications/<会话ID>`，群聊成员共享文件目录但原生会话独立。既有任务路径不重写，已分配的沟通目录不随工作根切换；目录变更重建模型上下文并保留聊天历史。内部附件、提示词和执行内容仍由 Run Files 管理，详见 docs/30-storage-layout.md 与 docs/17-communication.md。
 

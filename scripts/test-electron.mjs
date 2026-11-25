@@ -88,6 +88,7 @@ const silentTrace = fixtureStore.createTrace(fixtureRun.id, { agentId: fixtureRu
 fixtureStore.attachTracePrompt(silentTrace.id, await fixtureFiles.writePromptSnapshot(fixtureRun.id, silentTrace.id, promptSnapshot({ systemPrompt: "SYSTEM_PRIVATE_DO_NOT_DISPLAY", prompt: "静默调用快照原文。" })));
 const fixtureChatEmployee=fixtureStore.listAgents().find(agent=>agent.id==='agent_engineer');
 fixtureStore.close();
+await mkdir(storage.dataRoot,{recursive:true,mode:0o700});
 await writeStorageLocation(storage.BATON_DESKTOP_CONTROL_ROOT,{version:1,workspaceRoot:storage.BATON_WORKSPACE_ROOT,previousRuntimeRoots:[]});
 const desktop = await electron.launch({ args: ["apps/electron/main.mjs", `--user-data-dir=${join(directory, "profile")}`], env: {
   ...process.env,

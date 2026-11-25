@@ -1,5 +1,7 @@
 # 工程脚本
 
+存储目录 E2E 验证更换工作目录前后 SQLite 路径和 inode 相同，并核对 Run Files 变化及清除数据的实际范围。配置目录升级验收在隔离旧实例退出后显式提供已验证的 SQLite 文件，同时保留旧工作目录。
+
 打包验收为每个实例建立隔离 HOME，在 `.data/packaged-*` 使用短路径以满足 macOS Unix socket 的长度限制。
 
 `run-tests.mjs` 是根目录 `npm test` 的入口。`verify-ai-contract.mjs` 和 `check-module-impact.mjs` 核对开发约定与模块登记。`package-mac-local.mjs` 构建本机签名包，`test-*.mjs` 执行各场景的独立验收。先查看脚本顶部的环境要求，部分真实 Runtime 验收会调用已配置的模型。

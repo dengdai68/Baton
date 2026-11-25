@@ -1,16 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { batonDataHome, legacyDataRequiresMigration, migrationGuidance, desktopServiceDataRoot, desktopServiceStoragePaths } from "../server/data-home.mjs";
+import { batonDataHome, legacyDataRequiresMigration, migrationGuidance, desktopServiceDataRoot, desktopServiceStoragePaths, prepareBusinessDatabase } from "../server/data-home.mjs";
 
-test("business storage follows the work root while authentication stays private", () => {
+test("business SQLite is private while Run Files follow the work root", () => {
   const home = "/fixture-home";
   assert.equal(batonDataHome(home), "/fixture-home/.baton");
   assert.equal(desktopServiceDataRoot(home), "/fixture-home/.baton");
   const storage = desktopServiceStoragePaths({ home, env: {} });
-  assert.equal(storage.databasePath, "/fixture-home/.baton/workspace/records/baton.sqlite");
+  assert.equal(storage.databasePath, "/fixture-home/.baton/sqlite/baton.sqlite");
   assert.equal(storage.authDatabasePath, "/fixture-home/.baton/auth.sqlite");
   assert.equal(storage.runFilesRoot, "/fixture-home/.baton/workspace/records");
   assert.equal(storage.runtimeConfigRoot, "/fixture-home/.baton/runtime-configs");
@@ -31,6 +31,29 @@ test("explicit environment overrides always win over the new defaults", () => {
   assert.equal(storage.runFilesRoot, "/override/runs");
   assert.equal(storage.runtimeConfigRoot, "/override/runtime");
   assert.equal(storage.workspaceRoot, "/override/workspaces");
+  const independent = desktopServiceStoragePaths({ home: "/fixture-home", env: { BATON_DB_PATH: env.BATON_DB_PATH, BATON_WORKSPACE_ROOT: env.BATON_WORKSPACE_ROOT } });
+  assert.equal(independent.databasePath, env.BATON_DB_PATH);
+  assert.equal(independent.runFilesRoot, "/override/workspaces/records");
+});
+
+test("managed SQLite refuses a missing main database when earlier data or sidecars exist", async t => {
+  const home = await mkdtemp(join(tmpdir(), "baton-sqlite-root-"));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  const storage = desktopServiceStoragePaths({ home, env: {} });
+  await mkdir(storage.dataRoot, { recursive: true });
+  const old = join(storage.dataRoot, "baton.sqlite");
+  await writeFile(old, "previous SQLite bytes");
+  await assert.rejects(prepareBusinessDatabase(storage), /旧位置/);
+  assert.equal(await readFile(old, "utf8"), "previous SQLite bytes");
+  await writeFile(storage.databasePath + "-wal", "a remaining WAL");
+  await assert.rejects(prepareBusinessDatabase(storage), /主库缺失/);
+  await rm(storage.databasePath + "-wal");
+  await symlink(old, storage.databasePath);
+  await assert.rejects(prepareBusinessDatabase(storage), /常规文件/);
+  await rm(storage.databasePath);
+  await writeFile(storage.databasePath, "new SQLite bytes");
+  await prepareBusinessDatabase(storage);
+  assert.equal(await readFile(old, "utf8"), "previous SQLite bytes");
 });
 
 test("legacy data detection blocks only a real legacy instance with an empty new location", async () => {
