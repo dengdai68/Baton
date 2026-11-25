@@ -820,6 +820,7 @@
     },
     {
       "id": "server.domain-store",
+      "taskAttentionCount": "Build the navigation attention count from current Task directory rows on every request, sharing attention statuses with the renderer.",
       "collaborationReadability": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "collaborationFlow": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "repeatImports": "Manual repeat imports replace plugins by exact origin URL plus plugin name and MCPs by trimmed case-sensitive display name; different plugin origins remain distinct. Serialized HTTP imports prepare immutable candidates; Store plans identity matches and deduplicates references, HTTP resolves compatibility, then Store commits current employee references in one transaction. Failed candidates are retired; frozen work/files remain unchanged. Receipts add reference-only replacements/employees/historyRetained, with CLI help/schema/text and shared UI matching.",
@@ -847,6 +848,7 @@
       "allowedDependencies": [
         "server/persistence.mjs",
         "server/execution-logs.mjs",
+        "client/console-projections.mjs",
         "node:*"
       ],
       "forbiddenDependencies": [
@@ -888,6 +890,7 @@
     },
     {
       "id": "server.sqlite-persistence",
+      "taskAttentionCount": "Reuse the ordinary unarchived task directory predicates for the indexed attention count.",
       "path": "server/persistence.mjs",
       "kind": "runtime",
       "owner": "server",
@@ -1169,6 +1172,7 @@
     },
     {
       "id": "client.console-projections",
+      "taskAttentionCount": "Export the shared status order for the inbox groups and navigation count.",
       "boundedConsoleWindow": "Task and Communication merge adjacent event pages in stable server order, cap history at 200, retain window Trace metadata and visible row anchors, pause live following while reading history, and reload the latest page explicitly; missed live windows are not bridged.",
       "collaborationReadability": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
       "collaborationFlow": "Role-to-role Messages only; no system, dispatch or lifecycle event rows. A message whose recipient is its sender, and a manager followup turn delivered to the deciding manager itself, render no target; underlying messages and deliveries keep the real recipients, and CLI shares the same records. Explicit saved references associate delivery/history metadata. Trace.inputMessageId and Message.startMessageId identify each invocation prompt; one console link loads and focuses that prompt across pagination. Native member sessions remain isolated. Failed tasks reject new messages; manual retry resumes the failed member with transient continue input. CLI shares message records without visual metadata.",
@@ -1222,6 +1226,7 @@
     },
     {
       "id": "web.console",
+      "taskAttentionCount": "Show the server count in navigation and sum the status groups’ pagination totals in the inbox header.",
       "inboxDetailContinuity": "Recent local answer records retain original question/context with the answer and frozen task content; completed previews show task content and recorded completion result. Workspace action follows the title. A single reply action and successful human completion advance across pending status groups, preserving failure drafts and existing precise reply/human confirmation contracts. Compact workspace details are cached per task keyed by run id, run status and task.updatedAt, so 5-second polls cost only the five directory queries; changed rows refetch progressively (4 concurrent), errors retry at most every 30s per row. Client presentation only; no CLI/HTTP/Store changes.",
       "composerAndMcpRecovery": "Chat and Task composers clear text/attachments when the local message appears, omit normal sending labels, and retain uncertain-receipt recovery and exact idempotency. Late receipts preserve newer drafts. MCP detail failure releases header edit; clicking re-reads configuration before opening the existing editor. No CLI/HTTP/Store/auth contract change.",
       "cliStatusPresentation": "CLI settings navigation/title use CLI, omit installation/login hints and preserve host install/refresh plus quick-start commands. Automation latest status clears the shared inset shadow along with background/radius; shared status semantics and interactive focus-visible remain unchanged. No CLI/HTTP/Store contract change.",

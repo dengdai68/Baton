@@ -223,12 +223,12 @@ export function editDiff(oldText, newText, { maxCells = 2000000 } = {}) {
 // Task/Run transition; clients use them only to make human next actions clear.
 export const TASK_FILTERS = Object.freeze(["all", "attention", "active", "backlog", "done", "cancelled"].map(id => ({ id, label: "" })));
 
-const taskAttentionStatuses = new Set(["awaiting_human", "awaiting_acceptance", "paused", "blocked", "failed"]);
+export const TASK_ATTENTION_STATUSES = Object.freeze(["awaiting_human", "awaiting_acceptance", "failed", "paused", "blocked"]);
 const taskActiveStatuses = new Set(["planning", "running", "review"]);
 const terminalRunStatuses = new Set(["completed", "cancelled", "failed"]);
 
 export function taskNeedsAttention(status) {
-  return taskAttentionStatuses.has(status);
+  return TASK_ATTENTION_STATUSES.includes(status);
 }
 
 export function taskMatchesFilter(status, filter) {

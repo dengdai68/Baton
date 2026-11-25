@@ -1,5 +1,6 @@
 import {RUNTIME_IDS,RUNTIME_EFFORT_LEVELS,runtimeLabel,nativeSessionId} from "../client/runtime-providers.mjs";
 import { workflowConnections } from "../client/workflow-description.mjs";
+import { TASK_ATTENTION_STATUSES } from "../client/console-projections.mjs";
 import { createStateJournal, copyState } from "./state-journal.mjs";
 import { automationCommands } from "./automations.mjs";
 import { statSync } from "node:fs";
@@ -426,7 +427,7 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
     addEvent({ ...event, runId: current.id, actor: humanMember, data: { ...event.data, dispatchId: dispatch.id, recipientAgentId: dispatch.recipientAgentId, cancelledDispatchIds: [] } });
     return clone(current);
   }
-  let navigationCache,catalogCache;
+  let communicationNotificationCache, catalogCache;
   return {
     ...communicationCommands(state, save, withRoleSnapshot, journal, persistence, notify),
     ...automationCommands(state, journal, persistence),
@@ -438,11 +439,15 @@ export function createStore({ databasePath = process.env.BATON_DB_PATH || ":memo
       return state.runs.filter(run => getTask(run.taskId)?.workspaceManaged).map(run => ({ taskId: run.taskId, runId: run.id, path: resolve(run.workspacePath) }));
     },
     getNavigationNotifications() {
-      const version=['tasks','runs','communicationConversations','communicationMessages','communicationDeliveries','agents'].map(name=>journal.version(name)).join(':');
-      if(navigationCache?.version===version)return {...navigationCache.value};
-      const runs=['awaiting_human','awaiting_acceptance','paused','blocked','failed'].flatMap(status=>journal.select('runs','status',status));
-      const value={taskAttentionCount:new Set(runs.filter(run=>{const task=getTask(run.taskId);return task?.kind!=='automation'&&!task?.archivedAt;}).map(run=>run.taskId)).size,communicationUnreadCount:this.communicationUnreadCount()};
-      navigationCache={version,value};return {...value};
+      const communicationVersion = ['communicationConversations', 'communicationMessages', 'communicationDeliveries', 'agents']
+        .map(name => journal.version(name)).join(':');
+      if (communicationNotificationCache?.version !== communicationVersion) {
+        communicationNotificationCache = { version: communicationVersion, unreadCount: this.communicationUnreadCount() };
+      }
+      return {
+        taskAttentionCount: persistence.countTasksByStatus(TASK_ATTENTION_STATUSES),
+        communicationUnreadCount: communicationNotificationCache.unreadCount
+      };
     },
     getCatalogReferences() {
       const version=['agents','roles','teams','workflowTemplates','tasks'].map(name=>journal.version(name)).join(':');if(catalogCache?.version===version)return clone(catalogCache.value);

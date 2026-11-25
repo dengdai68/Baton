@@ -15,7 +15,7 @@ import { createMarketplaceUI, createMcpMarketplaceUI, createEmployeeMultiSelect,
 import { paginate, paginationMarkup } from "./pagination.mjs";
 import { createFloatingList, closeFloatingList, closeFloatingLists } from './floating-list.mjs';
 import { consoleContentTokens, retainsConsoleEvent, editDiff, isShellTool, shellCommandText, shellTokens, toolCommandSummary, toolEditInput, toolFileInput, workingDirectoryIcon } from "/client/console-projections.mjs";
-import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, partyName, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workflowDisplay, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
+import { EVENT_KIND_LABEL as KIND_LABEL, STATUS_TEXT as statusText, TASK_ATTENTION_STATUSES, buildConsoleEntries, classifyEvent, collaborationRecords, displayText, formatExactTime as exactTime, formatMessageTime, formatRelativeTime as timeAgo, isTransportFrame, mentionables, partyName, providerLabel, roleExecutionStatus, taskActionLabel, taskMatchesFilter, taskNeedsAttention, workflowDisplay, workspaceAgents, workflowFocus } from "/client/console-projections.mjs";
 
 /* Baton Console：任务空间信息架构 + 轻盈视觉系统。
    视图：overview / tasks / teams / agents / workspace（普通任务与自动化共用任务空间）。 */
@@ -409,8 +409,7 @@ function clearInvalid(form) {
 /* ---------- 壳层 ---------- */
 function renderShell() {
   $$('[data-header-view]').forEach(host => { host.hidden = host.dataset.headerView !== state.currentView; });
-  const attentionRuns = state.runs.filter((run) => !run.task?.archivedAt && taskNeedsAttention(run.status));
-  const count = state.navigationNotifications?.taskAttentionCount ?? new Set(attentionRuns.map(run => run.taskId)).size;
+  const count = state.navigationNotifications?.taskAttentionCount ?? 0;
   // The attention count appears once, on 待我处理; 任务中心 no longer duplicates it.
   const inboxCount = $("#nav-inbox-count"); inboxCount.textContent = count; inboxCount.hidden = !count; inboxCount.setAttribute('aria-label', $t("{0} 项待你处理", [count]));
   const unread = state.navigationNotifications?.communicationUnreadCount ?? state.communicationUnreadCount ?? 0;
@@ -547,7 +546,14 @@ function toggleSidebar() {
   button.title = $t("{0}侧栏 ⌘\\", [collapsed ? $t("展开") : $t("收起")]);
 }
 
-const inboxGroups = [['awaiting_human',$t("等待你的澄清")],['awaiting_acceptance',$t("待你验收")],['failed',$t("执行中断")],['paused',$t("已暂停")],['blocked',$t("等待恢复")]];
+const inboxLabels = {
+  awaiting_human: $t("等待你的澄清"),
+  awaiting_acceptance: $t("待你验收"),
+  failed: $t("执行中断"),
+  paused: $t("已暂停"),
+  blocked: $t("等待恢复")
+};
+const inboxGroups = TASK_ATTENTION_STATUSES.map(status => [status, inboxLabels[status]]);
 let inboxRequest = 0, inboxPreviewRequest = 0, inboxDetailRunning = false, inboxDetailAgain = false;
 const inboxDrafts = new Map(), inboxAnswered = new Map();
 function inboxVisibleGroups() { return state.inboxView === 'recent' ? [['done',$t("最近已处理")]] : inboxGroups; }
@@ -652,9 +658,11 @@ function renderInbox() {
   if (header.innerHTML !== chips) header.innerHTML = chips;
   if (state.inboxLoading || !state.inboxResults) { host.innerHTML = `<div class="directory-empty" role="status">${$t("正在读取事项…")}</div>`; return; }
   const tasks = inboxTasks();
+  const total = Object.values(state.inboxResults).reduce((sum, group) => sum + group.total, 0);
   const totalCount = $('#inbox-total-count');
-  if (totalCount) { totalCount.textContent = String(tasks.length); totalCount.hidden = !tasks.length; }
-  setTitleCount('inbox', tasks.length);
+  if (totalCount) { totalCount.textContent = String(total); totalCount.hidden = !total; }
+  setTitleCount('inbox', total);
+  renderTitleCount();
   if (!state.inboxReceipt && !tasks.some(task => task.id === state.inboxSelection)) state.inboxSelection = tasks[0]?.id;
   const list = inboxVisibleGroups().map(([status,label]) => {
     const result = state.inboxResults[status];

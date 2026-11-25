@@ -29,6 +29,40 @@ const sourceWording = text => text.replace(/\$\{\$t\(("(?:[^"\\]|\\.)*")\)\}/g, 
 
 async function directory(prefix) { const path = await mkdtemp(join(tmpdir(), prefix)); await mkdir(join(path, "repos", "app", ".git"), { recursive: true }); return path; }
 
+test('task attention counts current directory rows, ignoring old or orphaned runs', async t => {
+  const root = await mkdtemp(join(tmpdir(), 'baton-attention-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const databasePath = join(root, 'state.sqlite');
+  const seed = createStore({ databasePath, workspaceRoot: root });
+  const task = seed.listTasks()[0];
+  const run = seed.createRun(task.id);
+  seed.close();
+
+  const db = new DatabaseSync(databasePath);
+  try {
+    const insert = db.prepare('INSERT INTO workspace_entities (collection,id,position,value_json) VALUES (?,?,?,?)');
+    for (const [index, taskId] of [task.id, 'missing-task'].entries()) {
+      const id = `historic-failure-${index}`;
+      insert.run('runs', id, index + 1, JSON.stringify({ ...run, id, taskId, status: 'failed' }));
+    }
+    for (const [index, facts] of [{ kind: 'ordinary', archivedAt: '2026-01-01' }, { kind: 'automation' }].entries()) {
+      const id = `excluded-task-${index}`;
+      insert.run('tasks', id, index + 1, JSON.stringify({ ...task, ...facts, id, status: 'failed' }));
+    }
+  } finally { db.close(); }
+
+  const store = createStore({ databasePath, workspaceRoot: root });
+  try {
+    assert.equal(store.getNavigationNotifications().taskAttentionCount, 0);
+    assert.equal(store.queryDirectory('tasks', { status: 'failed' }).total, 0);
+    store.pauseRun(run.id);
+    assert.equal(store.queryDirectory('tasks', { status: 'paused' }).total, 1);
+    assert.equal(store.getNavigationNotifications().taskAttentionCount, 1);
+    store.resumeRun(run.id);
+    assert.equal(store.getNavigationNotifications().taskAttentionCount, 0);
+  } finally { store.close(); }
+});
+
 test('workflow delivery locations are arbitrary workspace-relative paths, survive restart and have no docs default',async()=>{
   const root=await mkdtemp(join(tmpdir(),'af-workflow-paths-')),databasePath=join(root,'state.sqlite');
   try{

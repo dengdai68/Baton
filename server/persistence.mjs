@@ -7,6 +7,11 @@ import {createConfigurationStore,configurationValues,CONFIGURATION_COLLECTIONS} 
 const SNAPSHOT_ID = 1;
 // Configuration directories listed newest-created first (reverse write position).
 const NEWEST_CREATED_FIRST = new Set(['agents', 'roles', 'teams', 'workflowTemplates']);
+const directoryField = name => `json_extract(value_json,'$.${name}')`;
+const taskDirectoryClauses = archived => [
+  `COALESCE(${directoryField('kind')},'ordinary') != 'automation'`,
+  `${directoryField('archivedAt')} IS ${archived ? 'NOT ' : ''}NULL`
+];
 
 // Cold rows retain identities/order only; bodies are loaded when a command reads them.
 // A bounded clean-row cache is safe because dirty rows stay pinned until commit.
@@ -273,16 +278,24 @@ export function createSqlitePersistence(databasePath = ":memory:", { onSaveDiagn
       }
       return database.prepare(`SELECT id FROM workspace_entities WHERE ${where.join(' AND ')} ORDER BY position ${last?'DESC':'ASC'} LIMIT ?`).all(...values,limit).map(row=>row.id);
     },
+    countTasksByStatus(statuses) {
+      const placeholders = statuses.map(() => '?').join(',');
+      return database.prepare(`
+        SELECT COUNT(*) AS total FROM workspace_entities
+        WHERE collection='tasks' AND ${taskDirectoryClauses(false).join(' AND ')}
+        AND ${directoryField('status')} IN (${placeholders})
+      `).get(...statuses).total;
+    },
     queryEntities(collection, { search = '', status = '', role = '', workflow = '', archived = false, page = 1, pageSize = 20 } = {}) {
       if (!['tasks','agents','roles','teams','workflowTemplates','communicationConversations','automations','automationTriggers'].includes(collection)) throw new Error('目录无效');
       page=Number(page);pageSize=Number(pageSize);
       if(!Number.isSafeInteger(page)||page<1||!Number.isSafeInteger(pageSize)||pageSize<1||pageSize>100)throw new Error('分页参数无效');
       const clauses=['collection=?'], values=[collection];
-      const field=name=>`json_extract(value_json,'$.${name}')`;
+      const field=directoryField;
       if(collection==='agents')clauses.push(`${field('status')} != 'deleted'`);
       if(collection==='communicationConversations')clauses.push(`COALESCE(${field('status')},'')!='deleted'`,`(${field('kind')}!='agent' OR EXISTS(SELECT 1 FROM workspace_entities a WHERE a.collection='agents' AND a.id=json_extract(workspace_entities.value_json,'$.targetId') AND json_extract(a.value_json,'$.status')!='deleted'))`);
       if(collection==='tasks') {
-        clauses.push(`COALESCE(${field('kind')},'ordinary') != 'automation'`,`${field('archivedAt')} IS ${archived ? 'NOT ' : ''}NULL`);
+        clauses.push(...taskDirectoryClauses(archived));
         if(workflow && workflow!=='all'){clauses.push(`${field('workflowTemplateId')}=?`);values.push(workflow);}
       }
       if(search.trim()) {

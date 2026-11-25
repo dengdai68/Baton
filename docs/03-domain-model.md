@@ -1,5 +1,7 @@
 # 领域模型
 
+导航的待处理任务数按任务当前状态查询普通未归档任务。等待澄清、待验收、执行中断、暂停和阻塞属于待处理。历史运行和缺少任务主记录的运行不参与统计。
+
 任务人类消息可提供 `clientRequestId`（8–100 位 ASCII 字母、数字、下划线或连字符）。ID 仅在同一 Run 内唯一；Store 将该 ID、原命令的 SHA-256 摘要（正文保留原始空白；省略正文与附件-only 空串等价，省略/null 接收人及回复等价；附件按 ID 顺序）与原始 queued/resumed/interactionOnly 回执随 Message 在同一事务保存。相同 ID 和命令返回原消息及 `replayed=true`，不新增事件、消息、派工，不唤醒执行；首次为 `replayed=false`。重放先于当前状态/归档门禁，因此消息保存后进入失败、已回答或归档仍能确认原事实。相同 ID 改命令返回 HTTP 409；未保存的新命令仍遵循全部原有门禁。未提供 ID 沿用一次新发送语义，不按正文或时间猜测重复。认证与执行协调规则不变。`/collaboration` 与 CLI 输出保留 `clientRequestId` 用于精确认领；仅内部 Message.clientRequest 保存摘要和回执，不进入协作展示。
 
 扩展目录增加只读使用筛选 `usage=all|unused`，默认 all。Store 汇总当前未删除员工的直接扩展选择与当前角色选择，传入配置目录查询的排除 ID 集合；搜索与排除先于排序后分页，不新增存储字段、迁移或执行状态。业务存储不可用时拒绝 unused，不将未知引用显示为空。App 与 CLI plugins/mcps list --usage 共用相同结果。

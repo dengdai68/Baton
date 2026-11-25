@@ -1,5 +1,7 @@
 # 客户端 Renderer
 
+「待我处理」侧栏角标使用后台实时查询的任务数，页面标题汇总各状态接口返回的分页总数。
+
 工作空间设置从同一受认证接口显示工作目录、执行资料、业务 SQLite 与配置目录。更改工作目录整理执行资料。清除数据对话框显示业务 SQLite 与当前工作目录的清除范围。
 
 `index.html` 与 `app.js` 提供 Mac 主界面。`login.html`、`setup.html` 和 `workspace-choice.js` 处理本机登录、首次设置和选址，`settings.mjs`、`communication.js`、`automations.mjs` 分别处理设置、沟通和自动化。`tokens.css` 与 `styles.css` 集中维护界面样式。服务端工作空间资源见 [workspace/](workspace/README.md)，早期浏览器入口见 [phone/](phone/README.md)，图标来源见 [icons/](icons/README.md)。

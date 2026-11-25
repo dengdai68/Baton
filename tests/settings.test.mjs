@@ -12,7 +12,7 @@ import { createCatalogFixtureStore as createStore } from "./fixture-store.mjs";
 import { mkdtemp, mkdir, rm, writeFile, realpath, stat, access } from "node:fs/promises";
 import { constants } from "node:fs";
 import { resolve, join, isAbsolute, normalize, parse } from "node:path";
-import { STATUS_TEXT, buildConsoleEntries, taskActionLabel, taskMatchesFilter, taskNeedsAttention } from "../client/console-projections.mjs";
+import { STATUS_TEXT, TASK_ATTENTION_STATUSES, buildConsoleEntries, taskActionLabel, taskMatchesFilter, taskNeedsAttention } from "../client/console-projections.mjs";
 import { collaborationRecords, partyName, workflowDisplay } from "../client/console-projections.mjs";
 import { createMarketplaceUI, createMcpMarketplaceUI } from "../web/marketplace.mjs";
 import { $t, $tm } from '../client/i18n.mjs';
@@ -215,15 +215,18 @@ test("sidebar counts only human attention and unread replies rather than invento
   const shell = source.slice(source.indexOf("function renderShell()"), source.indexOf("let navigationRequest"));
   const nodes = new Map();
   const headers = ['tasks','inbox','agents'].map(headerView => ({dataset:{headerView},hidden:true}));
-  const context = { state: { currentView: "tasks", communicationUnreadCount: 3, runs: [{ taskId: "a", status: "running" }, { taskId: "b", status: "paused" }, { taskId: "b", status: "failed" }, { taskId: "archived", status: "failed", task: { archivedAt: "yesterday" } }] }, taskNeedsAttention,
+  const context = { state: { currentView: "tasks", communicationUnreadCount: 3, runs: [{ taskId: "missing", status: "failed" }] },
     $$: () => headers,
     $: selector => { if (!nodes.has(selector)) nodes.set(selector, { style: {}, setAttribute() {} }); return nodes.get(selector); } };
   runWithCache(`${shell}; renderShell();`, context);
   assert.deepEqual(headers.map(host=>host.hidden),[false,true,true], 'only the active page exposes its header actions');
-  assert.equal(nodes.get("#nav-inbox-count").textContent, 1, "the attention count lives on 待我处理 only");
+  assert.equal(nodes.get("#nav-inbox-count").hidden, true, "historical runs never supply a fallback count");
   assert.equal(nodes.has("#nav-task-count"), false, "任务中心 no longer duplicates the count");
   assert.equal(nodes.get("#nav-communication-count").textContent, 3);
   for (const id of ["team", "workflow", "agent"]) assert.equal(nodes.has(`#nav-${id}-count`), false);
+  context.state.navigationNotifications = { taskAttentionCount: 1, communicationUnreadCount: 3 };
+  runWithCache("renderShell();", context);
+  assert.equal(nodes.get("#nav-inbox-count").textContent, 1, "the badge uses the latest task directory count");
   context.state.navigationNotifications = { taskAttentionCount: 0, communicationUnreadCount: 0 };
   runWithCache("renderShell();", context);
   assert.equal(nodes.get("#nav-inbox-count").hidden, true);
@@ -1067,14 +1070,23 @@ test('work-root reset preserves presentation preferences and reloads the retaine
 
 async function inboxHarness(extra = {}) {
   const source = await readFile(new URL('../web/app.js', import.meta.url),'utf8');
-  const block = source.slice(source.indexOf('const inboxGroups ='),source.indexOf('/* ---------- 总览 ---------- */'));
-  const state = {currentView:'inbox',inboxSelection:'a',inboxErrors:{},inboxResults:{awaiting_human:{tasks:[{id:'a',title:'登录',status:'awaiting_human',runs:[{id:'run/a'}]},{id:'b',title:'导出',status:'awaiting_human',runs:[{id:'run/b'}]}]}},inboxDetails:{}};
+  const block = source.slice(source.indexOf('const inboxLabels ='),source.indexOf('/* ---------- 总览 ---------- */'));
+  const state = {currentView:'inbox',inboxSelection:'a',inboxErrors:{},inboxResults:{awaiting_human:{total:2,tasks:[{id:'a',title:'登录',status:'awaiting_human',runs:[{id:'run/a'}]},{id:'b',title:'导出',status:'awaiting_human',runs:[{id:'run/b'}]}]}},inboxDetails:{}};
   const preview = {dataset:{},isConnected:true,innerHTML:'',querySelector(){return null;}};
   const list={innerHTML:''},host={innerHTML:'',querySelector:selector=>selector==='.inbox-list'?list:selector==='.inbox-layout'?{}:null};
-  const context = {state,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:selector=>selector==='#inbox-content'?host:preview,setTitleCount(){},requestAnimationFrame:callback=>callback(),esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
+  const context = {state,TASK_ATTENTION_STATUSES,URLSearchParams,console,Date,CSS:{escape:String},document:{activeElement:null},$:selector=>selector==='#inbox-content'?host:preview,setTitleCount(){},renderTitleCount(){},requestAnimationFrame:callback=>callback(),esc:value=>String(value??'').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;'),pill:String,statusText:{},statusTone:()=> 'attention',statusShape:()=> '?',exactTime:String,timeAgo:String,roleColor:()=> 'color-blue',initialsOf:()=> 'K',acceptanceReview:()=>({verified:true,criteria:['宽窄布局'],artifactCount:2}),acceptanceCriteriaMarkup:value=>value.criteria.join('；'),toast(){},api:async()=>({}),...extra};
   const controller = runWithCache(block+';({refreshInbox,renderInbox,renderInboxPreview,sendInboxAnswer,inboxFacts,inboxDrafts,inboxAnswered,inboxTasks,advanceInbox})',context);
   return {controller,state:context.state,preview,...context};
 }
+test('inbox title counts every matching task across its paginated status groups', async () => {
+  const renderedCounts = [];
+  const h = await inboxHarness({setTitleCount: (view, count) => renderedCounts.push([view, count])});
+  h.state.inboxResults.awaiting_human.total = 27;
+  h.state.inboxResults.failed = {tasks: [], total: 0};
+  h.controller.renderInbox();
+  assert.deepEqual(renderedCounts, [['inbox', 27]]);
+  assert.equal(h.controller.inboxTasks().length, 2);
+});
 test('inbox rows derive real question identity, failure text and acceptance from compact facts',async()=>{
   const {controller} = await inboxHarness();
   const question={id:'q',content:'是否调整第三方登录？',sender:{id:'kai',name:'Kai'},recipient:{type:'human'}};

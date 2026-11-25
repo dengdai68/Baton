@@ -1,5 +1,7 @@
 # 共享展示投影
 
+`TASK_ATTENTION_STATUSES` 是待处理列表分组、共享状态筛选和后端导航计数的共同定义。
+
 存储设置与 CLI 使用相同的路径模型。桌面设置分别显示工作目录、执行资料目录和业务数据库。清除数据提示涵盖业务 SQLite 与整个当前工作目录，英文和繁体中文使用同一表述。
 
 Mac 的 [web/](../web/README.md)、[手机端](../apps/mobile/README.md) 和 [CLI](../cli/README.md) 共享这里的展示规则。`console-projections.mjs` 整理任务、协作消息及控制台事件，`workflow-description.mjs` 定义工作流图的连线投影，`mcp-tool-page.mjs` 提供 MCP 工具列表搜索与分页，`byte-cache.mjs` 提供按容量淘汰的缓存。`runtime-providers.mjs` 集中定义跨端使用的 Runtime 标识及名称，服务端也引用这些定义。译文维护见 [locales/](locales/README.md)。
