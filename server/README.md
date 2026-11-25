@@ -1,5 +1,7 @@
 # 控制面
 
+运行时读取用户的普通偏好，再应用当前数字员工的模型、思考档位和所选扩展。Claude Code 的输出预算及自动压缩环境参数通过子进程传入。 入口见 server/runtime/extensions.mjs 与 portable-extensions.mjs。
+
 导航接口每次从任务目录查询待处理任务数量。SQLite 计数使用普通未归档任务的当前状态，和列表匹配。
 
 `index.mjs` 装配桌面接口、工作空间网关和后台恢复。`workspace-admin.mjs` 是独立部署入口，`workspace-http.mjs` 与 `workspace-identity.mjs` 负责远端访问和设备会话。`store.mjs`、`persistence.mjs` 与 `orchestrator.mjs` 分别处理领域状态、SQLite 持久化和执行调度。`run-files.mjs` 管理运行文件。[runtime/](runtime/README.md) 连接各 Provider，[history/](history/README.md) 提供受控历史查询。

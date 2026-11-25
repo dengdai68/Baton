@@ -1023,6 +1023,7 @@
     },
     {
       "id": "server.local-agent-runtime",
+      "userPreferences": "Native user preferences precede employee model, effort and selected extensions. Claude environment budgets are passed at spawn. Kimi TOML and OpenCode JSONC are parsed structurally.",
       "sourceMarkdownCompatibility": "v3 plans map known source model aliases and native Skill/question tools while preserving v2 frozen digests. A narrow description-colon YAML repair is materialized only in private invocation copies. Format errors expose relative paths/positions without YAML buffers and isolate the affected catalog entry. External-source acceptance imports ai-minions once and checks every plugin against all three Runtimes.",
       "pluginUpdates": "Git HEAD/ref/sha probing and original-market/dependency provenance prepare only requested installed names. Automatic source clones are transient; failed candidates never replace active bindings, and bundled MCP is excluded from auto installation.",
       "mcpEditing": "mcpEditInput preserves unchanged redacted JSON fields and reuses current configuration validation; edits create immutable files and leave frozen references readable.",
@@ -1074,6 +1075,7 @@
         "node:os",
         "server/runtime/registry.mjs",
         "js-yaml (safe frontmatter parsing)",
+        "smol-toml and jsonc-parser (native runtime preferences)",
         "vendored MIT DeepSeek Harness 0.2.2-rc.1 hook bridges and native peer APIs"
       ],
       "forbiddenDependencies": [

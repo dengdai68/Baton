@@ -12,7 +12,7 @@
 
 无法通过原生命令安全查询模型目录时返回明确错误并保留手工输入，不编造模型/档位。安装只读检查执行 PATH；未安装的槽位仍可见，但不能启用、测试或启动。账号登录继续由各 CLI 自己管理。
 
-OpenCode 使用 `opencode api --standalone model.list` 查询模型及变体元数据，只投影可公开模型字段。Gemini 的应用系统指令通过私有 `GEMINI_SYSTEM_MD` 文件传递，按成员创建稳定的私有 `GEMINI_CLI_HOME`；只投影账号、模型及连接环境，仅加载所选 Skill/MCP，关闭未选择的 Hook，并显式跳过目录交互信任提示；Qwen追加系统指令，Kimi Code 2 使用创建时绑定的 Markdown Agent，每轮从私有指令文件读取最新应用说明，Pi追加系统文件，OpenCode 使用本轮私有 Agent 配置、独立服务器及关闭自动更新。Cursor没有独立系统指令参数时，显式在本轮消息前缀传入应用指令，属于传输能力限制，不能声称为原生system角色。新增适配器通过相同私有历史桥加载 baton_history，不另造历史接口。
+OpenCode 使用 `opencode api --standalone model.list` 查询模型及变体元数据，只投影可公开模型字段。Gemini 的应用系统指令通过私有 `GEMINI_SYSTEM_MD` 文件传递，按成员创建稳定的私有 `GEMINI_CLI_HOME`；继承普通用户偏好以及账号、模型和连接环境，仅加载所选 Skill/MCP，关闭未选择的 Hook，并显式跳过目录交互信任提示；Qwen追加系统指令，Kimi Code 2 使用创建时绑定的 Markdown Agent，每轮从私有指令文件读取最新应用说明，Pi追加系统文件，OpenCode 使用本轮私有 Agent 配置、独立服务器及关闭自动更新。Cursor没有独立系统指令参数时，显式在本轮消息前缀传入应用指令，属于传输能力限制，不能声称为原生system角色。新增适配器通过相同私有历史桥加载 baton_history，不另造历史接口。
 
 ## 原生接口依据
 
@@ -40,9 +40,9 @@ OpenCode v2 的 `run --session` 在 ID 不存在时会创建会话。因此续�
 
 Kimi 的创建时 Agent 指向按执行成员键隔离的 `.baton/runtime-context` 私有指令文件；续接只更新该文件，不改写原 Trace。没有原生终结提示时保留调用记录，不能声称已有可续接会话。
 
-Cursor 原生插件、MCP 与 Skill 缺少统一的调用级关闭接口，因此为每位执行成员使用稳定的私有 CLI HOME、CURSOR_CONFIG_DIR 与 CURSOR_DATA_DIR。仅投影原生模型和权限设置，不继承全局扩展；macOS 引用现有默认加密钥匙串数据库，文件认证引用原账号文件，由 CLI 自行读取，不提取令牌。工具仍以本机用户权限运行，应用指令明确给出原用户目录及 Git/SSH 等命令的 HOME 用法；这不是文件访问沙箱。
+Cursor 原生插件、MCP 与 Skill 缺少统一的调用级关闭接口，因此为每位执行成员使用稳定的私有 CLI HOME、CURSOR_CONFIG_DIR 与 CURSOR_DATA_DIR。投影原生模型、权限、网络与其他普通偏好，不继承全局扩展；macOS 引用现有默认加密钥匙串数据库，文件认证引用原账号文件，由 CLI 自行读取，不提取令牌。工具仍以本机用户权限运行，应用指令明确给出原用户目录及 Git/SSH 等命令的 HOME 用法；这不是文件访问沙箱。
 
-Gemini 的系统设置覆盖要求 root 所有权，不能用用户私有文件冒充系统设置。因此在 `.baton/runtime-context/<成员执行键>/gemini-home` 维护稳定的原生配置与会话缓存，只投影连接字段，扩展不从全局继承。OS 钥匙串仍由原生 CLI 读取；旧 OAuth 文件通过 `GOOGLE_APPLICATION_CREDENTIALS` 引用，适配器只读文件元数据，不读取 token 字节。原始文件变动仅使该成员的派生认证缓存失效，全局配置和账号不改写。
+Gemini 的系统设置覆盖要求 root 所有权，不能用用户私有文件冒充系统设置。因此在 `.baton/runtime-context/<成员执行键>/gemini-home` 维护稳定的原生配置与会话缓存，投影用户普通偏好和连接字段，当前员工提供扩展。OS 钥匙串仍由原生 CLI 读取；旧 OAuth 文件通过 `GOOGLE_APPLICATION_CREDENTIALS` 引用，适配器只读文件元数据，不读取 token 字节。原始文件变动仅使该成员的派生认证缓存失效，全局配置和账号不改写。
 
 真实验证中的隔离 HOME 在 macOS 下只引用现有默认加密钥匙串数据库，确保原生 CLI 的 `security` 查询仍能定位现有登录；验证程序不查询或输出凭据值，不创建或修改钥匙串。
 
@@ -89,3 +89,5 @@ Skill 可选字段 allowed-tools/allowedTools 不再构成六种 Runtime 的不�
 2026-11-14本轮真实验收使用官方Claude Code 2.1.325、Codex 0.167.2、DeepSeek Harness 0.2.2-rc.1。升级解决旧Claude缺少system-prompt-snapshot选项、旧DSH stdout混入目录日志的问题，未添加适配回退。验证包含普通App登录shell解析的实际CLI、原生会话续接、真实任务到人类验收及三Runtime私聊/群聊问答；resume系统指令另有请求形状检查，不能把模型输出服从性当请求未送达。后续仍应从官方来源更新并按实际executable验证。
 
 Runtime 显示名、思考档位标签与模型目录说明在界面按当前语言显示；Runtime ID、原生参数、调用与会话协议不变，服务端诊断文字保持源语言并在展示时翻译。
+
+Cursor、Gemini、Qwen 和 Pi 的成员配置投影包含普通用户偏好。Kimi 在专属临时目录读取配置，混合 Hook 的 TOML 按字段筛选，结束后清理。OpenCode 的用户配置、显式配置文件及内联 JSONC 偏好与当前成员的 Agent、策略、Skill 和 MCP 配置叠加。

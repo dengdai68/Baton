@@ -1,5 +1,7 @@
 # 本机 Runtime
 
+运行时读取用户的普通偏好，再应用当前数字员工的模型、思考档位和所选扩展。Claude Code 的输出预算及自动压缩环境参数通过子进程传入。 入口见 server/runtime/extensions.mjs 与 portable-extensions.mjs。
+
 `registry.mjs` 登记、查询和终止活动执行，`configuration.mjs` 管理 Runtime 配置，`marketplace.mjs` 处理扩展目录，`local-cli.mjs`、`codex-app-server.mjs` 和 `dsh.mjs` 对接各自执行协议。DeepSeek Harness 的内置桥接副本及来源在 [vendor/dsh-hooks/](vendor/dsh-hooks/README.md)。
 
 纸张设计继续落地：待我处理、下一步/更多菜单、命令面板、列表/看板、详情抽屉、精确回复上下文、即时保存与一体化标题栏。共享 tokens 位于 web/tokens.css，组件位于 web/styles.css，compact.css 只保留密度。员工和扩展使用同一目录语言，窄沟通窗口保留首屏发送。扩展新增 usage=all|unused 筛选，App/CLI/HTTP/Store 同步，当前未删除员工或角色引用均算使用；搜索筛选先于分页，不改导入、编辑、执行或冻结协议。
@@ -12,7 +14,7 @@ remotePluginRevision 用 ls-remote 查询真实提交并保留 ref/sha；importP
 
 MCP mcpEditInput 复用 parseMcpJson 与既有安装校验；脱敏值只在相同 JSON 路径且未更改时恢复原私有值。编辑产出新不可变安装版本，不覆盖旧 mcp.json，兼容性与服务名冲突继续走 resolve。目录绑定事务由 Store 负责。
 
-所选 Skill 原生加载：Claude 保留 --plugin-dir，移除禁用全部技能的参数，空 setting-sources 排除宿主设置并关闭可关闭的 bundled skills；Provider 必备内置能力不等于员工安装插件。Codex 有所选 Skill 时使用调用独占的 codex-app-server.mjs，以 extraRoots/set 注册精确目录、原生发现、每线程 skills.config 仅启用所选路径；无 Skill 的调用保留 exec，二者使用同一原生 thread 存储并精确续接。原生加载失败不回退为提示词读文件。应用系统指令不再追加 Skill 路径或历史工具目录；MCP 名称/参数/分页由真实服务定义提供。
+所选 Skill 原生加载：Claude 保留 --plugin-dir，移除禁用全部技能的参数，空 setting-sources 排除自动发现的扩展，再通过私有设置文件应用用户偏好并关闭可关闭的 bundled skills；Provider 必备内置能力不等于员工安装插件。Codex 有所选 Skill 时使用调用独占的 codex-app-server.mjs，以 extraRoots/set 注册精确目录、原生发现、每线程 skills.config 仅启用所选路径；无 Skill 的调用保留 exec，二者使用同一原生 thread 存储并精确续接。原生加载失败不回退为提示词读文件。应用系统指令不再追加 Skill 路径或历史工具目录；MCP 名称/参数/分页由真实服务定义提供。
 
 打包版历史服务以 Electron Node 模式启动：Codex 适配器传递 Bridge 的完整 MCP env，required=true 让初始化失败真实报错；ELECTRON_RUN_AS_NODE 只给历史 MCP 子进程，cliEnvironment 仍从 Provider 环境移除。平台历史与员工选择的市场 MCP 独立，不新增配置字段。
 
@@ -84,9 +86,9 @@ mcp-tools.mjs复用mcp-launcher读取真实工具定义（initialize/tools/list�
 
 Gemini 非交互调用显式信任任务工作目录并指定 extensions none，保持现有账号配置与全局文件不变。系统设置路径在原生 CLI 中要求 root 所有权，适配器不写入该路径，也不以未经验证的设置覆盖宣称扩展已隔离。Cursor thinking delta 按原生事件保存公开思考。
 
-Gemini 使用稳定的成员私有 GEMINI_CLI_HOME 只投影连接配置，原生钥匙串/旧 OAuth 路径仍由 CLI 自行读取。Qwen 使用 safe-mode 禁用扩展而保留认证；不使用会跳过账号设置的 bare 模式。
+Gemini 使用稳定的成员私有 GEMINI_CLI_HOME 投影用户偏好和认证设置，原生钥匙串/旧 OAuth 路径仍由 CLI 自行读取。Qwen 使用 safe-mode 禁用扩展而保留认证；不使用会跳过账号设置的 bare 模式。
 
-Cursor 在成员稳定的私有 HOME 中保存原生会话，仅引用已有钥匙串/文件认证并投影 model/permissions，关闭全局扩展隐式加载。原用户目录通过调用指令及 BATON_HOST_HOME 提供；不限制本机文件操作。
+Cursor 在成员稳定的私有 HOME 中保存原生会话，仅引用已有钥匙串/文件认证并投影普通 CLI 设置，关闭全局扩展隐式加载。原用户目录通过调用指令及 BATON_HOST_HOME 提供；不限制本机文件操作。
 
 portable-extensions.mjs 复用 selectedExtensions/readPluginExecutionPlan 校验与 MCP 私有启动器，为六个新增 Runtime 生成命名空间 Skill 及原生 MCP 配置。Skill 相对资源保留，子代理映射各 Runtime 原生接口；pi-agents.mjs 只由原生 Pi 扩展加载器执行，独立进程/会话传递冻结正文、源工具选择、模型及取消，不拥有领域状态。Cursor 拒绝源工具约束，Pi 要求显式基础工具清单。Hook/未映射工具/专用字段整插件明确拒绝。不得用拼接 Skill 全文或 Shell 客户端替代原生加载。
 

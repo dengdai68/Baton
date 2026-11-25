@@ -4,7 +4,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm,stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {createMarketplace} from '../server/runtime/marketplace.mjs';
-import {preparePortableExtensions,portableSkillName,configurePortableExtensions} from '../server/runtime/portable-extensions.mjs';
+import {preparePortableConnectionProfile,preparePortableExtensions,portableSkillName,configurePortableExtensions} from '../server/runtime/portable-extensions.mjs';
 import {PORTABLE_RUNTIME_IDS,RUNTIME_IDS} from '../client/runtime-providers.mjs';
 import {createStore} from '../server/store.mjs';
 async function fixture(t){const root=await mkdtemp(join(tmpdir(),'af-native-extensions-'));t.after(()=>rm(root,{recursive:true,force:true}));const source=join(root,'source');await mkdir(join(source,'.claude-plugin'),{recursive:true});await mkdir(join(source,'skills','proof'),{recursive:true});await writeFile(join(source,'.claude-plugin/plugin.json'),JSON.stringify({name:'selected-plugin',version:'1.0.0'}));await writeFile(join(source,'skills/proof/SKILL.md'),'---\nname: proof\ndescription: Use the selected proof instructions.\n---\nRead resources.txt beside this file.');await writeFile(join(source,'skills/proof/resources.txt'),'relative selected resource');const market=createMarketplace(join(root,'market'));return {root,source,market};}
@@ -68,4 +68,30 @@ test('existing optional-field compatibility cache can refresh without reinstalli
  const {plugins:[entry]}=await market.import({path:source}),store=createStore({databasePath:join(root,'cached.sqlite')});t.after(()=>store.close());const stale={...entry,providers:['claude-code','codex','dsh'],compatibility:{...entry.compatibility,...Object.fromEntries(PORTABLE_RUNTIME_IDS.map(p=>[p,{supported:false,reasons:['old allowed-tools rejection']}]))}};store.registerExtensions([stale]);
  const before=store.getExtension('plugin',entry.id);assert.equal(before.compatibility.opencode.supported,false);const current=await market.detail(entry.id,'plugin');const refreshed=store.refreshExtensionCompatibility('plugin',entry.id,current);assert.equal(refreshed.id,entry.id);assert.deepEqual(refreshed.source,before.source);for(const provider of RUNTIME_IDS)assert.equal(refreshed.compatibility[provider].supported,true);
  const binding=await market.resolve({pluginIds:[entry.id],mcpIds:[]},'opencode');assert.match(await readFile(binding.skillPaths[0],'utf8'),/allowed-tools: Bash, Read/);
+});
+
+test('native settings preserve compaction and employee effort while excluding ambient components', async t => {
+  const root=await mkdtemp(join(tmpdir(),'baton-user-prefs-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  for(const provider of ['pi','qwen','kimi']){
+    const source=join(root,'source-'+provider),context=join(root,'context-'+provider);
+    await mkdir(source);await mkdir(context);
+    const key={pi:'PI_CODING_AGENT_DIR',qwen:'QWEN_HOME',kimi:'KIMI_CODE_HOME'}[provider];
+    const env={HOME:root,[key]:source};
+    if(provider==='kimi'){
+      const original='default_model = "model-a"\n[loop_control]\nmax_steps = 77\n[[hooks.Stop]]\ncommand = "unselected"\n';
+      await writeFile(join(source,'config.toml'),original);
+      await preparePortableConnectionProfile({runtime:{provider}},env,context,context);
+      const settings=await readFile(join(context,'config.toml'),'utf8');
+      assert.match(settings,/max_steps = 77/);assert.doesNotMatch(settings,/unselected/);
+      assert.equal(await readFile(join(source,'config.toml'),'utf8'),original);
+    } else {
+      await writeFile(join(source,'settings.json'),JSON.stringify({compaction:{reserveTokens:30000},model:{reasoningEffort:'low'},packages:['unselected'],hooks:{Stop:[]}}));
+      await preparePortableConnectionProfile({runtime:{provider,effort:'high'}},env,context);
+      const settings=JSON.parse(await readFile(join(env[key],'settings.json'),'utf8'));
+      assert.deepEqual(settings.compaction,{reserveTokens:30000});
+      assert.equal(settings.packages,undefined);assert.equal(settings.hooks,undefined);
+      if(provider==='qwen')assert.equal(settings.model.reasoningEffort,'high');
+    }
+  }
 });

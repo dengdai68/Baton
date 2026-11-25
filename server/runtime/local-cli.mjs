@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from 'node:url';
 import { runDshSdk } from "./dsh.mjs";
@@ -10,7 +11,7 @@ import { constants } from "node:fs";
 import { createInterface } from "node:readline";
 import { registerExecution, hasActiveExecution } from "./registry.mjs";
 import { withExtensionValidation } from "./marketplace.mjs";
-import { selectedExtensions, codexMarketArgs, claudeMarketEnvironment, nativePluginRuntime } from "./extensions.mjs";
+import { selectedExtensions, codexMarketArgs, claudeUserConfiguration, nativePluginRuntime } from "./extensions.mjs";
 import {runtimeStorageReferences} from '../storage-layout.mjs';
 import { diagnostic, diagnosticRedactor, withDiagnosticContext } from "../diagnostics.mjs";
 import { diagnoseLaunch } from "./launch-diagnostics.mjs";
@@ -414,10 +415,10 @@ async function executeJsonl({ runId, executionKey = runId, command, args, cwd, e
   }
 }
 
-async function invokeClaudeCodeCli(input) {
+async function invokeClaudeCodeCli(input, settingsFile) {
   const { runtime, workspacePath, traceDirectory, finalPath, outputSchema, prompt, runId, onEvent, apiRetryTimeoutMs, idleTimeoutMs } = input;
   const extensions = await selectedExtensions(runtime);
-  const connectionEnv = await claudeMarketEnvironment();
+  const {preferences, environment: connectionEnv} = await claudeUserConfiguration();
   await verifyPaths(runtime.skillPaths, "Claude Code 技能文件");
   await verifyPaths(runtime.pluginPaths, "Claude Code 插件目录");
   await verifyPaths(runtime.mcpConfigPaths, "Claude Code MCP 配置");
@@ -431,7 +432,9 @@ async function invokeClaudeCodeCli(input) {
     args.push("--append-system-prompt-file", instructionsPath, "--system-prompt-snapshot", "off");
   }
   if (outputSchema) args.push("--json-schema", JSON.stringify(outputSchema));
-  args.push('--strict-mcp-config', '--setting-sources', '', '--settings', JSON.stringify({disableBundledSkills:true,...(input.workspaceHook ? {hooks:{PostToolUse:[{hooks:[{type:'command',command:input.workspaceHook.command,timeout:35}]}]}} : {})}));
+  const settings = { ...preferences, disableBundledSkills:true,...(input.workspaceHook ? {hooks:{PostToolUse:[{hooks:[{type:'command',command:input.workspaceHook.command,timeout:35}]}]}} : {})};
+  await writeFile(settingsFile, JSON.stringify(settings), {mode:0o600});
+  args.push('--strict-mcp-config','--setting-sources','','--settings',settingsFile);
   if (input.session) {
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.session.sessionId)) throw new Error("Claude Code 会话 ID 必须为 UUID");
     args.push(input.session.resume ? "--resume" : "--session-id", input.session.sessionId);
@@ -453,8 +456,10 @@ async function invokeClaudeCodeCli(input) {
   let finalText = "", terminalFailure = null, recovered = false;
   let turnComplete = false;
   const backgroundTasks = new Set();
+  const env = cliEnvironment(runtime.executable || "claude", { ...connectionEnv, ...(input.historyMcp ? { MCP_TIMEOUT: process.env.MCP_TIMEOUT || "120000", MCP_CONNECT_TIMEOUT_MS: process.env.MCP_CONNECT_TIMEOUT_MS || "120000", MCP_CONNECTION_NONBLOCKING: "0", ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH || "false" } : {}), BATON_TRACE_OUTPUT_DIR: `${traceDirectory}/output` });
+  if (runtime.effort) delete env.CLAUDE_CODE_EFFORT_LEVEL;
   return executeJsonl({
-    runId, command: runtime.executable || "claude", args, cwd: workspacePath, env: cliEnvironment(runtime.executable || "claude", { ...connectionEnv, ...(input.historyMcp ? { MCP_TIMEOUT: process.env.MCP_TIMEOUT || "120000", MCP_CONNECT_TIMEOUT_MS: process.env.MCP_CONNECT_TIMEOUT_MS || "120000", MCP_CONNECTION_NONBLOCKING: "0", ENABLE_TOOL_SEARCH: process.env.ENABLE_TOOL_SEARCH || "false" } : {}), BATON_TRACE_OUTPUT_DIR: `${traceDirectory}/output` }), provider: "Claude Code", apiRetryTimeoutMs, idleTimeoutMs,
+    runId, command: runtime.executable || "claude", args, cwd: workspacePath, env, provider: "Claude Code", apiRetryTimeoutMs, idleTimeoutMs,
     onEvent, diagnosticPrompt: [input.systemPrompt, prompt].filter(Boolean), executionKey: input.executionKey, canStart: input.canStart, session: input.session,
     isBackgroundWaiting: () => turnComplete || backgroundTasks.size > 0,
     normalizeEvent: (event) => {
@@ -614,7 +619,13 @@ async function loggedInvocation(input, invoke) {
   }, { redact: diagnosticRedactor({ secrets, prompt: [input.systemPrompt, input.prompt].filter(Boolean).join("\n") }) });
 }
 
-export function runClaudeCodeCli(input) { return loggedInvocation(input, invokeClaudeCodeCli); }
+export function runClaudeCodeCli(input) {
+  return loggedInvocation(input, async value => {
+    const directory = await mkdtemp(join(tmpdir(), 'baton-claude-settings-'));
+    try { return await invokeClaudeCodeCli(value, join(directory,'settings.json')); }
+    finally { await rm(directory,{recursive:true,force:true}); }
+  });
+}
 export function runCodexCli(input) { return loggedInvocation(input, invokeCodexCli); }
 
 export function runDshCli(input) { return loggedInvocation(input, value => runDshSdk(value, { content: executionContent, cancelledError: message => new RuntimeCancelledError(message), missingSessionError: message => new RuntimeSessionMissingError(message) })); }

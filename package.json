@@ -1,6 +1,6 @@
 {
   "name": "baton-app",
-  "version": "0.1.12-beta.3",
+  "version": "0.1.12",
   "private": true,
   "license": "Apache-2.0",
   "description": "Local AI teams, collaborative tasks and scheduled automation",
@@ -51,10 +51,12 @@
     "elkjs": "^0.10.0",
     "highlight.js": "^11.12.0",
     "js-yaml": "4.3.2",
+    "jsonc-parser": "3.3.1",
     "marked": "^18.0.12",
     "qrcode": "^1.5.4",
     "semver": "7.7.3",
-    "sharp": "0.35.5"
+    "sharp": "0.35.5",
+    "smol-toml": "1.9.1"
   },
   "devDependencies": {
     "electron": "44.11.5",

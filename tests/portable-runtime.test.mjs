@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {Readable} from 'node:stream';
 import {randomUUID} from 'node:crypto';
 import {PORTABLE_RUNTIME_IDS,RUNTIME_IDS,RUNTIME_EFFORT_LEVELS,runtimeLabel} from '../client/runtime-providers.mjs';
-import {readNativeJsonl,portableEvents,assertPortableExtensionIsolation,nativeModelWithEffort} from '../server/runtime/portable-cli.mjs';
+import {runPortableCli,readNativeJsonl,portableEvents,assertPortableExtensionIsolation,nativeModelWithEffort} from '../server/runtime/portable-cli.mjs';
 import {runRuntime,executionContent,separateRuntimeSession} from '../server/runtime/local-cli.mjs';
 import {createStore} from '../server/store.mjs';
 import {validateInput} from '../cli/client.mjs';
@@ -90,26 +90,30 @@ test('OpenCode native policies isolate skills and MCP; unsupported native plugin
 test('Cursor projects an isolated native home while preserving host context, model and permissions',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-cursor-profile-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const native=join(root,'native'),work=join(root,'work'),trace=join(root,'trace');await mkdir(join(native,'.cursor/skills/unselected'),{recursive:true});await mkdir(work);await mkdir(trace);
- const original={model:'manual-native',permissions:{deny:['Shell(rm)']},hooks:{never:'never-run'},unrelatedSecret:'must-not-project'};await writeFile(join(native,'.cursor/cli-config.json'),JSON.stringify(original));await writeFile(join(native,'.cursor/mcp.json'),JSON.stringify({mcpServers:{unselected:{command:'never-run'}}}));
+ const original={model:'manual-native',permissions:{deny:['Shell(rm)']},hooks:{never:'never-run'},editor:{vimMode:true}};await writeFile(join(native,'.cursor/cli-config.json'),JSON.stringify(original));await writeFile(join(native,'.cursor/mcp.json'),JSON.stringify({mcpServers:{unselected:{command:'never-run'}}}));
  const capture=join(root,'capture.json'),command=join(root,'cli');await writeFile(command,`#!/usr/bin/env node
 import{writeFile,readFile,access}from'node:fs/promises';import{join}from'node:path';let text='';for await(const x of process.stdin)text+=x;let mcp=false;try{await access(join(process.env.CURSOR_CONFIG_DIR,'mcp.json'));mcp=true;}catch{}
 await writeFile(${JSON.stringify(capture)},JSON.stringify({home:process.env.HOME,host:process.env.BATON_HOST_HOME,settings:JSON.parse(await readFile(join(process.env.CURSOR_CONFIG_DIR,'cli-config.json'),'utf8')),text,mcp}));for(const e of ${JSON.stringify(frames('cursor'))})console.log(JSON.stringify(e));`,{mode:0o700});
  const snapshots=[];const input={onPrompt:async value=>snapshots.push(value),runtime:{provider:'cursor',executable:command},environment:{...process.env,HOME:native,CURSOR_CONFIG_DIR:join(native,'.cursor')},workspacePath:work,traceDirectory:trace,executionKey:'cursor-member',prompt:'Verify',systemPrompt:'Application rules',onEvent:async()=>{}};
- await runRuntime(input);const first=JSON.parse(await readFile(capture,'utf8'));assert.notEqual(first.home,native);assert.equal(first.host,native);assert.equal(snapshots.length,1);assert.ok(snapshots[0].systemPrompt.includes(native));assert.equal(snapshots[0].prompt,'Verify');assert.deepEqual(first.settings,{model:original.model,permissions:original.permissions});assert.equal(first.mcp,true);assert.match(first.text,/本机用户目录/);assert.ok(first.text.includes(native));
+ await runRuntime(input);const first=JSON.parse(await readFile(capture,'utf8'));assert.notEqual(first.home,native);assert.equal(first.host,native);assert.equal(snapshots.length,1);assert.ok(snapshots[0].systemPrompt.includes(native));assert.equal(snapshots[0].prompt,'Verify');assert.deepEqual(first.settings,{model:original.model,permissions:original.permissions,editor:original.editor});assert.equal(first.mcp,true);assert.match(first.text,/本机用户目录/);assert.ok(first.text.includes(native));
+ const marketplace=join(first.home,'.cursor/plugins/marketplaces');
+ await mkdir(marketplace,{recursive:true});await writeFile(join(marketplace,'.comms-plugin-blocks.v1.json'),'{}');
  await runRuntime({...input,session:{sessionId:uuid,resume:true}});const next=JSON.parse(await readFile(capture,'utf8'));assert.equal(next.home,first.home);assert.deepEqual(JSON.parse(await readFile(join(native,'.cursor/cli-config.json'),'utf8')),original);
+ await mkdir(join(marketplace,'ambient-plugin'));
+ await assert.rejects(runRuntime({...input,session:{sessionId:uuid,resume:true}}),/未选择扩展/);
 });
 
 test('Gemini projects connection settings into a stable private home without loading native global extensions',async t=>{
  const root=await mkdtemp(join(tmpdir(),'af-gemini-profile-'));t.after(()=>rm(root,{recursive:true,force:true}));
  const native=join(root,'native'),workspace=join(root,'work'),trace=join(root,'trace');await mkdir(join(native,'.gemini/skills/unselected'),{recursive:true});await mkdir(workspace);await mkdir(trace);
- const original={security:{auth:{selectedType:'gemini-api-key'}},model:{name:'manual-native'},env:{GEMINI_BASE_URL:'https://example.invalid',UNRELATED_SECRET:'never-project'},mcpServers:{unselected:{command:'never-run'}},hooks:{SessionStart:[{command:'never-run'}]},skills:{enabled:true}};
+ const original={security:{auth:{selectedType:'gemini-api-key'}},model:{name:'manual-native'},experimental:{newPreference:true},env:{GEMINI_BASE_URL:'https://example.invalid',UNRELATED_SECRET:'never-project'},mcpServers:{unselected:{command:'never-run'}},hooks:{SessionStart:[{command:'never-run'}]},skills:{enabled:true}};
  const settings=join(native,'.gemini/settings.json');await writeFile(settings,JSON.stringify(original));const oauth=join(native,'.gemini/oauth_creds.json');await writeFile(oauth,'must not be parsed by adapter');
  const command=join(root,'cli'),capture=join(root,'capture.json');await writeFile(command,`#!/usr/bin/env node
 import{readFile,writeFile}from'node:fs/promises';import{join}from'node:path';let text='';for await(const part of process.stdin)text+=part;
 await writeFile(${JSON.stringify(capture)},JSON.stringify({home:process.env.GEMINI_CLI_HOME,settings:JSON.parse(await readFile(join(process.env.GEMINI_CLI_HOME,'.gemini/settings.json'),'utf8')),reference:process.env.GOOGLE_APPLICATION_CREDENTIALS}));
 for(const e of ${JSON.stringify(frames('gemini'))})console.log(JSON.stringify(e));`,{mode:0o700});
  const input={runtime:{provider:'gemini',executable:command},environment:{...process.env,HOME:native,GEMINI_CLI_HOME:native},workspacePath:workspace,traceDirectory:trace,executionKey:'same-member',prompt:'Verify',onEvent:async()=>{}};
- await runRuntime(input);const first=JSON.parse(await readFile(capture,'utf8'));assert.equal(first.settings.security.auth.selectedType,'gemini-api-key');assert.deepEqual(first.settings.model,{name:'manual-native'});assert.equal(first.settings.env.UNRELATED_SECRET,undefined);assert.deepEqual(first.settings.mcpServers,{});assert.equal(first.settings.hooks,undefined);assert.deepEqual(first.settings.skills,{enabled:false});assert.deepEqual(first.settings.hooksConfig,{enabled:false});assert.deepEqual(first.settings.mcp,{allowed:[]});assert.equal(first.reference,oauth);assert.notEqual(first.home,native);
+ await runRuntime(input);const first=JSON.parse(await readFile(capture,'utf8'));assert.equal(first.settings.security.auth.selectedType,'gemini-api-key');assert.deepEqual(first.settings.model,{name:'manual-native'});assert.equal(first.settings.env,undefined);assert.equal(first.settings.experimental.newPreference,true);assert.deepEqual(first.settings.mcpServers,{});assert.equal(first.settings.hooks,undefined);assert.deepEqual(first.settings.skills,{enabled:false});assert.deepEqual(first.settings.hooksConfig,{enabled:false});assert.deepEqual(first.settings.mcp,{allowed:[]});assert.equal(first.reference,oauth);assert.notEqual(first.home,native);
  await runRuntime({...input,session:{sessionId:uuid,resume:true}});const second=JSON.parse(await readFile(capture,'utf8'));assert.equal(second.home,first.home);assert.deepEqual(JSON.parse(await readFile(settings,'utf8')),original);assert.equal(await readFile(oauth,'utf8'),'must not be parsed by adapter');
 });
 
@@ -146,4 +150,26 @@ test('native model arguments preserve fast mode and carry real OpenCode variant 
  assert.equal(nativeModelWithEffort({provider:'cursor',model:'native[context=1m]',effort:'high'}),'native[context=1m,effort=high]');
  assert.equal(nativeModelWithEffort({provider:'cursor',model:'native[effort=low]',effort:'high'}),'native[effort=high]');
  assert.equal(nativeModelWithEffort({provider:'opencode',model:'provider/model#old',effort:'deep'}),'provider/model#deep');
+});
+
+test('OpenCode merges ordinary JSONC preferences with employee resources without global plugin discovery',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'baton-opencode-profile-'));
+  t.after(()=>rm(root,{force:true,recursive:true}));
+  const config=join(root,'user-config'),home=join(root,'host'),work=join(root,'work'),trace=join(root,'trace');
+  await mkdir(join(config,'opencode','plugins'),{recursive:true});
+  await mkdir(home);await mkdir(work);await mkdir(trace);
+  const source=join(config,'opencode','opencode.jsonc');
+  const original='{// config comment\n"model":"my-model","plugin":["unselected"],"mcp":{"unused":{}}}';
+  await writeFile(source,original);
+  let projected;
+  await runPortableCli({runtime:{provider:'opencode'},workspacePath:work,traceDirectory:trace,prompt:'test',
+    environment:{HOME:home,XDG_CONFIG_HOME:config,OPENCODE_CONFIG_CONTENT:'{"small_model":"small","agents":{"ambient":{}}}'}
+  },{execute:async({env})=>{
+    projected=env.XDG_CONFIG_HOME;
+    assert.deepEqual(JSON.parse(await readFile(join(projected,'opencode','opencode.jsonc'),'utf8')),{model:'my-model'});
+    const overlay=JSON.parse(env.OPENCODE_CONFIG_CONTENT);
+    assert.equal(overlay.small_model,'small');assert.deepEqual(Object.keys(overlay.agents),['baton']);
+  }});
+  assert.equal(await readFile(source,'utf8'),original);
+  await assert.rejects(readFile(join(projected,'opencode','opencode.jsonc')),{code:'ENOENT'});
 });

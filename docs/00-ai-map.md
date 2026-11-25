@@ -1,5 +1,7 @@
 # 代码导航
 
+运行时读取用户的普通偏好，再应用当前数字员工的模型、思考档位和所选扩展。Claude Code 的输出预算及自动压缩环境参数通过子进程传入。 入口见 server/runtime/extensions.mjs 与 portable-extensions.mjs。
+
 「待我处理」角标实时统计符合任务目录条件的当前任务，标题汇总各状态列表的分页总数。角标和列表共用待处理状态定义。
 
 Baton 业务 SQLite 和派生历史索引固定在配置根的 `sqlite/`。工作目录的 `records` 保存执行文件。App 与 CLI 共享实际路径查询和 Run Files 搬运契约。清除数据保留工作目录和 records 目录，以便重启。

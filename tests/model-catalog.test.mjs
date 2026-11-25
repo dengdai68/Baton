@@ -115,7 +115,7 @@ test("effort vocabularies come from observed CLI behavior only", () => {
 });
 
 test("claude catalog pins and capability declarations are honored by the market spawn environment (QA-RT-03)", async () => {
-  const { claudeMarketEnvironment } = await import("../server/runtime/extensions.mjs");
+  const { claudeUserConfiguration } = await import("../server/runtime/extensions.mjs");
   const home = await mkdtemp(join(tmpdir(), "af-claude-consistency-"));
   await mkdir(join(home, ".claude"));
   const settingsPath = join(home, ".claude", "settings.json");
@@ -130,7 +130,7 @@ test("claude catalog pins and capability declarations are honored by the market 
   // both sides, which is exactly the precedence the contract documents.
   const environment = Object.fromEntries(Object.entries(process.env).filter(([key]) => key !== "CLAUDE_CONFIG_DIR"));
   const catalog = await runtimeModelCatalog({ provider: "claude-code" }, { environment, homeDirectory: home });
-  const spawnEnv = await claudeMarketEnvironment(settingsPath);
+  const {environment:spawnEnv} = await claudeUserConfiguration(settingsPath);
   const effective = (key) => environment[key] ?? spawnEnv[key];
   // Assert by real alias, never by a pinned model ID (QA-RT-04: an actual model
   // ID is not an alias and has no ANTHROPIC_DEFAULT_<id>_* key).

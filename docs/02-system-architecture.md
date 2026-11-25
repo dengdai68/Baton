@@ -147,3 +147,5 @@ Store 选择 Run 全部未读公开消息并管理当前处理消息引用，Orc
 任务回复解析保留原始 rawResponse；正文加唯一尾部协调 JSON 时，正文和非空、不同的 summary 按原顺序合并，相同正文只保存一次，协调字段仍按原协议执行。短引导句不能覆盖完整交付报告。既有 Message 不重写，原始完整输出可在对应控制台读取。
 
 工作空间账号、任务负责人、远程授权与 iOS 入口见[工作空间服务](31-workspace-service.md)。
+
+运行时使用 jsonc-parser 读取 OpenCode 的 JSONC 配置，使用 smol-toml 解析 Kimi 原生配置以隔离 Hooks。结构化解析保留模型名、嵌套表和配置类型，避免用文本匹配修改原生文件。

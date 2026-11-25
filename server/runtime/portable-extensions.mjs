@@ -3,7 +3,8 @@ import {dirname,join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
 import yaml from 'js-yaml';
-import {selectedExtensions} from './extensions.mjs';
+import {parse as parseToml, stringify as stringifyToml} from 'smol-toml';
+import {selectedExtensions, readUserSettings, userPreferences, profileEnvironment} from './extensions.mjs';
 import {readExtensionFile,readPluginExecutionPlan} from './marketplace.mjs';
 import {PORTABLE_AGENT_TOOLS,parsePluginMarkdown} from './plugin-compatibility.mjs';
 
@@ -14,10 +15,6 @@ export async function referenceNativeFile(source,target){
   try{await lstat(source);}catch(error){if(error.code==='ENOENT')return;throw error;}
   try{const current=await lstat(target);if(!current.isSymbolicLink())throw new Error('原生配置引用位置已有非链接文件');await rm(target);}catch(error){if(error.code!=='ENOENT')throw error;}
   await mkdir(dirname(target),{recursive:true,mode:0o700});await symlink(source,target);
-}
-export async function nativeConnectionSettings(source,keys){
-  let value;try{const raw=await readFile(source,'utf8');if(Buffer.byteLength(raw)>1024*1024)throw Error();value=JSON.parse(raw);if(!value||typeof value!=='object'||Array.isArray(value))throw Error();}catch(error){if(error.code==='ENOENT')return {};throw new Error('原生连接设置无法读取或不是有效 JSON');}
-  return Object.fromEntries(keys.filter(key=>Object.hasOwn(value,key)).map(key=>[key,value[key]]));
 }
 // Integrity-checked immutable sources are never modified. Whole plugin copies
 // preserve relative resources; only the native SKILL frontmatter is projected.
@@ -70,12 +67,15 @@ export async function preparePortableExtensions(input){
 }
 export async function writeNativeJson(path,value){await mkdir(dirname(path),{recursive:true,mode:0o700});await writeFile(path,JSON.stringify(value),{mode:0o600});}
 
-export async function preparePortableConnectionProfile(input,environment,context){
+export async function preparePortableConnectionProfile(input,environment,context,kimiHome){
   const provider=input.runtime.provider,host=environment.HOME;
   if(provider==='qwen'){
     const source=environment.QWEN_HOME || join(host,'.qwen'),home=join(context,'qwen-home'),config=join(home,'.qwen');
     await mkdir(config,{recursive:true,mode:0o700});
-    const settings=await nativeConnectionSettings(join(source,'settings.json'),['security','model','modelProviders','env']);
+    const settings=userPreferences(await readUserSettings(join(source,'settings.json')), ['extensionManagement']);
+    Object.assign(environment,profileEnvironment(settings.env,environment));
+    delete settings.env;
+    if(settings.tools) settings.tools=userPreferences(settings.tools,['discoveryCommand','callCommand']);
     // Authentication/provider selection is preserved; customization is invocation-owned.
     await writeNativeJson(join(config,'settings.json'),{...settings,...(input.runtime.effort?{model:{...settings.model,reasoningEffort:input.runtime.effort}}:{}),skills:{disabledLevels:['project','extension','bundled']}});
     for(const name of ['oauth_creds.json'])await referenceNativeFile(join(source,name),join(config,name));
@@ -83,17 +83,32 @@ export async function preparePortableConnectionProfile(input,environment,context
     return `本机用户目录：${host}。CLI HOME 仅保存本成员的调用配置；访问用户配置或运行 Git、SSH 时使用本机用户目录。`;
   }
   if(provider==='kimi'){
-    const source=environment.KIMI_CODE_HOME || join(host,'.kimi-code'),home=join(context,'kimi-home');await mkdir(home,{recursive:true,mode:0o700});
-    // Native TOML remains native-owned. Reject executable hooks rather than
-    // parsing a second TOML dialect or copying credential values.
-    try{const config=await readFile(join(source,'config.toml'),'utf8');if(/^\s*(?:\[\[?\s*["']?hooks\b|["']?hooks["']?\s*=)/m.test(config))throw Error('Kimi 连接配置含有未选择的 Hook，尚不能隔离');}catch(error){if(error.code!=='ENOENT')throw error;}
-    for(const name of ['config.toml','credentials','oauth','device_id','region','sessions','session_index.jsonl','file-history'])await referenceNativeFile(join(source,name),join(home,name));
+    const source=environment.KIMI_CODE_HOME || join(host,'.kimi-code'),home=kimiHome;
+    let raw;
+    try { raw=await readFile(join(source,'config.toml'),'utf8'); }
+    catch(error){if(error.code!=='ENOENT')throw new Error('Kimi 用户配置不可读取');}
+    if(raw!==undefined){
+      let settings;
+      try { settings=parseToml(raw); } catch { throw new Error('Kimi 用户配置不是有效 TOML'); }
+      const filtered=userPreferences(settings),path=join(home,'config.toml');
+      if(Object.keys(filtered).length===Object.keys(settings).length) await symlink(join(source,'config.toml'),path);
+      else await writeFile(path,stringifyToml(filtered),{mode:0o600,flag:'wx'});
+    }
+    for(const name of ['credentials','oauth','device_id','region','sessions','session_index.jsonl','file-history']){
+      await referenceNativeFile(join(source,name),join(home,name));
+    }
+    // A newly authenticated installation may not have created the native session directory yet.
+    try { await lstat(join(home,'sessions')); } catch(error){
+      if(error.code!=='ENOENT')throw error;
+      const sessions=join(context,'kimi-home','sessions');
+      await mkdir(sessions,{recursive:true,mode:0o700});await symlink(sessions,join(home,'sessions'));
+    }
     environment.KIMI_CODE_HOME=home;return '';
   }
   if(provider==='pi'){
     const source=environment.PI_CODING_AGENT_DIR || join(host,'.pi','agent'),home=join(context,'pi-home');await mkdir(home,{recursive:true,mode:0o700});
     for(const name of ['auth.json','models.json'])await referenceNativeFile(join(source,name),join(home,name));
-    const settings=await nativeConnectionSettings(join(source,'settings.json'),['defaultProvider','defaultModel','defaultThinkingLevel','enabledModels']);
+    const settings=userPreferences(await readUserSettings(join(source,'settings.json')), ['promptTemplates','shellCommandPrefix','resources']);
     await writeNativeJson(join(home,'settings.json'),settings);environment.PI_CODING_AGENT_DIR=home;return '';
   }
   return '';
@@ -112,7 +127,7 @@ export async function configurePortableExtensions(input,environment,projection){
   if(provider==='gemini'||provider==='qwen'){
     const file=join(configName,'settings.json'),settings=JSON.parse(await readFile(file,'utf8'));
     Object.assign(settings,{mcpServers:trusted,mcp:{allowed:Object.keys(servers)}});
-    if(provider==='gemini')settings.experimental={enableAgents:true};
+    if(provider==='gemini')settings.experimental={...settings.experimental,enableAgents:true};
     if(provider==='gemini')settings.skills={enabled:skills.length>0};
     await writeNativeJson(file,settings);
     const target=join(configName,'skills');await rm(target,{recursive:true,force:true});await symlink(skillsRoot,target);

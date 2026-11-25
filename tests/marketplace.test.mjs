@@ -5,7 +5,7 @@ import {mkdir,mkdtemp,readFile,writeFile,stat,lstat,symlink,rm,chmod,realpath,un
 import {resolve,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createMarketplace,selectionIds,readExtensionFile} from '../server/runtime/marketplace.mjs';
-import {selectedExtensions,codexMarketArgs,claudeMarketEnvironment} from '../server/runtime/extensions.mjs';
+import {selectedExtensions,codexMarketArgs,claudeUserConfiguration} from '../server/runtime/extensions.mjs';
 import {runClaudeCodeCli} from '../server/runtime/local-cli.mjs';
 import {createCatalogFixtureStore as createStore} from './fixture-store.mjs';
 import {createServer} from 'node:http';
@@ -389,13 +389,15 @@ test('MCP details redact credentials; unsupported fields and multi-server input 
   assert.equal((await market.resolve({...empty,mcpIds:[remote.id]},'codex')).extensionManifest.length,1);
 });
 
-test('Claude market inherits only connection environment, never hooks or extension settings', async t => {
+test('Claude inherits inference preferences and environment alongside employee-only extensions', async t => {
   const {root} = await fixture(t), path = join(root,'settings.json');
-  await writeFile(path, JSON.stringify({env:{ANTHROPIC_BASE_URL:'https://example.com',ARBITRARY_PLUGIN_SECRET:'excluded'},hooks:{test:'must-not-execute'},apiKeyHelper:'must-not-execute',enabledPlugins:{evil:true}}));
-  const env = await claudeMarketEnvironment(path);
-  assert.deepEqual(Object.keys(env), process.env.ANTHROPIC_BASE_URL === undefined ? ['ANTHROPIC_BASE_URL'] : []);
+  await writeFile(path, JSON.stringify({language:'zh-CN',env:{CLAUDE_CODE_MAX_OUTPUT_TOKENS:'30000',ANTHROPIC_BASE_URL:'https://example.com',ARBITRARY_PLUGIN_SECRET:'excluded'},hooks:{test:'must-not-execute'},apiKeyHelper:'must-not-execute',enabledPlugins:{evil:true}}));
+  const {environment:env,preferences} = await claudeUserConfiguration(path);
+  assert.deepEqual(preferences,{language:"zh-CN"});
+  assert.equal(process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS ?? env.CLAUDE_CODE_MAX_OUTPUT_TOKENS,process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS ?? "30000");
+  assert.equal(env.ANTHROPIC_BASE_URL,process.env.ANTHROPIC_BASE_URL === undefined ? 'https://example.com' : undefined);
   assert.doesNotMatch(JSON.stringify(env), /excluded|must-not-execute|evil/);
-  await writeFile(path,'invalid'); await assert.rejects(claudeMarketEnvironment(path),/无效/);
+  await writeFile(path,'invalid'); await assert.rejects(claudeUserConfiguration(path),/有效 JSON/);
 });
 
 test('market versions are immutable, private, selectable and persistent without secret metadata', async t => {
@@ -503,10 +505,10 @@ test('Claude market launch disables implicit discovery and keeps only selected r
   const {root,market} = await fixture(t), entry = await install(market,root);
   const runtime = await market.resolve({pluginIds:[entry.id],mcpIds:[]},'claude-code');
   const executable = join(root,'cli.mjs');
-  await writeFile(executable,`#!/usr/bin/env node\nconsole.log(JSON.stringify({type:'system',subtype:'init',mcp_servers:[]})); console.log(JSON.stringify({type:'result',structured_output:{args:process.argv.slice(2)}}));`); await chmod(executable,0o755);
+  await writeFile(executable,`#!/usr/bin/env node\nconsole.log(JSON.stringify({type:'system',subtype:'init',mcp_servers:[]})); console.log(JSON.stringify({type:'result',structured_output:{args:process.argv.slice(2),bundled:JSON.parse((await import('node:fs')).readFileSync(process.argv[process.argv.indexOf('--settings')+1])).disableBundledSkills}}));`); await chmod(executable,0o755);
   const result = JSON.parse((await runClaudeCodeCli({runtime:{...runtime,executable},workspacePath:root,traceDirectory:root,finalPath:join(root,'final.json'),outputSchema:{},prompt:'work',runId:'market-launch',onEvent:async()=>{}})).finalText);
   assert.ok(result.args.includes('--strict-mcp-config')); assert.ok(!result.args.includes('--disable-slash-commands'));
-  assert.equal(JSON.parse(result.args[result.args.indexOf('--settings')+1]).disableBundledSkills,true);
+  assert.equal(result.bundled,true);
   assert.equal(result.args[result.args.indexOf('--setting-sources')+1],'');
   assert.equal(result.args.at(-1), 'work');
   assert.equal(result.args[result.args.indexOf('--plugin-dir')+1],runtime.pluginPaths[0]);

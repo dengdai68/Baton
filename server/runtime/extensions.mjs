@@ -12,15 +12,44 @@ import { diagnoseLaunch } from './launch-diagnostics.mjs';
 import { parsePluginMarkdown } from './plugin-compatibility.mjs';
 
 const exec = promisify(execFile);
-// Preserve existing model connection env without loading user extensions/hooks.
-// Never execute apiKeyHelper or return these values through the control plane.
-export async function claudeMarketEnvironment(path = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')) {
-  let content;
-  try { content = await readFile(path, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return {}; throw new Error('模型连接配置不可读取'); }
-  let settings;
-  try { if (Buffer.byteLength(content) > 1024 * 1024) throw new Error(); settings = JSON.parse(content); } catch { throw new Error('模型连接配置无效'); }
-  const keys = ['ANTHROPIC_API_KEY','ANTHROPIC_AUTH_TOKEN','ANTHROPIC_BASE_URL','ANTHROPIC_MODEL','ANTHROPIC_DEFAULT_HAIKU_MODEL','ANTHROPIC_DEFAULT_SONNET_MODEL','ANTHROPIC_DEFAULT_OPUS_MODEL','ANTHROPIC_DEFAULT_FABLE_MODEL','ANTHROPIC_DEFAULT_HAIKU_MODEL_SUPPORTED_CAPABILITIES','ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES','ANTHROPIC_DEFAULT_OPUS_MODEL_SUPPORTED_CAPABILITIES','ANTHROPIC_DEFAULT_FABLE_MODEL_SUPPORTED_CAPABILITIES','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY'];
-  return Object.fromEntries(keys.filter(key => process.env[key] === undefined && typeof settings?.env?.[key] === 'string').map(key => [key, settings.env[key]]));
+// Read only the user profile. Project files and employee extensions have separate loaders.
+export async function readUserSettings(path) {
+  let raw;
+  try { raw = await readFile(path, 'utf8'); }
+  catch (error) { if (error.code === 'ENOENT') return {}; throw new Error('用户配置不可读取'); }
+  try {
+    if (Buffer.byteLength(raw) > 1024 * 1024) throw Error();
+    const settings = JSON.parse(raw);
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw Error();
+    return settings;
+  } catch { throw new Error('用户配置不是有效 JSON 对象'); }
+}
+
+// Filter at the configuration boundary, not inside opaque provider/model IDs.
+export function userPreferences(settings, excluded = []) {
+  const component = /hook|plugin|marketplace|skill|subagent|mcp|extension|^agents?$|^teammate|^channels?$|^packages$|^prompts?$|^themes$|^commands$/i;
+  return Object.fromEntries(Object.entries(settings).filter(([key]) =>
+    !component.test(key) && !excluded.includes(key) && !['__proto__','constructor','prototype'].includes(key)));
+}
+
+// A profile may tune the CLI, but must not redirect home/discovery or install code at spawn.
+export function profileEnvironment(values = {}, inherited = process.env) {
+  const reserved = /(?:MCP|HOOK|SKILL|PLUGIN|SUBAGENT|TEAMMATE|MARKETPLACE|AGENT_TEAM|_HELPER|_WRAPPER|SHELL_PREFIX|SETTINGS|ADDITIONAL_DIRECTORIES)|^(?:BATON_|ELECTRON_|DYLD_|LD_|NODE_|XDG_|BASH_ENV$|ENV$|ZDOTDIR$|HOME$|PATH$|CLAUDE_CONFIG_DIR$|CLAUDE_CODE_(?:SHELL|EXEC)|GEMINI_CLI_HOME$|QWEN_HOME$|PI_CODING_AGENT_DIR$|KIMI_CODE_HOME$|OPENCODE_CONFIG)/i;
+  return Object.fromEntries(Object.entries(values || {}).filter(([key,value]) =>
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && !reserved.test(key) &&
+    typeof value === 'string' && !value.includes('\0') && inherited[key] === undefined));
+}
+
+export async function claudeUserConfiguration(path = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude'), 'settings.json')) {
+  const {env, ...settings} = await readUserSettings(path);
+  const preferences = userPreferences(settings, [
+    'apiKeyHelper','awsAuthRefresh','awsCredentialExport','gcpAuthRefresh','otelHeadersHelper',
+    'policyHelper','statusLine','fileSuggestion','processWrapper','diffTool','worktree',
+    'strictPluginOnlyCustomization','disableSideloadFlags','channelsEnabled','parentSettingsBehavior'
+  ]);
+  // Native connection and behavior variables go directly to spawn (never argv).
+  const environment = profileEnvironment(env);
+  return {preferences, environment};
 }
 export const tomlValue = value => Array.isArray(value) ? `[${value.map(tomlValue).join(',')}]` : value && typeof value === 'object' ? `{${Object.entries(value).map(([key,item]) => `${JSON.stringify(key)}=${tomlValue(item)}`).join(',')}}` : JSON.stringify(value);
 export const codexAgentKey=(ref,index,name)=>`af_${ref.id.replaceAll('-','')}_${index}_${name.replace(/[^a-zA-Z0-9_]/g,'_').toLowerCase().slice(0,24)}`;

@@ -1,12 +1,14 @@
-import {writeFile, mkdir,readFile,readdir,lstat,symlink,stat,rm,realpath} from 'node:fs/promises';
-import {join,dirname,isAbsolute} from 'node:path';
-import {homedir} from 'node:os';
+import {writeFile, mkdtemp, mkdir,readFile,readdir,lstat,symlink,stat,rm,realpath} from 'node:fs/promises';
+import {join,dirname,isAbsolute,resolve} from 'node:path';
+import {homedir,tmpdir} from 'node:os';
 import {randomUUID,createHash} from 'node:crypto';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
+import {parse as parseJsonc} from 'jsonc-parser';
 import {StringDecoder} from 'node:string_decoder';
 import {RUNTIME_PROVIDERS,PORTABLE_RUNTIME_IDS,nativeSessionId} from '../../client/runtime-providers.mjs';
 import {preparePortableExtensions,preparePortableConnectionProfile,configurePortableExtensions} from './portable-extensions.mjs';
+import {readUserSettings,userPreferences,profileEnvironment} from './extensions.mjs';
 import {cliEnvironment} from './cli-environment.mjs';
 
 const textOf=value=>typeof value==='string'?value:Array.isArray(value)?value.filter(x=>x?.type==='text').map(x=>x.text || '').join('\n'):'';
@@ -20,8 +22,8 @@ async function referenceFile(source,target){
 async function prepareCursorHome(input,environment){
   const host=environment.HOME || homedir(),source=environment.CURSOR_CONFIG_DIR || (environment.XDG_CONFIG_HOME?join(environment.XDG_CONFIG_HOME,'cursor'):join(host,'.cursor')),home=join(memberContext(input),'cursor-home'),config=join(home,'.cursor');
   await mkdir(config,{recursive:true,mode:0o700});
-  let settings={};try{const raw=await readFile(join(source,'cli-config.json'),'utf8');if(Buffer.byteLength(raw)>1024*1024)throw Error();settings=JSON.parse(raw);if(!settings||typeof settings!=='object'||Array.isArray(settings))throw Error();}catch(error){if(error.code!=='ENOENT')throw new Error('Cursor 原生连接配置无法读取或不是有效 JSON');}
-  await writeFile(join(config,'cli-config.json'),JSON.stringify(Object.fromEntries(['model','permissions'].filter(key=>settings[key]!==undefined).map(key=>[key,settings[key]]))),{mode:0o600});
+  const settings=userPreferences(await readUserSettings(join(source,'cli-config.json')),['authInfo']);
+  await writeFile(join(config,'cli-config.json'),JSON.stringify(settings),{mode:0o600});
   // File-store users retain the native account path; no token bytes are read.
   await referenceFile(join(host,'.cursor/auth.json'),join(config,'auth.json'));
   if(process.platform==='darwin'){
@@ -40,9 +42,16 @@ async function prepareGeminiHome(input,environment){
   const source=join(environment.GEMINI_CLI_HOME || environment.HOME || homedir(),'.gemini');
   const home=join(memberContext(input),'gemini-home'),config=join(home,'.gemini');
   await mkdir(config,{recursive:true,mode:0o700});
-  let settings={};try{const raw=await readFile(join(source,'settings.json'),'utf8');if(Buffer.byteLength(raw)>1024*1024)throw Error();settings=JSON.parse(raw);if(!settings || typeof settings!=='object'||Array.isArray(settings))throw Error();}catch(error){if(error.code!=='ENOENT')throw new Error('Gemini 账号连接配置无法读取或不是有效 JSON');}
-  const connectionKeys=['GEMINI_API_KEY','GOOGLE_API_KEY','GEMINI_BASE_URL','GEMINI_API_BASE_URL','GOOGLE_GENAI_USE_VERTEXAI','GOOGLE_CLOUD_PROJECT','GOOGLE_CLOUD_LOCATION','GOOGLE_APPLICATION_CREDENTIALS','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY'];
-  const projected={security:{auth:settings.security?.auth || {}},...(settings.model?{model:settings.model}:{}),...(settings.modelConfigs?{modelConfigs:settings.modelConfigs}:{}),...(settings.proxy?{proxy:settings.proxy}:{}),env:Object.fromEntries(Object.entries(settings.env || {}).filter(([key])=>connectionKeys.includes(key))),skills:{enabled:false},hooksConfig:{enabled:false},mcp:{allowed:[]}};
+  const settings=await readUserSettings(join(source,'settings.json'));
+  const projected=userPreferences(settings);
+  Object.assign(environment,profileEnvironment(projected.env,environment));
+  delete projected.env;
+  if (settings.tools) projected.tools=userPreferences(settings.tools,['discoveryCommand','callCommand']);
+  if (settings.experimental) projected.experimental=userPreferences(settings.experimental,['enableAgents','acp']);
+  if (settings.security) projected.security=userPreferences(settings.security);
+  projected.skills={enabled:false};
+  projected.hooksConfig={enabled:false};
+  projected.mcp={allowed:[]};
   if(input.runtime.effort){
     projected.modelConfigs ||= {};projected.modelConfigs.overrides=[...(projected.modelConfigs.overrides || []),{match:{model:input.runtime.model},modelConfig:{generateContentConfig:{thinkingConfig:{thinkingLevel:input.runtime.effort.toUpperCase()}}}}];
   }
@@ -78,12 +87,19 @@ export async function assertPortableExtensionIsolation(provider,cwd,environment)
   for(const root of new Set(roots)){
     for(const name of ['mcp.json','settings.json',...(provider==='cursor'?['hooks.json','cli.json']:[]),...(provider==='opencode'?['opencode.json','opencode.jsonc']:[])]){
       let raw;try{raw=await readFile(join(root,name),'utf8');}catch(error){if(error.code==='ENOENT')continue;throw new Error('原生 Runtime 扩展配置无法读取，不能确认加载范围');}
-      let value;try{if(Buffer.byteLength(raw)>1024*1024)throw Error();value=JSON.parse(raw);}catch{throw new Error('原生 Runtime 配置无法确认扩展范围（需有效 JSON），未启动调用');}
+      let value;try{if(Buffer.byteLength(raw)>1024*1024)throw Error();value=provider==='opencode'?openCodeSettings(raw):JSON.parse(raw);}catch{throw new Error('原生 Runtime 配置无法确认扩展范围（需有效 JSON），未启动调用');}
       if((provider==='opencode'?['extensions','hooks','plugin','plugins']:provider==='gemini'?['mcpServers','extensions','hooks','plugin','plugins',...(root===join(cwd,folder)?['mcp','skills','hooksConfig']:[])]:['mcpServers','mcp','extensions','hooks','plugin','plugins']).some(key=>value[key]&&Object.keys(value[key]).length))throw new Error(`${RUNTIME_PROVIDERS[provider].label} 原生配置含有未由员工选择的扩展；当前适配器不能安全隔离这些扩展，未启动调用。请使用不含全局扩展的 CLI 配置或已有兼容 Runtime。`);
     }
     if(provider==='cursor'&&cursorConfigRoot===root&&root!==join(home,'.cursor')&&root!==join(cwd,'.cursor'))continue; // Config location is not Cursor's HOME-based plugin/skill discovery root.
     for(const name of (provider==='opencode'?['plugins','extensions']:['plugins','extensions','skills','agents'])){
       let files;try{files=await readdir(join(root,name));}catch(error){if(error.code==='ENOENT')continue;throw new Error('原生 Runtime 扩展目录无法读取');}
+      if(provider==='cursor' && root===cursorConfigRoot && name==='plugins' && files.includes('marketplaces')){
+        const directory=join(root,name,'marketplaces');
+        if((await lstat(directory)).isDirectory()){
+          const entries=await readdir(directory,{withFileTypes:true});
+          if(entries.every(entry=>entry.isFile() && entry.name==='.comms-plugin-blocks.v1.json')) files=files.filter(item=>item!=='marketplaces');
+        }
+      }
       // Qwen creates this data-only enablement index even with no extensions.
       if(files.some(name=>!name.startsWith('.') && !(provider==='qwen' && name==='extension-enablement.json')))throw new Error(`${RUNTIME_PROVIDERS[provider].label} 原生 ${name} 目录有未选择扩展，当前适配器尚未支持隔离，未启动调用`);
     }
@@ -194,7 +210,51 @@ export function nativeModelWithEffort({provider,model,effort}) {
   return model;
 }
 
+function openCodeSettings(raw) {
+  const errors=[];
+  const settings=parseJsonc(raw,errors,{allowTrailingComma:true});
+  if(errors.length || !settings || typeof settings!=='object' || Array.isArray(settings)) throw new Error('OpenCode 配置不是有效 JSONC 对象');
+  return settings;
+}
+
+// Keep credentials and session storage native. Only replace the config search roots.
+async function prepareOpenCodeHome(environment,temporary,cwd) {
+  const base=environment.XDG_CONFIG_HOME || join(environment.HOME || homedir(),'.config');
+  async function project(source,target,required=false){
+    let raw;
+    try { raw=await readFile(source,'utf8'); }
+    catch(error){if(!required && error.code==='ENOENT')return;throw new Error('OpenCode 用户配置不可读取');}
+    const settings=openCodeSettings(raw);
+    const projected=userPreferences(settings,['agent','command','tools']);
+    // OpenCode expands file references relative to the config file it loads.
+    const content=JSON.stringify(projected,(_key,value)=>typeof value==='string'
+      ? value.replace(/\{file:([^}]+)\}/g,(match,path)=>isAbsolute(path)||path.startsWith('~')?match:'{file:'+resolve(dirname(source),path)+'}') : value);
+    await writeFile(target,content,{mode:0o600});
+  }
+  async function directory(source,target){
+    await mkdir(target,{recursive:true,mode:0o700});
+    for(const file of ['config.json','opencode.json','opencode.jsonc']) await project(join(source,file),join(target,file));
+    await referenceFile(join(source,'AGENTS.md'),join(target,'AGENTS.md'));
+  }
+  await directory(join(base,'opencode'),join(temporary,'opencode'));
+  if(environment.OPENCODE_CONFIG_DIR){
+    const target=join(temporary,'custom');await directory(resolve(cwd,environment.OPENCODE_CONFIG_DIR),target);environment.OPENCODE_CONFIG_DIR=target;
+  }
+  if(environment.OPENCODE_CONFIG){
+    const target=join(temporary,'explicit.json');await project(resolve(cwd,environment.OPENCODE_CONFIG),target,true);environment.OPENCODE_CONFIG=target;
+  }
+  environment.XDG_CONFIG_HOME=temporary;
+}
+
 export async function runPortableCli(input,api) {
+  const {provider}=input.runtime;
+  if(!['kimi','opencode'].includes(provider)) return invokePortableCli(input,api);
+  const home=await mkdtemp(join(tmpdir(),'baton-'+provider+'-'));
+  try { return await invokePortableCli(input,api,home); }
+  finally { await rm(home,{recursive:true,force:true}); }
+}
+
+async function invokePortableCli(input,api,privateHome) {
   const {runtime,traceDirectory,session:requested}=input,provider=runtime.provider;
   if(!PORTABLE_RUNTIME_IDS.includes(provider))throw new Error('不支持的原生 CLI');
   if(!runtime.extensionSelection && ((runtime.extensionManifest || []).length || runtime.skillPaths?.length || runtime.pluginPaths?.length || runtime.mcpConfigPaths?.length))throw new Error('扩展路径缺少冻结的员工选择');
@@ -204,10 +264,11 @@ export async function runPortableCli(input,api) {
   const command=runtime.executable || RUNTIME_PROVIDERS[provider].command;
   const environment=cliEnvironment(command,{},input.environment?{environment:input.environment}:{});
   environment.PWD=input.workspacePath;
+  if(provider==='opencode')await prepareOpenCodeHome(environment,privateHome,input.workspacePath);
   if(provider==='kimi' && runtime.effort)environment.KIMI_MODEL_THINKING_EFFORT=runtime.effort;
   let hostContext=provider==='cursor'?await prepareCursorHome(input,environment):'';
   if(provider==='gemini')hostContext=await prepareGeminiHome(input,environment);
-  hostContext ||= await preparePortableConnectionProfile(input,environment,memberContext(input));
+  hostContext ||= await preparePortableConnectionProfile(input,environment,memberContext(input),privateHome);
   // Clear only invocation-owned files before checking ambient configuration.
   if(provider==='cursor')await rm(join(environment.HOME,'.cursor','mcp.json'),{force:true});
   if(provider==='gemini')await rm(join(environment.GEMINI_CLI_HOME,'.gemini','skills'),{recursive:true,force:true});
@@ -225,7 +286,12 @@ export async function runPortableCli(input,api) {
   await writeFile(instructions,applicationInstructions,{mode:0o600});
   const prompt=provider==='cursor'?`[应用指令]\n${hostContext}\n${input.systemPrompt || ''}${schema}\n\n[本轮输入]\n${input.prompt}`:input.prompt;
   if(provider==='gemini')environment.GEMINI_SYSTEM_MD=instructions;
-  if(provider==='opencode'){const {agents,...configuration}=nativeConfig;environment.OPENCODE_CONFIG_CONTENT=JSON.stringify({update:'disable',...configuration,agents:{...agents,baton:{mode:'primary',system:applicationInstructions}}});}
+  if(provider==='opencode'){
+    const user=userPreferences(openCodeSettings(environment.OPENCODE_CONFIG_CONTENT || '{}'),['agent','tools','command']);
+    const {agents,policies,...configuration}=nativeConfig;
+    const userPolicies=(user.policies || []).filter(policy=>!['mcp.use','skill.use'].includes(policy.action));
+    environment.OPENCODE_CONFIG_CONTENT=JSON.stringify({...user,update:'disable',...configuration,policies:[...userPolicies,...policies],agents:{...agents,baton:{mode:'primary',system:applicationInstructions}}});
+  }
   let args;
   if(provider==='cursor')args=['--print','--force','--trust','--approve-mcps',...extensions.plugins.flatMap(path=>['--plugin-dir',path]),'--output-format','stream-json',...(session.resume?['--resume',session.sessionId]:[])];
   if(provider==='gemini')args=['--skip-trust','--extensions','none','--output-format','stream-json','--approval-mode','yolo',...(session.resume?['--resume',session.sessionId]:[])];

@@ -99,7 +99,7 @@ async function claudeCatalog({ environment, homeDirectory }) {
   if (current && !pinnedIds.has(current) && !CLAUDE_ALIASES.includes(current)) {
     pushModel({
       id: current, label: current, description: "", resolvedTo: undefined, capabilities: undefined, current: true,
-      source: currentFromSettingsOnly ? "settings.json model 字段（市场扩展执行使用 --setting-sources '' 时不生效）" : "ANTHROPIC_MODEL 环境变量",
+      source: currentFromSettingsOnly ? "settings.json model 字段" : "ANTHROPIC_MODEL 环境变量",
       ...claudeEfforts(undefined)
     });
   }
@@ -109,7 +109,7 @@ async function claudeCatalog({ environment, homeDirectory }) {
     notes: [
       "Claude Code 没有离线列出全部模型的命令；此处列出内置别名、本机别名钉住与当前生效模型，可钉任意全量模型 ID。",
       "仅读取模型/名称/说明/能力类键；凭据键（如 ANTHROPIC_AUTH_TOKEN）绝不读取或展示。",
-      "选择市场扩展的执行带 --setting-sources ''：settings.json 的 model 字段不生效，ANTHROPIC_* 环境变量按同一优先级生效。",
+      "用户配置提供默认模型，员工指定的模型优先。",
       "思考档位可用性因模型而异；未声明能力的模型由 CLI 解析，不支持时回退到不超过所选的最高可用档。"
     ],
     models

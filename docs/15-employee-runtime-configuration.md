@@ -6,7 +6,7 @@
 
 MCP 详情提供编辑名称、说明及 JSON；保存生成新版本并原子更新当前员工的 mcpIds，列表只保留新的当前版本，已启动任务和排队调用保持旧快照。PUT /api/runtime/mcp-marketplace/:id 接受非空部分对象 {name?,description?,content?}；content 是完整单服务 JSON 字符串，省略保留配置。GET 中未改动的脱敏值在相同 JSON 位置保留，删除字段清除，重命名服务或鉴权字段须填写真实新值。失败保留旧绑定；新候选退役且文件不作历史改写。返回新 id、previousId、employees（仅 ID/名称）、historyRetained。旧 ID 再编辑返回404；不兼容时整次拒绝。
 
-未填写扩展选择等同于空选择，不继承用户/项目的全局 MCP 和插件。Codex 每次调用显式关闭账号 Apps（`features.apps=false`）；Claude 使用 strict-mcp-config 与空 setting-sources，并仅沿用模型连接环境。所选 MCP 与平台历史服务仍加载，Runtime 基础文件、Shell、原生搜索工具不在此扩展清单中；这不是 OS 沙箱。员工资料/插件/MCP 编辑不重建原生沟通记忆，下一轮应用新配置。参见 [Codex 官方配置](https://developers.openai.com/codex/config-reference/) 与 [Claude CLI](https://code.claude.com/docs/en/cli-reference)。
+未填写扩展选择等同于空选择，不继承用户/项目的全局 MCP 和插件。Codex 每次调用显式关闭账号 Apps（`features.apps=false`）；Claude 使用 strict-mcp-config 与空 setting-sources，从用户设置继承普通偏好和环境变量，以调用专属设置文件叠加员工配置。所选 MCP 与平台历史服务仍加载，Runtime 基础文件、Shell、原生搜索工具不在此扩展清单中；这不是 OS 沙箱。员工资料/插件/MCP 编辑不重建原生沟通记忆，下一轮应用新配置。参见 [Codex 官方配置](https://developers.openai.com/codex/config-reference/) 与 [Claude CLI](https://code.claude.com/docs/en/cli-reference)。
 
 ## 已安装项管理
 
@@ -58,7 +58,7 @@ HTTP/CLI 拒绝 `skillIds`、员工 `mcpJson`、连接字段、手工路径及�
 
 安装时分别解析 Claude 与 Codex 清单，不把优先发现的清单组件覆盖到另一个 Runtime。Codex 根 manifest 的 `extensions.com.openai` 或 `.codex-plugin` 配置用于 Codex 投影；显式 `hooks: {}` 关闭默认 Hook，不继承 Claude 的启动 Hook。组件并集只用于详情展示，实际 Skill/Subagent/Hook 按员工所选 Runtime 投影并随任务冻结。切换 Runtime 不自动删除原选择；不兼容时 UI 和服务端均拒绝保存，须移除或更换插件。
 
-Claude 使用所选 --plugin-dir 原生加载 Skill/Subagent/Hook，空 setting-sources 排除宿主设置、关闭可关闭的 bundled skills，不禁用全部 Skill。Codex 所选 Skill 通过调用独占 App Server 原生注册额外根，发现后以线程级 skills.config 仅启用所选路径；不把路径和逐一读取指令放进系统提示词。无 Skill 保留 exec，同一会话身份可续接，原生加载失败不退回读文件指令。既有 agents/共同 command Hook 投影保留，不改全局配置；源专有而尚无等价映射的功能必须明确拒绝，不能以省略组件声称完整兼容。不支持原生接口的 CLI 明确报错，当前目标 Codex 0.164.0。
+Claude 使用所选 --plugin-dir 原生加载 Skill/Subagent/Hook，空 setting-sources 排除自动发现的扩展，再通过私有设置文件应用用户偏好、关闭可关闭的 bundled skills，不禁用全部 Skill。Codex 所选 Skill 通过调用独占 App Server 原生注册额外根，发现后以线程级 skills.config 仅启用所选路径；不把路径和逐一读取指令放进系统提示词。无 Skill 保留 exec，同一会话身份可续接，原生加载失败不退回读文件指令。既有 agents/共同 command Hook 投影保留，不改全局配置；源专有而尚无等价映射的功能必须明确拒绝，不能以省略组件声称完整兼容。不支持原生接口的 CLI 明确报错，当前目标 Codex 0.164.0。
 
 格式互通不等于所有生命周期/工具名等价；Skill、共同命令 Hook 和 Subagent 正文可适配，但 Provider 专有功能须分别验证。参考 [Codex 插件规范](https://developers.openai.com/plugins/build/plugins)、[官方跨格式说明](https://developers.openai.com/plugins/guides/submit-claude-plugin)、[Claude 规范](https://code.claude.com/docs/en/plugins-reference)。已审阅的 [claude-codex-converter](https://github.com/achammah/claude-codex-converter) 侧重全局迁移，不作为员工隔离加载器；本轮复用现有官方 MCP SDK，不新增依赖。
 
@@ -76,11 +76,11 @@ Claude 使用所选 --plugin-dir 原生加载 Skill/Subagent/Hook，空 setting-
 
 Runtime 配置新增可选 `effort`（思考等级，空 = CLI 默认），随 model 一同保存、回读、投影给绑定员工并进入真实调用；已有 Task/Run/排队沟通快照保持冻结。Store 按 Provider 校验 effort 档位集合（Claude Code：low/medium/high/xhigh/max；Codex：加 ultra，均来自真实 CLI 观察），明显非法值拒绝；模型仍是自由文本——2026-10-25 人类裁决允许手工输入，服务端不做列表成员硬校验，但 UI/CLI 如实标注"不在当前列表"。
 
-模型列表只来自真实来源，经受认证 `GET /api/settings/runtime-profiles/models?provider=…` 提供（server/runtime/model-catalog.mjs）：Codex 用与真实 spawn 相同的 cliEnvironment 执行 `codex debug models`（0.160.0 起），投影 slug/名称/可见性/逐模型 supported_reasoning_levels；visibility 为 hide 的模型不列出，目录可见不等于账号可用（实测 gpt-5.5 在目录中但被 ChatGPT 账号拒绝，返回明确 model_not_found），实际可用性以连接测试/调用为准。Claude Code 无离线列表命令（官方文档确认），目录 = 文档内置别名（default/best/fable/sonnet/opus/haiku/sonnet[1m]/opus[1m]/opusplan）+ settings.json `model`/env 与进程环境（进程优先，与 claudeMarketEnvironment 同边界）中的 ANTHROPIC_MODEL 与 ANTHROPIC_DEFAULT_*_MODEL 别名钉住及 _SUPPORTED_CAPABILITIES 能力声明；只读模型/名称/说明/能力键，凭据键绝不读取或回显。查询失败、空列表如实返回错误/空集，不编造列表。市场扩展执行带 `--setting-sources ''`，settings.json 的 model 字段在该模式下不生效（ANTHROPIC_* 环境键仍按同一优先级生效），目录说明已如实标注。
+模型列表只来自真实来源，经受认证 `GET /api/settings/runtime-profiles/models?provider=…` 提供（server/runtime/model-catalog.mjs）：Codex 用与真实 spawn 相同的 cliEnvironment 执行 `codex debug models`（0.160.0 起），投影 slug/名称/可见性/逐模型 supported_reasoning_levels；visibility 为 hide 的模型不列出，目录可见不等于账号可用（实测 gpt-5.5 在目录中但被 ChatGPT 账号拒绝，返回明确 model_not_found），实际可用性以连接测试/调用为准。Claude Code 无离线列表命令（官方文档确认），目录 = 文档内置别名（default/best/fable/sonnet/opus/haiku/sonnet[1m]/opus[1m]/opusplan）+ settings.json `model`/env 与进程环境（进程优先，与 claudeUserConfiguration 同边界）中的 ANTHROPIC_MODEL 与 ANTHROPIC_DEFAULT_*_MODEL 别名钉住及 _SUPPORTED_CAPABILITIES 能力声明；只读模型/名称/说明/能力键，凭据键绝不读取或回显。查询失败、空列表如实返回错误/空集，不编造列表。员工指定模型优先于用户默认模型。
 
 生效链路：Claude 调用追加 `--model`/`--effort`（2.1.216 实测，非法档位 CLI 仅告警回退，故保存侧必须校验）；Codex 追加 `--model` 与 `-c model_reasoning_effort="<level>"`（0.160.0 实测该键被识别、非法值不被本地拒绝，故保存侧必须校验）。保存校验分两层：Store 按 Provider 档位集合拒绝明显非法值；HTTP 在模型存在于真实目录时按该模型声明的档位拒绝不适用值（Codex 逐模型、Claude 按能力声明），模型不在目录（手工输入）或目录查询失败时不臆造拒绝。连接测试使用保存的 model+effort。resume 会话照常携带两参数：Claude `--resume` 下 `--model`/`--effort` 覆盖原会话选择（官方文档机制，已实测参数接受）；Codex `exec resume` 下 `-c`/`--model` 覆盖同理。切换模型时 UI 清除不在新模型档位集合内的旧 effort 并明示；模型能力未知（无声明/不在目录）时不臆造拒绝，如实标注由 CLI 解析回退。
 
-目录与执行环境一致性：市场扩展执行（`--setting-sources ''`）经 claudeMarketEnvironment 只回注明确列举的连接键，该白名单与目录读取键一致——ANTHROPIC_MODEL、四个 ANTHROPIC_DEFAULT_*_MODEL 别名钉住及对应 _SUPPORTED_CAPABILITIES 能力声明、地址与代理键；进程环境优先。目录声明的别名钉住/能力在实际 spawn 同样生效（回归测试锁定）。
+Claude 在调用时读取用户 settings.json，普通设置写入权限 0600 的临时文件，结束即删除。环境变量直接传入子进程，已有进程环境优先。员工模型与思考档位、当前插件、MCP 和 Baton 的工作区 Hook 由启动参数指定。用户 Hook、Skill、子代理、插件、MCP、执行辅助命令以及重新指定扩展来源的环境设置不参与合并。模型目录仅展示模型相关字段。
 
 Web 设置模型字段为可搜索筛选的建议列表 + 手工输入，思考等级为联动 select，加载中/空/失败三态与"手工输入不在列表"标注齐备；目录请求带序号，连续刷新或切换页面时过期响应不覆盖新列表。CLI `runtimes models PROVIDER` 返回同一目录，schema/help/输出同步 effort 字段与 models 操作。桌面共用该设置页，无新增 IPC/桥。目录和调用共用服务 PATH 发现的固定 CLI，不接受界面/CLI 指定路径或命名 Codex profile。
 
