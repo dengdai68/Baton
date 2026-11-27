@@ -3273,7 +3273,7 @@
       "path": "server/relay-account.mjs",
       "kind": "service",
       "owner": "workspace",
-      "purpose": "Mac identity, account invitations, certificate-bound sessions and revocation",
+      "purpose": "Mac identity, invitation issuer, paired device inventory, certificate-bound sessions and revocation",
       "sourceOfTruth": [
         "relay/README.md",
         "docs/31-workspace-service.md"

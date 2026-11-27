@@ -7,6 +7,7 @@ address.type = 'url';
 address.placeholder = 'https://relay.example.com';
 const label = el('label', '此账号使用的 Relay 地址');
 label.append(address);
+const account = el('p');
 const connection = el('p');
 const identity = el('code');
 const fingerprint = el('details');
@@ -50,6 +51,7 @@ let currentOrigin = '';
 async function refresh() {
   const state = await request();
   if (!editing) address.value=state.origin;
+  account.textContent=state.account ? '签发账号 · '+state.account : '';
   currentOrigin=state.origin; initialized=true;
   connection.textContent=state.origin ? state.online ? '已连接' : state.error === 'Relay HTTP 403' ? 'Relay 未允许此 Mac，请将下方指纹加入接入名单' : '正在重连，请检查 Relay 地址和接入指纹' : '尚未设置 Relay';
   identity.textContent=state.pin; add.disabled=!state.online;
@@ -69,7 +71,7 @@ async function refresh() {
   }
 }
 address.oninput=()=>{editing=true;};
-panel.append(label,save,connection,fingerprint,add,invitation,devices);
+panel.append(account,label,save,connection,fingerprint,add,invitation,devices);
 async function poll() {
   try { if (!document.hidden) await refresh(); } catch(error) {status.textContent=error.message;}
   setTimeout(poll,2000);

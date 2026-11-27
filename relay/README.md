@@ -47,7 +47,7 @@ node --test tests/relay.test.mjs
 | --- | --- |
 | 生成邀请 | `baton://pair?v=1&relay=<主机及可选端口>&r=<32位十六进制>&fp=<64位十六进制>&t=<43位base64url>`。指纹是 Mac 公钥 SPKI 的 SHA-256。 |
 | 管理账号 | 已登录的 Mac 会话通过 `GET/PUT/DELETE /api/account/relay` 读取、更换、清除设置。更新地址的 JSON 字段为 `relay`。 |
-| 添加与移除手机 | `POST /api/account/relay/invites` 返回 `link`、`qr` 和 `expires`（Unix 毫秒）。管理页面轮询账号接口查看已兑换的设备。`DELETE /api/account/relay/devices/<id>` 单独撤销。 |
+| 添加与移除手机 | `POST /api/account/relay/invites` 返回 `link`、`qr` 和 `expires`（Unix 毫秒）。管理页面读取账号接口的 `account` 显示签发人，并轮询 `devices` 查看已兑换的设备。`DELETE /api/account/relay/devices/<id>` 单独撤销。 |
 | 绑定与续期 | 仅在内层 TLS 中使用 `POST /relay/redeem`（`t`、`device`）和 `POST /relay/session`。成功结果含 `channel`、`token`、`workspace`、`user`、`mode`。会话令牌有效期 15 分钟，授权按设备证书核验。 |
 | 重载名单 | 更新配置的 `allow` 后向 Relay 进程发送 SIGHUP。移除的 Mac 会断开连接。更换公网证书时重启服务。 |
 

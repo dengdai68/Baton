@@ -1,7 +1,6 @@
 import { existsSync } from 'node:fs';
 import {networkInterfaces, hostname} from 'node:os';
 import { relayAccount } from './relay-account.mjs';
-import QRCode from 'qrcode';
 import {workspaceIdentity} from './workspace-identity.mjs';
 import {provisionWorkspace,workspaceOrigin} from './workspace-config.mjs';
 import {publicErrorMessage, startWorkspace} from './workspace-http.mjs';
@@ -349,6 +348,7 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     }
     else if (pathname === '/api/account/relay' && request.method === 'DELETE') sendJson(response,200,relay.configure(''));
     else if (pathname === '/api/account/relay/invites' && request.method === 'POST') {
+      const {default: QRCode} = await import('qrcode');
       const invite = await relay.invite();
       sendJson(response,201,{...invite,qr:await QRCode.toDataURL(invite.link)});
     } else if (/^\/api\/account\/relay\/devices\/[a-f0-9]{32}$/.test(pathname) && request.method === 'DELETE') {
