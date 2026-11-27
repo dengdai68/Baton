@@ -2,7 +2,7 @@ import { createServer } from 'node:https';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { publicPin, readMessages, routePattern, sendMessage } from '../server/relay-wire.mjs';
+import { publicPin, readMessages, routePattern, sendMessage } from './wire.mjs';
 
 export function createRelay({cert, key, allow}) {
   const controls = new Map();

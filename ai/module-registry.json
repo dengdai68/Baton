@@ -3224,7 +3224,7 @@
     },
     {
       "id": "workspace.relay-wire",
-      "path": "server/relay-wire.mjs",
+      "path": "relay/wire.mjs",
       "kind": "service",
       "owner": "workspace",
       "purpose": "TLS CONNECT transport and bounded route messages",

@@ -43,7 +43,8 @@ const add = button('添加手机', async () => {
   const qr = el('img'); qr.src=data.qr; qr.alt='一次性配对二维码'; qr.width=264;
   const link = el('input'); link.value=data.link; link.readOnly=true; link.setAttribute('aria-label','一次性配对地址');
   link.onclick=()=>link.select();
-  invitation.replaceChildren(qr,el('p','用手机 Baton 扫码，或在登录页输入此地址。十分钟内有效。'),link);
+  const copy=button('复制地址',async()=>{await navigator.clipboard.writeText(link.value); status.textContent='已复制配对地址';});
+  invitation.replaceChildren(qr,el('p','用手机 Baton 扫码，或在登录页输入此地址。十分钟内有效。'),link,copy);
 });
 let currentOrigin = '';
 async function refresh() {

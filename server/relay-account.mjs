@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { connectRelay } from './relay-connector.mjs';
-import { publicPin, relayOrigin } from './relay-wire.mjs';
+import { publicPin, relayOrigin } from '../relay/wire.mjs';
 import { deviceApiAllowed } from './workspace-http.mjs';
 
 const id = () => randomBytes(16).toString('hex');
@@ -54,7 +54,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
   }
   function settings() {
     connect();
-    return {origin:origin() || '', pin, online:connector?.ready || false, error:connector?.error || null,
+    return {origin:origin() || '', pin, online:connector?.online || false, registered:connector?.ready || false, error:connector?.error || null,
       devices:db.prepare('SELECT id,label,created,invitation,lastSeen FROM channels WHERE owner=? ORDER BY created DESC').all(owner() || '')};
   }
   function transaction(fn) {
@@ -63,6 +63,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
     catch (error) { db.exec('ROLLBACK'); throw error; }
   }
   function configure(input) {
+    if (typeof input !== 'string') throw Error('请输入 Relay 的 HTTPS 地址');
     const url = input ? relayOrigin(input) : '';
     if (!owner()) throw Error('请先登录');
     if (url !== (origin() || '')) {

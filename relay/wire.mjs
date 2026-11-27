@@ -24,7 +24,7 @@ export function readMessages(socket, handle) {
     try {
       for (;;) {
         const end = pending.indexOf('\n');
-        if (end > 65536 || (end < 0 && pending.length > 65536)) throw Error();
+        if (end > 131072 || (end < 0 && pending.length > 131072)) throw Error();
         if (end < 0) break;
         const value = JSON.parse(pending.slice(0, end));
         pending = pending.slice(end + 1);

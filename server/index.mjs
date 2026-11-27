@@ -342,7 +342,11 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
     const relay = accountRelay();
     response.setHeader('Cache-Control','no-store');
     if (pathname === '/api/account/relay' && request.method === 'GET') sendJson(response,200,relay.settings());
-    else if (pathname === '/api/account/relay' && request.method === 'PUT') sendJson(response,200,relay.configure((await readJson(request)).relay));
+    else if (pathname === '/api/account/relay' && request.method === 'PUT') {
+      const value = (await readJson(request,4096))?.relay;
+      if (typeof value !== 'string' || !value.trim()) throw Error('请输入 Relay 的 HTTPS 地址');
+      sendJson(response,200,relay.configure(value.trim()));
+    }
     else if (pathname === '/api/account/relay' && request.method === 'DELETE') sendJson(response,200,relay.configure(''));
     else if (pathname === '/api/account/relay/invites' && request.method === 'POST') {
       const invite = await relay.invite();

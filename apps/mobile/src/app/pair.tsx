@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/ui/button';
 import { TextField } from '@/ui/form';
 import { Txt } from '@/ui/text';
-import { takePairingLink } from '@/workspace/link';
+import { onPairingLink, takePairingLink } from '@/workspace/link';
 import { useSession } from '@/workspace/session';
 import { $t } from '@/i18n';
 
@@ -25,8 +25,13 @@ export default function Pair() {
   }
   useEffect(() => {
     if (!ready) return;
-    const link = takePairingLink();
-    if (link) void redeem(link);
+    const consume = () => {
+      if (running.current) return;
+      const link = takePairingLink();
+      if (link) void redeem(link);
+    };
+    consume();
+    return onPairingLink(consume);
   },[ready]);
   return <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{paddingTop:insets.top+36,paddingHorizontal:24,gap:16}}>
     <Txt variant="display">{$t('输入配对地址')}</Txt>
