@@ -1,4 +1,4 @@
-import { Redirect } from 'expo-router';
+import { Redirect, router } from 'expo-router';
 import { useState, useEffect } from 'react';
 import { Alert, AppState, Keyboard, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -111,6 +111,10 @@ export default function Connect() {
   return <ScrollView keyboardShouldPersistTaps="handled" style={{backgroundColor:colors.bgCanvas}} contentContainerStyle={{paddingTop:insets.top+40,paddingHorizontal:24,paddingBottom:32}}>
     <View style={{gap:12,width:'100%',maxWidth:480,alignSelf:'center'}}>
       <Txt variant="display" weight="semibold">{$t('登录')}</Txt>
+      <View style={{flexDirection:'row',gap:12}}>
+        <Button label={$t('扫码配对')} onPress={()=>router.push('/scan')}/>
+        <Button label={$t('输入配对地址')} onPress={()=>router.push('/pair')}/>
+      </View>
       <Txt>{$t('用户名')}</Txt><TextField accessibilityLabel={$t('用户名')} value={name} onFocus={()=>setChoosing(false)} onChangeText={setName} autoCapitalize="none" autoCorrect={false} textContentType="username" />
       <Txt>{$t('密码')}</Txt><TextField accessibilityLabel={$t('密码')} value={password} onFocus={()=>setChoosing(false)} onChangeText={setPassword} secureTextEntry textContentType="password" returnKeyType="go" onSubmitEditing={submit}/>
       {error ? <Notice tone="failed" text={error}/> : null}

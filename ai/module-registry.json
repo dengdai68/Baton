@@ -3221,6 +3221,98 @@
           "Android"
         ]
       }
+    },
+    {
+      "id": "workspace.relay-wire",
+      "path": "server/relay-wire.mjs",
+      "kind": "service",
+      "owner": "workspace",
+      "purpose": "TLS CONNECT transport and bounded route messages",
+      "sourceOfTruth": [
+        "relay/README.md",
+        "docs/31-workspace-service.md"
+      ],
+      "tests": [
+        "tests/relay.test.mjs"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "relay/README.md"
+        ],
+        "reviewIf": [
+          "device authentication",
+          "routing"
+        ]
+      }
+    },
+    {
+      "id": "workspace.relay-connector",
+      "path": "server/relay-connector.mjs",
+      "kind": "service",
+      "owner": "workspace",
+      "purpose": "Outbound Baton connections and route recovery",
+      "sourceOfTruth": [
+        "relay/README.md",
+        "docs/31-workspace-service.md"
+      ],
+      "tests": [
+        "tests/relay.test.mjs"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "relay/README.md"
+        ],
+        "reviewIf": [
+          "device authentication",
+          "routing"
+        ]
+      }
+    },
+    {
+      "id": "workspace.relay-account",
+      "path": "server/relay-account.mjs",
+      "kind": "service",
+      "owner": "workspace",
+      "purpose": "Mac identity, account invitations, certificate-bound sessions and revocation",
+      "sourceOfTruth": [
+        "relay/README.md",
+        "docs/31-workspace-service.md"
+      ],
+      "tests": [
+        "tests/relay.test.mjs"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "relay/README.md"
+        ],
+        "reviewIf": [
+          "device authentication",
+          "routing"
+        ]
+      }
+    },
+    {
+      "id": "workspace.relay",
+      "path": "relay/",
+      "kind": "service",
+      "owner": "workspace",
+      "purpose": "Stateless HTTPS service for authenticated Baton hosts",
+      "sourceOfTruth": [
+        "relay/README.md",
+        "docs/31-workspace-service.md"
+      ],
+      "tests": [
+        "tests/relay.test.mjs"
+      ],
+      "whenChanged": {
+        "mustUpdate": [
+          "relay/README.md"
+        ],
+        "reviewIf": [
+          "device authentication",
+          "routing"
+        ]
+      }
     }
   ],
   "runMemberEditing": "Store.updateRunMembers preserves immutable history via removedParticipantIds; App/CLI tasks members share authenticated PUT and guards. tests/task-members.test.mjs and scripts/test-issue3-ui.mjs/test-issue3-real.mjs verify. History MCP adds list_employees/read_employee using shared configuration.",

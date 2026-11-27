@@ -13,6 +13,8 @@ export type TransportRequest = {
   bodyFile?: string;
   /** Lower-case hex SHA-256 of the paired workspace certificate (local workspaces only). */
   pin?: string;
+  relay?: string;
+  deviceKey?: string;
   /** "text" (default), "base64" or "file" (written to the app cache, URI returned). */
   responseType?: 'text' | 'base64' | 'file';
   /** File name used for "file" responses (share sheet, previews). */
@@ -44,6 +46,8 @@ declare class BatonTransportModule extends NativeModule<TransportEvents> {
   request(options: TransportRequest): Promise<TransportResponse>;
   openStream(id: string, options: TransportRequest): void;
   closeStream(id: string): void;
+  newDeviceKey(): Promise<string>;
+  removeDeviceKey(key: string): Promise<void>;
   clearCache(): Promise<void>;
 }
 

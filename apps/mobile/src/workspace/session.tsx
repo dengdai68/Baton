@@ -6,6 +6,8 @@ import { AppState, Platform } from 'react-native';
 import * as Device from 'expo-device';
 import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import Transport from 'baton-transport';
+import { relayInvitation } from './link';
 import { type ApiClient, closedClient, createApiClient, loginDevice } from '@/api/client';
 import { $t } from '@/i18n';
 
@@ -18,6 +20,7 @@ type Session = {
   client: ApiClient | null;
   expired: boolean;
   login(origin: string, name: string, password: string, pin: string | null): Promise<void>;
+  pair(link: string): Promise<void>;
   leave(): Promise<void>;
 };
 
@@ -57,16 +60,48 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       setToken(result.token); setExpired(false); setActive(workspace);
     } finally { busy.current = false; }
   }, [active]);
+  const pair = useCallback(async (link: string) => {
+    if (active || busy.current) throw Error($t('请先退出当前账号'));
+    let invite: ReturnType<typeof relayInvitation>;
+    try { invite = relayInvitation(link); } catch { throw Error($t('配对地址无效')); }
+    busy.current = true;
+    let key: string | undefined;
+    try {
+      key = await Transport.newDeviceKey();
+      const device = deviceLabel();
+      const response = await Transport.request({relay:invite.relay,deviceKey:key,pin:invite.pin,
+        url:'https://'+invite.route+'.baton.invalid/relay/redeem',method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({t:invite.token,device}),timeout:20});
+      const result = JSON.parse(response.body || '{}');
+      if (response.status !== 200 || !/^[0-9a-f]{32}$/.test(result.channel) || !result.token)
+        throw Error($t('配对链接无效、已使用或已过期'));
+      const origin = 'https://'+result.channel+'.baton.invalid';
+      const workspace: SavedWorkspace = {id:'relay.'+result.channel,origin,pin:invite.pin,relay:invite.relay,deviceKey:key,
+        name:result.workspace,mode:result.mode,user:result.user,device,addedAt:Date.now(),lastUsedAt:Date.now()};
+      await workspaceStore.save(workspace,result.token);
+      key=undefined;
+      setActive(workspace); setToken(result.token); setExpired(false);
+    } catch (error) {
+      if ((error as Error).message.includes('配对链接无效')) throw error;
+      throw Error($t('无法建立配对连接，请检查 Mac 是否在线，并确认邀请仍然有效。'));
+    } finally {
+      busy.current = false;
+      if (key) await Transport.removeDeviceKey(key).catch(()=>{});
+    }
+  },[active]);
   const leave = useCallback(async () => {
     if (active && token) await createApiClient({ ...active, token }).post('/logout').catch(() => {});
-    if (active) await workspaceStore.remember(active.origin);
+    if (active?.deviceKey) {
+      await Transport.removeDeviceKey(active.deviceKey);
+      await Transport.clearCache();
+    } else if (active) await workspaceStore.remember(active.origin);
     await workspaceStore.clear();
     setActive(null); setToken(null); setExpired(false);
     cache.removeQueries({ queryKey:['ws'] });
   }, [active, token, cache]);
 
   const client = useMemo(
-    () => (active && token ? createApiClient({ origin: active.origin, pin: active.pin, token, onUnauthorized: () => setExpired(true) }) : null),
+    () => (active && token ? createApiClient({ ...active, token, onUnauthorized: () => setExpired(true) }) : null),
     [active, token],
   );
 
@@ -119,8 +154,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, [active?.id, client, expired, cache]);
 
   const value = useMemo<Session>(
-    () => ({ live, ready, active, client, expired, login, leave }),
-    [live, ready, active, client, expired, login, leave],
+    () => ({ live, ready, active, client, expired, login, pair, leave }),
+    [live, ready, active, client, expired, login, pair, leave],
   );
   return <SessionContext value={value}>{children}</SessionContext>;
 }

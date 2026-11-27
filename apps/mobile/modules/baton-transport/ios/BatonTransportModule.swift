@@ -15,6 +15,8 @@ struct TransportRequest: Record {
   @Field var bodyFile: String?
   /// Lower-case hex SHA-256 of the expected leaf certificate (self-signed local workspaces).
   @Field var pin: String?
+  @Field var relay: String?
+  @Field var deviceKey: String?
   /// "text" (default), "base64" or "file".
   @Field var responseType: String = "text"
   /// Suggested file name for "file" responses.
@@ -77,6 +79,8 @@ final class CertificateProbe: NSObject, URLSessionTaskDelegate, @unchecked Senda
 /// Trusts a pinned host only when its leaf certificate matches the paired fingerprint;
 /// hosts without a pin use the system trust store (cloud workspaces).
 class PinningDelegate: NSObject, URLSessionTaskDelegate {
+  var relayTLS: RelayTLS?
+
   func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) { completionHandler(nil) }
 
   func urlSession(
@@ -84,6 +88,7 @@ class PinningDelegate: NSObject, URLSessionTaskDelegate {
     didReceive challenge: URLAuthenticationChallenge,
     completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
   ) {
+    if let relayTLS { relayTLS.authenticate(challenge, completionHandler); return }
     let space = challenge.protectionSpace
     guard space.authenticationMethod == NSURLAuthenticationMethodServerTrust, let trust = space.serverTrust else {
       completionHandler(.performDefaultHandling, nil)
@@ -245,19 +250,33 @@ public class BatonTransportModule: Module {
       return ["fingerprint":fingerprint, "trusted":probe.trusted]
     }
 
+    AsyncFunction("newDeviceKey") { UUID().uuidString.lowercased().replacingOccurrences(of:"-",with:"") }
+    AsyncFunction("removeDeviceKey") { (key: String) in RelayDeviceKey.remove(key) }
+
     AsyncFunction("request") { (options: TransportRequest) async throws -> [String: Any?] in
       try await self.perform(options)
     }
 
     Function("openStream") { (id: String, options: TransportRequest) throws in
       let request = try self.prepare(options)
-      let task = self.streamSession.dataTask(with: request)
-      self.streamDelegate.register(task, id: id, key: pinKey(host: request.url?.host ?? "", port: request.url?.port))
+      var session = self.streamSession
+      var delegate = self.streamDelegate
+      if let relay = try self.relay(options, request) {
+        let dedicated = StreamDelegate()
+        dedicated.relayTLS = relay
+        dedicated.onEvent = self.streamDelegate.onEvent
+        dedicated.onEnd = self.streamDelegate.onEnd
+        session = URLSession(configuration:try relay.configuration(),delegate:dedicated,delegateQueue:nil)
+        delegate = dedicated
+      }
+      let task = session.dataTask(with: request)
+      delegate.register(task, id: id, key: pinKey(host: request.url?.host ?? "", port: request.url?.port))
       self.streamLock.lock()
       self.streamTasks[id]?.cancel()
       self.streamTasks[id] = task
       self.streamLock.unlock()
       task.resume()
+      if options.relay != nil { session.finishTasksAndInvalidate() }
     }
 
     Function("closeStream") { (id: String) in
@@ -285,7 +304,7 @@ public class BatonTransportModule: Module {
     guard let url = URL(string: options.url), (url.scheme == "https" || (url.scheme == "http" && options.pin == nil)), let host = url.host, !host.isEmpty else {
       throw TransportFailure("INVALID_URL: \(options.url.prefix(80))")
     }
-    if let pin = options.pin {
+    if options.relay == nil, let pin = options.pin {
       guard pin.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil else {
         throw TransportFailure("INVALID_PIN: certificate fingerprint must be 64 hex characters")
       }
@@ -297,12 +316,24 @@ public class BatonTransportModule: Module {
     return request
   }
 
+  private func relay(_ options: TransportRequest, _ request: URLRequest) throws -> RelayTLS? {
+    guard let origin = options.relay else { return nil }
+    guard let url = request.url, let pin = options.pin, let key = options.deviceKey else { throw RelayTLSFailure.invalid }
+    return try RelayTLS(origin:origin,url:url,pin:pin,key:key,create:url.path == "/relay/redeem")
+  }
   private func perform(_ options: TransportRequest) async throws -> [String: Any?] {
     var request = try prepare(options)
     let key = pinKey(host: request.url?.host ?? "", port: request.url?.port)
     // Credentials always use a fresh TLS connection with the leaf observed at login.
     let loginSession = request.url?.path == "/login" ? URLSession(configuration: .ephemeral, delegate: requestDelegate, delegateQueue: nil) : nil
     defer { loginSession?.invalidateAndCancel() }
+    var session = loginSession ?? requestSession
+    if let relay = try relay(options, request) {
+      let delegate = PinningDelegate()
+      delegate.relayTLS = relay
+      session = URLSession(configuration:try relay.configuration(),delegate:delegate,delegateQueue:nil)
+    }
+    defer { if options.relay != nil {session.invalidateAndCancel()} }
     let cachedFile = options.cacheKey.map { Self.cacheFile(for: $0, fileName: options.fileName) }
     if options.responseType == "file", let cachedFile, FileManager.default.fileExists(atPath: cachedFile.path) {
       return ["status": 200, "headers": [String: String](), "body": nil, "fileUri": cachedFile.absoluteString, "cached": true]
@@ -312,7 +343,7 @@ public class BatonTransportModule: Module {
     do {
       if let file = options.bodyFile {
         guard let fileURL = URL(string: file), fileURL.isFileURL else { throw TransportFailure("INVALID_BODY: bodyFile must be a file:// URI") }
-        (data, response) = try await requestSession.upload(for: request, fromFile: fileURL)
+        (data, response) = try await session.upload(for: request, fromFile: fileURL)
       } else {
         if let base64 = options.bodyBase64 {
           guard let body = Data(base64Encoded: base64) else { throw TransportFailure("INVALID_BODY: bodyBase64 is not valid base64") }
@@ -320,7 +351,7 @@ public class BatonTransportModule: Module {
         } else if let text = options.body {
           request.httpBody = Data(text.utf8)
         }
-        (data, response) = try await (loginSession ?? requestSession).data(for: request)
+        (data, response) = try await session.data(for: request)
       }
     } catch let failure as TransportFailure {
       throw failure

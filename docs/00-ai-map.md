@@ -372,3 +372,5 @@ Pi 控制台降噪：`client/console-projections.mjs` 的已知类型/精确摘�
 常驻服务：`apps/electron/daemon.mjs` 由 launchd 用户代理（`apps/electron/daemon-service.mjs` 生成与管理）以应用可执行文件的 Node 模式运行，像宿主一样拥有 `server/index.mjs` 子进程并沿用同一 IPC 协议，经配置根私有 `daemon.sock` 向 main 提供状态、通知订阅与空闲预约；Mac 主进程在两种退出策略下都连接同一服务，设置 → 工作空间 → 本机服务切换（宿主 `getServiceStatus`/`setResidentService` 仅限设置页）。手机网关 `server/workspace-http.mjs` 按设备范围（mobile 只读配置 / desktop）放行、按客户端地址限制认证失败、对远程请求隐藏内部错误；`server/workspace-identity.mjs` 记录设备最近访问并在闲置 30 天后失效。决策与安全模型 docs/32；测试 tests/daemon、tests/workspace-service、tests/electron。
 
 登录地址在桌面偏好或 iOS 钥匙串内增删，连通圆点由健康检查驱动。工作空间的内网 HTTP 和代理公网 HTTPS 共用同一服务，入口配置见 docs/31。单工作空间登录入口为 web/workspace-choice.js、server/workspace-http.mjs 和 iOS SessionProvider。实时通知从 Store journal 送到两端。详见 docs/31-workspace-service.md。
+
+手机 Relay 服务、出站连接器和证书认证见 [部署与协议](../relay/README.md)。配对回归入口为 `tests/relay.test.mjs`。

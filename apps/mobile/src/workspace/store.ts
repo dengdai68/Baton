@@ -8,6 +8,8 @@ export type SavedWorkspace = {
   pin: string | null;
   name: string;
   mode: 'local' | 'cloud';
+  relay?: string;
+  deviceKey?: string;
   user: string;
   device: string;
   addedAt: number;
