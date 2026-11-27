@@ -19,6 +19,8 @@ export type ClientOptions = {
   origin: string;
   pin: string | null;
   token: string;
+  relay?: string;
+  deviceKey?: string;
   /** Called once per 401: the device was revoked or the token expired. */
   onUnauthorized?: () => void;
 };
@@ -65,18 +67,40 @@ function subscribeStreams() {
 
 export type ApiClient = ReturnType<typeof createApiClient>;
 
-export function createApiClient({ origin, pin, token, onUnauthorized }: ClientOptions) {
+export function createApiClient({ origin, pin, token, relay, deviceKey, onUnauthorized }: ClientOptions) {
   const base = (path: string, extra: Partial<TransportRequest> = {}): TransportRequest => ({
     url: origin + path,
-    pin: pin ?? undefined,
+    pin: pin ?? undefined, relay, deviceKey,
     headers: { Authorization: 'Bearer ' + token, Accept: 'application/json', 'Content-Type': 'application/json' },
     ...extra,
   });
 
+  let renewAt = 0;
+  let renewing: Promise<void> | undefined;
+  function authorize() {
+    if (!relay || Date.now() < renewAt) return Promise.resolve();
+    return renewing ??= (async () => {
+      const response = await Transport.request(base('/relay/session',{method:'POST',body:'{}'}));
+      if (response.status === 401) onUnauthorized?.();
+      const data = JSON.parse(response.body || '{}');
+      if (response.status !== 200 || !data.token) throw new ApiError($t('无法恢复设备通道'),response.status);
+      token = data.token;
+      renewAt = Date.now()+12*60000;
+    })().finally(()=>{renewing=undefined;});
+  }
   async function call<T>(method: string, path: string, body?: unknown, extra: Partial<TransportRequest> = {}): Promise<T> {
     let response;
     try {
-      response = await Transport.request(base(path, { method, body: body === undefined ? undefined : JSON.stringify(body), ...extra }));
+      await authorize();
+      const send = () => {
+        const options = base(path, {method, body:body === undefined ? undefined : JSON.stringify(body), ...extra});
+        if (relay) options.headers = {...options.headers,Authorization:'Bearer '+token};
+        return Transport.request(options);
+      };
+      response = await send();
+      if (relay && response.status === 401) {
+        renewAt = 0; await authorize(); response = await send();
+      }
     } catch (error) {
       throw transportError(error);
     }
@@ -113,13 +137,15 @@ export function createApiClient({ origin, pin, token, onUnauthorized }: ClientOp
     stream(path: string, handlers: StreamHandlers): () => void {
       subscribeStreams();
       const id = 'stream-' + ++streamCounter;
-      streams.set(id, handlers);
-      try {
-        Transport.openStream(id, base(path, { headers: { Authorization: 'Bearer ' + token, Accept: 'text/event-stream' } }));
-      } catch (error) {
-        streams.delete(id);
-        handlers.onEnd?.(transportError(error));
-      }
+      streams.set(id, {...handlers,onEnd:error=>{
+        if (relay && error?.status === 401) { renewAt=0; handlers.onEnd?.(null); }
+        else handlers.onEnd?.(error);
+      }});
+      void authorize().then(()=>{
+        if (streams.has(id)) Transport.openStream(id,base(path,{headers:{Authorization:'Bearer '+token,Accept:'text/event-stream'}}));
+      }).catch(error=>{
+        if (streams.delete(id)) handlers.onEnd?.(transportError(error));
+      });
       return () => {
         streams.delete(id);
         Transport.closeStream(id);

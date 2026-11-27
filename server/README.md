@@ -210,3 +210,5 @@ Store.subscribeNotifications 发布未来已提交的任务待验收/完成及�
 `workspace-http.mjs` 是公网可达的唯一入口：默认拒绝，只转发白名单路由；设备会话按配对范围授权（`mobile` 只读配置，`desktop` 为另一台 Mac 的客户端），按 IP 短期限流，并按账号与 IP 组合持久封禁 24 小时（`X-Forwarded-For` 仅信任已配置的直接代理来源）；远程请求的非预期内部错误只返回「请求处理失败」并写本机诊断；所有响应带 HSTS、CSP、`X-Frame-Options: DENY`、COOP/CORP 与 Permissions-Policy；每台设备最多 8 条实时事件流，网关最多 256 个并发连接。`workspace-identity.mjs` 只存令牌摘要，记录设备配对时间、最近访问时间与地址，会话闲置 30 天失效、使用即续期（每分钟最多写一次），访问库文件为 0600。安全模型与加密取舍见 [docs/32](../docs/32-resident-service.md)，测试 `tests/workspace-service.test.mjs`。
 
 工作空间事件流、Mac 配对目录及网关访问范围见 docs/31-workspace-service.md。配对目录只对本机管理 API 开放。
+
+`relay-account.mjs` 负责 Mac 邀请与设备通道，`relay-connector.mjs` 向公网建立出站连接。部署入口在 [relay/](../relay/README.md)。

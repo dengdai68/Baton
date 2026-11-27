@@ -63,3 +63,7 @@ Mac 的登录选择器和本机设置都显示 workspace-service.json 的 origin
 反向代理应覆盖 `X-Forwarded-For` 或把真实客户端地址追加到最后一项。若直接连接 Baton 的是反向代理，在 `workspace-service.json` 的可选 `trustedProxyAddresses` 数组中填写该代理连接 Baton 时的实际来源 IP。Baton 只采信列表内代理提供的最后一跳。未配置时使用 TCP 对端地址。Docker 的发布地址与实际回源来源 IP 可能不同，部署时按实际来源核对。远端错误只显示网关定义的公开消息。
 
 已认证的 Mac 和已登录设备使用 `GET /api/workspace/events`。连接就绪后，`workspace-change` 按批次通知任务、沟通、自动化及两类控制台发生变化；客户端通过各自的已授权分页接口补读。Mac 可用 `runId` 在同一连接订阅当前运行的详细事件。心跳持续校验会话，设备撤销、退出和应用切入后台都会结束相应订阅。旧 Run 流仍服务已有调用者。
+
+## 手机通过 Relay 访问 Mac
+
+在 Mac 的设置中打开工作空间的「远程访问 · 添加手机」。配置 Relay 并登记 Mac 公钥后，每次添加手机都会生成独立邀请。手机使用扫码或手输入口完成端到端配对。配置、有效期、撤销及通信协议见 [Relay 部署说明](../relay/README.md)。

@@ -74,6 +74,8 @@ class TransportRequest : Record {
 
   /** Lower-case hex SHA-256 of the expected leaf certificate (self-signed local workspaces). */
   @Field var pin: String? = null
+  @Field var relay: String? = null
+  @Field var deviceKey: String? = null
 
   /** "text" (default), "base64" or "file". */
   @Field var responseType: String = "text"
@@ -165,6 +167,7 @@ class BatonTransportModule : Module() {
   // The server sends a heartbeat every 15 seconds; the read timeout catches a dead link.
   private val streamClient = httpClient(STREAMS_PER_HOST).callTimeout(STREAM_LIFETIME_HOURS, TimeUnit.HOURS).build()
   private val pinnedTls = ConcurrentHashMap<String, Tls>()
+  private val routes = mutableMapOf<Pair<String,String>, RelayTls>()
   private val streamCalls = ConcurrentHashMap<String, Call>()
   private val probes: ExecutorService = Executors.newCachedThreadPool()
 
@@ -172,6 +175,13 @@ class BatonTransportModule : Module() {
     Name("BatonTransport")
     Events("onStreamEvent", "onStreamEnd")
 
+    AsyncFunction("newDeviceKey") { UUID.randomUUID().toString().replace("-","") }
+    AsyncFunction("removeDeviceKey") { key: String ->
+      synchronized(routes) {
+        routes.keys.filter { it.first == key }.forEach { routes.remove(it)?.close() }
+        RelayTls.remove(key)
+      }
+    }
     AsyncFunction("inspectCertificate") { origin: String, promise: Promise ->
       val url = origin.toHttpUrlOrNull()
       if (url == null || !url.isHttps || url.host.isEmpty()) throw TransportFailure("INVALID_URL")
@@ -207,6 +217,7 @@ class BatonTransportModule : Module() {
     }
 
     OnDestroy {
+      synchronized(routes) { routes.values.forEach { it.close() }; routes.clear() }
       streamCalls.values.forEach(Call::cancel)
       streamCalls.clear()
       requestClient.dispatcher.cancelAll()
@@ -229,7 +240,7 @@ class BatonTransportModule : Module() {
     }
     options.pin?.let { pin ->
       if (!PIN_PATTERN.matches(pin)) throw TransportFailure("INVALID_PIN: certificate fingerprint must be 64 hex characters")
-      PinStore.set(pinKey(url.host, url.port), pin)
+      if (options.relay == null) PinStore.set(pinKey(url.host, url.port), pin)
     }
     val builder = Request.Builder().url(url)
     for ((name, value) in options.headers) {
@@ -246,12 +257,23 @@ class BatonTransportModule : Module() {
    * The client for one request: per-request timeouts, and the pinned TLS context when the
    * host has a registered pin. A fresh client (login) never reuses a connection or TLS session.
    */
-  private fun clientFor(base: OkHttpClient, url: HttpUrl, timeoutSeconds: Double, fresh: Boolean): OkHttpClient {
-    val millis = (timeoutSeconds * 1000).toLong().coerceAtLeast(1)
+  private fun clientFor(base: OkHttpClient, url: HttpUrl, options: TransportRequest, fresh: Boolean): OkHttpClient {
+    val millis = (options.timeout * 1000).toLong().coerceAtLeast(1)
     val builder = base.newBuilder()
       .connectTimeout(millis, TimeUnit.MILLISECONDS)
       .readTimeout(millis, TimeUnit.MILLISECONDS)
       .writeTimeout(millis, TimeUnit.MILLISECONDS)
+    options.relay?.let { value ->
+      val relay = value.toHttpUrlOrNull() ?: throw TransportFailure("INVALID_URL")
+      require(relay.isHttps && relay.username.isEmpty() && relay.password.isEmpty() && relay.encodedPath == "/" && relay.query == null)
+      require(url.isHttps && Regex("[0-9a-f]{32}\\.baton\\.invalid").matches(url.host) && url.port == 443)
+      val handle = requireNotNull(options.deviceKey)
+      val pin = requireNotNull(options.pin)
+      val route = synchronized(routes) {
+        routes.getOrPut(handle to "$value|$pin|${url.host}") { RelayTls(relay,url.host,pin,handle,url.encodedPath == "/relay/redeem") }
+      }
+      return route.configure(builder).build()
+    }
     if (url.isHttps) {
       val key = pinKey(url.host, url.port)
       val pin = PinStore.pin(key)
@@ -284,7 +306,7 @@ class BatonTransportModule : Module() {
     val key = pinKey(url.host, url.port)
     // Credentials always use a fresh TLS connection with the leaf observed at login.
     val login = url.encodedPath == LOGIN_PATH
-    val client = clientFor(requestClient, url, options.timeout, fresh = login)
+    val client = clientFor(requestClient, url, options, fresh = login)
     client.newCall(request).enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) {
         if (login) client.connectionPool.evictAll()
@@ -371,7 +393,7 @@ class BatonTransportModule : Module() {
     val request = prepare(options).build()
     val url = request.url
     val key = pinKey(url.host, url.port)
-    val call = clientFor(streamClient, url, options.timeout, fresh = false).newCall(request)
+    val call = clientFor(streamClient, url, options, fresh = false).newCall(request)
     streamCalls.put(id, call)?.cancel()
     call.enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) = finishStream(id, call, key, 0, e)

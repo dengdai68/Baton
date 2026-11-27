@@ -555,6 +555,13 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
         ${info.origin ? row(info.local ? $t("工作空间地址") : $t("登录地址"),info.origin) : ''}${info.connectionError ? row($t("无法连接"),info.connectionError) : ''}${info.fingerprint ? `<details class="workspace-cert" ${expanded ? 'open' : ''}><summary>${$t("证书指纹")}</summary><code>${escape(info.fingerprint)}</code></details>` : ''}</div></div>
         <div class="settings-group"><h4>${$t("当前账号登录的设备")}</h4><div class="settings-box">
         ${devices.map(item => row(item.label, [item.lastAddress?.replace(/^::ffff:/i,''), item.id === info.deviceId ? $t("当前设备") : item.lastSeen ? new Date(item.lastSeen).toLocaleString() : $t("本机工作空间")].filter(Boolean).join(' · '))).join('')}</div></div>`;
+      if (info.local && !remoteWorkspace) {
+        const link = document.createElement('a');
+        link.href = '/phone/index.html';
+        link.className = 'small-button';
+        link.textContent = $t('远程访问 · 添加手机');
+        panel.append(link);
+      }
     } catch (error) { if (panel.isConnected) panel.textContent = error.message; }
   }
   function mount(target, page = "general") {

@@ -1,4 +1,7 @@
+import { existsSync } from 'node:fs';
 import {networkInterfaces, hostname} from 'node:os';
+import { relayAccount } from './relay-account.mjs';
+import QRCode from 'qrcode';
 import {workspaceIdentity} from './workspace-identity.mjs';
 import {provisionWorkspace,workspaceOrigin} from './workspace-config.mjs';
 import {publicErrorMessage, startWorkspace} from './workspace-http.mjs';
@@ -59,7 +62,11 @@ const host = "127.0.0.1";
 const instanceId = randomUUID();
 const storage = desktopServiceStoragePaths();
 const databasePath = storage.databasePath;
-let workspaceConfig;
+let workspaceConfig, relayAccess;
+function accountRelay() {
+  return relayAccess ??= relayAccount({root:storage.controlRoot, account:()=>auth.administratorIdentity(),
+    name:()=>workspaceConfig?.name || hostname(), api:gatewayApi, readJson, sendJson});
+}
 try { workspaceConfig = JSON.parse(await readFile(join(storage.controlRoot,'workspace-service.json'),'utf8')); }
 catch(error){ if(error.code!=='ENOENT')throw error; }
 if(workspaceConfig?.mode==='cloud' && process.env.BATON_WORKSPACE_DAEMON!=='1')throw Error('云端工作空间需要独立服务入口');
@@ -326,6 +333,23 @@ async function routeApi(request, response, pathname, searchParams = new URLSearc
         fingerprint:workspaceConfig?.cert && new X509Certificate(readFileSync(workspaceConfig.cert)).fingerprint256,
         devices:[local, ...(identity?.accountDevices('human_operator') || [])]});
     } finally { identity?.close(); }
+    return true;
+  }
+  if (pathname === '/api/account/relay' || pathname.startsWith('/api/account/relay/')) {
+    if (context.remote || !auth.session(request) || workspaceConfig?.mode === 'cloud') {
+      sendJson(response,403,{error:'请在 Mac 登录后管理 Relay'}); return true;
+    }
+    const relay = accountRelay();
+    response.setHeader('Cache-Control','no-store');
+    if (pathname === '/api/account/relay' && request.method === 'GET') sendJson(response,200,relay.settings());
+    else if (pathname === '/api/account/relay' && request.method === 'PUT') sendJson(response,200,relay.configure((await readJson(request)).relay));
+    else if (pathname === '/api/account/relay' && request.method === 'DELETE') sendJson(response,200,relay.configure(''));
+    else if (pathname === '/api/account/relay/invites' && request.method === 'POST') {
+      const invite = await relay.invite();
+      sendJson(response,201,{...invite,qr:await QRCode.toDataURL(invite.link)});
+    } else if (/^\/api\/account\/relay\/devices\/[a-f0-9]{32}$/.test(pathname) && request.method === 'DELETE') {
+      relay.revoke(pathname.split('/').pop()); sendJson(response,200,relay.settings());
+    } else sendJson(response,404,{error:'未找到'});
     return true;
   }
   if (pathname.startsWith('/api/phone/')) {
@@ -1149,6 +1173,7 @@ server.listen(port, host, async () => {
   const listeningPort = server.address().port;
   authOptions.origins = [`http://127.0.0.1:${listeningPort}`];
   auth = createAuth(authOptions);
+  if (existsSync(join(storage.controlRoot,'relay-access.sqlite')) && workspaceConfig?.mode !== 'cloud') accountRelay();
   if (!workspaceConfig && process.env.BATON_AUTO_WORKSPACE === '1') {
     const address = Object.values(networkInterfaces()).flat().find(ip => ip?.family === 'IPv4' && !ip.internal)?.address;
     try {
