@@ -6,7 +6,7 @@ Relay 为不能接受公网入站连接的 Mac 提供手机访问入口。两台
 
 在公网主机上准备 Node.js 22.12 或更新版本、一个域名与受手机系统信任的 HTTPS 证书。保存完整证书链和私钥，限制服务账户读取私钥。手机和 Mac 均需要连通这个 TCP 端口。若前面有负载均衡器，请使用 TCP 透传，并将连接交给同一台 Relay 实例。
 
-从仓库根目录运行以下命令。配置中的证书路径建议使用绝对路径。
+公网主机只需复制 `relay/` 目录和下方配置，无需安装 npm 依赖。从该目录的上一级运行以下命令。配置中的证书路径建议使用绝对路径。
 
 ```json
 {
@@ -40,3 +40,17 @@ Mac 在控制目录的 `relay-identity/` 保存身份，在 `relay-access.sqlite
 ```sh
 node --test tests/relay.test.mjs
 ```
+
+### 线上的字段与管理接口
+
+| 操作 | 实现约定 |
+| --- | --- |
+| 生成邀请 | `baton://pair?v=1&relay=<主机及可选端口>&r=<32位十六进制>&fp=<64位十六进制>&t=<43位base64url>`。指纹是 Mac 公钥 SPKI 的 SHA-256。 |
+| 管理账号 | 已登录的 Mac 会话通过 `GET/PUT/DELETE /api/account/relay` 读取、更换、清除设置。更新地址的 JSON 字段为 `relay`。 |
+| 添加与移除手机 | `POST /api/account/relay/invites` 返回 `link`、`qr` 和 `expires`（Unix 毫秒）。管理页面轮询账号接口查看已兑换的设备。`DELETE /api/account/relay/devices/<id>` 单独撤销。 |
+| 绑定与续期 | 仅在内层 TLS 中使用 `POST /relay/redeem`（`t`、`device`）和 `POST /relay/session`。成功结果含 `channel`、`token`、`workspace`、`user`、`mode`。会话令牌有效期 15 分钟，授权按设备证书核验。 |
+| 重载名单 | 更新配置的 `allow` 后向 Relay 进程发送 SIGHUP。移除的 Mac 会断开连接。更换公网证书时重启服务。 |
+
+设计附录中的 HTTP/2、Upgrade 和部分字段是设计阶段的接口。当前版本在标准 HTTPS CONNECT 内建立端到端 TLS。独立实现客户端时以本页的协议、源码与测试为准。
+
+[测试报告](TEST-REPORT.md) · [交互报告](INTERACTION-REPORT.md)

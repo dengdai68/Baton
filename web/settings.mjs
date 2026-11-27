@@ -559,7 +559,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
         const link = document.createElement('a');
         link.href = '/phone/index.html';
         link.className = 'small-button';
-        link.textContent = $t('远程访问 · 添加手机');
+        link.textContent = $t("远程访问 · 添加手机");
         panel.append(link);
       }
     } catch (error) { if (panel.isConnected) panel.textContent = error.message; }

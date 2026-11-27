@@ -3295,5 +3295,6 @@
  "配对地址无效": "Invalid pairing link",
  "配对链接无效、已使用或已过期": "The pairing link is invalid, used or expired",
  "无法建立配对连接，请检查 Mac 是否在线，并确认邀请仍然有效。": "Could not pair. Check that the Mac is online and the invitation is still valid.",
- "无法恢复设备通道": "Could not restore the device connection"
+ "无法恢复设备通道": "Could not restore the device connection",
+ "返回": "Back"
 }

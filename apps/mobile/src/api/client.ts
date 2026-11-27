@@ -137,7 +137,14 @@ export function createApiClient({ origin, pin, token, relay, deviceKey, onUnauth
     stream(path: string, handlers: StreamHandlers): () => void {
       subscribeStreams();
       const id = 'stream-' + ++streamCounter;
-      streams.set(id, {...handlers,onEnd:error=>{
+      streams.set(id, {...handlers,onEvent:(event,data)=>{
+        if (relay && event === 'auth-expired') {
+          renewAt = 0;
+          streams.delete(id);
+          Transport.closeStream(id);
+          handlers.onEnd?.(null);
+        } else handlers.onEvent(event,data);
+      },onEnd:error=>{
         if (relay && error?.status === 401) { renewAt=0; handlers.onEnd?.(null); }
         else handlers.onEnd?.(error);
       }});

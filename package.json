@@ -76,6 +76,7 @@
       "NOTICE",
       "apps/electron/**/*",
       "server/**/*",
+      "relay/wire.mjs",
       "web/**/*",
       "client/**/*",
       "cli/**/*.mjs",

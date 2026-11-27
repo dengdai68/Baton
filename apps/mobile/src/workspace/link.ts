@@ -22,5 +22,13 @@ export function relayInvitation(input: string) {
 
 // Keep the single-use credential out of navigation history and persisted route parameters.
 let pending = '';
-export function setPairingLink(value: string) { pending = value; }
+const listeners = new Set<() => void>();
+export function onPairingLink(listener: () => void) {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+export function setPairingLink(value: string) {
+  pending = value;
+  for (const listener of listeners) listener();
+}
 export function takePairingLink() { const value = pending; pending = ''; return value; }

@@ -1,7 +1,7 @@
-import { openTunnel, readMessages, routePattern, sendMessage } from './relay-wire.mjs';
+import { openTunnel, readMessages, routePattern, sendMessage } from '../relay/wire.mjs';
 
 export function connectRelay(origin, identity, routes, accept) {
-  let control, stopped = false, retry, heartbeat, delay = 500, revision = 0, ready = false, lastError = '';
+  let control, stopped = false, retry, heartbeat, delay = 500, revision = 0, ready = false, online = false, lastError = '';
   const sockets = new Set();
   function sync() {
     ready = false;
@@ -14,7 +14,7 @@ export function connectRelay(origin, identity, routes, accept) {
       control = socket;
       socket.setTimeout(70000, () => socket.destroy());
       readMessages(socket, msg => {
-        if (msg.registered === revision) { ready = true; delay = 500; }
+        if (msg.registered === revision) { ready = true; online = true; lastError = ''; delay = 500; }
         if (!routePattern.test(msg.open) || !routePattern.test(msg.route)) return;
         if (!routes().some(entry => entry.id === msg.route)) return;
         void openTunnel(origin, msg.open + '.attach.invalid:443', identity).then(stream => {
@@ -26,7 +26,7 @@ export function connectRelay(origin, identity, routes, accept) {
       });
       heartbeat = setInterval(() => sendMessage(socket, {ping:true}), 25000);
       socket.once('close', () => {
-        clearInterval(heartbeat); ready = false; control = null;
+        clearInterval(heartbeat); ready = false; online = false; control = null;
         for (const stream of sockets) stream.destroy();
         schedule();
       });
@@ -39,7 +39,7 @@ export function connectRelay(origin, identity, routes, accept) {
     delay = Math.min(15000, delay * 2);
   }
   void dial();
-  return {sync, get error() { return lastError; }, get ready() {return ready;}, close() {
+  return {sync, get online() {return online;}, get error() { return lastError; }, get ready() {return ready;}, close() {
     stopped = true; clearTimeout(retry); clearInterval(heartbeat); control?.destroy();
     for (const stream of sockets) stream.destroy();
   }};
