@@ -54,7 +54,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
   }
   function settings() {
     connect();
-    return {origin:origin() || '', pin, online:connector?.online || false, registered:connector?.ready || false, error:connector?.error || null,
+    return {account:account()?.name, origin:origin() || '', pin, online:connector?.online || false, registered:connector?.ready || false, error:connector?.error || null,
       devices:db.prepare('SELECT id,label,created,invitation,lastSeen FROM channels WHERE owner=? ORDER BY created DESC').all(owner() || '')};
   }
   function transaction(fn) {
