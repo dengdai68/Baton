@@ -1,16 +1,41 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { connect } from 'node:tls';
-import { createHash } from 'node:crypto';
+import { connect, createSecureContext } from 'node:tls';
+import { createHash, createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
 import { createRelay } from '../relay/server.mjs';
 import { publicPin, openTunnel, readMessages, routeHost, sendMessage } from '../relay/wire.mjs';
 import { relayAccount, serviceIdentity } from '../server/relay-account.mjs';
+
+test('Mac identities use named P-256 and repair a legacy certificate without rotating its key', t => {
+  const root = mkdtempSync(join(tmpdir(),'baton-relay-identity-'));
+  t.after(() => rmSync(root,{recursive:true,force:true}));
+  const fresh = serviceIdentity(root);
+  const namedSpki = key => createPublicKey({key:createPrivateKey(key).export({format:'jwk'}),format:'jwk'}).export({type:'spki',format:'der'});
+  assert.deepEqual(new X509Certificate(fresh.cert).publicKey.export({type:'spki',format:'der'}), namedSpki(fresh.key));
+  assert.deepEqual(serviceIdentity(root), fresh);
+
+  const dir = join(root,'relay-identity'), keyPath = join(dir,'key.pem'), certPath = join(dir,'cert.pem');
+  execFileSync('openssl',['req','-new','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1',
+    '-pkeyopt','ec_param_enc:explicit','-nodes','-subj','/CN=Baton','-days','2','-keyout',keyPath,'-out',certPath],{stdio:'ignore'});
+  const legacyKey = readFileSync(keyPath), legacyCert = readFileSync(certPath);
+  writeFileSync(keyPath, fresh.key);
+  assert.throws(() => serviceIdentity(root), /身份不匹配/);
+  assert.deepEqual(readFileSync(certPath), legacyCert);
+  writeFileSync(keyPath, legacyKey);
+  const repaired = serviceIdentity(root);
+  assert.deepEqual(readFileSync(keyPath), legacyKey);
+  assert.deepEqual(repaired.key, legacyKey);
+  assert.notDeepEqual(repaired.cert, legacyCert);
+  assert.deepEqual(new X509Certificate(repaired.cert).publicKey.export({type:'spki',format:'der'}), namedSpki(legacyKey));
+  createSecureContext(repaired);
+  assert.deepEqual(serviceIdentity(root), repaired);
+});
 
 function relayFixture(root) {
   const keyFile = join(root,'key.pem'), certFile = join(root,'cert.pem');
