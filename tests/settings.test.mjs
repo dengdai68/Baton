@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { ByteCache } from "../client/byte-cache.mjs";
 import { applyPreferences, NAVIGATION, normalizePreferences, PREFERENCES_KEY, readPreferences, savePreferences } from "../web/preferences.mjs";
-import { SETTINGS_PAGES, createClosePreferenceUI, createCliInstallationUI } from "../web/settings.mjs";
+import { SETTINGS_PAGES, createClosePreferenceUI, createCliInstallationUI, relayConnectionStatus, invitationOutcome, invitationCountdown } from "../web/settings.mjs";
 import { createCatalogFixtureStore as createStore } from "./fixture-store.mjs";
 import { mkdtemp, mkdir, rm, writeFile, realpath, stat, access } from "node:fs/promises";
 import { constants } from "node:fs";
@@ -1288,4 +1288,47 @@ test('role rows expose the editor from the row and menu while capping bound avat
   const html=nodes['#roles-grid'].innerHTML;
   assert.equal((html.match(/data-edit-role=/g)||[]).length,2);assert.equal((html.match(/title="Employee/g)||[]).length,5);assert.match(html,/directory-avatar-overflow">\+2/);
   assert.match(html,/<details class="action-menu"><button[^>]*data-edit-role=[\s\S]*data-delete-role=/);assert.match(html,/创建于 2026-11-01/);assert.match(html,/role-row-prompt/);
+});
+
+test("remote access status names each Relay state without inventing progress", () => {
+  const cases = [
+    [null, "", "未设置"],
+    [{ origin: "" }, "", "未设置"],
+    [{ origin: "https://relay.example.com", online: true }, "done", "已连接"],
+    [{ origin: "https://relay.example.com", online: false, error: "Relay HTTP 403" }, "failed", "未获准接入"],
+    [{ origin: "https://relay.example.com", online: false, error: "ECONNREFUSED" }, "failed", "无法连接"],
+    [{ origin: "https://relay.example.com", online: false, error: null }, "running", "正在连接"],
+  ];
+  for (const [state, tone, label] of cases) {
+    const status = relayConnectionStatus(state);
+    console.log("relay state", JSON.stringify(state), "->", status.tone || "(neutral)", status.label, "|", status.text);
+    assert.equal(status.tone, tone);
+    assert.equal(status.label, label);
+  }
+  assert.match(relayConnectionStatus({ origin: "https://r", error: "ECONNREFUSED" }).text, /ECONNREFUSED/, "the system error stays visible");
+});
+
+test("invitation outcome follows the paired device, then expiry; countdown never goes negative", () => {
+  const invitation = { link: "baton://pair?v=1&relay=relay.example.com&r=" + "a".repeat(32) + "&fp=x&t=y", expires: 1_000_600_000 };
+  const waiting = invitationOutcome(invitation, { devices: [{ id: "d1", invitation: "b".repeat(32), label: "Other" }] }, 1_000_000_000);
+  console.log("waiting ->", JSON.stringify(waiting));
+  assert.deepEqual(waiting, { status: "waiting", remaining: 600_000 });
+  const paired = invitationOutcome(invitation, { devices: [{ id: "d2", invitation: "a".repeat(32), label: "Pixel 9" }] }, 1_000_700_000);
+  console.log("paired (even after expiry) ->", JSON.stringify(paired));
+  assert.equal(paired.status, "paired", "a redeemed invitation counts as paired even if the countdown already ran out");
+  assert.equal(paired.device.label, "Pixel 9");
+  assert.deepEqual(invitationOutcome(invitation, { devices: [] }, 1_000_600_000), { status: "expired" });
+  assert.equal(invitationOutcome(null, { devices: [] }), null);
+  const samples = [[600_000, "10:00"], [599_001, "10:00"], [61_000, "1:01"], [59_999, "1:00"], [1, "0:01"], [0, "0:00"], [-5_000, "0:00"]];
+  for (const [ms, text] of samples) { console.log("countdown", ms, "->", invitationCountdown(ms)); assert.equal(invitationCountdown(ms), text); }
+});
+
+test("Workspaces settings embeds remote access instead of navigating to a standalone page", async () => {
+  const source = await readFile(new URL("../web/settings.mjs", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /phone\/index\.html/, "no link to the removed standalone page");
+  assert.match(source, /<div data-remote-access data-local-only hidden><\/div>/, "the Workspaces panel hosts the inline section");
+  assert.match(source, /createRemoteAccessUI\(root\.querySelector\('\[data-remote-access\]'\)/);
+  assert.match(source, /remoteAccessUI\?\.hide\(\);\s*if \(page === "workspaces"\)/, "leaving Workspaces stops Relay polling");
+  await assert.rejects(readFile(new URL("../web/phone/index.html", import.meta.url), "utf8"), { code: "ENOENT" });
+  await assert.rejects(readFile(new URL("../web/phone/app.js", import.meta.url), "utf8"), { code: "ENOENT" });
 });

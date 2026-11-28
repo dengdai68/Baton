@@ -119,7 +119,7 @@ CLI 安装作为独立设置分类，始终由客户端展示；宿主方法缺�
 插件详情/员工搜索器展示各 Runtime 兼容性；详情注明静态兼容边界及具体不兼容原因，组件标记适用 Runtime。员工切换 Runtime 不静默丢弃选择，不兼容项禁选、已选项提示并阻止保存；最终校验仍在服务端。安装同时支持市场 Git 远程条目，任一失败不发布部分安装。
 
 - `app.js`：路由、任务、员工、团队、工作流、控制台、当前文件与 CHANGE。
-- `settings.mjs`：常规、外观、Runtime、仓库、CLI 与日志设置。
+- `settings.mjs`：常规、外观、工作空间、Runtime、仓库、CLI 与日志设置。工作空间页内的 `createRemoteAccessUI` 管理远程访问。
 - `communication.js`：长期私聊/群聊和 Markdown。
 - `manual-graphs.mjs`：本地图形加载、布局与销毁。
 - `preferences.mjs`：显示偏好；`pagination.mjs`：列表分页。
@@ -311,4 +311,4 @@ Runtime 设置及员工选择覆盖九项，统一显示名来自 client/runtime
 
 登录页的工作空间选择器位于账号密码下方。当前选择和列表用相同的圆点与单行 URL，本机地址带「(本机)」，外部地址可从列表移除。设置以紧凑行展示当前空间、登录设备和按需展开的证书指纹。
 
-工作空间设置的「远程访问 · 添加手机」打开本账号的 Relay 设置页。页面只向本机已登录会话展示配对地址。
+「设置 → 工作空间」页内的「远程访问」区块管理本账号的 Relay：地址与连接状态、签发账号、可复制的 Mac 接入指纹、页内一次性配对面板（二维码、配对地址、十分钟倒计时，成功后可「不是我，移除」，过期后可重新生成），以及「经 Relay 配对的手机」与「局域网与 SSH 转发」。区块只在 Mac 本机已登录会话显示；页面可见时每 15 秒刷新，等待扫码时每 2 秒刷新，离开页面即停止。状态判断与倒计时由导出的 `relayConnectionStatus`、`invitationOutcome` 和 `invitationCountdown` 提供，`tests/settings.test.mjs` 覆盖。

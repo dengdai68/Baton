@@ -67,6 +67,8 @@ UI 使用隔离 Electron 实例检查宽窄布局、搜索、展开和滚动。�
 
 任务中心操作直接可见的展示回归覆盖删除确认保留、归档/恢复往返和两主题宽窄布局，入口 scripts/test-runtime-settings.mjs；不以其生命周期夹具作为真实 Provider 执行证据。
 
+settings.test.mjs 覆盖远程访问的 Relay 状态映射（未设置/已连接/403 未获准/其他错误/连接中）、一次性邀请结果（等待/已添加/过期边界）与倒计时格式，并断言独立 `/phone/index.html` 入口已删除。`node scripts/test-remote-access.mjs` 在隔离 Electron 中启动本地 Relay 与协议手机：设置 → 工作空间页内完成保存地址、403 指纹提示、放行后连接、二维码与倒计时、手机兑换后“已添加/不是我，移除”、过期重新生成、取消，以及离开页面后停止轮询；两主题 1320/760px 无横向溢出。`BATON_LOCALE=en` 检查英文无中文残留，`BATON_REMOTE_KEEP=1` 保留证据目录 `.data/remote-access-*`，默认结束即删除。
+
 任务创建展示在 smoke 静态契约与 scripts/test-task-creation.mjs 隔离界面验收同步；显式验收内容仍按原协议冻结，隐藏说明不改变 Runtime 权限或 CLI 能力。
 
 application-updates.test.mjs 覆盖严格正式版与SemVer、GitHub 404/错误、下载并发与显式触发、真实流式校验/失败清理、后台周期停止、IPC来源限制及真实子服务空闲锁（忙写入拒绝、锁中HTTP写入拒绝、正确ID释放）。签名安装真实闭环仍需正式签名Release。

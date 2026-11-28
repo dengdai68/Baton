@@ -36,6 +36,8 @@ MCP 超时与详情编辑：server/runtime/mcp-tools.mjs 使用45秒发现预算
 
 消息输入与 MCP 编辑：`web/communication.js`、`web/app.js` 在显示本地消息时清空 composer，只对未确认失败展示恢复操作；保留精确回执合并及新草稿保护。`web/marketplace.mjs` 在详情读取失败后恢复编辑按钮，点击重新读取配置，复用原编辑表单。验证：communication/smoke tests、test-market-catalog；HTTP/CLI/Store 无协议变化。
 
+远程访问入口：`web/settings.mjs` 的 `createRemoteAccessUI` 在「设置 → 工作空间」页内渲染 Relay 地址与连接状态、Mac 接入指纹、页内一次性配对面板、经 Relay 配对的手机以及局域网与 SSH 转发，只在 Mac 本机会话显示，调用 `/api/account/relay` 与 `/api/phone/*`；`web/phone/` 只保留早期云端入口。协议见 relay/README 与 docs/31，纯函数由 tests/settings.test.mjs 覆盖，隔离 Electron 与本地 Relay 的宽窄、双主题验收见 `scripts/test-remote-access.mjs`。无 HTTP/Store 契约变化；Relay 管理是 Mac 本机操作，CLI 无对应命令。
+
 CLI 设置文案与自动化行内状态：`web/settings.mjs` 的分类/标题为「CLI」，保留宿主安装/刷新和快速开始，移除安装说明与登录提示；`web/styles.css` 的 `.automation-latest .status-pill` 在清除底色/圆角时同时清除共享内阴影，保留图标语义及控件焦点。隔离验收见 `scripts/test-runtime-settings.mjs`、`scripts/test-automations.mjs`；无 CLI/HTTP/Store 契约变化。
 
 画布连线/任务行操作/群聊删除：`web/workflow-editor.mjs` 关闭会把拖动中临时线算入的 X6 allowMulti，重复连线由编辑器校验，连线后焦点回画布；`web/app.js`、`web/styles.css` 让任务行下一步与更多菜单常显左对齐；`web/communication.js` 用齿轮进入编辑群聊并在弹框底部删除群聊（注入共享 confirmDialog）。`server/communication-store.mjs` 的 deleteCommunication 做群聊逻辑删除，`server/index.mjs` 提供 DELETE 路由，`server/persistence.mjs` 目录查询排除已删除；契约见 docs/17，验收见 test-workflow-editor、test-directory-headers、test-communication-workbench 与 communication.test。CLI 不覆盖长期沟通，无 CLI 变化。
@@ -112,7 +114,7 @@ CLI 连接集中在 cli/client.mjs 的私有 endpoint 发现与实例校验，�
 | `client/console-projections.mjs` | 无副作用的共享展示投影 | [client](../client/README.md) |
 | `client/i18n.mjs`、`client/locales/` | 界面多语言：简体源文本为键，繁体/英文目录 | [client](../client/README.md) |
 | `web/app.js` | 任务、员工、团队、工作流与文件界面 | [web](../web/README.md) |
-| `web/settings.mjs` | 外观、Runtime、仓库和 CLI 设置 | [配置](15-employee-runtime-configuration.md) |
+| `web/settings.mjs` | 外观、工作空间（含远程访问）、Runtime、仓库和 CLI 设置 | [配置](15-employee-runtime-configuration.md)、[工作空间服务](31-workspace-service.md) |
 | `apps/electron/` | 桌面窗口、自有后台和受限宿主接口 | [桌面](18-electron-client.md) |
 | `cli/` | 认证 HTTP 命令、帮助与输出 | [CLI](21-configuration-cli.md) |
 | `tests/`、`scripts/` | 隔离测试、构建及工程检查 | [测试](../tests/README.md) |

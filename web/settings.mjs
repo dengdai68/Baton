@@ -216,12 +216,213 @@ export function createCliInstallationUI(panel, desktop) {
   return { refresh: () => run(), dispose() { disposed = true; } };
 }
 
+const RELAY_REFRESH_MS = 15000, INVITATION_REFRESH_MS = 2000;
+
+/** Relay connection line for Settings → 工作空间: a status-pill tone and its text. */
+export function relayConnectionStatus(state) {
+  if (!state?.origin) return { tone: "", label: $t("未设置"), text: $t("保存 Relay 地址后即可添加手机。") };
+  if (state.online) return { tone: "done", label: $t("已连接"), text: $t("手机可经 Relay 访问这台 Mac。") };
+  if (state.error === "Relay HTTP 403") return { tone: "failed", label: $t("未获准接入"), text: $t("Relay 未允许此 Mac：请把下方的 Mac 接入指纹加入 Relay 接入名单。") };
+  if (state.error) return { tone: "failed", label: $t("无法连接"), text: $t("正在重连 Relay（{0}），请检查地址和接入名单。", [state.error]) };
+  return { tone: "running", label: $t("正在连接"), text: $t("正在连接 Relay…") };
+}
+
+/** Progress of the one-time invitation shown on the page, judged from the latest Relay state. */
+export function invitationOutcome(invitation, state, now = Date.now()) {
+  if (!invitation) return null;
+  const route = new URL(invitation.link).searchParams.get("r");
+  const device = (state?.devices || []).find((item) => item.invitation === route);
+  if (device) return { status: "paired", device };
+  if (now >= invitation.expires) return { status: "expired" };
+  return { status: "waiting", remaining: invitation.expires - now };
+}
+
+/** "m:ss" for the invitation countdown; never negative. */
+export const invitationCountdown = (milliseconds) => {
+  const seconds = Math.max(0, Math.ceil(milliseconds / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+};
+
+/**
+ * Remote access inside Settings → 工作空间 (Mac session only): the Relay address and
+ * its connection, the Mac access fingerprint, one-time phone invitations, the phones
+ * paired through the Relay, and the LAN / SSH direct connection of the workspace service.
+ */
+export function createRemoteAccessUI(container, { api, notify, confirmDialog, onDirectAccessChanged = () => {} }) {
+  container.innerHTML = `<div class="settings-group" aria-labelledby="remote-access-title"><h4 id="remote-access-title">${$t("远程访问")}</h4>
+      <p class="settings-description">${$t("手机不在同一网络时经 Relay 连接这台 Mac。Relay 只转发端到端加密的数据，不保存账号和业务内容。")}</p>
+      <div class="settings-box">
+        <form class="settings-row settings-row-wrap" data-relay-form novalidate>
+          <div class="settings-row-text"><strong><label for="relay-origin">${$t("Relay 地址")}</label></strong></div>
+          <div class="settings-row-controls phone-enable-controls"><input id="relay-origin" name="relay" type="url" inputmode="url" placeholder="https://relay.example.com" autocomplete="off" spellcheck="false" /><button class="primary-button compact" type="submit">${$t("保存")}</button></div>
+        </form>
+        <div class="settings-row"><div class="settings-row-text"><strong>${$t("连接状态")}</strong><small data-relay-status role="status">${$t("正在读取远程访问状态…")}</small></div><span class="status-pill" data-relay-pill hidden></span></div>
+        <div class="settings-row" data-relay-account hidden><div class="settings-row-text"><strong>${$t("签发账号")}</strong><small data-relay-account-name></small></div></div>
+        <div class="settings-row"><div class="settings-row-text"><strong>${$t("Mac 接入指纹")}</strong><small>${$t("部署 Relay 时加入接入名单，Relay 只接受名单内的 Mac。")}</small><code class="relay-pin" data-relay-pin>—</code></div><button class="small-button" type="button" data-copy-relay-pin disabled>${$t("复制")}</button></div>
+        <div class="settings-row"><div class="settings-row-text"><strong>${$t("添加手机")}</strong><small>${$t("生成十分钟内有效的一次性二维码。在手机 Baton 登录页扫码，或输入配对地址。")}</small></div><button class="small-button" type="button" data-add-phone disabled>${$t("添加手机")}</button></div>
+        <div class="phone-pairing" data-phone-pairing aria-live="polite" hidden></div>
+      </div></div>
+    <div class="settings-group"><h4>${$t("经 Relay 配对的手机")}</h4><div class="settings-box" data-relay-devices><div class="settings-row"><div class="settings-row-text"><small>${$t("正在读取…")}</small></div></div></div></div>
+    <div class="settings-group"><h4>${$t("局域网与 SSH 转发")}</h4><div class="settings-box" data-direct-access><div class="settings-row"><div class="settings-row-text"><small>${$t("正在读取…")}</small></div></div></div></div>`;
+  const form = container.querySelector("[data-relay-form]"), input = form.elements.relay, save = form.querySelector('button[type="submit"]');
+  const status = container.querySelector("[data-relay-status]"), pill = container.querySelector("[data-relay-pill]");
+  const pin = container.querySelector("[data-relay-pin]"), copyPin = container.querySelector("[data-copy-relay-pin]");
+  const account = container.querySelector("[data-relay-account]"), accountName = container.querySelector("[data-relay-account-name]");
+  const add = container.querySelector("[data-add-phone]"), pairing = container.querySelector("[data-phone-pairing]");
+  const devices = container.querySelector("[data-relay-devices]"), direct = container.querySelector("[data-direct-access]");
+  // invitation: the live one-time invitation; result: its outcome, kept until dismissed.
+  let state = null, invitation = null, result = null, timer = null, ticker = null, active = false, disposed = false, busy = false, edited = false, request = 0;
+  const relay = (path = "", method = "GET", data) => api("/api/account/relay" + path, { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) });
+  const time = (value) => (value ? new Date(value).toLocaleString() : "—");
+  // Polling rewrites only what changed, so screen readers do not repeat the status.
+  const setHtml = (node, html) => { if (node.innerHTML !== html) node.innerHTML = html; };
+  input.addEventListener("input", () => { edited = true; });
+
+  function renderState() {
+    const connection = relayConnectionStatus(state);
+    if (status.textContent !== connection.text) status.textContent = connection.text;
+    pill.className = `status-pill ${connection.tone}`.trim(); pill.textContent = connection.label; pill.hidden = false;
+    if (!edited && document.activeElement !== input) input.value = state.origin || "";
+    account.hidden = !state.account || !state.origin;
+    accountName.textContent = state.account || "";
+    pin.textContent = state.pin || "—";
+    copyPin.disabled = !state.pin;
+    add.disabled = busy || !state.online || Boolean(invitation);
+    save.disabled = busy;
+    setHtml(devices, state.devices?.length
+      ? state.devices.map((device) => `<div class="settings-row"><div class="settings-row-text"><strong>${escape(device.label)}</strong><small>${escape($t("配对于 {0} · 最近在线 {1}", [time(device.created), time(device.lastSeen)]))}</small></div><button class="small-button danger" type="button" data-remove-device="${escape(device.id)}">${$t("移除")}</button></div>`).join("")
+      : `<div class="settings-row"><div class="settings-row-text"><small>${$t("尚无配对手机。点「添加手机」生成配对二维码。")}</small></div></div>`);
+  }
+
+  function renderInvitation() {
+    const outcome = invitationOutcome(invitation, state);
+    if (outcome && outcome.status !== "waiting") { result = outcome; invitation = null; clearInterval(ticker); ticker = null; schedule(); renderState(); }
+    if (result) {
+      pairing.hidden = false;
+      // An unexpected phone can be removed right here ("not me"); an expired code can be regenerated.
+      const extra = result.status === "paired"
+        ? `<button class="small-button danger" type="button" data-remove-device="${escape(result.device.id)}">${$t("不是我，移除")}</button>`
+        : `<button class="small-button" type="button" data-add-phone ${busy || !state?.online ? "disabled" : ""}>${$t("重新生成")}</button>`;
+      setHtml(pairing, `<div class="phone-pairing-text"><strong>${result.status === "paired" ? escape($t("已添加 {0}", [result.device.label])) : $t("配对地址已过期")}</strong><small>${result.status === "paired" ? $t("这台手机已出现在下方列表中。") : $t("请重新生成配对二维码。")}</small></div><div class="settings-row-controls">${extra}<button class="small-button" type="button" data-dismiss-invitation>${$t("完成")}</button></div>`);
+      return;
+    }
+    if (!outcome) { pairing.hidden = true; pairing.replaceChildren(); return; }
+    pairing.hidden = false;
+    if (!pairing.querySelector("[data-invitation-countdown]")) {
+      pairing.innerHTML = `<img class="phone-pairing-qr" alt="${$t("一次性配对二维码")}" width="180" height="180" />
+        <div class="phone-pairing-text"><strong>${$t("用手机 Baton 扫码配对")}</strong><small>${$t("扫码后手机直接登录此账号；也可以在手机登录页输入下面的配对地址。")}</small><small data-invitation-countdown></small>
+          <div class="phone-pairing-link"><input readonly aria-label="${$t("一次性配对地址")}" data-invitation-link /><button class="small-button" type="button" data-copy-invitation>${$t("复制地址")}</button></div>
+          <div><button class="ghost-button" type="button" data-cancel-invitation>${$t("取消")}</button></div></div>`;
+      pairing.querySelector("img").src = invitation.qr;
+      pairing.querySelector("[data-invitation-link]").value = invitation.link;
+    }
+    pairing.querySelector("[data-invitation-countdown]").textContent = $t("{0} 后失效，仅可使用一次。", [invitationCountdown(outcome.remaining)]);
+  }
+
+  async function loadDirectAccess() {
+    try {
+      const value = await api("/api/phone/status");
+      if (disposed) return;
+      if (value.origin) {
+        direct.innerHTML = `<div class="settings-row"><div class="settings-row-text"><strong>${$t("已启用")}</strong><small>${escape($t("同一网络或 SSH 转发可访问 {0}；手机用账号密码登录。", [value.origin]))}</small></div></div>`
+          + (value.pairingOrigin && value.pairingOrigin !== value.origin ? `<div class="settings-row"><div class="settings-row-text"><strong>${$t("公网入口")}</strong><small>${escape(value.pairingOrigin)}</small></div></div>` : "")
+          + (value.error ? `<div class="settings-row"><div class="settings-row-text"><strong>${$t("无法连接")}</strong><small>${escape($tm(value.error))}</small></div></div>` : "");
+        return;
+      }
+      direct.innerHTML = `<form class="settings-row settings-row-wrap settings-row-stacked" data-direct-form novalidate><div class="settings-row-text"><strong><label for="direct-origin">${$t("工作空间地址")}</label></strong><small>${$t("手机在同一网络时直接连接这台 Mac；只开放 9443 端口。")}</small></div>
+        <div class="settings-row-controls phone-enable-controls"><input id="direct-origin" name="origin" type="url" autocomplete="off" spellcheck="false" /><label class="phone-relay-option"><input type="checkbox" name="ssh" />${$t("使用已配置的 SSH 转发")}</label><button class="small-button" type="submit">${$t("启用")}</button></div></form>`;
+      direct.querySelector("[data-direct-form]").elements.origin.value = value.suggested || "";
+    } catch (error) {
+      if (!disposed) direct.innerHTML = `<div class="settings-row"><div class="settings-row-text"><strong>${$t("读取失败")}</strong><small>${escape(error.message)}</small></div><button class="small-button" type="button" data-retry-direct>${$t("重试")}</button></div>`;
+    }
+  }
+
+  async function refresh() {
+    if (disposed || !active) return;
+    const current = ++request;
+    try {
+      const value = await relay();
+      if (disposed || current !== request) return;
+      state = value; renderState(); renderInvitation();
+    } catch (error) {
+      if (!disposed && current === request) { status.textContent = error.message; pill.className = "status-pill failed"; pill.textContent = $t("读取失败"); pill.hidden = false; }
+    } finally { if (current === request) schedule(); }
+  }
+  // Fast while a phone may be scanning; slow otherwise. Hidden pages never poll.
+  // hide() (leaving Workspaces) runs after the click that triggered it, so the timer
+  // is re-checked when it fires instead of only when it is scheduled.
+  function schedule() {
+    clearTimeout(timer);
+    if (active && !disposed) timer = setTimeout(() => { if (active && !disposed && !document.hidden) void refresh(); else schedule(); }, invitation ? INVITATION_REFRESH_MS : RELAY_REFRESH_MS);
+  }
+  async function run(action) {
+    if (busy) return;
+    busy = true; if (state) renderState();
+    try { await action(); }
+    catch (error) { notify(error.message, true); }
+    finally { busy = false; if (state && !disposed) renderState(); }
+  }
+  const copy = (value, message) => navigator.clipboard.writeText(value).then(() => notify(message)).catch((error) => notify($t("复制失败：{0}", [error.message]), true));
+  function startTicker() { clearInterval(ticker); ticker = invitation ? setInterval(renderInvitation, 1000) : null; }
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const value = input.value.trim();
+    if (!state || value === (state.origin || "")) { notify($t("Relay 地址未变化。")); return; }
+    void run(async () => {
+      // Changing or clearing the Relay revokes this account's invitations and paired phones.
+      if (state.origin && !await confirmDialog({ title: value ? $t("更改 Relay 地址") : $t("清除 Relay 地址"), message: $t("此账号的配对邀请和经 Relay 配对的手机都会失效，手机需要重新扫码。"), confirmLabel: value ? $t("更改并撤销配对") : $t("清除并撤销配对"), danger: true })) return;
+      state = await relay("", value ? "PUT" : "DELETE", value ? { relay: value } : undefined);
+      edited = false; invitation = null; result = null; clearInterval(ticker); ticker = null; renderInvitation();
+      notify(value ? $t("Relay 地址已保存。") : $t("已清除 Relay 地址。"));
+    });
+  });
+  container.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) return;
+    if (button.hasAttribute("data-copy-relay-pin") && state?.pin) void copy(state.pin, $t("Mac 接入指纹已复制。"));
+    if (button.hasAttribute("data-copy-invitation") && invitation) void copy(invitation.link, $t("配对地址已复制。"));
+    if (button.hasAttribute("data-retry-direct")) void loadDirectAccess();
+    if (button.hasAttribute("data-dismiss-invitation") || button.hasAttribute("data-cancel-invitation")) {
+      // Cancelling only hides it; the unused invitation still expires on its own.
+      invitation = null; result = null; clearInterval(ticker); ticker = null; renderInvitation(); renderState(); schedule();
+    }
+    if (button.hasAttribute("data-add-phone")) void run(async () => {
+      const created = await relay("/invites", "POST", {});
+      invitation = created; result = null; pairing.replaceChildren();
+      renderInvitation(); renderState(); schedule(); startTicker();
+    });
+    const removed = state?.devices?.find((device) => device.id === button.dataset.removeDevice);
+    if (removed) void run(async () => {
+      if (!await confirmDialog({ title: $t("移除手机"), message: $t("移除「{0}」后，这台手机需要重新扫码才能连接。", [removed.label]), confirmLabel: $t("移除"), danger: true })) return;
+      state = await relay("/devices/" + encodeURIComponent(removed.id), "DELETE");
+      if (result?.device?.id === removed.id) { result = null; renderInvitation(); }
+      notify($t("已移除 {0}。", [removed.label]));
+    });
+  });
+  container.addEventListener("submit", (event) => {
+    const directForm = event.target.closest("[data-direct-form]");
+    if (!directForm) return;
+    event.preventDefault();
+    void run(async () => {
+      await api("/api/phone/enable", { method: "POST", body: JSON.stringify({ origin: directForm.elements.origin.value.trim(), relay: directForm.elements.ssh.checked }) });
+      notify($t("局域网直连已启用。"));
+      await loadDirectAccess(); onDirectAccessChanged();
+    });
+  });
+  return {
+    show() { if (active || disposed) return; active = true; startTicker(); void refresh(); void loadDirectAccess(); },
+    hide() { active = false; ++request; clearTimeout(timer); clearInterval(ticker); ticker = null; },
+    dispose() { disposed = true; this.hide(); },
+  };
+}
+
 export function createSettingsUI({ api, notify, navigate, getPreferences, updatePreferences, clearInvalid, setInvalid, onWorkspaceSaved = () => {}, openModal, closeModal, confirmDialog, onDataReset, onResetStarted = () => {}, onResetFailed = () => {} }) {
   let workspaceLocation = null;
   let root = null, repositoriesLoaded = false, workspaceLoaded = false, runtimeLoaded = false;
   let deviceRefreshTimer = null;
   let logRequest = 0, currentPage = null;
-  let closePreferenceUI = null, languagePreferenceUI = null, residentServiceUI = null, cliInstallationUI = null, appUpdateUI = null;
+  let closePreferenceUI = null, languagePreferenceUI = null, residentServiceUI = null, cliInstallationUI = null, appUpdateUI = null, remoteAccessUI = null;
   const refreshHostSettings = () => {
     if (currentPage === "workspaces") void residentServiceUI?.refresh();
     if (currentPage === "general") { void closePreferenceUI?.refresh(); void languagePreferenceUI?.refresh(); }
@@ -555,12 +756,11 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
         ${info.origin ? row(info.local ? $t("工作空间地址") : $t("登录地址"),info.origin) : ''}${info.connectionError ? row($t("无法连接"),info.connectionError) : ''}${info.fingerprint ? `<details class="workspace-cert" ${expanded ? 'open' : ''}><summary>${$t("证书指纹")}</summary><code>${escape(info.fingerprint)}</code></details>` : ''}</div></div>
         <div class="settings-group"><h4>${$t("当前账号登录的设备")}</h4><div class="settings-box">
         ${devices.map(item => row(item.label, [item.lastAddress?.replace(/^::ffff:/i,''), item.id === info.deviceId ? $t("当前设备") : item.lastSeen ? new Date(item.lastSeen).toLocaleString() : $t("本机工作空间")].filter(Boolean).join(' · '))).join('')}</div></div>`;
-      if (info.local && !remoteWorkspace) {
-        const link = document.createElement('a');
-        link.href = '/phone/index.html';
-        link.className = 'small-button';
-        link.textContent = $t("远程访问 · 添加手机");
-        panel.append(link);
+      // Remote access is managed only from the Mac's own local session.
+      const remote = root.querySelector('[data-remote-access]');
+      if (remote) {
+        remote.hidden = !(info.local && !remoteWorkspace);
+        if (remote.hidden) remoteAccessUI?.hide(); else if (currentPage === "workspaces") remoteAccessUI?.show();
       }
     } catch (error) { if (panel.isConnected) panel.textContent = error.message; }
   }
@@ -590,6 +790,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
           <section class="settings-section" data-settings-panel="workspaces" hidden>
             <h3>${$t("工作空间")}</h3>
             <div data-current-workspace></div>
+            <div data-remote-access data-local-only hidden></div>
             <div class="settings-group" data-local-only><h4>${$t("本机服务")}</h4><div class="settings-box"><label class="settings-row settings-toggle"><span class="settings-row-text"><strong>${$t("常驻后台运行")}</strong><small data-resident-status role="status">${$t("正在读取本机服务…")}</small></span><input type="checkbox" role="switch" data-resident-toggle aria-label="${$t("常驻后台运行")}" disabled /></label></div></div>
             <div data-workspace-config></div>
             <div class="settings-group" data-local-only><h4 id="data-management-title">${$t("危险操作")}</h4><div class="settings-box settings-danger-zone"><div class="settings-row"><div class="settings-row-text"><strong>${$t("清除所有数据")}</strong><small>${$t("删除业务数据库和整个当前工作目录，保留设置与登录。")}</small></div><button type="button" class="small-button danger" data-reset-all>${$t("清除所有数据")}</button></div></div><p class="field-hint">${$t("包括当前工作目录中的所有文件和业务记录；配置目录中的账号、认证、Runtime、插件、MCP、Git 凭据、偏好和日志保留。")}</p></div>
@@ -621,6 +822,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
       closePreferenceUI = createClosePreferenceUI(root.querySelector('[data-settings-panel="general"]'), globalThis.window?.batonDesktop);
       if (remoteWorkspace) root.querySelectorAll('[data-local-only]').forEach(section => {section.hidden=true;});
       residentServiceUI = createResidentServiceUI(root.querySelector('[data-settings-panel="workspaces"]'), globalThis.window?.batonDesktop);
+      if (!remoteWorkspace) remoteAccessUI = createRemoteAccessUI(root.querySelector('[data-remote-access]'), { api, notify, confirmDialog, onDirectAccessChanged: () => void loadCurrentWorkspace() });
       languagePreferenceUI = createLanguagePreferenceUI(root.querySelector('[data-settings-panel="general"]'), globalThis.window?.batonDesktop);
       const cliPanel = root.querySelector('[data-settings-panel="cli"]');
       cliInstallationUI = createCliInstallationUI(cliPanel, host);
@@ -662,6 +864,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     if (currentPage !== page) {
       ++logRequest; currentPage = page;
       clearInterval(deviceRefreshTimer);
+      remoteAccessUI?.hide();
       if (page === "workspaces") {
         void loadCurrentWorkspace();
         deviceRefreshTimer=setInterval(()=>{if (!document.hidden) void loadCurrentWorkspace();},15000);
@@ -681,6 +884,7 @@ export function createSettingsUI({ api, notify, navigate, getPreferences, update
     closePreferenceUI?.dispose(); closePreferenceUI = null; languagePreferenceUI?.dispose(); languagePreferenceUI = null; residentServiceUI?.dispose(); residentServiceUI = null;
     cliInstallationUI?.dispose(); cliInstallationUI = null;
     appUpdateUI?.dispose(); appUpdateUI = null;
+    remoteAccessUI?.dispose(); remoteAccessUI = null;
     ++logRequest;
     currentPage = null;
     if (root) { closeFloatingLists(root); inputClear(root); root.replaceChildren(); }
