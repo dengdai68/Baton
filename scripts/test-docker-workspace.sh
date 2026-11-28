@@ -12,7 +12,7 @@ network=$name-net
 cleanup() {
   docker rm -f "$server" "$relay" >/dev/null 2>&1 || true
   docker network rm "$network" >/dev/null 2>&1 || true
-  docker volume rm "$name-http" "$name-https" >/dev/null 2>&1 || true
+  docker volume rm "$name-http" "$name-https" "$name-cloud" >/dev/null 2>&1 || true
   docker image rm "$server" "$relay" >/dev/null 2>&1 || true
   rm -r "$scratch"
 }
@@ -38,9 +38,12 @@ done
 group=(--group-add "$(id -g)")
 tls=(-v "$scratch/workspace.test:/tls:ro")
 admin() { docker exec "$server" node server/workspace-admin.mjs relay "$root" "$@"; }
-operator_login() {
+operator_cli() {
   docker exec -i "$server" node cli/main.mjs --endpoint-file "$root/desktop-endpoint.json" \
-    --session-file "$root/cli-session.json" auth login --username operator --password-stdin < "$scratch/password" >/dev/null
+    --session-file "$root/cli-session.json" "$@"
+}
+operator_login() {
+  operator_cli auth login --username operator --password-stdin < "$scratch/password" >/dev/null
 }
 start_server() {
   docker run -d --name "$server" --network "$network" --network-alias workspace.test "${group[@]}" \
@@ -72,15 +75,18 @@ for protocol in http https; do
   "${direct[@]}" -H @"$scratch/header" "$url/api/settings/current-workspace" | jq -e '.username=="operator"' >/dev/null
   status=$("${direct[@]}" --no-fail -o /dev/null -w '%{http_code}' -H @"$scratch/header" "$url/api/account/relay")
   [[ $status == 403 ]]
+  if admin status >/dev/null 2>&1; then echo "Unexpected operator access before login" >&2; exit 1; fi
+  operator_login
+  team=$(echo '{"name":"Volume proof","memberAgentIds":[]}' | operator_cli teams create --file - --json | jq -er 'first(..|objects|select(.name=="Volume proof")|.id)')
   docker rm -f "$server" >/dev/null
   start_server
+  operator_login
+  operator_cli teams get "$team" --json | jq -e --arg id "$team" 'any(..|objects; .id==$id and .name=="Volume proof")' >/dev/null
   "${direct[@]}" -H @"$scratch/header" "$url/api/settings/current-workspace" | jq -e '.username=="operator"' >/dev/null
-  echo "PASS $protocol login, authenticated API, remote management denied, volume survives container recreation"
+  echo "PASS $protocol login, authenticated API, remote management denied, business record and session survive container recreation"
   if [[ $protocol == http ]]; then docker rm -f "$server" >/dev/null; fi
 done
 
-if admin status >/dev/null 2>&1; then echo "Unexpected operator access before login" >&2; exit 1; fi
-operator_login
 pin=$(admin status | jq -er '.pin | select(test("^[0-9a-f]{64}$"))')
 jq -n --arg pin "$pin" '{bind:"0.0.0.0",port:8443,cert:"/config/cert.pem",key:"/config/key.pem",allow:[$pin]}' > "$scratch/relay.test/relay.json"
 chmod 640 "$scratch/relay.test/relay.json"
@@ -121,3 +127,20 @@ channel=$(admin status | jq -er '.devices[] | select(.label=="Container phone") 
 admin remove "$channel" | jq -e '.ok // (.devices|length==0)' >/dev/null
 admin status | jq -e '.devices|length==0' >/dev/null
 echo "PASS end-to-end pairing, authenticated account read and operator removal"
+
+docker rm -f "$server" >/dev/null
+protocol=http
+volume=(-v "$name-cloud:/home/node")
+service_tls=()
+docker run --rm "${volume[@]}" "$server" init "$root" cloud http://workspace.test:9443 9443 0.0.0.0 >/dev/null
+docker run --rm -i "${volume[@]}" "$server" operator "$root" operator < "$scratch/password"
+docker run --rm -i "${volume[@]}" "$server" member "$root" alice < "$scratch/password"
+start_server
+jq -Rs '{name:"alice",password:rtrimstr("\n"),bearer:true}' "$scratch/password" | \
+  "${direct[@]}" -H 'Content-Type: application/json' --data-binary @- "$url/login" > "$scratch/cloud-login"
+jq -er '.token | "Authorization: Bearer "+.' "$scratch/cloud-login" > "$scratch/cloud-header"
+"${direct[@]}" -H @"$scratch/cloud-header" "$url/api/settings/current-workspace" | jq -e '.username=="alice"' >/dev/null
+operator_login
+if admin status >"$scratch/cloud-relay" 2>&1; then echo "Unexpected single-account Relay in cloud mode" >&2; exit 1; fi
+grep -q '请在 Mac 登录后管理 Relay' "$scratch/cloud-relay"
+echo "PASS cloud member direct login; operator cannot attach the single-account Relay"
