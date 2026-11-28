@@ -1,7 +1,7 @@
 import { createServer } from 'node:https';
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, randomBytes, timingSafeEqual, X509Certificate } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { connectRelay } from './relay-connector.mjs';
@@ -14,20 +14,52 @@ const inviteLifetime = 600000, sessionLifetime = 900000, idleLifetime = 30*86400
 // A removed phone keeps reaching its Mac for a while, so it is told "removed" instead of "offline".
 const revokedLifetime = 7*86400000, routeLimit = 1024;
 
+function readServiceIdentity(dir) {
+  const key = readFileSync(join(dir,'key.pem'));
+  const certPath = join(dir,'cert.pem');
+  const cert = readFileSync(certPath);
+  const leaf = new X509Certificate(cert);
+  try {
+    const pub = leaf.publicKey;
+    const named = createPublicKey({key:pub.export({format:'jwk'}), format:'jwk'});
+    if (pub.export({type:'spki',format:'der'}).equals(named.export({type:'spki',format:'der'}))) return {key, cert};
+  } catch (error) {
+    if (error.code !== 'ERR_OSSL_X509_PUBLIC_KEY_DECODE_ERROR') throw error;
+  }
+
+  // macOS LibreSSL previously emitted explicit curve parameters for Baton.
+  // Reissue only our own self-signed P-256 leaf, retaining the stored private key.
+  const privateKey = createPrivateKey(key);
+  if (privateKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1' || leaf.subject !== 'CN=Baton' ||
+      leaf.issuer !== leaf.subject || !leaf.verify(createPublicKey(privateKey))) throw Error('Relay 证书与 Mac 身份不匹配');
+  const namedKey = createPrivateKey({key:privateKey.export({format:'jwk'}), format:'jwk'});
+  const temp = mkdtempSync(join(dir,'.renew-'));
+  try {
+    const pem = join(temp,'key.pem'), out = join(temp,'cert.pem');
+    writeFileSync(pem, namedKey.export({type:'pkcs8',format:'pem'}), {mode:0o600});
+    execFileSync('openssl', ['req','-new','-x509','-key',pem,'-subj','/CN=Baton','-days','3650','-out',out],
+      {stdio:'ignore', timeout:15000});
+    const renewed = readFileSync(out);
+    if (!new X509Certificate(renewed).checkPrivateKey(namedKey)) throw Error('Relay 证书签发失败');
+    renameSync(out, certPath);
+    return {key, cert:renewed};
+  } finally { rmSync(temp, {recursive:true, force:true}); }
+}
+
 export function serviceIdentity(root) {
   const dir = join(root, 'relay-identity');
   if (!existsSync(dir)) {
     mkdirSync(root, {recursive:true, mode:0o700});
     const temp = mkdtempSync(join(root, '.relay-key-'));
     try {
-      execFileSync('openssl', ['req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-nodes',
+      execFileSync('openssl', ['req','-x509','-newkey','ec','-pkeyopt','ec_paramgen_curve:prime256v1','-pkeyopt','ec_param_enc:named_curve','-nodes',
         '-subj','/CN=Baton','-days','3650','-keyout',join(temp,'key.pem'),'-out',join(temp,'cert.pem')], {stdio:'ignore',timeout:15000});
       chmodSync(join(temp,'key.pem'), 0o600);
       renameSync(temp, dir);
     } catch (error) { if (!existsSync(dir)) throw error; }
     finally { rmSync(temp, {recursive:true, force:true}); }
   }
-  return {key:readFileSync(join(dir,'key.pem')), cert:readFileSync(join(dir,'cert.pem'))};
+  return readServiceIdentity(dir);
 }
 
 export function relayAccount({root, account, api, readJson, sendJson, name, tlsOptions}) {

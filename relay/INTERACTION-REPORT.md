@@ -17,3 +17,17 @@
 业务侧每次配对授予「当前账号＋这台手机」独立通道。手机切换到其他网络或 Relay 重启时沿用原通道。撤销设备后，Mac 在 7 天内继续登记该通道，手机经内层连接收到 401 并显示「此设备已被移除」；只有 Mac 未连接 Relay 时才表现为连接失败。
 
 真机通过摄像头扫描实体二维码、蜂窝网络漫游、Android App 端到端交互和已安装的 Electron 发布包仍待实测。
+
+## iOS V6 复测（2026-11-28）
+
+iPhone 17e 模拟器（iOS 26.4.1）安装了由合并提交 `cee3875` 构建的完整 Release App。安装包和构建产物中的 JS bundle 经 SHA-256 核对一致。Mac 与 Relay 各自运行，测试账号为 `relay-v6`。以下截图位于运行目录 `relay-evidence/v6/`。
+
+| 操作 | 手机或 Mac 上的实际结果 | 截图 |
+| --- | --- | --- |
+| 从 Mac 签发一次性邀请，在手机登录页输入 | 手机进入账号的任务页 | `ios-v6-paired.png` |
+| 仅关闭测试 Mac 后台，再打开手机 App | 任务页显示「任务读取失败」和「重试」。未出现移除提示或重新配对按钮 | `ios-v6-offline.png` |
+| 保持 Relay 在线，重启原 Mac 后台 | 手机使用原授权重新进入任务页 | `ios-v6-restored.png` |
+| 在 Mac 点击该手机旁的「移除」 | 已配对列表从一台变为空；手机再次访问显示「此设备已被移除」和「重新配对」 | `mac-before-removal.png`、`mac-after-removal.png`、`ios-v6-removed.png` |
+| 在手机点击「重新配对」 | 回到带有「扫码配对」「输入配对地址」的登录页 | `ios-v6-repair-login.png` |
+
+合并时的协议测试和回归结果见[合并版测试报告](https://github.com/dengdai68/Baton/blob/cee3875185b4c478d74fcb7f66ac342d5e08315c/relay/TEST-REPORT.md)。

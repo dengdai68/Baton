@@ -46,3 +46,9 @@ iOS 构建首次遇到 Expo 原生模块扫描超时，测试机上临时延长�
 | 回归 | 桌面 `npm test` 966/966，移动端测试 9/9 与类型检查、`check:ai`、`check:impact`、`git diff --check` 通过。 |
 
 手机失效页的「此设备已被移除 / 重新配对」文案只经类型检查，未在模拟器上截图：本机磁盘剩余空间不足以完成 iOS Release 构建。
+
+## macOS 证书兼容性与 iOS V6 后续验证（2026-11-28）
+
+合并版本的签名桌面应用在独立账号中登录后，使用 macOS 系统 LibreSSL 签发的身份打开远程访问页时出现 `PUBLIC_KEY_DECODE_ERROR`。回归覆盖命名曲线新证书、保留原私钥修复旧证书、拒绝密钥不匹配的旧证书，以及重启后继续使用同一证书。普通 Node 运行 Relay 专项 3/3 通过，在 Electron 的 Node 模式下使用系统 LibreSSL 单独运行此兼容性用例 1/1 通过。
+
+完整 iOS App 已在模拟器验证配对、离线、恢复、设备移除及返回登录页，实际页面见[交互报告](./INTERACTION-REPORT.md)。
