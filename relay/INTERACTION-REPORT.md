@@ -31,3 +31,9 @@ iPhone 17e 模拟器（iOS 26.4.1）安装了由合并提交 `cee3875` 构建的
 | 在手机点击「重新配对」 | 回到带有「扫码配对」「输入配对地址」的登录页 | `ios-v6-repair-login.png` |
 
 合并时的协议测试和回归结果见[合并版测试报告](https://github.com/dengdai68/Baton/blob/cee3875185b4c478d74fcb7f66ac342d5e08315c/relay/TEST-REPORT.md)。
+
+## 独立 Server 与客户端直连（2026-11-28）
+
+Mac 签名 App 在隔离配置下，通过桌面登录入口分别打开 HTTP 和 HTTPS 工作空间。两次均进入远程任务页，页面使用自己的已登录会话读取当前账号成功。被连接的是本机使用同一 Server 源码启动的独立服务。运行目录中的 `relay-evidence/docker/mac-direct-http.png` 和 `mac-direct-https.png` 保存了任务窗口截图。
+
+在 Linux 容器内，管理员使用独立会话依次查看指纹、登记 HTTPS Relay、签发邀请、列出并移除配对设备。另一个容器用协议测试客户端兑换邀请并读取账号。iOS 与 Android 直连的 URL 输入、HTTPS 证书分支及显式 HTTP 网络配置均已核对。[容器测试结果](TEST-REPORT.md#容器部署2026-11-28) · [部署命令](../docs/31-workspace-service.md#docker-部署独立-server)
