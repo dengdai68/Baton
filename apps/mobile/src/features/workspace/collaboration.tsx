@@ -4,7 +4,7 @@ import { Divider } from '@/ui/layout';
 // sendInstruction): reply to the pending question first, at most one @member,
 // attachments uploaded before the message, local "sending" records confirmed by id.
 import { router } from 'expo-router';
-import { MessagesSquare, Reply, RotateCcw, SquareTerminal, Undo2 } from 'lucide-react-native';
+import { MessagesSquare, Reply, SquareTerminal } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, View } from 'react-native';
 
@@ -12,7 +12,7 @@ import { partyName, workspaceAgents } from '@shared/console-projections.mjs';
 import { useCatalog } from '@/features/catalog';
 import { LocalAttachments, type MessageAttachment, MessageAttachments } from '@/features/messages/attachment';
 import { dayLabel, sameDay } from '@/features/messages/day';
-import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage } from '@/features/messages/views';
+import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage, OutgoingMessageFeedback, type OutgoingMessageStatus } from '@/features/messages/views';
 import { $t, $tm } from '@/i18n';
 import { type LocalAttachment, pickFiles, pickImages } from '@/lib/attachments';
 import { useTheme } from '@/theme';
@@ -27,8 +27,8 @@ import { useClient } from '@/workspace/session';
 import { type CollaborationRecord, collaborationItems, useCollaboration, type Workspace } from './data';
 
 type Outgoing = {
-  id: string; content: string; createdAt: string; status: 'sending' | 'unconfirmed';
-  replyToMessageId: string | null; recipientName?: string; attachments: LocalAttachment[]; error?: string;
+  id: string; content: string; createdAt: string; status: OutgoingMessageStatus;
+  replyToMessageId: string | null; recipientAgentId: string | null; recipientName?: string; attachments: LocalAttachment[]; error?: string;
 };
 const requestId = () => 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
 const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -47,7 +47,9 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
   const [sending, setSending] = useState(false);
-  const questions = (workspace.pendingQuestions || []).filter((item) => item.recipient?.type === 'human');
+  const sendInProgress = useRef(false);
+  const [acknowledgedReplies, setAcknowledgedReplies] = useState<string[]>([]);
+  const questions = (workspace.pendingQuestions || []).filter((item) => item.recipient?.type === 'human' && !acknowledgedReplies.includes(item.id));
   const [replyTo, setReplyTo] = useState<string | undefined>(undefined);
   const effectiveReply = replyTo === undefined || (replyTo && !questions.some((item) => item.id === replyTo)) ? questions[0]?.id || '' : replyTo;
   const replyQuestion = questions.find((item) => item.id === effectiveReply);
@@ -74,18 +76,20 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
   }
 
   async function send(retry?: Outgoing) {
+    if (sendInProgress.current) return;
     const content = (retry?.content ?? draft).trim();
     const files = retry?.attachments ?? attachments;
     if (!content && !files.length) return;
     const reply = retry ? retry.replyToMessageId : effectiveReply || null;
     if (!reply && questions.length) { toast($t('请在待答问题上点击「回复此问题」，再发送回答。'), true); return; }
-    const targets = agents.filter((agent) => new RegExp('@' + escapeRegExp(agent.name) + '(?=$|\\s|[，,。.!！?？:：;；])').test(content));
-    if (!reply && targets.length > 1) { toast($t('一条消息只能 @ 一位当前任务成员'), true); return; }
+    const targets = retry || reply ? [] : agents.filter((agent) => new RegExp('@' + escapeRegExp(agent.name) + '(?=$|\\s|[，,。.!！?？:：;；])').test(content));
+    if (targets.length > 1) { toast($t('一条消息只能 @ 一位当前任务成员'), true); return; }
     const target = targets[0];
     const entry: Outgoing = retry ? { ...retry, status: 'sending', error: undefined } : {
       id: requestId(), content, createdAt: new Date().toISOString(), status: 'sending', replyToMessageId: reply,
-      recipientName: reply ? replyQuestion?.sender.name : (target || run.manager)?.name, attachments: files,
+      recipientAgentId: target?.id ?? null, recipientName: reply ? replyQuestion?.sender.name : (target || run.manager)?.name, attachments: files,
     };
+    sendInProgress.current = true;
     setOutbox((current) => [...current.filter((item) => item.id !== entry.id), entry]);
     if (!retry) { setDraft(''); setAttachments([]); }
     following.current = true;
@@ -96,19 +100,25 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
         item.uploaded = result.attachment;
       }
       const result = await client.post<{ interactionOnly?: boolean; resumed?: boolean }>(`/api/runs/${encodeURIComponent(run.id)}/messages`, {
-        clientRequestId: entry.id, recipientAgentId: reply ? null : target?.id ?? null, replyToMessageId: reply, content,
+        clientRequestId: entry.id, recipientAgentId: entry.recipientAgentId, replyToMessageId: entry.replyToMessageId, content: entry.content,
         attachmentIds: entry.attachments.map((item) => item.uploaded?.id),
       });
+      setOutbox((current) => current.map((item) => item.id === entry.id ? { ...item, status: 'accepted' } : item));
       toast(result.interactionOnly ? $t('问题已发送，仅答疑，不恢复业务流程') : result.resumed ? $t('澄清已发送，对应协作将继续') : $t('消息已入队，不打断正在执行的成员'));
-      if (reply) setReplyTo(undefined);
-      await collaboration.refetch();
-      onSent();
+      if (reply) {
+        setAcknowledgedReplies((current) => [...current, reply]);
+        setReplyTo((current) => current === reply ? undefined : current);
+      }
     } catch (error) {
       setOutbox((current) => current.map((item) => (item.id === entry.id ? { ...item, status: 'unconfirmed', error: (error as Error).message } : item)));
       toast((error as Error).message, true);
+      return;
     } finally {
+      sendInProgress.current = false;
       setSending(false);
     }
+    void collaboration.refetch();
+    onSent();
   }
 
   function restore(entry: Outgoing) {
@@ -136,20 +146,9 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
       return (
         <View>
           {divider}
-          <HumanMessage name={$t('你')} kind={entry.replyToMessageId ? $t('回复') : $t('消息')} to={entry.recipientName} time={entry.createdAt}
-            footer={
-              <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                <Txt variant="caption" tone={entry.status === 'sending' ? 'tertiary' : 'danger'}>
-                  {entry.status === 'sending' ? $t('发送中…') : $t('未确认送达：{0}', [entry.error || ''])}
-                </Txt>
-                {entry.status === 'unconfirmed' ? (
-                  <View style={{ flexDirection: 'row', gap: 4 }}>
-                    <IconButton icon={Undo2} label={$t('恢复草稿')} tone="neutral" tinted size={32} onPress={() => restore(entry)} />
-                    <IconButton icon={RotateCcw} label={$t('重试发送')} tinted size={32} onPress={() => void send(entry)} />
-                  </View>
-                ) : null}
-              </View>
-            }>
+          <HumanMessage testID={entry.id} name={$t('你')} kind={entry.replyToMessageId ? $t('回复') : $t('消息')} to={entry.recipientName} time={entry.createdAt} footer={
+            <OutgoingMessageFeedback status={entry.status} error={entry.error} sending={sending} onRestore={() => restore(entry)} onRetry={() => void send(entry)} />
+          }>
             {entry.content ? <Markdown size="body" content={entry.content} /> : null}
             <LocalAttachments items={entry.attachments} />
           </HumanMessage>
@@ -172,13 +171,14 @@ export function Collaboration({ workspace, header, onOpenConsole, onSent }: {
         </View>
       );
     }
+    const canReply = item.canReply && !acknowledgedReplies.includes(item.replyId);
     return (
       <View>
         {divider}
         <AgentMessage sender={senderOf(item)} name={partyName(item.senderType, item.from)} kind={$tm(item.title)}
-          to={item.to ? partyName(item.recipientType || 'agent', item.to) : null} time={item.timestamp} status={item.status} attention={item.canReply}
+          to={item.to ? partyName(item.recipientType || 'agent', item.to) : null} time={item.timestamp} status={item.status} attention={canReply}
           accessory={<>
-            {item.canReply ? <IconButton icon={Reply} label={$t('回复此问题')} tone="attention" tinted size={30} onPress={() => { setReplyTo(item.replyId); following.current = true; list.current?.scrollToEnd({ animated: true }); }} /> : null}
+            {canReply ? <IconButton icon={Reply} label={$t('回复此问题')} tone="attention" tinted size={30} onPress={() => { setReplyTo(item.replyId); following.current = true; list.current?.scrollToEnd({ animated: true }); }} /> : null}
             {consoleLink}
           </>}>
           <CollapsibleBody content={item.content} mentions={agents.map((agent) => agent.name)} />

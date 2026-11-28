@@ -33,12 +33,13 @@ export function ComposerLayout({ children, style }: { children: ReactNode; style
   return (
     <View style={[style, { paddingBottom: keyboardOverlap }]}>
       {children}
-      <AndroidKeyboardInsets
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-        importantForAccessibility="no-hide-descendants"
-        onKeyboardOverlap={({ nativeEvent }) => setKeyboardOverlap(nativeEvent.overlap)}
-      />
+      {/* Expo's native view does not implement React Native pointer-event hit testing. */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none" importantForAccessibility="no-hide-descendants">
+        <AndroidKeyboardInsets
+          style={{ flex: 1 }}
+          onKeyboardOverlap={({ nativeEvent }) => setKeyboardOverlap(nativeEvent.overlap)}
+        />
+      </View>
     </View>
   );
 }
