@@ -4,7 +4,7 @@ import { headerRightOptions, useContentTopInset } from '@/ui/header';
 // with retry/console, read receipts, @mentions in groups and attachments.
 import { useQueryClient } from '@tanstack/react-query';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Ellipsis, MessageSquare, RotateCcw, SquareTerminal, Undo2 } from 'lucide-react-native';
+import { Ellipsis, MessageSquare, RotateCcw, SquareTerminal } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 
@@ -12,7 +12,7 @@ import { useWorkspaceKey } from '@/api/queries';
 import { type ChatMessage, chatMessages, useConversation } from '@/features/chats/model';
 import { LocalAttachments, MessageAttachments } from '@/features/messages/attachment';
 import { dayLabel, sameDay } from '@/features/messages/day';
-import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage } from '@/features/messages/views';
+import { AgentMessage, CollapsibleBody, DayDivider, HumanMessage, OutgoingMessageFeedback, type OutgoingMessageStatus } from '@/features/messages/views';
 import { $t, useLocale } from '@/i18n';
 import { type LocalAttachment, pickFiles, pickImages } from '@/lib/attachments';
 import { useTheme } from '@/theme';
@@ -25,7 +25,7 @@ import { Txt } from '@/ui/text';
 import { useToast } from '@/ui/toast';
 import { useClient } from '@/workspace/session';
 
-type Outgoing = { id: string; content: string; createdAt: string; status: 'sending' | 'unconfirmed'; error?: string; attachments: LocalAttachment[] };
+type Outgoing = { id: string; content: string; createdAt: string; status: OutgoingMessageStatus; error?: string; attachments: LocalAttachment[]; mentionAgentIds: string[] };
 const requestId = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
 
 export default function Conversation() {
@@ -46,6 +46,7 @@ export default function Conversation() {
   const [attachments, setAttachments] = useState<LocalAttachment[]>([]);
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
   const [sending, setSending] = useState(false);
+  const sendInProgress = useRef(false);
   const list = useRef<FlatList>(null);
   const following = useRef(true);
   const lastRead = useRef<string | null>(null);
@@ -54,6 +55,10 @@ export default function Conversation() {
   const confirmed = new Set(messages.map((message) => message.clientRequestId).filter(Boolean));
   const pending = outbox.filter((entry) => !confirmed.has(entry.id));
   const latest = messages.at(-1);
+
+  useEffect(() => {
+    if (pending.length !== outbox.length) setOutbox(pending);
+  }, [pending.length, outbox.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Read receipt for the newest visible message.
   useEffect(() => {
@@ -70,11 +75,16 @@ export default function Conversation() {
   }
 
   async function send(retry?: Outgoing) {
+    if (sendInProgress.current) return;
     const content = retry?.content ?? draft;
     const files = retry?.attachments ?? attachments;
     if (!content.trim() && !files.length) return;
     if (content.length > 32000) { toast($t('消息最多 32000 字符。'), true); return; }
-    const entry: Outgoing = retry ? { ...retry, status: 'sending', error: undefined } : { id: requestId(), content, createdAt: new Date().toISOString(), status: 'sending', attachments: files };
+    const entry: Outgoing = retry ? { ...retry, status: 'sending', error: undefined } : {
+      id: requestId(), content, createdAt: new Date().toISOString(), status: 'sending', attachments: files,
+      mentionAgentIds: members.filter((member) => content.includes('@' + member.name)).map((member) => member.id),
+    };
+    sendInProgress.current = true;
     setOutbox((current) => [...current.filter((item) => item.id !== entry.id), entry]);
     if (!retry) { setDraft(''); setAttachments([]); }
     following.current = true;
@@ -84,17 +94,19 @@ export default function Conversation() {
         const result = await client.upload<{ attachment: { id: string; name: string } }>(`/api/communications/${encodeURIComponent(chatId)}/attachments`, item.uri, { name: item.name });
         item.uploaded = result.attachment;
       }
-      const mentionAgentIds = members.filter((member) => content.includes('@' + member.name)).map((member) => member.id);
       await client.post(`/api/communications/${encodeURIComponent(chatId)}/messages`, {
-        content, mentionAgentIds, attachmentIds: entry.attachments.map((item) => item.uploaded?.id), clientRequestId: entry.id,
+        content: entry.content, mentionAgentIds: entry.mentionAgentIds, attachmentIds: entry.attachments.map((item) => item.uploaded?.id), clientRequestId: entry.id,
       });
-      await conversation.refetch();
+      setOutbox((current) => current.map((item) => item.id === entry.id ? { ...item, status: 'accepted' } : item));
     } catch (error) {
       setOutbox((current) => current.map((item) => (item.id === entry.id ? { ...item, status: 'unconfirmed', error: (error as Error).message } : item)));
       toast((error as Error).message, true);
+      return;
     } finally {
+      sendInProgress.current = false;
       setSending(false);
     }
+    void conversation.refetch();
   }
 
   function restore(entry: Outgoing) {
@@ -122,15 +134,7 @@ export default function Conversation() {
         <View>
           {divider}
           <HumanMessage testID={entry.id} name={$t('你')} time={entry.createdAt} footer={
-            <View style={{ alignItems: 'flex-end', gap: 6 }}>
-              <Txt variant="caption" tone={entry.status === 'sending' ? 'tertiary' : 'danger'}>{entry.status === 'sending' ? $t('发送中…') : $t('未确认送达：{0}', [entry.error || ''])}</Txt>
-              {entry.status === 'unconfirmed' ? (
-                <View style={{ flexDirection: 'row', gap: 4 }}>
-                  <IconButton icon={Undo2} label={$t('恢复草稿')} tone="neutral" tinted size={32} onPress={() => restore(entry)} />
-                  <IconButton icon={RotateCcw} label={$t('重试发送')} tinted size={32} onPress={() => void send(entry)} />
-                </View>
-              ) : null}
-            </View>
+            <OutgoingMessageFeedback status={entry.status} error={entry.error} sending={sending} onRestore={() => restore(entry)} onRetry={() => void send(entry)} />
           }>
             {entry.content ? <CollapsibleBody content={entry.content} mentions={mentionNames} /> : null}
             <LocalAttachments items={entry.attachments} />

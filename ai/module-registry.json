@@ -3193,7 +3193,7 @@
     },
     {
       "id": "workspace.mobile",
-      "taskFiltersAndComposer": "Mobile task lists filter by status and search. Both message screens use ComposerLayout, with Android keyboard overlap measured against native IME insets.",
+      "taskFiltersAndComposer": "Mobile task lists filter by status and search. Both message screens use ComposerLayout, with Android keyboard overlap measured against native IME insets inside a non-interactive React Native view. Both screens display local outgoing messages immediately and settle the send state on the POST receipt independently of refreshing history.",
       "loginAddressPicker": "Desktop and iOS display the full origin on one line with a shared health dot in the trigger and list. Removing an address updates only local login choices.",
       "path": "apps/mobile/",
       "kind": "mobile-client",

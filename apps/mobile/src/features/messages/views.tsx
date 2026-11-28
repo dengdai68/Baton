@@ -3,14 +3,34 @@
 // dividers, collapsible long bodies and amber question cards.
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { RotateCcw, Undo2 } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
 import { formatMessageTime } from '@shared/console-projections.mjs';
 import { $t } from '@/i18n';
 import { useTheme } from '@/theme';
 import { Avatar } from '@/ui/avatar';
+import { IconButton } from '@/ui/icon-button';
 import { Markdown } from '@/ui/markdown';
 import { Txt } from '@/ui/text';
+
+export type OutgoingMessageStatus = 'sending' | 'accepted' | 'unconfirmed';
+
+export function OutgoingMessageFeedback({ status, error, sending, onRestore, onRetry }: {
+  status: OutgoingMessageStatus; error?: string; sending: boolean; onRestore: () => void; onRetry: () => void;
+}) {
+  if (status === 'accepted') return null;
+  if (status === 'sending') return <Txt variant="caption" tone="tertiary" accessibilityLiveRegion="polite">{$t('发送中…')}</Txt>;
+  return (
+    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+      <Txt variant="caption" tone="danger" accessibilityLiveRegion="polite">{$t('未确认送达：{0}', [error || ''])}</Txt>
+      <View style={{ flexDirection: 'row', gap: 4 }}>
+        <IconButton icon={Undo2} label={$t('恢复草稿')} tone="neutral" tinted size={32} onPress={onRestore} />
+        <IconButton icon={RotateCcw} label={$t('重试发送')} disabled={sending} tinted size={32} onPress={onRetry} />
+      </View>
+    </View>
+  );
+}
 
 export function DayDivider({ label }: { label: string }) {
   const { colors } = useTheme();

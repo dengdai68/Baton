@@ -286,6 +286,7 @@ class BatonTransportModule : Module() {
       }
     }
     if (fresh) builder.connectionPool(ConnectionPool())
+    if (diagnosticsEnabled()) builder.eventListenerFactory { TimingListener() }
     return builder.build()
   }
 

@@ -102,7 +102,7 @@ export default function TaskWorkspace() {
   );
 
   if (task.isPending || (runId && workspace.isPending)) return <>{screen}<LoadingState screen label={$t('正在读取协作记录与当前状态')} /></>;
-  if (task.error || !current) return <>{screen}<ErrorState title={$t('任务加载失败')} message={task.error?.message || ''} onRetry={() => void task.refetch()} /></>;
+  if (!current) return <>{screen}<ErrorState title={$t('任务加载失败')} message={task.error?.message || ''} onRetry={() => void task.refetch()} /></>;
 
   if (!runId) {
     // A draft (created on the Mac): its brief, then start or edit.
@@ -125,7 +125,7 @@ export default function TaskWorkspace() {
       </ScrollView>
     );
   }
-  if (workspace.error || !data || !run) return <>{screen}<ErrorState title={$t('任务加载失败')} message={workspace.error?.message || ''} onRetry={() => void workspace.refetch()} /></>;
+  if (!data || !run) return <>{screen}<ErrorState title={$t('任务加载失败')} message={workspace.error?.message || ''} onRetry={() => void workspace.refetch()} /></>;
 
   const acceptance = acceptanceReview(data);
   const retries = retryableDispatches(data);
@@ -169,7 +169,7 @@ export default function TaskWorkspace() {
         ) : null}
       </View>
       <View style={{ flex: 1 }}>
-        <Collaboration workspace={data} onOpenConsole={(agentId, traceId) => openConsole(taskId, run.id, agentId, traceId)} onSent={() => void workspace.refetch()} />
+        <Collaboration key={run.id} workspace={data} onOpenConsole={(agentId, traceId) => openConsole(taskId, run.id, agentId, traceId)} onSent={() => void workspace.refetch()} />
       </View>
     </ComposerLayout>
   );
