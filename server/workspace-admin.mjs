@@ -6,6 +6,7 @@ import { randomBytes } from "node:crypto";
 import { provisionWorkspace } from "./workspace-config.mjs";
 import { workspaceIdentity } from "./workspace-identity.mjs";
 import { createAuth } from "./auth.mjs";
+import { createClient } from "../cli/client.mjs";
 
 import { readStorageLocation } from "./storage-layout.mjs";
 
@@ -13,17 +14,34 @@ process.umask(0o077);
 const [command, where, ...args] = process.argv.slice(2);
 if (!where || command === "help") {
   console.log(
-    "workspace init DIR local|cloud HTTP(S)_ORIGIN [PORT] [BIND]\nworkspace serve DIR\nworkspace member DIR NAME < password-file\nworkspace operator DIR NAME < password-file\nworkspace devices DIR\nworkspace revoke DIR DEVICE_ID",
+    "workspace init DIR local|cloud HTTP(S)_ORIGIN [PORT] [BIND] [CERT_CHAIN PRIVATE_KEY]\nworkspace serve DIR\nworkspace member DIR NAME < password-file\nworkspace operator DIR NAME < password-file\nworkspace devices DIR\nworkspace revoke DIR DEVICE_ID\nworkspace relay DIR status|set HTTPS_ORIGIN|invite|remove CHANNEL|clear",
   );
   process.exit(command === "help" ? 0 : 2);
 }
 const root = resolve(where),
   file = join(root, "workspace-service.json");
 if (command === "init") {
-  const [mode, address, portArg = "9443", bind = "127.0.0.1"] = args,
+  const [mode, address, portArg = "9443", bind = "127.0.0.1", cert, key] = args,
     port = Number(portArg);
-  provisionWorkspace(root, { mode, origin: address, port, bind });
+  if (args.length > 6) throw Error("init 参数过多");
+  provisionWorkspace(root, { mode, origin: address, port, bind, cert, key });
   console.log(file);
+} else if (command === "relay") {
+  // Use the signed-in operator's loopback API, including its local/cloud checks.
+  const client = createClient({endpointFile:join(root,"desktop-endpoint.json"), sessionFile:join(root,"cli-session.json")});
+  const base = "/api/account/relay";
+  const [action, value] = args;
+  let result;
+  if (action === "status" && args.length === 1) result = await client.request(base);
+  else if (action === "set" && args.length === 2) result = await client.request(base, {method:"PUT", body:{relay:value}});
+  else if (action === "clear" && args.length === 1) result = await client.request(base, {method:"DELETE", body:{}});
+  else if (action === "invite" && args.length === 1) {
+    const {link, expires} = await client.request(base + "/invites", {method:"POST", body:{}});
+    result = {link, expires};
+  } else if (action === "remove" && args.length === 2 && /^[a-f0-9]{32}$/.test(value)) {
+    result = await client.request(base + "/devices/" + value, {method:"DELETE", body:{}});
+  } else throw Error("用法：workspace relay DIR status|set HTTPS_ORIGIN|invite|remove CHANNEL|clear");
+  console.log(JSON.stringify(result));
 } else {
   const config = JSON.parse(readFileSync(file));
   if (command === "serve") {

@@ -6,10 +6,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { once } from 'node:events';
-import { connect, createSecureContext } from 'node:tls';
+import { createSecureContext } from 'node:tls';
 import { createHash, createPrivateKey, createPublicKey, X509Certificate } from 'node:crypto';
 import { createRelay } from '../relay/server.mjs';
 import { publicPin, openTunnel, readMessages, routeHost, sendMessage } from '../relay/wire.mjs';
+import { call } from './relay-client.mjs';
 import { relayAccount, serviceIdentity } from '../server/relay-account.mjs';
 
 test('Mac identities use named P-256 and repair a legacy certificate without rotating its key', t => {
@@ -67,26 +68,6 @@ async function online(account) {
     await new Promise(resolve=>setTimeout(resolve,50));
   }
   throw Error('registration timeout ' + account.settings().error);
-}
-async function call(url, ca, key, target, path, data, token) {
-  const stream = await openTunnel(url,routeHost(target.r)+':443',{ca});
-  const phone = connect({...key,socket:stream,rejectUnauthorized:false,minVersion:'TLSv1.3'});
-  try {
-    await once(phone,'secureConnect');
-    assert.equal(publicPin(phone.getPeerCertificate().raw),target.fp);
-    const body = Buffer.isBuffer(data) ? data : data ? JSON.stringify(data) : '';
-    const type = Buffer.isBuffer(data) ? 'application/octet-stream' : 'application/json';
-    phone.write((data?'POST':'GET')+' '+path+' HTTP/1.1\r\nHost: '+routeHost(target.r)+'\r\nConnection: close\r\nContent-type: '+type+'\r\nContent-length: '+Buffer.byteLength(body)+'\r\n'+(token?'Authorization: Bearer '+token+'\r\n':'')+'\r\n');
-    if (body.length) phone.write(body);
-    let result='';
-    for await(const chunk of phone) {
-      result+=chunk;
-      if (path === '/api/workspace/events' && result.includes('data: {"ready":true}\n\n')) break;
-    }
-    const status = Number(result.match(/^HTTP\/1\.1 (\d+)/)?.[1]);
-    const payload = result.match(/\{[^\r\n]*\}/)?.[0];
-    return {status,...JSON.parse(payload || '{}')};
-  } finally {phone.destroy(); stream.destroy();}
 }
 test('two Baton hosts share one relay, credentials and live routes are isolated', {timeout:40000}, async t => {
   const root=mkdtempSync(join(tmpdir(),'baton-relay-test-'));

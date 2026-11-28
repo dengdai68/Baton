@@ -1,0 +1,22 @@
+name: Docker deployments
+on:
+  pull_request:
+    paths:
+      - 'server/**'
+      - 'relay/**'
+      - 'client/**'
+      - 'cli/**'
+      - 'web/**'
+      - 'package*.json'
+      - 'tests/relay-client.mjs'
+      - 'scripts/test-docker-workspace.sh'
+      - '.github/workflows/docker.yml'
+permissions:
+  contents: read
+jobs:
+  services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/test-docker-workspace.sh
