@@ -373,4 +373,4 @@ Pi 控制台降噪：`client/console-projections.mjs` 的已知类型/精确摘�
 
 登录地址在桌面偏好或 iOS 钥匙串内增删，连通圆点由健康检查驱动。工作空间的内网 HTTP 和代理公网 HTTPS 共用同一服务，入口配置见 docs/31。单工作空间登录入口为 web/workspace-choice.js、server/workspace-http.mjs 和 iOS SessionProvider。实时通知从 Store journal 送到两端。详见 docs/31-workspace-service.md。
 
-手机 Relay 服务、出站连接器和证书认证见 [部署与协议](../relay/README.md)。配对回归入口为 `tests/relay.test.mjs`。完整手机 App 的模拟器操作及验证边界见 [交互报告](../relay/INTERACTION-REPORT.md)。
+手机 Relay 服务、出站连接器和证书认证见 [部署与协议](../relay/README.md)。配对回归入口为 `tests/relay.test.mjs`，覆盖撤销后的 401 移除提示和同一 Mac 重连接管路由。完整手机 App 的模拟器操作及验证边界见 [交互报告](../relay/INTERACTION-REPORT.md)。

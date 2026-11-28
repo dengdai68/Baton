@@ -9,7 +9,7 @@ import { once } from 'node:events';
 import { connect } from 'node:tls';
 import { createHash } from 'node:crypto';
 import { createRelay } from '../relay/server.mjs';
-import { publicPin, openTunnel, routeHost } from '../relay/wire.mjs';
+import { publicPin, openTunnel, readMessages, routeHost, sendMessage } from '../relay/wire.mjs';
 import { relayAccount, serviceIdentity } from '../server/relay-account.mjs';
 
 function relayFixture(root) {
@@ -105,7 +105,9 @@ test('two Baton hosts share one relay, credentials and live routes are isolated'
   const third=await invite(b), bob=await send(key,third,'/relay/redeem',{t:third.t});
   await Promise.all([online(a),online(b)]);
   a.revoke(first.channel);await online(a);
-  await assert.rejects(send(key,channel,'/relay/session',{}),/404/);
+  // The removed phone still reaches its Mac and learns it was removed, not that the Mac is offline.
+  assert.equal((await send(key,channel,'/relay/session',{})).status,401);
+  assert.equal((await send(key,channel,'/api/tasks',null,first.token)).status,401);
   const alive={r:two.channel,fp:second.fp}, separate={r:bob.channel,fp:third.fp};
   assert.equal((await send(other,alive,'/api/tasks',null,two.token)).user,'Alice');
   assert.equal((await send(key,separate,'/api/tasks',null,bob.token)).user,'Bob');
@@ -120,4 +122,37 @@ test('two Baton hosts share one relay, credentials and live routes are isolated'
   for (let i=0;i<50 && b.settings().online;i++) await new Promise(resolve=>setTimeout(resolve,20));
   assert.equal(b.settings().online,false);
   await assert.rejects(send(key,separate,'/relay/session',{}),/404/);
+});
+
+test('a reconnecting Baton replaces its stale control link; another Baton cannot take its routes', {timeout:20000}, async t => {
+  const root=mkdtempSync(join(tmpdir(),'baton-relay-takeover-'));
+  const outer=relayFixture(root), mac=serviceIdentity(join(root,'mac')), other=serviceIdentity(join(root,'other'));
+  const relay=createRelay({...outer,allow:new Set([publicPin(mac.cert),publicPin(other.cert)])});
+  relay.listen(0,'127.0.0.1');await once(relay,'listening');
+  t.after(async()=>{await relay.shutdown();rmSync(root,{recursive:true,force:true});});
+  const url='https://127.0.0.1:'+relay.address().port, route='a'.repeat(32);
+  async function register(identity) {
+    const socket=await openTunnel(url,'control.baton.invalid:443',{ca:outer.cert,...identity});
+    const replies=[];readMessages(socket,msg=>replies.push(msg));
+    sendMessage(socket,{revision:1,routes:[{id:route,expires:0}]});
+    for (let i=0;i<100 && !replies.length && !socket.destroyed;i++) await new Promise(resolve=>setTimeout(resolve,20));
+    return {socket,replies};
+  }
+  const stale=await register(mac);
+  assert.deepEqual(stale.replies,[{registered:1}]);
+  // The old socket is still open (sleep, network switch) when the same Mac dials again.
+  const fresh=await register(mac);
+  assert.deepEqual(fresh.replies,[{registered:1}]);
+  for (let i=0;i<50 && !stale.socket.destroyed;i++) await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(stale.socket.destroyed,true);
+  await new Promise(resolve=>setTimeout(resolve,100));
+  // Closing the replaced link must not drop the routes now owned by the new link.
+  const opened=new Promise(resolve=>readMessages(fresh.socket,msg=>msg.open && resolve(msg)));
+  const phone=openTunnel(url,routeHost(route)+':443',{ca:outer.cert}).catch(error=>error);
+  assert.equal((await opened).route,route);
+  const intruder=await register(other);
+  assert.equal(intruder.replies.length,0);
+  assert.equal(intruder.socket.destroyed,true);
+  fresh.socket.destroy();
+  await phone;
 });
