@@ -113,4 +113,4 @@ Android release 包使用 Expo 模板自带的调试签名，适合本机或测�
 
 登录页单行显示工作空间 URL，选择器和列表用相同的小圆点表示连通状态。每个已添加的地址都可单独移除。更多页显示当前账号，工作空间详情位于设置。
 
-登录页还支持扫描或输入 Mac 生成的 `baton://pair` 链接。Relay 通道使用手机自己的客户端证书。iOS 的 HTTPS CONNECT 入口要求 iOS 17 及以上。安装与接入见 [Relay 部署说明](../../relay/README.md)。
+登录页还支持扫描或输入 Mac 生成的 `baton://pair` 链接。Relay 通道使用手机自己的客户端证书。iOS 的 HTTPS CONNECT 入口要求 iOS 17 及以上。Mac 移除这台手机后，授权失效页显示「此设备已被移除」和「重新配对」，直连登录仍显示原有的重新登录提示。安装与接入见 [Relay 部署说明](../../relay/README.md)。

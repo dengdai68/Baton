@@ -10,7 +10,9 @@ import { deviceApiAllowed } from './workspace-http.mjs';
 
 const id = () => randomBytes(16).toString('hex');
 const digest = text => createHash('sha256').update(text).digest();
-const inviteLifetime = 600000, sessionLifetime = 900000;
+const inviteLifetime = 600000, sessionLifetime = 900000, idleLifetime = 30*86400000;
+// A removed phone keeps reaching its Mac for a while, so it is told "removed" instead of "offline".
+const revokedLifetime = 7*86400000, routeLimit = 1024;
 
 export function serviceIdentity(root) {
   const dir = join(root, 'relay-identity');
@@ -35,16 +37,25 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
   db.exec(`PRAGMA busy_timeout=3000;
     CREATE TABLE IF NOT EXISTS settings(account TEXT PRIMARY KEY, origin TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS invitations(id TEXT PRIMARY KEY, owner TEXT NOT NULL, hash BLOB NOT NULL, expires INTEGER NOT NULL, attempts INTEGER NOT NULL DEFAULT 0);
-    CREATE TABLE IF NOT EXISTS channels(id TEXT PRIMARY KEY, owner TEXT NOT NULL, device TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL, invitation TEXT NOT NULL, lastSeen INTEGER NOT NULL);`);
+    CREATE TABLE IF NOT EXISTS channels(id TEXT PRIMARY KEY, owner TEXT NOT NULL, device TEXT NOT NULL, label TEXT NOT NULL, created INTEGER NOT NULL, invitation TEXT NOT NULL, lastSeen INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS revoked(id TEXT PRIMARY KEY, owner TEXT NOT NULL, expires INTEGER NOT NULL);`);
   const identity = serviceIdentity(root), pin = publicPin(identity.cert);
   let connector, connectedOrigin;
   const sessions = new Map(), streams = new Map();
   const owner = () => account()?.version;
   const origin = () => db.prepare('SELECT origin FROM settings WHERE account=?').get(owner() || '')?.origin;
-  const activeRoutes = () => {
-    db.prepare('DELETE FROM invitations WHERE expires<=?').run(Date.now());
-    db.prepare('DELETE FROM channels WHERE lastSeen<=?').run(Date.now()-30*86400000);
+  const liveRoutes = () => {
+    const now = Date.now();
+    db.prepare('DELETE FROM invitations WHERE expires<=?').run(now);
+    db.prepare('DELETE FROM revoked WHERE expires<=?').run(now);
+    db.prepare('INSERT OR IGNORE INTO revoked SELECT id,owner,? FROM channels WHERE lastSeen<=?').run(now+revokedLifetime, now-idleLifetime);
+    db.prepare('DELETE FROM channels WHERE lastSeen<=?').run(now-idleLifetime);
     return db.prepare(`SELECT id,expires FROM invitations WHERE owner=? UNION ALL SELECT id,0 AS expires FROM channels WHERE owner=?`).all(owner() || '',owner() || '');
+  };
+  const activeRoutes = () => {
+    const live = liveRoutes();
+    return live.concat(db.prepare('SELECT id,expires FROM revoked WHERE owner=? ORDER BY expires DESC LIMIT ?')
+      .all(owner() || '', Math.max(0, routeLimit - live.length)));
   };
   function connect() {
     const url = origin();
@@ -68,7 +79,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
     if (!owner()) throw Error('请先登录');
     if (url !== (origin() || '')) {
       transaction(() => {
-        for (const table of ['invitations','channels','settings']) db.prepare('DELETE FROM ' + table + ' WHERE ' + (table === 'settings' ? 'account' : 'owner') + '=?').run(owner());
+        for (const table of ['invitations','channels','revoked','settings']) db.prepare('DELETE FROM ' + table + ' WHERE ' + (table === 'settings' ? 'account' : 'owner') + '=?').run(owner());
         if (url) db.prepare('INSERT INTO settings VALUES (?,?)').run(owner(), url);
       });
       sessions.clear(); connect();
@@ -77,7 +88,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
   }
   async function invite() {
     if (!connector?.ready || !origin()) throw Error('Relay 尚未连接，请检查接入名单和地址');
-    if (activeRoutes().length >= 1024) throw Error('通道和邀请数量已达上限');
+    if (liveRoutes().length >= routeLimit) throw Error('通道和邀请数量已达上限');
     const route = id(), token = randomBytes(32).toString('base64url'), expires = Date.now() + inviteLifetime;
     db.prepare('INSERT INTO invitations (id,owner,hash,expires) VALUES (?,?,?,?)').run(route, owner(), digest(token), expires);
     connector.sync();
@@ -89,7 +100,10 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
     return {link:link.href, expires};
   }
   function revoke(route) {
-    db.prepare('DELETE FROM channels WHERE id=? AND owner=?').run(route, owner() || '');
+    transaction(() => {
+      if (db.prepare('DELETE FROM channels WHERE id=? AND owner=?').run(route, owner() || '').changes)
+        db.prepare('INSERT OR REPLACE INTO revoked VALUES (?,?,?)').run(route, owner(), Date.now()+revokedLifetime);
+    });
     sessions.delete(route);
     for (const stream of streams.get(route) || []) stream.destroy();
     connector?.sync();
@@ -133,7 +147,7 @@ export function relayAccount({root, account, api, readJson, sendJson, name, tlsO
           return sendJson(res,200,session(channel));
         }
         const row = db.prepare('SELECT device,lastSeen FROM channels WHERE id=? AND owner=?').get(route, owner());
-        if (!row || row.device !== device || row.lastSeen <= Date.now()-30*86400000) return reject(401,'设备未获授权或已撤销');
+        if (!row || row.device !== device || row.lastSeen <= Date.now()-idleLifetime) return reject(401,'设备未获授权或已撤销');
         if (Date.now()-row.lastSeen > 60000) db.prepare('UPDATE channels SET lastSeen=? WHERE id=?').run(Date.now(),route);
         if (req.method === 'POST' && url.pathname === '/relay/session') return sendJson(res,200,session(route));
         const token = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(req.headers.authorization)?.[1];

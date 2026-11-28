@@ -1,6 +1,6 @@
 import { createServer } from 'node:https';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { publicPin, readMessages, routePattern, sendMessage } from './wire.mjs';
 
@@ -26,6 +26,8 @@ export function createRelay({cert, key, allow}) {
     const owner = cert && publicPin(cert);
     if (target === 'control.baton.invalid:443') {
       if (!allow.has(owner)) return reply(socket, '403 Forbidden');
+      // A reconnecting Baton replaces its own stale control socket (sleep, network switch).
+      for (const [previous, pin] of controls) if (pin === owner) previous.destroy();
       const owned = new Map(), active = new Set();
       const peer = {socket, owner, active};
       controls.set(socket,owner);
@@ -38,17 +40,17 @@ export function createRelay({cert, key, allow}) {
         for (const {id, expires} of msg.routes) {
           if (!routePattern.test(id) || !Number.isSafeInteger(expires) || expires < 0) throw Error();
           const previous = routes.get(id);
-          if (previous && previous.peer !== peer) throw Error();
+          if (previous && previous.peer !== peer && previous.peer.owner !== owner) throw Error();
           next.set(id, {peer, expires});
         }
-        for (const id of owned.keys()) if (!next.has(id)) routes.delete(id);
+        for (const id of owned.keys()) if (!next.has(id) && routes.get(id)?.peer === peer) routes.delete(id);
         owned.clear();
         for (const [id, item] of next) { routes.set(id, item); owned.set(id, item); }
         sendMessage(socket, {registered:msg.revision});
       });
       socket.on('close', () => {
         controls.delete(socket);
-        for (const id of owned.keys()) routes.delete(id);
+        for (const id of owned.keys()) if (routes.get(id)?.peer === peer) routes.delete(id);
         for (const s of active) s.destroy();
       });
       return;
@@ -88,7 +90,8 @@ export function createRelay({cert, key, allow}) {
   return server;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Resolve symlinks (for example /tmp on macOS) so the command line entry is always recognized.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [configFile] = process.argv.slice(2);
   if (!configFile) throw Error('用法: node relay/server.mjs /path/to/relay.json');
   const conf = JSON.parse(readFileSync(configFile));

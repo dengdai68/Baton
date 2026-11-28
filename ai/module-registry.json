@@ -3273,7 +3273,7 @@
       "path": "server/relay-account.mjs",
       "kind": "service",
       "owner": "workspace",
-      "purpose": "Mac identity, invitation issuer, paired device inventory, certificate-bound sessions and revocation",
+      "purpose": "Mac identity, invitation issuer, paired device inventory, certificate-bound sessions, revocation and removal notices for revoked channels",
       "sourceOfTruth": [
         "relay/README.md",
         "docs/31-workspace-service.md"
@@ -3296,7 +3296,7 @@
       "path": "relay/",
       "kind": "service",
       "owner": "workspace",
-      "purpose": "Stateless HTTPS service for authenticated Baton hosts",
+      "purpose": "Stateless HTTPS service for authenticated Baton hosts; a reconnecting host replaces its own stale control link",
       "sourceOfTruth": [
         "relay/README.md",
         "docs/31-workspace-service.md"

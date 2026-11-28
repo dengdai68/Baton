@@ -11,13 +11,15 @@ import { useSession } from '@/workspace/session';
 
 function Expired() {
   const { colors } = useTheme();
-  const { leave } = useSession();
+  const { active, leave } = useSession();
+  // A Relay channel only ends when the Mac removed this phone; a new invitation is the way back.
+  const relay = Boolean(active?.relay);
   return (
     <View style={{ flex: 1, backgroundColor: colors.bgCanvas, justifyContent: 'center', padding: 24, gap: 14 }}>
       <ShieldAlert size={36} color={colors.stAttention} strokeWidth={1.6} />
-      <Txt variant="title" weight="semibold">{$t('此设备的授权已失效')}</Txt>
-      <Txt tone="secondary">{$t('请重新输入工作空间地址和账号登录。')}</Txt>
-      <Button variant="primary" size="lg" label={$t('重新登录')} onPress={async () => { await leave(); router.replace('/connect'); }} />
+      <Txt variant="title" weight="semibold">{relay ? $t('此设备已被移除') : $t('此设备的授权已失效')}</Txt>
+      <Txt tone="secondary">{relay ? $t('请在 Mac 上点「添加手机」，再扫码或输入新的配对地址。') : $t('请重新输入工作空间地址和账号登录。')}</Txt>
+      <Button variant="primary" size="lg" label={relay ? $t('重新配对') : $t('重新登录')} onPress={async () => { await leave(); router.replace('/connect'); }} />
     </View>
   );
 }
