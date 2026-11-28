@@ -52,3 +52,17 @@ iOS 构建首次遇到 Expo 原生模块扫描超时，测试机上临时延长�
 合并版本的签名桌面应用在独立账号中登录后，使用 macOS 系统 LibreSSL 签发的身份打开远程访问页时出现 `PUBLIC_KEY_DECODE_ERROR`。回归覆盖命名曲线新证书、保留原私钥修复旧证书、拒绝密钥不匹配的旧证书，以及重启后继续使用同一证书。普通 Node 运行 Relay 专项 3/3 通过，在 Electron 的 Node 模式下使用系统 LibreSSL 单独运行此兼容性用例 1/1 通过。
 
 完整 iOS App 已在模拟器验证配对、离线、恢复、设备移除及返回登录页，实际页面见[交互报告](./INTERACTION-REPORT.md)。
+
+## 容器部署（2026-11-28）
+
+在 GitHub Actions 的 Linux Docker 主机上从源码构建并启动了 `server/Dockerfile` 和 `relay/Dockerfile`。测试使用临时网络、数据卷、账号和 CA，结束后清理资源。[容器验收日志](https://github.com/dengdai68/Baton/actions/runs/46117254149/job/140893740576) · [仓库回归检查](https://github.com/dengdai68/Baton/actions/runs/46117254109/job/140893740617)
+
+| 路径 | 实测结果 |
+| --- | --- |
+| Server 直接登录 | 一个实例用 HTTP 无证书启动，另一个从只读挂载读取证书链和私钥并用 HTTPS 启动。两者均可登录并读取当前账号，两者的网络设备会话均无法管理 Relay。 |
+| 持久卷 | 在两种协议下分别通过管理 CLI 创建团队。删除并重建容器、复用原卷后，原设备令牌仍可用，管理 CLI 重新登录后能按原 ID 读回同一团队。 |
+| Server 与 Relay | 在容器内登录管理员、登记指纹并通过 HTTPS 接入 Relay。HTTP Relay 地址被设置接口拒绝，向公网入口发送明文 HTTP 未收到有效 HTTP 响应。 |
+| 端到端配对 | 独立协议客户端容器使用自己的密钥，兑换一次性邀请、核对 Server 公钥，并通过加密通道读到签发账号。管理员随后成功移除该设备。 |
+| 多成员权限 | 云端成员可直接登录并读取自己的账号；该模式下主机管理员调用单管理员配对接口仍被拒绝。 |
+
+本机独立检出的桌面测试 968/968、移动端测试 9/9 通过。Mac 签名 App 实际完成 HTTP 和 HTTPS 直连登录。iOS、Android 本轮核对共享的 URL 测试、两端网络配置和原生传输分支，未对容器部署重复运行整机交互。复跑命令为 `bash scripts/test-docker-workspace.sh`，要求 Linux Docker、Bash、curl、jq 和 OpenSSL。
