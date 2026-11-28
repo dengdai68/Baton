@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import http from "node:http";
 import https from "node:https";
 import { createStore } from "../server/store.mjs";
+import { provisionWorkspace } from "../server/workspace-config.mjs";
 import { workspaceIdentity } from "../server/workspace-identity.mjs";
 import {createAuth} from "../server/auth.mjs";
 const credentials = {name:"operator",password:"workspace test password"};
@@ -573,4 +574,17 @@ test("resetting the local owner invalidates signed-in devices and their list ent
   assert.equal((await request('/api/tasks',undefined,'',bearer)).s,401);
   const current = await request('/login',{name:credentials.name,password:"changed workspace password",device:"Current Mac"});
   assert.deepEqual((await request('/device-info',undefined,current.cookie)).b.devices.map(item=>item.label),['Current Mac']);
+});
+
+test("supplied workspace certificates require HTTPS and a complete readable pair", t => {
+  const root = mkdtempSync(join(tmpdir(), "baton-external-certs-"));
+  t.after(() => rmSync(root, {recursive:true, force:true}));
+  const input = {mode:"local", port:9443, origin:"https://localhost:9443"};
+  assert.throws(() => provisionWorkspace(root, {...input, cert:"/tls/chain.pem"}), /绝对路径/);
+  assert.throws(() => provisionWorkspace(root, {...input, cert:"relative.pem", key:"/tls/key.pem"}), /绝对路径/);
+  assert.throws(() => provisionWorkspace(root, {...input, origin:"http://localhost:9443", cert:"/tls/chain.pem", key:"/tls/key.pem"}), /HTTPS/);
+  assert.throws(() => provisionWorkspace(root, {...input, cert:join(root,"missing"), key:join(root,"key.pem")}), {code:"ENOENT"});
+  const http = provisionWorkspace(root, {...input, origin:"http://localhost:9443"});
+  assert.equal(http.cert, undefined);
+  assert.equal(http.key, undefined);
 });

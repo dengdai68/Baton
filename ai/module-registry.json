@@ -3069,16 +3069,18 @@
       "path": "server/workspace-admin.mjs",
       "kind": "workspace",
       "owner": "client-platform",
-      "purpose": "Workspace provisioning and service launch",
+      "purpose": "Headless workspace provisioning, service launch and operator-authenticated Relay management",
       "sourceOfTruth": [
         "docs/31-workspace-service.md"
       ],
       "tests": [
-        "tests/workspace-service.test.mjs"
+        "tests/workspace-service.test.mjs",
+        "scripts/test-docker-workspace.sh"
       ],
       "allowedDependencies": [
         "node:*",
-        "Baton Store"
+        "Baton Store",
+        "cli/client.mjs"
       ],
       "forbiddenDependencies": [
         "Relay business state"
@@ -3144,7 +3146,7 @@
       "path": "server/workspace-config.mjs",
       "kind": "workspace",
       "owner": "client-platform",
-      "purpose": "Workspace TLS provisioning and local pairing link generation",
+      "purpose": "Workspace HTTP/TLS provisioning with generated or operator-supplied certificates",
       "sourceOfTruth": [
         "docs/31-workspace-service.md"
       ],
@@ -3221,6 +3223,16 @@
           "Android"
         ]
       }
+    },
+    {
+      "id": "workspace.relay-client-test",
+      "path": "tests/relay-client.mjs",
+      "kind": "test",
+      "owner": "workspace",
+      "purpose": "Exercise the pinned inner TLS connection from a test phone",
+      "sourceOfTruth": ["relay/README.md"],
+      "tests": ["tests/relay.test.mjs", "scripts/test-docker-workspace.sh"],
+      "whenChanged": {"mustUpdate": ["relay/README.md"]}
     },
     {
       "id": "workspace.relay-wire",

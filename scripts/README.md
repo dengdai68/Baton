@@ -274,3 +274,5 @@ MCP 详情编辑验收：test-market-catalog.mjs 同时核对共享抽屉标题�
 `test-i18n.mjs` 在隔离 HOME/Store 夹具与禁用 Provider 的 Electron 中，以 `BATON_LOCALE=en` 逐页（待我处理、任务、自动化、团队、工作流、员工、角色、插件、MCP、沟通、全部设置页、开发手册、任务工作区）检查可见文字与 title/aria/placeholder：英文不得残留界面中文、繁体不得出现常见简体字，业务数据（API 返回的中文内容）不计入；同时核对宿主菜单、登录页、设置 → 常规切换繁体后的重载与 `desktop-preferences.json` 持久化、重启后显式选择优先于系统语言以及“跟随系统”恢复。截图（英文宽/窄、繁体宽）与 evidence.json 写入 `.data/i18n-acceptance/`。`BATON_I18N_APP=/path/Baton.app` 可验收打包版本。
 
 `npm run package:mac:local`（`package-mac-local.mjs`）构建本机安装用的 `release/mac-arm64/Baton.app`：与 `package:mac` 相同的应用，但用钥匙串中的稳定签名身份（Apple Development 或 Developer ID Application）代替 ad-hoc，使 macOS 在重装后保留授予 Baton 的文件访问权限（外接数据卷、完全磁盘访问），常驻服务不会卡在等待授权。钥匙串有多个身份时用 `BATON_SIGN_IDENTITY`（SHA-1 或全名）指定；没有可用身份时明确失败，不回退 ad-hoc。构建后核对签名身份并执行 `codesign --verify --deep --strict`。发布流程不变。
+
+在有 Docker、Bash、curl、jq 和 OpenSSL 的 Linux 主机执行 `bash scripts/test-docker-workspace.sh`，可独立构建两个镜像，并用临时卷验证 HTTP/HTTPS、重建后授权、Relay 注册、配对与撤销。

@@ -232,3 +232,5 @@ runtimes models 的新增目标返回原生可选模型与逐模型 levels，非
 CLI 输出、帮助与错误保持简体中文，不读取客户端界面语言；界面语言是客户端宿主偏好，不属于 CLI 可配置能力，App/CLI 业务语义不变。
 
 automations get 的 automation.latestExecution 显示最近一次实际 Run 的标识、开始时间与当前状态；无实际运行时为 null。
+
+无界面 Server 在容器内使用本节的独立 CLI 登录，然后由 `workspace-admin.mjs relay DIR` 调用同一回环管理 API。端点文件、会话文件、签发邀请及移除设备的命令见[工作空间部署](31-workspace-service.md#无图形界面接入-relay)。

@@ -27,9 +27,42 @@ node relay/server.mjs /etc/baton-relay/relay.json
 3. 在手机 Baton 登录页选择「扫码配对」或「输入配对地址」。邀请十分钟内可用一次。兑换成功后，手机进入签发邀请的 Mac 账号。
 4. 在 Mac 上点某台手机旁的「移除」即可撤销其通道。被移除的手机仍能在 7 天内经 Relay 到达 Mac，收到 401 后显示「此设备已被移除」，而不是「Mac 离线」。更换或清空账号的 Relay 地址会撤销该账号此前的通道和邀请；这些手机经旧 Relay 已无法到达 Mac，只会显示无法连接。
 
-首次配对前，持有完整有效邀请的设备能够兑换它。请通过受信方式传递二维码或地址。服务应用于 Mac 桌面登录账号，浏览器和原有直接登录入口继续使用工作空间地址。
+首次配对前，持有完整有效邀请的设备能够兑换它。请通过受信方式传递二维码或地址。配对服务使用单管理员工作空间账号，支持 Mac 桌面及无图形界面的独立 Server。浏览器直接登录时使用工作空间地址。
 
 Mac 使用命名曲线 P-256 编码接入证书。早期 macOS 测试版可能把曲线参数完整写进证书，导致桌面端打开远程访问页失败。升级后首次使用时会保留原私钥并重新签发这类证书。如果此前用命令行部署登记过旧编码的指纹，请将 Relay 接入名单更新为页面当前显示的指纹，重新配对使用旧指纹的手机。
+
+## Docker 部署与证书
+
+Baton 的 Relay 公网入口使用 HTTPS/TLS 1.3。Mac、iOS 和 Android 直接连接工作空间 Server 时可显式使用 HTTP 或 HTTPS。独立 Server 的构建、初始化、账号和容器内配对命令见[工作空间部署](../docs/31-workspace-service.md#docker-部署独立-server)。
+
+证书签给客户端填写的 Relay 域名。可以使用 Let’s Encrypt 和 Certbot。下面是 Linux 部署示例。域名的 A/AAAA 记录须指向部署入口，HTTP-01 验证需让签发机构能访问 TCP 80，Certbot 的 standalone 模式需要占用该端口。无法开放 80 时，可使用 DNS 服务商对应的 Certbot DNS 插件，通过 TXT 记录验证域名。[Let’s Encrypt 验证方式](https://letsencrypt.org/docs/challenge-types/) · [Certbot 证书与续期](https://eff-certbot.readthedocs.io/en/stable/using.html#where-are-my-certificates)
+
+```bash
+DOMAIN=relay.example.com
+sudo certbot certonly --standalone -d "$DOMAIN"
+sudo groupadd --system -f baton-tls
+CONF=/srv/baton/relay-config
+sudo install -d -o root -g baton-tls -m 0750 "$CONF"
+sudo install -o root -g baton-tls -m 0640 "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" "$CONF/fullchain.pem"
+sudo install -o root -g baton-tls -m 0640 "/etc/letsencrypt/live/$DOMAIN/privkey.pem" "$CONF/privkey.pem"
+sudo tee "$CONF/relay.json" >/dev/null <<'JSON'
+{"bind":"0.0.0.0","port":8443,"cert":"/config/fullchain.pem","key":"/config/privkey.pem","allow":[]}
+JSON
+sudo chown root:baton-tls "$CONF/relay.json"
+sudo chmod 0640 "$CONF/relay.json"
+```
+
+以下构建命令从仓库根目录执行，构建上下文只包含 Relay。将目录挂载为只读，容器用非 root 用户及专用补充组读取配置和私钥。宿主 TCP 443 映射到容器 8443；客户端填 `https://relay.example.com`。也可发布其他端口，并将端口写入 Relay 地址。
+
+```bash
+docker build -f relay/Dockerfile -t baton-relay relay
+docker run -d --name baton-relay -p 443:8443 --group-add "$(getent group baton-tls | cut -d: -f3)" \
+  -v "$CONF:/config:ro" baton-relay /config/relay.json
+```
+
+空允许名单可启动服务。将 Mac 设置页或独立 Server 的 `relay DIR status` 返回的 64 位指纹添加到 `allow`，保存宿主的 `relay.json`，再运行 `docker kill --signal=HUP baton-relay`。每个实例单独登记。Relay 的配置、证书和允许名单来自宿主目录；在线连接由各 Server 重建。证书续期后，在 Certbot 的 deploy hook 中重复上面的两个 `install` 命令，然后执行 `docker restart baton-relay` 以加载新证书。工作空间 Server 使用自己的受信证书时，按相同方法更新其专用证书目录并重启对应容器。
+
+Paseo 开源 Relay 的默认监听为 `127.0.0.1:4000`，使用 HTTP/WebSocket，可自托管明文监听；其托管入口使用 `wss://relay.paseo.sh`。这些是 Paseo 的协议选项。[Paseo 官方运行配置](https://github.com/getpaseo/paseo-relay#runtime-contract) · [托管连接测试](https://github.com/getpaseo/paseo/blob/main/packages/relay/src/live-relay.e2e.test.ts)
 
 ## 已实现的连接协议
 

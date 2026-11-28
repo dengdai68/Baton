@@ -212,3 +212,5 @@ Store.subscribeNotifications 发布未来已提交的任务待验收/完成及�
 工作空间事件流、Mac 配对目录及网关访问范围见 docs/31-workspace-service.md。配对目录只对本机管理 API 开放。
 
 `relay-account.mjs` 负责 Mac 邀请与设备通道，`relay-connector.mjs` 向公网建立出站连接。部署入口在 [relay/](../relay/README.md)。
+
+独立 Server 的 Dockerfile 使用仓库根作为构建上下文，入口为 `workspace-admin.mjs`。HTTP、证书挂载、持久卷及容器内管理命令见[工作空间部署](../docs/31-workspace-service.md#docker-部署独立-server)。
